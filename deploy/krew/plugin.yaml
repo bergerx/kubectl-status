@@ -1,7 +1,7 @@
 apiVersion: krew.googlecontainertools.github.com/v1alpha2
 kind: Plugin
 metadata:
-  name: {{ .PluginName }}
+  name: resource-status
 spec:
   version: "v0.1.0"
   platforms:
@@ -9,41 +9,41 @@ spec:
       matchLabels:
         os: linux
         arch: amd64
-    uri: https://github.com/{{ .Owner }}/{{ .Repo }}/releases/download/v0.1.0/{{ .PluginName }}_linux_amd64.tar.gz
+    uri: https://github.com/bergerx/kubectl-resource-status/releases/download/v0.1.0/resource-status_linux_amd64.tar.gz
     sha256: ""
     files:
-    - from: "./{{ .PluginName }}"
+    - from: "./resource-status"
       to: "."
-    bin: "{{ .PluginName }}"
+    bin: "resource-status"
   - selector:
       matchLabels:
         os: darwin
         arch: amd64
-    uri: https://github.com/{{ .Owner }}/{{ .Repo }}/releases/download/v0.1.0/{{ .PluginName }}_darwin_amd64.tar.gz
+    uri: https://github.com/bergerx/kubectl-resource-status/releases/download/v0.1.0/resource-status_darwin_amd64.tar.gz
     sha256: ""
     files:
-    - from: "./{{ .PluginName }}"
+    - from: "./resource-status"
       to: "."
-    bin: "{{ .PluginName }}"
+    bin: "resource-status"
   - selector:
       matchLabels:
         os: windows
         arch: amd64
-    uri: https://github.com/{{ .Owner }}/{{ .Repo }}/releases/download/v0.1.0/{{ .PluginName }}_windows_amd64.zip
+    uri: https://github.com/bergerx/kubectl-resource-status/releases/download/v0.1.0/resource-status_windows_amd64.zip
     sha256: ""
     files:
-    - from: "/{{ .PluginName }}.exe"
+    - from: "/resource-status.exe"
       to: "."
-    bin: "{{ .PluginName }}.exe"
+    bin: "resource-status.exe"
   shortDescription: A new plugin
-  homepage: https://github.com/{{ .Owner }}/{{ .Repo }}
+  homepage: https://github.com/bergerx/kubectl-resource-status
   caveats: |
     Usage:
-      $ kubectl {{ .PluginName }}
+      $ kubectl resource-status
 
     For additional options:
-      $ kubectl {{ .PluginName }} --help
-      or https://github.com/{{ .Owner }}/{{ .Repo }}/blob/v0.1.0/doc/USAGE.md
+      $ kubectl resource-status --help
+      or https://github.com/bergerx/kubectl-resource-status/blob/v0.1.0/doc/USAGE.md
 
   description: |
     This is a new plugin
