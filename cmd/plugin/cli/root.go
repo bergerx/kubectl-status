@@ -26,7 +26,7 @@ func RootCmd() *cobra.Command {
 	f := cmdutil.NewFactory(KubernetesConfigFlags)
 
 	cmd := &cobra.Command{
-		Use:           "TODO-BINARY-NAME (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
+		Use: "TODO-BINARY-NAME (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
 		//DisableFlagsInUseLine: true,
 		Short:         "Display resource-status for one or many resources",
 		Long:          `.`,

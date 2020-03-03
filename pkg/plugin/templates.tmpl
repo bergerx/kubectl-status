@@ -2,7 +2,7 @@
     {{- $created := .metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
     {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" }}
     {{- $startedIn := $created | dateSub $started}}
-    {{- template "status_summary_line" . }} {{ .status.phase | podPhaseColor }} {{ .status.qosClass | podQosColor}}
+    {{- template "status_summary_line" . }} {{ .status.phase | colorPodPhase }} {{ .status.qosClass | colorPodQos}}
       {{- if gt ($startedIn.Seconds | int) 0}}, started after {{ $startedIn.Seconds | ago }}{{end}}
       {{- with .status.reason }} {{ . }}{{end}}
       {{- with .status.message}}, message: {{ . }}{{end}}
@@ -88,7 +88,7 @@
 {{- end -}}
 
 {{- define "status_summary_line" }}
-{{.kind | cyanBold }}/{{.metadata.name | cyan}}{{ with .metadata.namespace }} -n {{.}}{{ end }}, created {{.metadata.creationTimestamp | colorAgo }} ago
+{{.kind | cyanBold }}/{{.metadata.name | cyan}}{{ with .metadata.namespace }} -n {{ . }}{{ end }}, created {{.metadata.creationTimestamp | colorAgo }} ago
 {{- end -}}
 
 {{- define "observed_generation_summary" }}
@@ -107,16 +107,17 @@
 {{- end -}}
 
 {{- define "condition_summary" }}
-  {{ .type | bold }}:{{ .status }}
-  {{- with .reason }} {{.}}{{end}}
+  {{.type | bold}}:{{.status | conditionStatusColor .}}{{ $condition := .}}
+  {{- with .reason }} {{.| conditionStatusColor $condition}}{{end}}
+  {{- with .message }}, {{.| conditionStatusColor $condition}}{{end}}
   {{- with .lastTransitionTime}} for {{. | colorAgo }}{{end}}
   {{- with .lastUpdateTime }}, last update was {{. | colorAgo }} ago{{end}}
   {{- with .lastProbeTime}}, last probe was {{. | colorAgo }} ago{{end}}
 {{- end -}}
 
 {{- define "container_status_summary"}}
-    {{ .name | bold }} deploys {{ .image }}
-      ready:{{ .ready }}{{ if gt (.restartCount | int) 0 }}, restarted {{ .restartCount | toString | red }} times{{ end }}
+    {{ .name | bold }} deploys {{ .image | markYellow "latest" }}
+      ready:{{ .ready | toString | redIf (not .ready) }}{{ if gt (.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.restartCount | int) | yellowBold }}{{ end }}
       {{- with .state }}
       state: {{ template "container_state_summary" . }}
       {{- end }}
@@ -128,7 +129,7 @@
 {{- define "container_state_summary" }}
     {{- /* https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-and-container-status */}}
     {{- with .waiting }}
-        {{- "Waiting" | red }} {{ .reason | red }}{{with .message}}: {{ . }}{{end}}
+        {{- "Waiting" | redBold }} {{ .reason | redBold }}{{with .message}}: {{ . | redBold }}{{end}}
     {{- end }}
     {{- with .running }}
         {{- "Running" | green }} for {{ .startedAt | colorAgo }}
@@ -138,7 +139,7 @@
             {{- $started := .startedAt | toDate "2006-01-02T15:04:05Z"  -}}
             {{- $finished := .finishedAt | toDate "2006-01-02T15:04:05Z"  -}}
             {{- $ranfor := $finished.Sub $started -}}
-        Terminated. Started {{ .startedAt | colorAgo }} ago and exit after {{ $ranfor | colorDuration }} {{- with .reason }} with reason {{ . | quote }}{{- end }} with exit code {{ template "exit_code_summary" . }}
+        Terminated. Started {{ .startedAt | colorAgo }} ago and exit after {{ $ranfor | colorDuration }} {{- with .reason }} with reason {{ . | colorContainerTerminateReason }}{{- end }} with exit code {{ template "exit_code_summary" . }}
         {{- else}}
             {{ template "exit_code_summary" . }}
         {{- end}}
@@ -146,9 +147,9 @@
 {{- end -}}
 
 {{- define "exit_code_summary" }}
-{{- .exitCode }}
+{{- .exitCode | toString | redIf (ne (.exitCode | toString) "0" ) }}
   {{- with .signal }} (signal: {{ . }}){{ end }}
-  {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | signalName}}) {{ end }}
+  {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | signalName }}) {{ end }}
 {{- end -}}
 
 {{- define "Node" }}
