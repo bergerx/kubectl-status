@@ -6,17 +6,17 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"text/template"
 	"time"
+	_ "unsafe"
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-	"golang.org/x/sys/unix"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/cli-runtime/pkg/resource"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -43,18 +43,13 @@ var funcMap = template.FuncMap{
 	"colorContainerTerminateReason": colorContainerTerminateReason,
 	"colorExitCode":                 colorExitCode,
 	"signalName":                    signalName,
-	// "colorContainerReady": colorContainerReady,
-
-	/*
-		humanizeBytes
-	*/
 }
 
 func conditionStatusColor(condition map[string]interface{}, str string) string {
 	switch {
 	case
-	strings.HasSuffix(fmt.Sprint(condition["type"]), "Pressure"), // Node Pressure conditions
-	condition["type"] == "Failed":  // Failed Jobs has this condition
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Pressure"), // Node Pressure conditions
+		condition["type"] == "Failed":                                // Failed Jobs has this condition
 		switch condition["status"] {
 		case "False":
 			return str
@@ -90,8 +85,11 @@ func dateSub(date1, date2 time.Time) time.Duration {
 	return date2.Sub(date1)
 }
 
+//go:linkname signame runtime.signame
+func signame(sig uint32) string
+
 func signalName(signal int64) string {
-	return unix.SignalName(syscall.Signal(signal))
+	return signame(uint32(signal))
 }
 
 func redIf(cond bool, str string) string {
