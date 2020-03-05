@@ -334,9 +334,11 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 {{- end -}}
 
 {{- define "observed_generation_summary" }}
-  {{- if ne .metadata.generation .status.observedGeneration }}
-  observedGeneration({{ .status.observedGeneration }}) doesn't match generation({{.metadata.generation}}) | red
-  This usually means related controller has not yet reconciled this resource! | yellow
+  {{- if and .metadata.generation .status.observedGeneration }}
+    {{- if ne .metadata.generation .status.observedGeneration }}
+  observedGeneration({{.status.observedGeneration | redBold}}) doesn't match generation({{.metadata.generation | redBold}})
+    {{ "This usually means related controller has not yet reconciled this resource!" | yellow }}
+    {{- end }}
   {{- end }}
 {{- end -}}
 
