@@ -19,6 +19,7 @@ See [usage](doc/USAGE.md) for some sample usage examples.
 
 Sample pod output from a minikube instance:
 ![Minikube components](doc/minikube-components.png)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fbergerx%2Fkubectl-resource-status.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fbergerx%2Fkubectl-resource-status?ref=badge_shield)
 
 Some pods got KILL and TERM signals, has containers with multiple restarts:
 ![Restarts with Signals](doc/init-signal-restart.png)
@@ -27,3 +28,7 @@ Some falinig InitContainer and Container
 ![Failing InitContainer](doc/failing-init-container.png)
 ![Failing Container](doc/failing-container.png)
 
+
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fbergerx%2Fkubectl-resource-status.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fbergerx%2Fkubectl-resource-status?ref=badge_large)
