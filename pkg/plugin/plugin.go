@@ -47,9 +47,19 @@ var funcMap = template.FuncMap{
 
 func conditionStatusColor(condition map[string]interface{}, str string) string {
 	switch {
-	case
-		strings.HasSuffix(fmt.Sprint(condition["type"]), "Pressure"), // Node Pressure conditions
-		condition["type"] == "Failed":                                // Failed Jobs has this condition
+	/*
+		From https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties:
+
+		> Condition types should indicate state in the "abnormal-true" polarity. For example, if the condition indicates
+		> when a policy is invalid, the "is valid" case is probably the norm, so the condition should be called
+		> "Invalid".
+
+		But apparently this is not common among most resources, so we have the list of cases that matches the expected
+		behaviour rather than the exceptions.
+	*/
+	case strings.HasSuffix(fmt.Sprint(condition["type"]), "Pressure"), // Node Pressure conditions
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Unavailable"), // Node NetworkUnavailable condition
+		condition["type"] == "Failed":                                   // Failed Jobs has this condition
 		switch condition["status"] {
 		case "False":
 			return str
