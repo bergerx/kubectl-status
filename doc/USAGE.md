@@ -6,17 +6,23 @@ The following assumes you have the plugin installed via
 kubectl krew install resource-status
 ```
 
-### Scan images in your current kubecontext
+### Show status of some resources
+
+In most cases replacing a `kubectl get ...` with an `kubectl resource-status`
+would do it.
 
 ```shell
-kubectl resource-status
-```
-
-### Scan images in another kubecontext
-
-```shell
-kubectl resource-status --context=context-name
+kubectl resource-status pods --all-namespaces                             # Show status of all pods in all namespaces
+kubectl resource-status pods                                              # Show status of all pods in the current namespace
+kubectl resource-status nodes                                             # Show status of all nodes
+kubectl resource-status pod my-pod                                        # Show status of a particular pod
+kubectl resource-status deployment my-dep                                 # Show status of a particular deployment
+kubectl resource-status node --selector='node-role.kubernetes.io/master'  # Show status of nodes marked as master
 ```
 
 ## How it works
-Write a brief description of your plugin here.
+
+Just a different representation of the kubernetes resources.
+
+Internally uses go templates to print a human-friendly output that focuses on
+the status fields of the resources in kubernetes.
