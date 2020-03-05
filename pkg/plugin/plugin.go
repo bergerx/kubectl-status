@@ -236,10 +236,17 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 			continue
 		}
 		tmpl := template.Must(template.
-			New("template").
+			New("templates").
 			Funcs(sprig.TxtFuncMap()).
 			Funcs(funcMap).
 			Parse(`
+{{- define "DefaultResource" }}
+  {{- template "status_summary_line" . }}
+  {{- template "observed_generation_summary" . }}
+  {{- template "replicas_status" . }}
+  {{- template "conditions_summary" . }}
+{{- end }}
+
 {{- define "Pod" }}
   {{- $created := .metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
   {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" }}
@@ -262,26 +269,6 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
     {{- end }}
   {{- end }}
 {{- end }}
-
-{{- define "ReplicaSet" }}
-  {{- template "status_summary_line" . }}
-  {{- template "observed_generation_summary" . }}
-  {{- template "replicas_status" . }}
-{{- end -}}
-
-{{- define "Deployment" }}
-  {{- template "status_summary_line" . }}
-  {{- template "observed_generation_summary" . }}
-  {{- template "replicas_status" . }}
-  {{- template "conditions_summary" . }}
-{{- end -}}
-
-{{- define "StatefulSet" }}
-  {{- template "status_summary_line" . }}
-  {{- template "observed_generation_summary" . }}
-  {{- template "replicas_status" . }}
-  {{- template "conditions_summary" . }}
-{{- end -}}
 
 {{- define "DaemonSet" }}
   {{- template "status_summary_line" . }}
@@ -412,7 +399,13 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
   {{- template "conditions_summary" . }}
 {{- end -}}`))
 		kind := info.ResourceMapping().GroupVersionKind.Kind
-		err = tmpl.ExecuteTemplate(os.Stderr, kind, out)
+		var kindTemplateName string
+		if t := tmpl.Lookup(kind); t != nil {
+			kindTemplateName = kind
+		} else {
+			kindTemplateName = "DefaultResource"
+		}
+		err = tmpl.ExecuteTemplate(os.Stderr, kindTemplateName, out)
 		if err != nil {
 			if errs.Has(err.Error()) {
 				continue
