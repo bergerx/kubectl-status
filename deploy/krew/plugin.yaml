@@ -9,36 +9,36 @@ spec:
       matchLabels:
         os: linux
         arch: amd64
-    uri: https://github.com/bergerx/kubectl-status/releases/download/v0.1.2/status_linux_amd64.tar.gz
-    sha256: "ade0777a7fc76b986102e36c70d7e5484dd7e0649131187f6973f8e885ab2c11"
+    uri: https://github.com/bergerx/kubectl-status/releases/download/v0.2.1/status_linux_amd64.tar.gz
+    sha256: "a94c1d064261e0fccf40b72ce4791d3f2e48d8affd06763b918547756663e2cd"
     files:
     - from: "./status"
       to: "."
-    - from: LICENCE
+    - from: LICENSE
       to: "."
     bin: "status"
   - selector:
       matchLabels:
         os: darwin
         arch: amd64
-    uri: https://github.com/bergerx/kubectl-status/releases/download/v0.1.2/status_darwin_amd64.tar.gz
-    sha256: "848e479388788e859d7d518ca4f4d0f496a8d8f39658e44f96c0411a8690e3de"
+    uri: https://github.com/bergerx/kubectl-status/releases/download/v0.2.1/status_darwin_amd64.tar.gz
+    sha256: "7eada7ad8626ec3ccae536e6bd48342d3e21e7d61f52fa80b4cee60223c8b3ad"
     files:
     - from: "./status"
       to: "."
-    - from: LICENCE
+    - from: LICENSE
       to: "."
     bin: "status"
   - selector:
       matchLabels:
         os: windows
         arch: amd64
-    uri: https://github.com/bergerx/kubectl-status/releases/download/v1.1.2/status_windows_amd64.zip
-    sha256: "8fac0f8414e8dfd4b6b6a473c3106deccecac6757f244f5854636efc32bc6ab0"
+    uri: https://github.com/bergerx/kubectl-status/releases/download/v0.2.1/status_windows_amd64.zip
+    sha256: "54a160cace548dec20b5844042ec49f8fc277ed219bdb15c81335931c960bd1d"
     files:
     - from: "/status.exe"
       to: "."
-    - from: LICENCE
+    - from: LICENSE
       to: "."
     bin: "status.exe"
   shortDescription: Show status details of a given resource.
