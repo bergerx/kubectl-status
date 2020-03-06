@@ -7,7 +7,7 @@ test:
 
 .PHONY: bin
 bin: fmt vet
-	go build -o bin/resource-status github.com/bergerx/kubectl-resource-status/cmd/plugin
+	go build -o bin/status github.com/bergerx/kubectl-status/cmd/plugin
 
 .PHONY: fmt
 fmt:

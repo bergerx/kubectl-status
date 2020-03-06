@@ -1,4 +1,4 @@
-module github.com/bergerx/kubectl-resource-status
+module github.com/bergerx/kubectl-status
 
 go 1.12
 

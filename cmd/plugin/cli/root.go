@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bergerx/kubectl-resource-status/pkg/plugin"
+	"github.com/bergerx/kubectl-status/pkg/plugin"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -26,9 +26,9 @@ func RootCmd() *cobra.Command {
 	f := cmdutil.NewFactory(KubernetesConfigFlags)
 
 	cmd := &cobra.Command{
-		Use: "kubectl resource-status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
+		Use: "kubectl status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
 		//DisableFlagsInUseLine: true,
-		Short:         "Display resource-status for one or many resources",
+		Short:         "Display status for one or many resources",
 		Long:          `.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,

@@ -1,10 +1,10 @@
-project_name: resource-status
+project_name: status
 release:
   github:
     owner: bergerx
-    name: kubectl-resource-status
+    name: kubectl-status
 builds:
-  - id: resource-status
+  - id: status
     goos:
     - linux
     - windows
@@ -17,11 +17,11 @@ builds:
       - GO111MODULE=on
     main: cmd/plugin/main.go
     ldflags: -s -w
-      -X github.com/bergerx/kubectl-resource-status/pkg/version.version=
+      -X github.com/bergerx/kubectl-status/pkg/version.version=
 archives:
-  - id: resource-status
+  - id: status
     builds:
-    - resource-status
+    - status
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
     - goos: windows
