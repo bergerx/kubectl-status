@@ -12,6 +12,7 @@
 *.out
 
 bin/
+dist/
 
 .DS_Store
 .idea/
