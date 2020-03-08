@@ -39,7 +39,7 @@ var funcMap = template.FuncMap{
 	"conditionStatusColor":          conditionStatusColor,
 	"colorPodQos":                   colorPodQos,
 	"colorPhase":                    colorPhase,
-	"colorPodPReason":               colorPodReason,
+	"colorReason":                   colorReason,
 	"colorContainerTerminateReason": colorContainerTerminateReason,
 	"colorExitCode":                 colorExitCode,
 	"signalName":                    signalName,
@@ -141,11 +141,12 @@ func colorPodQos(qos string) string {
 }
 
 func colorPhase(phase string) string {
-	/* covers ".status.phase" for various types, e.g. pod, pv, pvc, svc, ns, etc ... */
+	/* covers ".status.phase" and ".status.state" for various types, e.g. pod, pv, pvc, svc, ns, etc ... */
 	switch phase {
 	case "Pending", "Released":
 		return color.YellowString(phase)
-	case "Running", "Succeeded", "Active", "Available", "Bound":
+	/* "valid" is for cert manager orders.status.state */
+	case "Running", "Succeeded", "Active", "Available", "Bound", "valid":
 		return color.GreenString(phase)
 	case "Failed", "Unknown", "Terminating":
 		return color.New(color.FgRed, color.Bold).Sprintf(phase)
@@ -154,7 +155,8 @@ func colorPhase(phase string) string {
 	}
 }
 
-func colorPodReason(reason string) string {
+func colorReason(reason string) string {
+	/* covers ".status.reason" for various types, e.g. pod, pv, etc ... */
 	switch reason {
 	case "Evicted":
 		return color.RedString(reason)
@@ -252,8 +254,8 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 {{- end }}
 
 {{- define "Pod" }}
-    {{- template "status_summary_line" . }} {{ .status.phase | colorPhase }}{{ with .status.qosClass }} {{ . | colorPodQos }}{{ end }}
-    {{- with .status.reason }} {{ . }}{{ end }}
+    {{- template "status_summary_line" . }}
+    {{- with .status.qosClass }} {{ . | colorPodQos }}{{ end }}
     {{- with .status.message }}, message: {{ . }}{{ end }}
     {{- template "conditions_summary" . }}
     {{- with .status.initContainerStatuses }}
@@ -277,19 +279,15 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
     {{- template "conditions_summary" . }}
 {{- end -}}
 
-{{- define "Namespace" }}
-    {{- template "status_summary_line" . }}
-    {{- with .status.phase }} {{ . | colorPhase }}{{ end }}
-{{- end -}}
-
 {{- define "PersistentVolume" }}
     {{- template "status_summary_line" . }}
-    {{- with .status.phase }} {{ . | colorPhase }}{{ end }}
+    {{- with .status.message }}
+  {{ "message" | bold }}: {{ . }}
+    {{- end }}
 {{- end -}}
 
 {{- define "PersistentVolumeClaim" }}
     {{- template "status_summary_line" . }}
-    {{- with .status.phase }} {{ . | colorPhase }}{{ end }}
     {{- with .status.capacity.storage }} {{ . }}{{ end }}
 {{- end -}}
 
@@ -322,9 +320,6 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
     {{- if .status.failed }}, {{ "failed" | redBold }} {{ .status.failed }}/{{ .spec.backoffLimit }} times{{ end }}
 {{- end -}}
 
-{{ define "job_work_queue" }}
-{{- end -}}
-
 {{- define "Service" }}
     {{- template "status_summary_line" . }}
     {{- if eq .spec.type "LoadBalancer" }}
@@ -337,15 +332,12 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
     {{- template "load_balancer_ingress" . }}
 {{- end -}}
 
-{{- /* Not yet tested
 {{- define "HorizontalPodAutoscaler" }}
-    {{- template "status_summary_line" . }}
-    scaled at: {{ .status.lastScaleTime | colorAgo }}
-    {{ "current" | bold }} replicas:{{ .status.currentReplicas | redIf ge .status.currentReplicas .status.desiredReplicas }}/({{ .spec.minReplicas | default "1" }}-{{ .spec.maxReplicas }})
-    {{- with .status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .status.currentCPUUtilizationPercentage | redIf ge .status.currentCPUUtilizationPercentage .spec.targetCPUUtilizationPercentage }}%/{{ .spec.targetCPUUtilizationPercentage }}%{{ end }} 
-    {{ "desired" | bold }} replicas:{{ .status.desiredReplicas | redIf ne .status.currentReplicas .status.desiredReplicas }}
+    {{- template "status_summary_line" . }} last scale was {{ .status.lastScaleTime | colorAgo }} ago
+  {{ "current" | bold }} replicas:{{ .status.currentReplicas }}/({{ .spec.minReplicas | default "1" }}-{{ .spec.maxReplicas }})
+    {{- if .status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .status.currentCPUUtilizationPercentage | toString | redIf (ge .status.currentCPUUtilizationPercentage .spec.targetCPUUtilizationPercentage) }}%/{{ .spec.targetCPUUtilizationPercentage }}%{{ end }}
+    {{- if (ne .status.currentReplicas .status.desiredReplicas) }}, {{ "desired" | redBold}}: {{ .status.currentReplicas }} --> {{ .status.desiredReplicas }}{{ end }}
 {{- end -}}
-*/ -}}
 
 {{- define "load_balancer_ingress" }}
     {{- if .status.loadBalancer.ingress }}
@@ -397,6 +389,10 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
         {{- $completed := .status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
         {{- $ranfor := $completed.Sub $started }} and {{ "completed" | green }} in {{ $ranfor | colorDuration }}
     {{- end }}
+    {{- with .status.phase }} {{ . | colorPhase }}{{ end }}
+    {{- /* .status.state is used by Ambassador */ -}}
+    {{- with .status.state }} {{ . | colorPhase }}{{ end }}
+    {{- with .status.reason }} {{ . | colorReason }}{{ end }}
 {{- end -}}
 
 {{- define "observed_generation_summary" }}
