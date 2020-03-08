@@ -38,7 +38,7 @@ var funcMap = template.FuncMap{
 	"dateSub":                       dateSub,
 	"conditionStatusColor":          conditionStatusColor,
 	"colorPodQos":                   colorPodQos,
-	"colorPodPhase":                 colorPodPhase,
+	"colorPhase":                    colorPhase,
 	"colorPodPReason":               colorPodReason,
 	"colorContainerTerminateReason": colorContainerTerminateReason,
 	"colorExitCode":                 colorExitCode,
@@ -59,6 +59,7 @@ func conditionStatusColor(condition map[string]interface{}, str string) string {
 	*/
 	case strings.HasSuffix(fmt.Sprint(condition["type"]), "Pressure"), // Node Pressure conditions
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Unavailable"), // Node NetworkUnavailable condition
+		strings.HasPrefix(fmt.Sprint(condition["type"]), "Non"),         // CRD NonStructuralSchema condition
 		condition["type"] == "Failed":                                   // Failed Jobs has this condition
 		switch condition["status"] {
 		case "False":
@@ -139,14 +140,15 @@ func colorPodQos(qos string) string {
 	}
 }
 
-func colorPodPhase(phase string) string {
+func colorPhase(phase string) string {
+	/* covers ".status.phase" for various types, e.g. pod, pv, pvc, svc, ns, etc ... */
 	switch phase {
-	case "Pending":
+	case "Pending", "Released":
 		return color.YellowString(phase)
-	case "Running", "Succeeded":
+	case "Running", "Succeeded", "Active", "Available", "Bound":
 		return color.GreenString(phase)
-	case "Failed", "Unknown":
-		return color.RedString(phase)
+	case "Failed", "Unknown", "Terminating":
+		return color.New(color.FgRed, color.Bold).Sprintf(phase)
 	default:
 		return phase
 	}
@@ -250,11 +252,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 {{- end }}
 
 {{- define "Pod" }}
-    {{- $created := .metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
-    {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" }}
-    {{- $startedIn := $created | dateSub $started}}
-    {{- template "status_summary_line" . }} {{ .status.phase | colorPodPhase }}{{ with .status.qosClass }} {{ . | colorPodQos }}{{ end }}
-    {{- if gt ($startedIn.Seconds | int) 0 }}, started after {{ $startedIn.Seconds | ago }}{{ end }}
+    {{- template "status_summary_line" . }} {{ .status.phase | colorPhase }}{{ with .status.qosClass }} {{ . | colorPodQos }}{{ end }}
     {{- with .status.reason }} {{ . }}{{ end }}
     {{- with .status.message }}, message: {{ . }}{{ end }}
     {{- template "conditions_summary" . }}
@@ -279,15 +277,84 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
     {{- template "conditions_summary" . }}
 {{- end -}}
 
+{{- define "Namespace" }}
+    {{- template "status_summary_line" . }}
+    {{- with .status.phase }} {{ . | colorPhase }}{{ end }}
+{{- end -}}
+
+{{- define "PersistentVolume" }}
+    {{- template "status_summary_line" . }}
+    {{- with .status.phase }} {{ . | colorPhase }}{{ end }}
+{{- end -}}
+
+{{- define "PersistentVolumeClaim" }}
+    {{- template "status_summary_line" . }}
+    {{- with .status.phase }} {{ . | colorPhase }}{{ end }}
+    {{- with .status.capacity.storage }} {{ . }}{{ end }}
+{{- end -}}
+
+{{- define "CronJob" }}
+    {{- template "status_summary_line" . }}, last ran at {{ .status.lastScheduleTime }} ({{ .status.lastScheduleTime | colorAgo }} ago)
+{{- end -}}
+
 {{- define "Job" }}
     {{- template "status_summary_line" . }}
-  {{ with .status.succeeded }}{{ "Succeeded" | green }}. {{ end }}Started {{ .status.startTime | colorAgo }} ago
-    {{- if .status.completionTime}}
-        {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" -}}
-        {{- $completed := .status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
-        {{- $ranfor := $completed.Sub $started }} and completed after {{ $ranfor | colorDuration }}.
-    {{- end}}
+    {{- /* See https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/#parallel-jobs */ -}}
+    {{- if eq (coalesce .spec.completions .spec.parallelism 1 | toString) "1" }}
+        {{- template "job_non_parallel" . }}
+    {{- else if .spec.completions }}
+        {{- /* TODO: handle "fixed completion count jobs" better */ -}}
+        {{- template "job_parallel" . }}
+    {{- else if .spec.parallelism }}
+        {{- /* TODO: handle "work queue jobs" better */ -}}
+        {{- template "job_parallel" . }}
+    {{- end }}
     {{- template "conditions_summary" . }}
+{{- end -}}
+
+{{ define "job_non_parallel" }}
+    {{- if .status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
+    {{- if .status.failed }}, {{ "Failed" | redBold }}{{ end }}
+{{- end -}}
+
+{{ define "job_parallel" }}
+    TODO: handle parallel jobs  better
+    {{- if .status.failed }}, {{ "failed" | redBold }} {{ .status.failed }}/{{ .spec.backoffLimit }} times{{ end }}
+{{- end -}}
+
+{{ define "job_work_queue" }}
+{{- end -}}
+
+{{- define "Service" }}
+    {{- template "status_summary_line" . }}
+    {{- if eq .spec.type "LoadBalancer" }}
+        {{- template "load_balancer_ingress" . }}
+    {{- end }}
+{{- end -}}
+
+{{- define "Ingress" }}
+    {{- template "status_summary_line" . }}
+    {{- template "load_balancer_ingress" . }}
+{{- end -}}
+
+{{- /* Not yet tested
+{{- define "HorizontalPodAutoscaler" }}
+    {{- template "status_summary_line" . }}
+    scaled at: {{ .status.lastScaleTime | colorAgo }}
+    {{ "current" | bold }} replicas:{{ .status.currentReplicas | redIf ge .status.currentReplicas .status.desiredReplicas }}/({{ .spec.minReplicas | default "1" }}-{{ .spec.maxReplicas }})
+    {{- with .status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .status.currentCPUUtilizationPercentage | redIf ge .status.currentCPUUtilizationPercentage .spec.targetCPUUtilizationPercentage }}%/{{ .spec.targetCPUUtilizationPercentage }}%{{ end }} 
+    {{ "desired" | bold }} replicas:{{ .status.desiredReplicas | redIf ne .status.currentReplicas .status.desiredReplicas }}
+{{- end -}}
+*/ -}}
+
+{{- define "load_balancer_ingress" }}
+    {{- if .status.loadBalancer.ingress }}
+	    {{- if or (index .status.loadBalancer.ingress 0).hostname (index .status.loadBalancer.ingress 0).ip }}
+	        {{- with (index .status.loadBalancer.ingress 0).hostname }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
+	        {{- with (index .status.loadBalancer.ingress 0).ip }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
+	    {{- else }} {{ "Pending LoadBalancer" | redBold }}
+	    {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "daemonset_replicas_status" }}
@@ -310,12 +377,26 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
         {{- with .status.updatedReplicas }}, updated:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
         {{- with .status.availableReplicas }}, available:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
         {{- with .status.fullyLabeledReplicas }}, fullyLabeled:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-        {{- if gt (.status.collisionCount | int) 0 }}{{ "collisionCount" | redBold }}:{{ .status.collisionCount }} {{- end }}
+        {{- with .status.unavailableReplicas }}, unavailable:{{ . | toString | redBold }}{{ end }}
+        {{- with .status.collisionCount }}, collisions:{{ .status.collisionCount | toString | redBold }}{{ end }}
   {{- end }}
 {{- end -}}
 
 {{- define "status_summary_line" }}
-{{.kind | cyanBold }}/{{ .metadata.name | cyan }}{{ with .metadata.namespace }} -n {{ . }}{{ end }}, created {{ .metadata.creationTimestamp | colorAgo }} ago
+{{.kind | cyanBold }}/{{ .metadata.name | cyan }}
+    {{- with .metadata.namespace }} -n {{ . }}{{ end -}}
+    , created {{ .metadata.creationTimestamp | colorAgo }} ago
+    {{- if .status.startTime }}
+	    {{- $created := .metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
+	    {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" }}
+	    {{- $startedIn := $created | dateSub $started}}
+        {{- if gt ($startedIn.Seconds | int) 0 }}, started after {{ $startedIn.Seconds | ago }}{{ end }}
+    {{- end }}
+    {{- if .status.completionTime }}
+        {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" -}}
+        {{- $completed := .status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
+        {{- $ranfor := $completed.Sub $started }} and {{ "completed" | green }} in {{ $ranfor | colorDuration }}
+    {{- end }}
 {{- end -}}
 
 {{- define "observed_generation_summary" }}
@@ -338,8 +419,16 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
     {{- with .reason }} {{ .| conditionStatusColor $condition }}{{ end }}
     {{- with .message }}, {{ .| conditionStatusColor $condition }}{{ end }}
     {{- with .lastTransitionTime }} for {{ . | colorAgo }}{{ end }}
-    {{- with .lastUpdateTime }}, last update was {{ . | colorAgo }} ago{{ end }}
-    {{- with .lastProbeTime}}, last probe was {{ . | colorAgo }} ago{{ end }}
+    {{- if .lastUpdateTime }}
+        {{- if ne (.lastUpdateTime | colorAgo) (.lastTransitionTime | colorAgo) -}}
+            , last update was {{ .lastUpdateTime | colorAgo }} ago
+	    {{- end }}
+    {{- end }}
+    {{- if .lastProbeTime}}
+        {{- if ne (.lastProbeTime | colorAgo) (.lastTransitionTime | colorAgo) -}}
+            , last probe was {{ .lastProbeTime | colorAgo }} ago
+        {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "container_status_summary"}}
