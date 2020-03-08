@@ -112,6 +112,7 @@ func redIf(cond bool, str string) string {
 func markRed(substr, s string) string {
 	return strings.ReplaceAll(s, substr, color.RedString(substr))
 }
+
 func markYellow(substr, s string) string {
 	return strings.ReplaceAll(s, substr, color.YellowString(substr))
 }
@@ -150,6 +151,7 @@ func colorPodPhase(phase string) string {
 		return phase
 	}
 }
+
 func colorPodReason(reason string) string {
 	switch reason {
 	case "Evicted":
@@ -241,163 +243,160 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 			Funcs(funcMap).
 			Parse(`
 {{- define "DefaultResource" }}
-  {{- template "status_summary_line" . }}
-  {{- template "observed_generation_summary" . }}
-  {{- template "replicas_status" . }}
-  {{- template "conditions_summary" . }}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "replicas_status" . }}
+    {{- template "conditions_summary" . }}
 {{- end }}
 
 {{- define "Pod" }}
-  {{- $created := .metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
-  {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" }}
-  {{- $startedIn := $created | dateSub $started}}
-  {{- template "status_summary_line" . }} {{ .status.phase | colorPodPhase }} {{ .status.qosClass | colorPodQos}}
-  {{- if gt ($startedIn.Seconds | int) 0}}, started after {{ $startedIn.Seconds | ago }}{{end}}
-  {{- with .status.reason }} {{ . }}{{end}}
-  {{- with .status.message}}, message: {{ . }}{{end}}
-  {{- template "conditions_summary" . }}
-  {{- with .status.initContainerStatuses }}
+    {{- $created := .metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
+    {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" }}
+    {{- $startedIn := $created | dateSub $started}}
+    {{- template "status_summary_line" . }} {{ .status.phase | colorPodPhase }}{{ with .status.qosClass }} {{ . | colorPodQos }}{{ end }}
+    {{- if gt ($startedIn.Seconds | int) 0 }}, started after {{ $startedIn.Seconds | ago }}{{ end }}
+    {{- with .status.reason }} {{ . }}{{ end }}
+    {{- with .status.message }}, message: {{ . }}{{ end }}
+    {{- template "conditions_summary" . }}
+    {{- with .status.initContainerStatuses }}
   InitContainers:
-    {{- range . }}
-        {{- template "container_status_summary" . }}
+        {{- range . }}
+            {{- template "container_status_summary" . }}
+        {{- end }}
     {{- end }}
-  {{- end }}
-  {{- with .status.containerStatuses }}
+    {{- with .status.containerStatuses }}
   Containers:
-    {{- range . }}
-      {{- template "container_status_summary" . }}
+        {{- range . }}
+            {{- template "container_status_summary" . }}
+        {{- end }}
     {{- end }}
-  {{- end }}
 {{- end }}
 
 {{- define "DaemonSet" }}
-  {{- template "status_summary_line" . }}
-  {{- template "observed_generation_summary" . }}
-  {{- template "daemonset_replicas_status" . }}
-  {{- template "conditions_summary" . }}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "daemonset_replicas_status" . }}
+    {{- template "conditions_summary" . }}
 {{- end -}}
 
 {{- define "Job" }}
-  {{- template "status_summary_line" . }}
-  {{ with .status.succeeded }}{{"Succeeded" | green}}. {{end}}Started {{ .status.startTime | colorAgo }} ago
-  {{- if .status.completionTime}}
-    {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" -}}
-    {{- $completed := .status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
-    {{- $ranfor := $completed.Sub $started }} and completed after {{ $ranfor | colorDuration }}.
-  {{- end}}
-  {{- template "conditions_summary" . }}
+    {{- template "status_summary_line" . }}
+  {{ with .status.succeeded }}{{ "Succeeded" | green }}. {{ end }}Started {{ .status.startTime | colorAgo }} ago
+    {{- if .status.completionTime}}
+        {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" -}}
+        {{- $completed := .status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
+        {{- $ranfor := $completed.Sub $started }} and completed after {{ $ranfor | colorDuration }}.
+    {{- end}}
+    {{- template "conditions_summary" . }}
 {{- end -}}
 
 {{- define "daemonset_replicas_status" }}
-  {{- if .status.desiredNumberScheduled }}{{ $desiredNumberScheduled := .status.desiredNumberScheduled }}
-  {{"desired" | bold}}:{{ .status.desiredNumberScheduled }}
-    {{- with .status.currentNumberScheduled }}, current:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
-    {{- with .status.numberAvailable }}, available:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
-    {{- with .status.numberReady }}, ready:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
-    {{- with .status.updatedNumberScheduled }}, updated:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
-    {{- if gt (.status.numberMisscheduled | int) 0 }}
-    {{"numberMisscheduled" | red}}:{{ .status.numberMisscheduled }}
+    {{- if .status.desiredNumberScheduled }}{{ $desiredNumberScheduled := .status.desiredNumberScheduled }}
+  {{ "desired" | bold}}:{{ .status.desiredNumberScheduled }}
+        {{- with .status.currentNumberScheduled }}, current:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
+        {{- with .status.numberAvailable }}, available:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
+        {{- with .status.numberReady }}, ready:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
+        {{- with .status.updatedNumberScheduled }}, updated:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
+        {{- if gt (.status.numberMisscheduled | int) 0 }}{{ "numberMisscheduled" | redBold }}:{{ .status.numberMisscheduled }}{{- end }}
     {{- end }}
-  {{- end }}
 {{- end -}}
 
 {{- define "replicas_status" }}
-  {{- if .status.replicas }}{{ $spec_replicas := .spec.replicas }}
-  {{"desired" | bold}}:{{ .spec.replicas }}
-    {{- with .status.replicas }}, existing:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-    {{- with .status.readyReplicas }}, ready:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-    {{- with .status.currentReplicas }}, current:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-    {{- with .status.updatedReplicas }}, updated:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-    {{- with .status.availableReplicas }}, available:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-    {{- with .status.fullyLabeledReplicas }}, fullyLabeled:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-    {{- if gt (.status.collisionCount | int) 0 }}
-  {{"collisionCount" | red}}:{{ .status.collisionCount }}
-    {{- end }}
+    {{- if .status.replicas }}{{ $spec_replicas := .spec.replicas }}
+  {{ "desired" | bold }}:{{ .spec.replicas }}
+        {{- with .status.replicas }}, existing:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
+        {{- with .status.readyReplicas }}, ready:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
+        {{- with .status.currentReplicas }}, current:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
+        {{- with .status.updatedReplicas }}, updated:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
+        {{- with .status.availableReplicas }}, available:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
+        {{- with .status.fullyLabeledReplicas }}, fullyLabeled:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
+        {{- if gt (.status.collisionCount | int) 0 }}{{ "collisionCount" | redBold }}:{{ .status.collisionCount }} {{- end }}
   {{- end }}
 {{- end -}}
 
 {{- define "status_summary_line" }}
-{{.kind | cyanBold }}/{{.metadata.name | cyan}}{{ with .metadata.namespace }} -n {{ . }}{{ end }}, created {{.metadata.creationTimestamp | colorAgo }} ago
+{{.kind | cyanBold }}/{{ .metadata.name | cyan }}{{ with .metadata.namespace }} -n {{ . }}{{ end }}, created {{ .metadata.creationTimestamp | colorAgo }} ago
 {{- end -}}
 
 {{- define "observed_generation_summary" }}
-  {{- if and .metadata.generation .status.observedGeneration }}
-    {{- if ne .metadata.generation .status.observedGeneration }}
-  observedGeneration({{.status.observedGeneration | redBold}}) doesn't match generation({{.metadata.generation | redBold}})
+    {{- if and .metadata.generation .status.observedGeneration }}
+        {{- if ne .metadata.generation .status.observedGeneration }}
+  observedGeneration({{ .status.observedGeneration | redBold }}) doesn't match generation({{ .metadata.generation | redBold }})
     {{ "This usually means related controller has not yet reconciled this resource!" | yellow }}
+        {{- end }}
     {{- end }}
-  {{- end }}
 {{- end -}}
 
 {{- define "conditions_summary" }}
-  {{- if .status.conditions }}
-    {{- range .status.conditions}}{{ template "condition_summary" .}}{{ end }}
-  {{- end }}
+    {{- if .status.conditions }}
+        {{- range .status.conditions }}{{ template "condition_summary" . }}{{ end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "condition_summary" }}
-  {{ .type | bold}}:{{.status | conditionStatusColor .}}{{ $condition := .}}
-  {{- with .reason }} {{.| conditionStatusColor $condition}}{{end}}
-  {{- with .message }}, {{.| conditionStatusColor $condition}}{{end}}
-  {{- with .lastTransitionTime}} for {{. | colorAgo }}{{end}}
-  {{- with .lastUpdateTime }}, last update was {{. | colorAgo }} ago{{end}}
-  {{- with .lastProbeTime}}, last probe was {{. | colorAgo }} ago{{end}}
+  {{ .type | bold }}:{{ .status | conditionStatusColor . }}{{ $condition := . }}
+    {{- with .reason }} {{ .| conditionStatusColor $condition }}{{ end }}
+    {{- with .message }}, {{ .| conditionStatusColor $condition }}{{ end }}
+    {{- with .lastTransitionTime }} for {{ . | colorAgo }}{{ end }}
+    {{- with .lastUpdateTime }}, last update was {{ . | colorAgo }} ago{{ end }}
+    {{- with .lastProbeTime}}, last probe was {{ . | colorAgo }} ago{{ end }}
 {{- end -}}
 
 {{- define "container_status_summary"}}
     {{ .name | bold }} ({{ .image | markYellow "latest" }}) {{ template "container_state_summary" .state }}
-      {{- if .state.running }}{{ if .ready }} and {{"Ready" | green}}{{ else }} but {{"Not Ready" | redBold}}{{end}}{{end}}
-      {{- if gt (.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.restartCount | int) | yellowBold }}{{ end }}
-      {{- with .lastState }}
+    {{- if .state.running }}{{ if .ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | redBold }}{{ end }}{{ end }}
+    {{- if gt (.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.restartCount | int) | yellowBold }}{{ end }}
+    {{- with .lastState }}
       lastState: {{ template "container_state_summary" . }}
-      {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "container_state_summary" }}
     {{- /* https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-and-container-status */}}
     {{- with .waiting }}
-        {{- "Waiting" | redBold }} {{ .reason | redBold }}{{with .message}}: {{ . | redBold }}{{end}}
+        {{- "Waiting" | redBold }} {{ .reason | redBold }}{{ with .message }}: {{ . | redBold }}{{ end }}
     {{- end }}
     {{- with .running }}
         {{- "Running" | green }} for {{ .startedAt | colorAgo }}
     {{- end }}
     {{- with .terminated }}
         {{- if .startedAt }}
-            {{- $started := .startedAt | toDate "2006-01-02T15:04:05Z"  -}}
-            {{- $finished := .finishedAt | toDate "2006-01-02T15:04:05Z"  -}}
+            {{- $started := .startedAt | toDate "2006-01-02T15:04:05Z" -}}
+            {{- $finished := .finishedAt | toDate "2006-01-02T15:04:05Z" -}}
             {{- $ranfor := $finished.Sub $started -}}
-        Started {{ .startedAt | colorAgo }} ago and {{ if .reason }}{{ .reason | colorContainerTerminateReason }}{{else}}terminated{{- end }} after {{ $ranfor | colorDuration }}
-        {{- if .exitCode }} with exit code {{ template "exit_code_summary" . }}{{end}}
-        {{- else}}
+        Started {{ .startedAt | colorAgo }} ago and {{ if .reason }}{{ .reason | colorContainerTerminateReason }}{{ else }}terminated{{- end }} after {{ $ranfor | colorDuration }}
+            {{- if .exitCode }} with exit code {{ template "exit_code_summary" . }}{{ end }}
+        {{- else }}
             {{ template "exit_code_summary" . }}
-        {{- end}}
+        {{- end }}
     {{- end }}
 {{- end -}}
 
 {{- define "exit_code_summary" }}
-{{- .exitCode | toString | redIf (ne (.exitCode | toString) "0" ) }}
-  {{- with .signal }} (signal: {{ . }}){{ end }}
-  {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | signalName }}) {{ end }}
+    {{- .exitCode | toString | redIf (ne (.exitCode | toString) "0" ) }}
+    {{- with .signal }} (signal: {{ . }}){{ end }}
+    {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | signalName }}) {{ end }}
 {{- end -}}
 
 {{- define "Node" }}
-  {{- template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
   {{ .status.nodeInfo.operatingSystem | bold }} {{ .status.nodeInfo.osImage }} ({{ .status.nodeInfo.architecture }}), kernel {{ .status.nodeInfo.kernelVersion }}, kubelet {{ .status.nodeInfo.kubeletVersion }}, kube-proxy {{ .status.nodeInfo.kubeProxyVersion }}
   cpu: {{ .status.allocatable.cpu }}, mem: {{ .status.allocatable.memory }} mem, ephemeral-storage: {{index .status.allocatable "ephemeral-storage"}}
-  {{- if or (index .metadata.labels "node.kubernetes.io/instance") (index .metadata.labels "topology.kubernetes.io/region") (index .metadata.labels "failure-domain.beta.kubernetes.io/region") (index .metadata.labels "topology.kubernetes.io/zone") (index .metadata.labels "failure-domain.beta.kubernetes.io/region")}}
-  {{"cloudprovider" | bold}}
-  {{- with index .metadata.labels "topology.kubernetes.io/region" | default (index .metadata.labels "failure-domain.beta.kubernetes.io/region")}} {{.}}{{end}}
-  {{- with index .metadata.labels "topology.kubernetes.io/zone" | default (index .metadata.labels "failure-domain.beta.kubernetes.io/zone")}}{{.}}{{end}}
-  {{- with index .metadata.labels "node.kubernetes.io/instance" | default (index .metadata.labels "beta.kubernetes.io/instance-type")}} {{.}}{{end}}
-  {{- with .metadata.labels.agentpool}}, agentpool:{{.}}{{end}}
-  {{- with index .metadata.labels "kubernetes.io/role"}}, role:{{.}}{{end}}
-  {{- end}}
-  {{"images" | bold }} {{.status.images | len}}.
-  {{- if .status.volumesInUse }} {{"volumes" | bold }} inuse={{ .status.volumesInUse | len }}
-    {{- with index .status.allocatable "attachable-volumes-azure-disk"}}/{{ . }}{{end}}, attached={{ .status.volumesAttached | len }}
-  {{- end}}
-  {{- template "conditions_summary" . }}
-{{- end -}}`))
+    {{- if or (index .metadata.labels "node.kubernetes.io/instance") (index .metadata.labels "topology.kubernetes.io/region") (index .metadata.labels "failure-domain.beta.kubernetes.io/region") (index .metadata.labels "topology.kubernetes.io/zone") (index .metadata.labels "failure-domain.beta.kubernetes.io/region") }}
+  {{ "cloudprovider" | bold }}
+        {{- with index .metadata.labels "topology.kubernetes.io/region" | default (index .metadata.labels "failure-domain.beta.kubernetes.io/region") }} {{ . }}{{ end }}
+        {{- with index .metadata.labels "topology.kubernetes.io/zone" | default (index .metadata.labels "failure-domain.beta.kubernetes.io/zone") }}{{ . }}{{ end }}
+        {{- with index .metadata.labels "node.kubernetes.io/instance" | default (index .metadata.labels "beta.kubernetes.io/instance-type") }} {{ . }}{{ end }}
+        {{- with .metadata.labels.agentpool }}, agentpool:{{ . }}{{ end }}
+        {{- with index .metadata.labels "kubernetes.io/role" }}, role:{{ . }}{{ end }}
+    {{- end }}
+  {{ "images" | bold }} {{ .status.images | len }}.
+    {{- if .status.volumesInUse }} {{ "volumes" | bold }} inuse={{ .status.volumesInUse | len }}
+        {{- with index .status.allocatable "attachable-volumes-azure-disk" }}/{{ . }}{{ end }}, attached={{ .status.volumesAttached | len }}
+    {{- end}}
+    {{- template "conditions_summary" . }}
+{{- end -}}
+`))
 		kind := info.ResourceMapping().GroupVersionKind.Kind
 		var kindTemplateName string
 		if t := tmpl.Lookup(kind); t != nil {
