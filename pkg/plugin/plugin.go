@@ -489,7 +489,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 		} else {
 			kindTemplateName = "DefaultResource"
 		}
-		err = tmpl.ExecuteTemplate(os.Stderr, kindTemplateName, out)
+		err = tmpl.ExecuteTemplate(os.Stdout, kindTemplateName, out)
 		if err != nil {
 			if errs.Has(err.Error()) {
 				continue
