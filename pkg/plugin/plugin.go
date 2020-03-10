@@ -498,6 +498,8 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 			errs.Insert(err.Error())
 			continue
 		}
+		// Add a newline at the end of every template
+		fmt.Println("")
 	}
 	return utilerrors.NewAggregate(allErrs)
 }
