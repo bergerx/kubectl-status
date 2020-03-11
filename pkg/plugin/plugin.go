@@ -497,7 +497,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
     {{- if .status.volumesInUse }} {{ "volumes" | bold }} inuse={{ .status.volumesInUse | len }}
         {{- with index .status.allocatable "attachable-volumes-azure-disk" }}/{{ . }}{{ end }}, attached={{ .status.volumesAttached | len }}
     {{- end}}
-    {{- template "conditions_summary" . }}
+    {{- template "conditions_summary" .status.conditions }}
 {{- end -}}
 `))
 		kind := info.ResourceMapping().GroupVersionKind.Kind
