@@ -21,31 +21,44 @@ import (
 )
 
 var funcMap = template.FuncMap{
-	"green":                         color.GreenString,
-	"greenBold":                     color.New(color.FgGreen, color.Bold).SprintfFunc(),
-	"yellow":                        color.YellowString,
-	"yellowBold":                    color.New(color.FgYellow, color.Bold).SprintfFunc(),
-	"red":                           color.RedString,
-	"redBold":                       color.New(color.FgRed, color.Bold).SprintfFunc(),
-	"cyan":                          color.CyanString,
-	"cyanBold":                      color.HiCyanString,
-	"bold":                          color.New(color.Bold).SprintfFunc(),
-	"colorAgo":                      colorAgo,
-	"colorDuration":                 colorDuration,
-	"markRed":                       markRed,
-	"markYellow":                    markYellow,
-	"redIf":                         redIf,
-	"dateSub":                       dateSub,
-	"conditionStatusColor":          conditionStatusColor,
-	"colorPodQos":                   colorPodQos,
-	"colorPhase":                    colorPhase,
-	"colorReason":                   colorReason,
-	"colorContainerTerminateReason": colorContainerTerminateReason,
-	"colorExitCode":                 colorExitCode,
-	"signalName":                    signalName,
+	"green":                 color.GreenString,
+	"yellow":                color.YellowString,
+	"red":                   color.RedString,
+	"cyan":                  color.CyanString,
+	"bold":                  color.New(color.Bold).SprintfFunc(),
+	"colorAgo":              colorAgo,
+	"colorDuration":         colorDuration,
+	"colorBool":             colorBool,
+	"colorKeyword":          colorKeyword,
+	"colorExitCode":         colorExitCode,
+	"markRed":               markRed,
+	"markYellow":            markYellow,
+	"redIf":                 redIf,
+	"signalName":            signalName,
+	"getPodCondition":       getPodCondition,
+	"isPodConditionHealthy": isPodConditionHealthy,
 }
 
-func conditionStatusColor(condition map[string]interface{}, str string) string {
+func colorBool(cond bool, str string) string {
+	if cond {
+		return color.GreenString(str)
+	} else {
+		return color.New(color.FgRed, color.Bold).Sprintf(str)
+	}
+}
+
+func getPodCondition(conditions []interface{}, conditionType string) map[string]interface{} {
+	var condition map[string]interface{}
+	for _, icondition := range conditions {
+		condition = icondition.(map[string]interface{})
+		if condition["type"] == conditionType {
+			break
+		}
+	}
+	return condition
+}
+
+func isPodConditionHealthy(condition map[string]interface{}) bool {
 	switch {
 	/*
 		From https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties:
@@ -63,37 +76,23 @@ func conditionStatusColor(condition map[string]interface{}, str string) string {
 		condition["type"] == "Failed":                                   // Failed Jobs has this condition
 		switch condition["status"] {
 		case "False":
-			return str
+			return true
 		case "True", "Unknown":
-			return color.New(color.FgRed, color.Bold).Sprintf(str)
+			return false
 		default:
-			return color.New(color.FgRed, color.Bold).Sprintf(str)
+			// not likely to ever happen, but just in case
+			return false
 		}
 	default:
 		switch condition["status"] {
 		case "True":
-			return str
+			return true
 		case "False", "Unknown":
-			return color.New(color.FgRed, color.Bold).Sprintf(str)
+			return false
 		default:
-			return color.New(color.FgRed, color.Bold).Sprintf(str)
+			return false
 		}
 	}
-}
-
-func colorContainerTerminateReason(reason string) string {
-	switch reason {
-	case "OOMKilled", "ContainerCannotRun", "Error":
-		return color.New(color.FgRed, color.Bold).Sprint(reason)
-	case "Completed":
-		return color.GreenString(reason)
-	default:
-		return reason
-	}
-}
-
-func dateSub(date1, date2 time.Time) time.Duration {
-	return date2.Sub(date1)
 }
 
 //go:linkname signame runtime.signame
@@ -127,41 +126,25 @@ func colorExitCode(exitCode int) string {
 	}
 }
 
-func colorPodQos(qos string) string {
-	switch qos {
-	case "BestEffort":
-		return color.RedString(qos)
-	case "Burstable":
-		return color.YellowString(qos)
-	case "Guaranteed":
-		return color.GreenString(qos)
-	default:
-		return color.RedString(qos)
-	}
-}
+func colorKeyword(phase string) string {
+	/* covers ".status.phase", ".status.state", ".status.reason", pod QOS,
+		   for various types, e.g. pod, pv, pvc, svc, ns, etc ...
 
-func colorPhase(phase string) string {
-	/* covers ".status.phase" and ".status.state" for various types, e.g. pod, pv, pvc, svc, ns, etc ... */
+		Here a generic method is used since this can be used to cover unknown CRDs that follows conventions as well.
+		This also helps with maintaining the list
+	    E.g.:
+	    * acme.cert-manager.io/v1alpha2 Order: .status.state: valid
+	    * pvc: .status.phase Bound
+	*/
 	switch phase {
-	case "Pending", "Released":
-		return color.YellowString(phase)
-	/* "valid" is for cert manager orders.status.state */
-	case "Running", "Succeeded", "Active", "Available", "Bound", "valid":
+	case "Running", "Succeeded", "Active", "Available", "Bound", "valid", "Guaranteed", "Completed":
 		return color.GreenString(phase)
-	case "Failed", "Unknown", "Terminating":
+	case "Pending", "Released", "Burstable":
+		return color.YellowString(phase)
+	case "Failed", "Unknown", "Terminating", "Evicted", "BestEffort", "OOMKilled", "ContainerCannotRun", "Error":
 		return color.New(color.FgRed, color.Bold).Sprintf(phase)
 	default:
 		return phase
-	}
-}
-
-func colorReason(reason string) string {
-	/* covers ".status.reason" for various types, e.g. pod, pv, etc ... */
-	switch reason {
-	case "Evicted":
-		return color.RedString(reason)
-	default:
-		return reason
 	}
 }
 
@@ -250,14 +233,14 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "replicas_status" . }}
-    {{- template "conditions_summary" . }}
+    {{- template "conditions_summary" .status.conditions }}
 {{- end }}
 
 {{- define "Pod" }}
     {{- template "status_summary_line" . }}
-    {{- with .status.qosClass }} {{ . | colorPodQos }}{{ end }}
+    {{- with .status.qosClass }} {{ . | colorKeyword }}{{ end }}
     {{- with .status.message }}, message: {{ . }}{{ end }}
-    {{- template "conditions_summary" . }}
+    {{- template "pod_conditions_summary" .status.conditions }}
     {{- with .status.initContainerStatuses }}
   InitContainers:
         {{- range . }}
@@ -276,19 +259,24 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "daemonset_replicas_status" . }}
-    {{- template "conditions_summary" . }}
+    {{- template "conditions_summary" .status.conditions }}
 {{- end -}}
 
 {{- define "PersistentVolume" }}
     {{- template "status_summary_line" . }}
-    {{- with .status.message }}
-  {{ "message" | bold }}: {{ . }}
+    {{- with .status.message }}{{/* exists on failure */}}
+  {{ "message" | red | bold }}: {{ . }}
     {{- end }}
 {{- end -}}
 
 {{- define "PersistentVolumeClaim" }}
     {{- template "status_summary_line" . }}
     {{- with .status.capacity.storage }} {{ . }}{{ end }}
+{{- end -}}
+
+{{- define "ComponentStatus" }}
+    {{- template "status_summary_line" . }}
+    {{- template "conditions_summary" .conditions }}
 {{- end -}}
 
 {{- define "CronJob" }}
@@ -307,17 +295,17 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
         {{- /* TODO: handle "work queue jobs" better */ -}}
         {{- template "job_parallel" . }}
     {{- end }}
-    {{- template "conditions_summary" . }}
+    {{- template "conditions_summary" .status.conditions }}
 {{- end -}}
 
-{{ define "job_non_parallel" }}
+{{- define "job_non_parallel" }}
     {{- if .status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
-    {{- if .status.failed }}, {{ "Failed" | redBold }}{{ end }}
+    {{- if .status.failed }}, {{ "Failed" | red | bold }}{{ end }}
 {{- end -}}
 
-{{ define "job_parallel" }}
+{{- define "job_parallel" }}
     TODO: handle parallel jobs  better
-    {{- if .status.failed }}, {{ "failed" | redBold }} {{ .status.failed }}/{{ .spec.backoffLimit }} times{{ end }}
+    {{- if .status.failed }}, {{ "failed" | red | bold }} {{ .status.failed }}/{{ .spec.backoffLimit }} times{{ end }}
 {{- end -}}
 
 {{- define "Service" }}
@@ -336,7 +324,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
     {{- template "status_summary_line" . }} last scale was {{ .status.lastScaleTime | colorAgo }} ago
   {{ "current" | bold }} replicas:{{ .status.currentReplicas }}/({{ .spec.minReplicas | default "1" }}-{{ .spec.maxReplicas }})
     {{- if .status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .status.currentCPUUtilizationPercentage | toString | redIf (ge .status.currentCPUUtilizationPercentage .spec.targetCPUUtilizationPercentage) }}%/{{ .spec.targetCPUUtilizationPercentage }}%{{ end }}
-    {{- if (ne .status.currentReplicas .status.desiredReplicas) }}, {{ "desired" | redBold}}: {{ .status.currentReplicas }} --> {{ .status.desiredReplicas }}{{ end }}
+    {{- if (ne .status.currentReplicas .status.desiredReplicas) }}, {{ "desired" | red | bold}}: {{ .status.currentReplicas }} --> {{ .status.desiredReplicas }}{{ end }}
 {{- end -}}
 
 {{- define "load_balancer_ingress" }}
@@ -344,7 +332,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 	    {{- if or (index .status.loadBalancer.ingress 0).hostname (index .status.loadBalancer.ingress 0).ip }}
 	        {{- with (index .status.loadBalancer.ingress 0).hostname }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
 	        {{- with (index .status.loadBalancer.ingress 0).ip }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
-	    {{- else }} {{ "Pending LoadBalancer" | redBold }}
+	    {{- else }} {{ "Pending LoadBalancer" | red | bold }}
 	    {{- end }}
     {{- end }}
 {{- end -}}
@@ -356,7 +344,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
         {{- with .status.numberAvailable }}, available:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
         {{- with .status.numberReady }}, ready:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
         {{- with .status.updatedNumberScheduled }}, updated:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
-        {{- if gt (.status.numberMisscheduled | int) 0 }}{{ "numberMisscheduled" | redBold }}:{{ .status.numberMisscheduled }}{{- end }}
+        {{- if gt (.status.numberMisscheduled | int) 0 }}{{ "numberMisscheduled" | red | bold }}:{{ .status.numberMisscheduled }}{{- end }}
     {{- end }}
 {{- end -}}
 
@@ -369,19 +357,19 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
         {{- with .status.updatedReplicas }}, updated:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
         {{- with .status.availableReplicas }}, available:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
         {{- with .status.fullyLabeledReplicas }}, fullyLabeled:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-        {{- with .status.unavailableReplicas }}, unavailable:{{ . | toString | redBold }}{{ end }}
-        {{- with .status.collisionCount }}, collisions:{{ .status.collisionCount | toString | redBold }}{{ end }}
+        {{- with .status.unavailableReplicas }}, unavailable:{{ . | toString | red | bold }}{{ end }}
+        {{- with .status.collisionCount }}, collisions:{{ .status.collisionCount | toString | red | bold }}{{ end }}
   {{- end }}
 {{- end -}}
 
 {{- define "status_summary_line" }}
-{{.kind | cyanBold }}/{{ .metadata.name | cyan }}
-    {{- with .metadata.namespace }} -n {{ . }}{{ end -}}
-    , created {{ .metadata.creationTimestamp | colorAgo }} ago
+{{.kind | cyan | bold }}/{{ .metadata.name | cyan }}
+    {{- with .metadata.namespace }} -n {{ . }}{{ end }}
+    {{- with .metadata.creationTimestamp }}, created {{ . | colorAgo }} ago{{ end }}
     {{- if .status.startTime }}
 	    {{- $created := .metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
 	    {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" }}
-	    {{- $startedIn := $created | dateSub $started}}
+	    {{- $startedIn := $started.Sub $created}}
         {{- if gt ($startedIn.Seconds | int) 0 }}, started after {{ $startedIn.Seconds | ago }}{{ end }}
     {{- end }}
     {{- if .status.completionTime }}
@@ -389,31 +377,61 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
         {{- $completed := .status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
         {{- $ranfor := $completed.Sub $started }} and {{ "completed" | green }} in {{ $ranfor | colorDuration }}
     {{- end }}
-    {{- with .status.phase }} {{ . | colorPhase }}{{ end }}
-    {{- /* .status.state is used by Ambassador */ -}}
-    {{- with .status.state }} {{ . | colorPhase }}{{ end }}
-    {{- with .status.reason }} {{ . | colorReason }}{{ end }}
+    {{- with .status.phase }} {{ . | colorKeyword }}{{ end }}
+    {{- /* .status.state is used by e.g. Ambassador */ -}}
+    {{- with .status.state }} {{ . | colorKeyword }}{{ end }}
+    {{- with .status.reason }} {{ . | colorKeyword }}{{ end }}
 {{- end -}}
 
 {{- define "observed_generation_summary" }}
     {{- if and .metadata.generation .status.observedGeneration }}
         {{- if ne .metadata.generation .status.observedGeneration }}
-  observedGeneration({{ .status.observedGeneration | redBold }}) doesn't match generation({{ .metadata.generation | redBold }})
+  observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match generation({{ .metadata.generation | red | bold }})
     {{ "This usually means related controller has not yet reconciled this resource!" | yellow }}
         {{- end }}
     {{- end }}
 {{- end -}}
 
+{{- define "pod_conditions_summary" }}
+  {{- $podScheduledCondition := getPodCondition . "PodScheduled" }}
+  {{- $initializedCondition := getPodCondition . "Initialized" }}
+  {{- $containersReadyCondition := getPodCondition . "ContainersReady" }}
+  {{- $readyCondition := getPodCondition . "Ready" }}
+  {{ "PodScheduled" | redIf (not (isPodConditionHealthy $podScheduledCondition)) | bold }}
+    {{- " -> "}}
+    {{- "Initialized" | redIf (not (isPodConditionHealthy $initializedCondition)) | bold }}
+    {{- " -> "}}
+    {{- if (isPodConditionHealthy $containersReadyCondition) }}
+        {{- template "condition_summary" $containersReadyCondition }}
+    {{- else }}
+        {{- "ContainersReady" | red | bold }}
+    {{- end }}
+    {{- " -> "}}
+    {{- if (isPodConditionHealthy $readyCondition) }}
+        {{- template "condition_summary" $readyCondition }}
+    {{- else }}
+        {{- "Ready" | red | bold }}
+    {{- end }}
+    {{- range . }}
+        {{- /* show details for only unhealthy conditions */ -}}
+        {{- if (not (isPodConditionHealthy .)) }}
+  {{ template "condition_summary" . }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
 {{- define "conditions_summary" }}
-    {{- if .status.conditions }}
-        {{- range .status.conditions }}{{ template "condition_summary" . }}{{ end }}
+    {{- if . }}
+        {{- range . }}
+  {{ template "condition_summary" . }}
+        {{- end }}
     {{- end }}
 {{- end -}}
 
 {{- define "condition_summary" }}
-  {{ .type | bold }}:{{ .status | conditionStatusColor . }}{{ $condition := . }}
-    {{- with .reason }} {{ .| conditionStatusColor $condition }}{{ end }}
-    {{- with .message }}, {{ .| conditionStatusColor $condition }}{{ end }}
+    {{- .type | redIf (not (isPodConditionHealthy .)) | bold }}{{ $condition := . }}
+    {{- with .reason }} {{ . | redIf (not (isPodConditionHealthy $condition)) }}{{ end }}
+    {{- with .message }}, {{ . | redIf (not (isPodConditionHealthy $condition)) }}{{ end }}
     {{- with .lastTransitionTime }} for {{ . | colorAgo }}{{ end }}
     {{- if .lastUpdateTime }}
         {{- if ne (.lastUpdateTime | colorAgo) (.lastTransitionTime | colorAgo) -}}
@@ -429,8 +447,8 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 
 {{- define "container_status_summary"}}
     {{ .name | bold }} ({{ .image | markYellow "latest" }}) {{ template "container_state_summary" .state }}
-    {{- if .state.running }}{{ if .ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | redBold }}{{ end }}{{ end }}
-    {{- if gt (.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.restartCount | int) | yellowBold }}{{ end }}
+    {{- if .state.running }}{{ if .ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
+    {{- if gt (.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.restartCount | int) | yellow | bold }}{{ end }}
     {{- with .lastState }}
       lastState: {{ template "container_state_summary" . }}
     {{- end }}
@@ -439,7 +457,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 {{- define "container_state_summary" }}
     {{- /* https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-and-container-status */}}
     {{- with .waiting }}
-        {{- "Waiting" | redBold }} {{ .reason | redBold }}{{ with .message }}: {{ . | redBold }}{{ end }}
+        {{- "Waiting" | red | bold }} {{ .reason | red | bold }}{{ with .message }}: {{ . | red | bold }}{{ end }}
     {{- end }}
     {{- with .running }}
         {{- "Running" | green }} for {{ .startedAt | colorAgo }}
@@ -449,7 +467,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
             {{- $started := .startedAt | toDate "2006-01-02T15:04:05Z" -}}
             {{- $finished := .finishedAt | toDate "2006-01-02T15:04:05Z" -}}
             {{- $ranfor := $finished.Sub $started -}}
-        Started {{ .startedAt | colorAgo }} ago and {{ if .reason }}{{ .reason | colorContainerTerminateReason }}{{ else }}terminated{{- end }} after {{ $ranfor | colorDuration }}
+        Started {{ .startedAt | colorAgo }} ago and {{ if .reason }}{{ .reason | colorKeyword }}{{ else }}terminated{{ end }} after {{ $ranfor | colorDuration }}
             {{- if .exitCode }} with exit code {{ template "exit_code_summary" . }}{{ end }}
         {{- else }}
             {{ template "exit_code_summary" . }}
