@@ -254,11 +254,7 @@
 
 {{- define "condition_summary" }}
     {{- $condition := . }}
-    {{- if (not (isPodConditionHealthy .)) }}
-        {{- printf "Not %s" .type | red | bold }}:
-    {{- else}}
-        {{- .type | bold }}:
-    {{- end }}
+    {{- .type | redIf (not (isPodConditionHealthy .)) | bold }}
     {{- with .reason }} {{ . | redIf (not (isPodConditionHealthy $condition)) }}{{ end }}
     {{- with .message }}, {{ . | redIf (not (isPodConditionHealthy $condition)) }}{{ end }}
     {{- with .lastTransitionTime }} for {{ . | colorAgo }}{{ end }}
