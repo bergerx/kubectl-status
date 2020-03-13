@@ -3,6 +3,9 @@ release:
   github:
     owner: bergerx
     name: kubectl-status
+before:
+  hooks:
+    - go generate ./...
 builds:
   - id: status
     goos:

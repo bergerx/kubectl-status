@@ -7,6 +7,7 @@ test:
 
 .PHONY: bin
 bin: fmt vet
+	go generate ./pkg/... ./cmd/...
 	go build -o bin/status github.com/bergerx/kubectl-status/cmd/plugin
 
 .PHONY: fmt
