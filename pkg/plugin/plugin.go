@@ -78,6 +78,7 @@ func isPodConditionHealthy(condition map[string]interface{}) bool {
 	*/
 	case strings.HasSuffix(fmt.Sprint(condition["type"]), "Pressure"), // Node Pressure conditions
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Unavailable"), // Node NetworkUnavailable condition
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Failure"),     // ReplicaSet ReplicaFailure: condition
 		strings.HasPrefix(fmt.Sprint(condition["type"]), "Non"),         // CRD NonStructuralSchema condition
 		condition["type"] == "Failed":                                   // Failed Jobs has this condition
 		switch condition["status"] {
