@@ -3,6 +3,7 @@
     {{- template "observed_generation_summary" . }}
     {{- template "replicas_status" . }}
     {{- template "conditions_summary" .status.conditions }}
+    {{- template "events" .events }}
 {{- end }}
 
 {{- define "Pod" }}
@@ -22,6 +23,7 @@
             {{- template "container_status_summary" . }}
         {{- end }}
     {{- end }}
+    {{- template "events" .events }}
 {{- end }}
 
 {{- define "StatefulSet" }}
@@ -46,6 +48,7 @@
     {{- else }}
   {{"Ongoing rollout" | yellow | bold }}: {{ .status.currentRevision }} -> {{ .status.updateRevision }}
     {{- end }}
+    {{- template "events" .events }}
 {{- end }}
 
 {{- define "DaemonSet" }}
@@ -53,6 +56,7 @@
     {{- template "observed_generation_summary" . }}
     {{- template "daemonset_replicas_status" . }}
     {{- template "conditions_summary" .status.conditions }}
+    {{- template "events" .events }}
 {{- end -}}
 
 {{- define "PersistentVolume" }}
@@ -60,20 +64,24 @@
     {{- with .status.message }}{{/* exists on failure */}}
   {{ "message" | red | bold }}: {{ . }}
     {{- end }}
+    {{- template "events" .events }}
 {{- end -}}
 
 {{- define "PersistentVolumeClaim" }}
     {{- template "status_summary_line" . }}
     {{- with .status.capacity.storage }} {{ . }}{{ end }}
+    {{- template "events" .events }}
 {{- end -}}
 
 {{- define "ComponentStatus" }}
     {{- template "status_summary_line" . }}
     {{- template "conditions_summary" .conditions }}
+    {{- template "events" .events }}
 {{- end -}}
 
 {{- define "CronJob" }}
     {{- template "status_summary_line" . }}, last ran at {{ .status.lastScheduleTime }} ({{ .status.lastScheduleTime | colorAgo }} ago)
+    {{- template "events" .events }}
 {{- end -}}
 
 {{- define "Job" }}
@@ -89,6 +97,7 @@
         {{- template "job_parallel" . }}
     {{- end }}
     {{- template "conditions_summary" .status.conditions }}
+    {{- template "events" .events }}
 {{- end -}}
 
 {{- define "job_non_parallel" }}
@@ -106,11 +115,13 @@
     {{- if eq .spec.type "LoadBalancer" }}
         {{- template "load_balancer_ingress" . }}
     {{- end }}
+    {{- template "events" .events }}
 {{- end -}}
 
 {{- define "Ingress" }}
     {{- template "status_summary_line" . }}
     {{- template "load_balancer_ingress" . }}
+    {{- template "events" .events }}
 {{- end -}}
 
 {{- define "HorizontalPodAutoscaler" }}
@@ -118,6 +129,7 @@
   {{ "current" | bold }} replicas:{{ .status.currentReplicas }}/({{ .spec.minReplicas | default "1" }}-{{ .spec.maxReplicas }})
     {{- if .status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .status.currentCPUUtilizationPercentage | toString | redIf (ge .status.currentCPUUtilizationPercentage .spec.targetCPUUtilizationPercentage) }}%/{{ .spec.targetCPUUtilizationPercentage }}%{{ end }}
     {{- if (ne .status.currentReplicas .status.desiredReplicas) }}, {{ "desired" | red | bold}}: {{ .status.currentReplicas }} --> {{ .status.desiredReplicas }}{{ end }}
+    {{- template "events" .events }}
 {{- end -}}
 
 {{- define "ResourceQuota" }}
@@ -126,6 +138,7 @@
     {{- range $key, $value := .status.used }}
   {{ $key }}: {{ $value }}/{{ index $hard $key }}
     {{- end }}
+    {{- template "events" .events }}
 {{- end -}}
 
 {{- define "load_balancer_ingress" }}
@@ -297,6 +310,21 @@
     {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | signalName }}) {{ end }}
 {{- end -}}
 
+{{- define "events" }}
+    {{- if .items }}
+  Events:
+        {{- range .items }}
+    {{ "" }} {{- /* To have the newline and two spaces */ -}}
+            {{- if eq .type "Warning" }}{{ .reason | red | bold }} {{ else }}{{ .reason }} {{ end }}
+            {{- .lastTimestamp | colorAgo }} ago {{ "" }}
+            {{- if gt (.count | int) 1 -}}
+                (x{{ .count }} over {{ .firstTimestamp | colorAgo }}) {{ "" }}
+            {{- end -}}
+            from {{ list .reportingComponent .reportingInstance .source.component .source.host .source.fieldPath | compact | join "," | bold }}: {{ .message }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
 {{- define "Node" }}
     {{- template "status_summary_line" . }}
   {{ .status.nodeInfo.operatingSystem | bold }} {{ .status.nodeInfo.osImage }} ({{ .status.nodeInfo.architecture }}), kernel {{ .status.nodeInfo.kernelVersion }}, kubelet {{ .status.nodeInfo.kubeletVersion }}, kube-proxy {{ .status.nodeInfo.kubeProxyVersion }}
@@ -314,5 +342,6 @@
         {{- with index .status.allocatable "attachable-volumes-azure-disk" }}/{{ . }}{{ end }}, attached={{ .status.volumesAttached | len }}
     {{- end}}
     {{- template "conditions_summary" .status.conditions }}
+    {{- template "events" .events }}
 {{- end -}}
 

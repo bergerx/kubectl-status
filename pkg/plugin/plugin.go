@@ -22,6 +22,7 @@ import (
 	"k8s.io/cli-runtime/pkg/resource"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/kubectl/pkg/scheme"
 )
 
 var funcMap = template.FuncMap{
@@ -177,6 +178,7 @@ func colorDuration(duration time.Duration) string {
 func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 	//log := logger.NewLogger()
 	//log.Info(strings.Join(args, ","))
+	clientSet, err := f.KubernetesClientSet()
 	clientConfig := f.ToRawKubeConfigLoader()
 	namespace, enforceNamespace, err := clientConfig.Namespace()
 	if err != nil {
@@ -246,6 +248,13 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 		} else {
 			kindTemplateName = "DefaultResource"
 		}
+
+		events, _ := clientSet.CoreV1().Events(namespace).Search(scheme.Scheme, obj)
+		eventsJson, _ := json.Marshal(events)
+		eventsKey := make(map[string]interface{})
+		out["events"] = eventsKey
+		json.Unmarshal(eventsJson, &eventsKey)
+
 		err = tmpl.ExecuteTemplate(os.Stdout, kindTemplateName, out)
 		if err != nil {
 			if errs.Has(err.Error()) {
