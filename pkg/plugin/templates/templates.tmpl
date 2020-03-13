@@ -24,6 +24,23 @@
     {{- end }}
 {{- end }}
 
+{{- define "StatefulSet" }}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
+           and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
+    {{- $injectedStatus := .status }}
+    {{- if not (hasKey .status "readyReplicas") }}
+        {{- $injectedStatus := set $injectedStatus "readyReplicas" 0.0 }}
+    {{- end }}
+    {{- if not (hasKey .status "currentReplicas") }}
+        {{- $injectedStatus := set $injectedStatus "currentReplicas" 0.0 }}
+    {{- end}}
+    {{- $injectedManifest := set . "status" $injectedStatus }}
+    {{- template "replicas_status" $injectedManifest }}
+    {{- /* template "conditions_summary" . */ -}}
+{{- end }}
+
 {{- define "DaemonSet" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
@@ -109,11 +126,11 @@
 {{- define "daemonset_replicas_status" }}
     {{- if .status.desiredNumberScheduled }}{{ $desiredNumberScheduled := .status.desiredNumberScheduled }}
   {{ "desired" | bold}}:{{ .status.desiredNumberScheduled }}
-        {{- with .status.currentNumberScheduled }}, current:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
-        {{- with .status.numberAvailable }}, available:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
-        {{- with .status.numberReady }}, ready:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
-        {{- with .status.updatedNumberScheduled }}, updated:{{ . | toString | redIf (not ( eq $desiredNumberScheduled . )) }}{{ end }}
-        {{- if gt (.status.numberMisscheduled | int) 0 }}{{ "numberMisscheduled" | red | bold }}:{{ .status.numberMisscheduled }}{{- end }}
+        {{- if hasKey .status "currentNumberScheduled" }}, current:{{ .status.currentNumberScheduled | toString | redIf (not ( eq $desiredNumberScheduled .status.currentNumberScheduled )) }}{{ end }}
+        {{- if hasKey .status "numberAvailable" }}, available:{{ .status.numberAvailable | toString | redIf (not ( eq $desiredNumberScheduled .status.numberAvailable)) }}{{ end }}
+        {{- if hasKey .status "numberReady" }}, ready:{{ .status.numberReady | toString | redIf (not ( eq $desiredNumberScheduled .status.numberReady )) }}{{ end }}
+        {{- if hasKey .status "updatedNumberScheduled" }}, updated:{{ .status.updatedNumberScheduled | toString | redIf (not ( eq $desiredNumberScheduled .status.updatedNumberScheduled )) }}{{ end }}
+        {{- with .status.numberMisscheduled }}{{ "numberMisscheduled" | red | bold }}:{{ . }}{{- end }}
     {{- end }}
 {{- end -}}
 
@@ -121,11 +138,11 @@
     {{- if .status.replicas }}{{ $spec_replicas := .spec.replicas }}
   {{ "desired" | bold }}:{{ .spec.replicas }}
         {{- with .status.replicas }}, existing:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-        {{- with .status.readyReplicas }}, ready:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-        {{- with .status.currentReplicas }}, current:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-        {{- with .status.updatedReplicas }}, updated:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-        {{- with .status.availableReplicas }}, available:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-        {{- with .status.fullyLabeledReplicas }}, fullyLabeled:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
+        {{- if hasKey .status "readyReplicas" }}, ready:{{ .status.readyReplicas | toString | redIf (not ( eq $spec_replicas .status.readyReplicas )) }}{{ end }}
+        {{- if hasKey .status "currentReplicas" }}, current:{{ .status.currentReplicas | toString | redIf (not ( eq $spec_replicas .status.currentReplicas )) }}{{ end }}
+        {{- if hasKey .status "updatedReplicas" }}, updated:{{ .status.updatedReplicas | toString | redIf (not ( eq $spec_replicas .status.updatedReplicas )) }}{{ end }}
+        {{- if hasKey .status "availableReplicas" }}, available:{{ .status.availableReplicas | toString | redIf (not ( eq $spec_replicas .status.availableReplicas )) }}{{ end }}
+        {{- if hasKey .status "fullyLabeledReplicas" }}, fullyLabeled:{{ .status.fullyLabeledReplicas | toString | redIf (not ( eq $spec_replicas .status.fullyLabeledReplicas )) }}{{ end }}
         {{- with .status.unavailableReplicas }}, unavailable:{{ . | toString | red | bold }}{{ end }}
         {{- with .status.collisionCount }}, collisions:{{ .status.collisionCount | toString | red | bold }}{{ end }}
   {{- end }}
