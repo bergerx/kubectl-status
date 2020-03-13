@@ -195,29 +195,38 @@
 {{- end -}}
 
 {{- define "pod_conditions_summary" }}
-  {{- $podScheduledCondition := getPodCondition . "PodScheduled" }}
-  {{- $initializedCondition := getPodCondition . "Initialized" }}
-  {{- $containersReadyCondition := getPodCondition . "ContainersReady" }}
-  {{- $readyCondition := getPodCondition . "Ready" }}
-  {{ "PodScheduled" | redIf (not (isPodConditionHealthy $podScheduledCondition)) | bold }}
-    {{- " -> "}}
-    {{- "Initialized" | redIf (not (isPodConditionHealthy $initializedCondition)) | bold }}
-    {{- " -> "}}
-    {{- if (isPodConditionHealthy $containersReadyCondition) }}
-        {{- template "condition_summary" $containersReadyCondition }}
+  {{ "" }} {{- /* To have the newline and two spaces */ -}}
+    {{- $podScheduledCondition := getPodCondition . "PodScheduled" }}
+    {{- $readyCondition := getPodCondition . "Ready" }}
+    {{- if (isPodConditionHealthy $podScheduledCondition) }}
+        {{- "PodScheduled" | bold }}
     {{- else }}
-        {{- "ContainersReady" | red | bold }}
+        {{- "Not PodScheduled" | red | bold }}
+    {{- end }}
+    {{- " -> "}}
+    {{- $initializedCondition := getPodCondition . "Initialized" }}
+    {{- if (isPodConditionHealthy $initializedCondition) }}
+        {{- "Initialized" | bold }}
+    {{- else }}
+        {{- "Not Initialized" | red | bold }}
+    {{- end }}
+    {{- " -> "}}
+    {{- $containersReadyCondition := getPodCondition . "ContainersReady" }}
+    {{- if (isPodConditionHealthy $containersReadyCondition) }}
+        {{- "ContainersReady" | bold }}
+    {{- else }}
+        {{- "Not ContainersReady" | red | bold }}
     {{- end }}
     {{- " -> "}}
     {{- if (isPodConditionHealthy $readyCondition) }}
         {{- template "condition_summary" $readyCondition }}
     {{- else }}
-        {{- "Ready" | red | bold }}
+        {{- "Not Ready" | red | bold }}
     {{- end }}
     {{- range . }}
         {{- /* show details for only unhealthy conditions */ -}}
         {{- if (not (isPodConditionHealthy .)) }}
-  {{ template "condition_summary" . }}
+    {{ template "condition_summary" . }}
         {{- end }}
     {{- end }}
 {{- end -}}
@@ -231,7 +240,12 @@
 {{- end -}}
 
 {{- define "condition_summary" }}
-    {{- .type | redIf (not (isPodConditionHealthy .)) | bold }}{{ $condition := . }}
+    {{- $condition := . }}
+    {{- if (not (isPodConditionHealthy .)) }}
+        {{- printf "Not %s" .type | red | bold }}:
+    {{- else}}
+        {{- .type | bold }}:
+    {{- end }}
     {{- with .reason }} {{ . | redIf (not (isPodConditionHealthy $condition)) }}{{ end }}
     {{- with .message }}, {{ . | redIf (not (isPodConditionHealthy $condition)) }}{{ end }}
     {{- with .lastTransitionTime }} for {{ . | colorAgo }}{{ end }}
@@ -252,7 +266,7 @@
     {{- if .state.running }}{{ if .ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
     {{- if gt (.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.restartCount | int) | yellow | bold }}{{ end }}
     {{- with .lastState }}
-      lastState: {{ template "container_state_summary" . }}
+      previously: {{ template "container_state_summary" . }}
     {{- end }}
 {{- end -}}
 
