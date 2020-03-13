@@ -38,7 +38,14 @@
     {{- end}}
     {{- $injectedManifest := set . "status" $injectedStatus }}
     {{- template "replicas_status" $injectedManifest }}
-    {{- /* template "conditions_summary" . */ -}}
+    {{- template "conditions_summary" .status.conditions }}
+    {{- if eq .status.currentRevision .status.updateRevision }}
+        {{- if eq $injectedStatus.readyReplicas 0.0 }}
+  {{ "Stuck rollout" | red }}: No ready replicas, this StatefulSet won't likely go further.
+        {{- end }}
+    {{- else }}
+  {{"Ongoing rollout" | yellow | bold }}: {{ .status.currentRevision }} -> {{ .status.updateRevision }}
+    {{- end }}
 {{- end }}
 
 {{- define "DaemonSet" }}
@@ -152,6 +159,7 @@
 {{.kind | cyan | bold }}/{{ .metadata.name | cyan }}
     {{- with .metadata.namespace }} -n {{ . }}{{ end }}
     {{- with .metadata.creationTimestamp }}, created {{ . | colorAgo }} ago{{ end }}
+    {{- with .metadata.generation }}, gen:{{ . }}{{ end }}
     {{- if .status.startTime }}
         {{- $created := .metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
         {{- $started := .status.startTime | toDate "2006-01-02T15:04:05Z" }}
