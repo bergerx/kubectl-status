@@ -120,6 +120,14 @@
     {{- if (ne .status.currentReplicas .status.desiredReplicas) }}, {{ "desired" | red | bold}}: {{ .status.currentReplicas }} --> {{ .status.desiredReplicas }}{{ end }}
 {{- end -}}
 
+{{- define "ResourceQuota" }}
+    {{- template "status_summary_line" . }}
+    {{- $hard := .status.hard }}
+    {{- range $key, $value := .status.used }}
+  {{ $key }}: {{ $value }}/{{ index $hard $key }}
+    {{- end }}
+{{- end -}}
+
 {{- define "load_balancer_ingress" }}
     {{- if .status.loadBalancer.ingress }}
         {{- if or (index .status.loadBalancer.ingress 0).hostname (index .status.loadBalancer.ingress 0).ip }}
