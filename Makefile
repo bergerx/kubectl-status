@@ -7,15 +7,18 @@ test:
 
 .PHONY: bin
 bin: fmt vet
-	go generate ./pkg/... ./cmd/...
 	go build -o bin/status github.com/bergerx/kubectl-status/cmd/plugin
 
+.PHONY: generate
+generate:
+	go generate ./pkg/... ./cmd/...
+
 .PHONY: fmt
-fmt:
+fmt: generate
 	go fmt ./pkg/... ./cmd/...
 
 .PHONY: vet
-vet:
+vet: generate
 	go vet ./pkg/... ./cmd/...
 
 .PHONY: kubernetes-deps
