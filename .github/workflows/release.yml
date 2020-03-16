@@ -19,6 +19,11 @@ jobs:
         uses: actions/setup-go@v1
         with:
           go-version: 1.13.x
+      - name: setup env
+        # workaround for goreleaser not able to find build dependencies which are installed by go install
+        shell: bash
+        run: |
+          echo "::add-path::$(go env GOPATH)/bin"
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v1
         with:
