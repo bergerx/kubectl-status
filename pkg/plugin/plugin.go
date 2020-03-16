@@ -14,15 +14,22 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	_ "github.com/bergerx/kubectl-status/pkg/plugin/statik"
+	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 	sfs "github.com/rakyll/statik/fs"
 	"github.com/spf13/cobra"
+	resource2 "k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/cli-runtime/pkg/resource"
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/scheme"
+	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 var funcMap = template.FuncMap{
@@ -40,8 +47,30 @@ var funcMap = template.FuncMap{
 	"markYellow":            markYellow,
 	"redIf":                 redIf,
 	"signalName":            signalName,
-	"getPodCondition":       getPodCondition,
 	"isPodConditionHealthy": isPodConditionHealthy,
+	"quantityToFloat64":     quantityToFloat64,
+	"quantityToInt64":       quantityToInt64,
+	"percent":               percent,
+	"humanizeSI":            humanizeSI,
+	"getItemInList":         getItemInList,
+}
+
+func humanizeSI(unit string, input float64) string {
+	return humanize.SIWithDigits(input, 1, unit)
+}
+
+func quantityToFloat64(str string) float64 {
+	quantity, _ := resource2.ParseQuantity(str)
+	return float64(quantity.MilliValue()) / 1000
+}
+
+func quantityToInt64(str string) int64 {
+	quantity, _ := resource2.ParseQuantity(str)
+	return quantity.Value()
+}
+
+func percent(x, y float64) float64 {
+	return x / y * 100
 }
 
 func colorBool(cond bool, str string) string {
@@ -52,16 +81,16 @@ func colorBool(cond bool, str string) string {
 	}
 }
 
-func getPodCondition(conditions []interface{}, conditionType string) map[string]interface{} {
-	var condition map[string]interface{}
-	for _, untypedCondition := range conditions {
-		typedCondition := untypedCondition.(map[string]interface{})
-		if typedCondition["type"] == conditionType {
-			condition = typedCondition
+func getItemInList(list []interface{}, itemKey, itemValue string) map[string]interface{} {
+	var item map[string]interface{}
+	for _, untypedItem := range list {
+		typedItem := untypedItem.(map[string]interface{})
+		if typedItem[itemKey].(string) == itemValue {
+			item = typedItem
 			break
 		}
 	}
-	return condition
+	return item
 }
 
 func isPodConditionHealthy(condition map[string]interface{}) bool {
@@ -214,10 +243,11 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 	}
 	errs := sets.NewString()
 	for _, info := range infos {
-		var data []byte
 		var err error
+		out := map[string]interface{}{}
 		obj := info.Object
-		data, err = json.Marshal(obj)
+		objKind := info.ResourceMapping().GroupVersionKind.Kind
+		err = includeObj(obj, out)
 		if err != nil {
 			if errs.Has(err.Error()) {
 				continue
@@ -226,9 +256,8 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 			errs.Insert(err.Error())
 			continue
 		}
-
-		out := map[string]interface{}{}
-		if err := json.Unmarshal(data, &out); err != nil {
+		err = includeEvents(obj, clientSet, out)
+		if err != nil {
 			if errs.Has(err.Error()) {
 				continue
 			}
@@ -236,25 +265,40 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 			errs.Insert(err.Error())
 			continue
 		}
+		if objKind == "Node" {
+			err = includeNodeMetrics(obj, f, out)
+			if err != nil {
+				if errs.Has(err.Error()) {
+					continue
+				}
+				allErrs = append(allErrs, err)
+				errs.Insert(err.Error())
+				continue
+			}
+		}
+		if objKind == "Pod" {
+			err = includePodMetrics(obj, f, out)
+			if err != nil {
+				if errs.Has(err.Error()) {
+					continue
+				}
+				allErrs = append(allErrs, err)
+				errs.Insert(err.Error())
+				continue
+			}
+		}
 
 		tmpl := template.Must(template.
 			New("templates.tmpl").
 			Funcs(sprig.TxtFuncMap()).
 			Funcs(funcMap).
 			Parse(contents))
-		kind := info.ResourceMapping().GroupVersionKind.Kind
 		var kindTemplateName string
-		if t := tmpl.Lookup(kind); t != nil {
-			kindTemplateName = kind
+		if t := tmpl.Lookup(objKind); t != nil {
+			kindTemplateName = objKind
 		} else {
 			kindTemplateName = "DefaultResource"
 		}
-
-		events, _ := clientSet.CoreV1().Events(namespace).Search(scheme.Scheme, obj)
-		eventsJson, _ := json.Marshal(events)
-		eventsKey := make(map[string]interface{})
-		out["events"] = eventsKey
-		json.Unmarshal(eventsJson, &eventsKey)
 
 		err = tmpl.ExecuteTemplate(os.Stdout, kindTemplateName, out)
 		if err != nil {
@@ -269,6 +313,62 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 		fmt.Println("")
 	}
 	return utilerrors.NewAggregate(allErrs)
+}
+
+func includeObj(obj runtime.Object, out map[string]interface{}) error {
+	var data []byte
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, &out)
+	if err != nil {
+		return err
+	}
+	return err
+}
+
+func includeEvents(obj runtime.Object, clientSet *kubernetes.Clientset, out map[string]interface{}) error {
+	objectMeta := obj.(metav1.Object)
+	events, _ := clientSet.CoreV1().Events(objectMeta.GetNamespace()).Search(scheme.Scheme, obj)
+	eventsJson, _ := json.Marshal(events)
+	eventsKey := make(map[string]interface{})
+	out["events"] = eventsKey
+	return json.Unmarshal(eventsJson, &eventsKey)
+}
+
+func includeNodeMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
+	config, _ := f.ToRESTConfig()
+	clientSet, _ := metricsv.NewForConfig(config)
+	objectMeta := obj.(metav1.Object)
+	nodeMetrics, _ := clientSet.MetricsV1beta1().
+		NodeMetricses().
+		Get(objectMeta.GetName(), v1.GetOptions{})
+	nodeMetricsJson, _ := json.Marshal(nodeMetrics)
+	nodeMetricsKey := make(map[string]interface{})
+	err := json.Unmarshal(nodeMetricsJson, &nodeMetricsKey)
+	if err != nil {
+		return err
+	}
+	out["nodeMetrics"] = nodeMetricsKey
+	return nil
+}
+
+func includePodMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
+	config, _ := f.ToRESTConfig()
+	clientSet, _ := metricsv.NewForConfig(config)
+	objectMeta := obj.(metav1.Object)
+	podMetrics, _ := clientSet.MetricsV1beta1().
+		PodMetricses(objectMeta.GetNamespace()).
+		Get(objectMeta.GetName(), metav1.GetOptions{})
+	podMetricsJson, _ := json.Marshal(podMetrics)
+	podMetricsKey := make(map[string]interface{})
+	err := json.Unmarshal(podMetricsJson, &podMetricsKey)
+	if err != nil {
+		return err
+	}
+	out["podMetrics"] = podMetricsKey
+	return nil
 }
 
 func getTemplate() (string, error) {

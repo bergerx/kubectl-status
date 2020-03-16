@@ -6,6 +6,7 @@ replace github.com/gorilla/rpc v1.2.0+incompatible => github.com/gorilla/rpc v1.
 
 require (
 	github.com/Masterminds/sprig/v3 v3.0.2
+	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/rakyll/statik v0.1.7
 	github.com/spf13/cobra v0.0.6
@@ -15,4 +16,5 @@ require (
 	k8s.io/cli-runtime v0.17.3
 	k8s.io/client-go v0.17.3
 	k8s.io/kubectl v0.17.3
+	k8s.io/metrics v0.17.3
 )
