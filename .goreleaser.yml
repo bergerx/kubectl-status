@@ -5,6 +5,7 @@ release:
     name: kubectl-status
 before:
   hooks:
+    - go get github.com/rakyll/statik@v0.1.7
     - go generate ./...
 builds:
   - id: status
