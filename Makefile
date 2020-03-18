@@ -1,6 +1,8 @@
 
 export GO111MODULE=on
 
+.DEFAULT_GOAL := bin
+
 .PHONY: test
 test:
 	go test ./pkg/... ./cmd/... -coverprofile cover.out
