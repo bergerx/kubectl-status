@@ -26,12 +26,9 @@ func RootCmd() *cobra.Command {
 	f := cmdutil.NewFactory(KubernetesConfigFlags)
 
 	cmd := &cobra.Command{
-		Use: "kubectl status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
-		//DisableFlagsInUseLine: true,
-		Short:         "Display status for one or many resources",
-		Long:          `.`,
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		Use:   "status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
+		Short: "Display status for one or many resources",
+		Long:  `.`,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			viper.BindPFlags(cmd.Flags())
 		},
@@ -41,8 +38,10 @@ func RootCmd() *cobra.Command {
 	}
 	KubernetesConfigFlags.AddFlags(cmd.Flags())
 	ResourceBuilderFlags.AddFlags(cmd.Flags())
+	var x bool
+	cmd.Flags().BoolVarP(&x, "test", "t", false, "Run the template against the provided yaml manifest. Need to be used with a --filename parameter. No request to apiserver is done.")
 
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(viper.AutomaticEnv)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	return cmd
 }
@@ -60,8 +59,4 @@ func InitAndExecute() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-}
-
-func initConfig() {
-	viper.AutomaticEnv()
 }

@@ -2,8 +2,10 @@
 package plugin
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -215,6 +217,16 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 		return errors.WithMessage(err, "Failed getting namespace")
 	}
 	filenames := cmdutil.GetFlagStringSlice(cmd, "filename")
+	isTest := cmdutil.GetFlagBool(cmd, "test")
+	if isTest {
+		if len(filenames) != 1 {
+			return errors.New("When using --test, exactly one --filename must be provided.")
+		}
+		filename := filenames[0]
+		out, _ := renderFile(filename)
+		fmt.Println(out)
+		return nil
+	}
 
 	r := f.NewBuilder().
 		Unstructured().
@@ -231,7 +243,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 		return errors.WithMessage(err, "Failed during querying of resources")
 	}
 
-	contents, err := getTemplate()
+	templateText, err := getTemplate()
 	if err != nil {
 		return err
 	}
@@ -271,19 +283,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		tmpl := template.Must(template.
-			New("templates.tmpl").
-			Funcs(sprig.TxtFuncMap()).
-			Funcs(funcMap).
-			Parse(contents))
-		var kindTemplateName string
-		if t := tmpl.Lookup(objKind); t != nil {
-			kindTemplateName = objKind
-		} else {
-			kindTemplateName = "DefaultResource"
-		}
-
-		err = tmpl.ExecuteTemplate(os.Stdout, kindTemplateName, out)
+		err = renderTemplate(templateText, os.Stdout, out)
 		if err != nil {
 			allErrs = append(allErrs, err)
 			continue
@@ -294,15 +294,56 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 	return utilerrors.NewAggregate(allErrs)
 }
 
-func includeObj(obj runtime.Object, out map[string]interface{}) error {
-	var data []byte
-	data, err := json.Marshal(obj)
+func renderFile(manifestFilename string) (string, error) {
+	var out map[string]interface{}
+	manifestFile, _ := ioutil.ReadFile(manifestFilename)
+	obj, _, _ := scheme.Codecs.UniversalDeserializer().Decode(manifestFile, nil, nil)
+	err := unmarshal(obj, &out)
 	if err != nil {
-		return errors.WithMessage(err, "Failed JSON encoding of object")
+		return "", errors.WithMessage(err, "Failed getting JSON for object")
 	}
-	err = json.Unmarshal(data, &out)
+	templateText, _ := getTemplate()
+	var output bytes.Buffer
+	err = renderTemplate(templateText, &output, out)
 	if err != nil {
-		return errors.WithMessage(err, "Failed parsing JSON of object")
+		return "", err
+	}
+	return output.String(), nil
+}
+
+func renderTemplate(templateText string, wr io.Writer, v map[string]interface{}) error {
+	tmpl := template.Must(template.
+		New("templates.tmpl").
+		Funcs(sprig.TxtFuncMap()).
+		Funcs(funcMap).
+		Parse(templateText))
+	kindTemplateName := findTemplateName(tmpl, v)
+	return tmpl.ExecuteTemplate(wr, kindTemplateName, v)
+}
+
+func findTemplateName(tmpl *template.Template, v map[string]interface{}) string {
+	objKind := v["kind"].(string)
+	var kindTemplateName string
+	if t := tmpl.Lookup(objKind); t != nil {
+		kindTemplateName = objKind
+	} else {
+		kindTemplateName = "DefaultResource"
+	}
+	return kindTemplateName
+}
+
+func includeObj(obj runtime.Object, out map[string]interface{}) error {
+	return unmarshal(obj, &out)
+}
+
+func unmarshal(v interface{}, out *map[string]interface{}) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, out)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -313,14 +354,10 @@ func includeEvents(obj runtime.Object, clientSet *kubernetes.Clientset, out map[
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting event")
 	}
-	eventsJson, err := json.Marshal(events)
-	if err != nil {
-		return errors.WithMessage(err, "Failed JSON encoding of object's Events")
-	}
 	eventsKey := make(map[string]interface{})
-	err = json.Unmarshal(eventsJson, &eventsKey)
+	err = unmarshal(events, &eventsKey)
 	if err != nil {
-		return errors.WithMessage(err, "Failed parsing JSON of Events")
+		return errors.WithMessage(err, "Failed getting JSON for Events")
 	}
 	out["events"] = eventsKey
 	return nil
@@ -340,14 +377,10 @@ func includeNodeMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]in
 		// swallow any errors while getting NodeMetrics
 		return nil
 	}
-	nodeMetricsJson, err := json.Marshal(nodeMetrics)
-	if err != nil {
-		return errors.WithMessage(err, "Failed JSON encoding of NodeMetrics")
-	}
 	nodeMetricsKey := make(map[string]interface{})
-	err = json.Unmarshal(nodeMetricsJson, &nodeMetricsKey)
+	err = unmarshal(nodeMetrics, &nodeMetricsKey)
 	if err != nil {
-		return errors.WithMessage(err, "Failed parsing JSON of NodeMetrics")
+		return errors.WithMessage(err, "Failed getting JSON for NodeMetrics")
 	}
 	out["nodeMetrics"] = nodeMetricsKey
 	return nil
@@ -367,14 +400,10 @@ func includePodMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]int
 		// swallow any errors while getting PodMetrics
 		return nil
 	}
-	podMetricsJson, err := json.Marshal(podMetrics)
-	if err != nil {
-		return errors.WithMessage(err, "Failed JSON encoding of PodMetrics")
-	}
 	podMetricsKey := make(map[string]interface{})
-	err = json.Unmarshal(podMetricsJson, &podMetricsKey)
+	err = unmarshal(podMetrics, &podMetricsKey)
 	if err != nil {
-		return errors.WithMessage(err, "Failed parsing JSON of PodMetrics")
+		return errors.WithMessage(err, "Failed getting JSON for PodMetrics")
 	}
 	out["podMetrics"] = podMetricsKey
 	return nil
