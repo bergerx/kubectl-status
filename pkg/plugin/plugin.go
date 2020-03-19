@@ -223,7 +223,10 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 			return errors.New("When using --test, exactly one --filename must be provided.")
 		}
 		filename := filenames[0]
-		out, _ := renderFile(filename)
+		out, err := renderFile(filename)
+		if err != nil {
+			return err
+		}
 		fmt.Println(out)
 		return nil
 	}
