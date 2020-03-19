@@ -14,6 +14,10 @@
     {{- with .status.message }}, message: {{ . }}{{ end }}
     {{- template "pod_conditions_summary" .status.conditions }}
     {{- template "owner_references" . }}
+    {{- if not .metadata.ownerReferences }}
+        {{- $container := index .spec.containers 0 }} {{- /* not ideal but will likely work in most cases if not all */ -}}
+  {{ "Standalone POD" | red | bold }}{{ if $container.stdin }}, interactive{{ end }}{{ if $container.tty }} with attached TTY{{ end }}.
+    {{- end }}
     {{- with .status.initContainerStatuses }}
   InitContainers:
         {{- range . }}
@@ -310,14 +314,8 @@
   Owners: {{ range $index, $ownerReference := .metadata.ownerReferences }}
             {{- if $index }}, {{ end }}{{ $ownerReference.kind | bold }}/{{ $ownerReference.name }}
         {{- end }}
-    {{- else }}
-        {{- if .spec.containers }}
-            {{- $container := index .spec.containers 0 }}
-  {{ "Standalone POD" | red | bold }}{{ if $container.stdin }}, interactive{{ end }}{{ if $container.tty }} with attached TTY{{ end }}.
-        {{- end }}
     {{- end }}
 {{- end -}}
-
 
 {{- define "observed_generation_summary" }}
     {{- if and .metadata.generation .status.observedGeneration }}
