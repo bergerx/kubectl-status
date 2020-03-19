@@ -187,7 +187,16 @@
 {{- end -}}
 
 {{- define "CronJob" }}
-    {{- template "status_summary_line" . }}, last ran at {{ .status.lastScheduleTime }} ({{ .status.lastScheduleTime | colorAgo }} ago)
+    {{- template "status_summary_line" . }}
+    {{- if .status.lastScheduleTime }}, last ran at {{ .status.lastScheduleTime }} ({{ .status.lastScheduleTime | colorAgo }} ago)
+    {{- else }}
+  {{ "Not yet scheduled" | yellow | bold }}
+    {{- end }}
+    {{- with .status.active }}
+        {{- range . }}
+  {{ "Active" | green }}: {{ .kind | bold }}/{{ .name }} is running.
+        {{- end }}
+    {{- end }}
     {{- template "owner_references" . }}
     {{- template "events" .events }}
 {{- end -}}
@@ -210,12 +219,14 @@
 {{- end -}}
 
 {{- define "job_non_parallel" }}
+    {{- if .status.active }}, {{ "Active" | green }}{{ end }}
     {{- if .status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
     {{- if .status.failed }}, {{ "Failed" | red | bold }}{{ end }}
 {{- end -}}
 
 {{- define "job_parallel" }}
     TODO: handle parallel jobs  better
+    {{- if .status.active }}, {{ "active" | green }}:{{ . }}{{ end }}
     {{- if .status.failed }}, {{ "failed" | red | bold }} {{ .status.failed }}/{{ .spec.backoffLimit }} times{{ end }}
 {{- end -}}
 
