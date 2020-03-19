@@ -15,7 +15,7 @@
     {{- template "pod_conditions_summary" .status.conditions }}
     {{- template "owner_references" . }}
     {{- if not .metadata.ownerReferences }}
-        {{- $container := index .spec.containers 0 }} {{- /* not ideal but will likely work in most cases if not all */ -}}
+        {{- $container := index .spec.containers 0 }}{{/* not ideal but will likely work in most cases if not all */}}
   {{ "Standalone POD" | red | bold }}{{ if $container.stdin }}, interactive{{ end }}{{ if $container.tty }} with attached TTY{{ end }}.
     {{- end }}
     {{- with .status.initContainerStatuses }}
@@ -232,11 +232,15 @@
 
 {{- define "Service" }}
     {{- template "status_summary_line" . }}
+    {{- if eq .spec.clusterIP "None" }} {{ "Headless" | yellow | bold }}{{- end }}
     {{- if eq .spec.type "LoadBalancer" }}
         {{- template "load_balancer_ingress" . }}
     {{- end }}
     {{- template "owner_references" . }}
     {{- if .endpoint }}
+        {{- if hasKey .endpoint.metadata.annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
+            , last endpoint change was {{ index .endpoint.metadata.annotations "endpoints.kubernetes.io/last-change-trigger-time"  | colorAgo }} ago
+        {{- end}}
         {{- if .endpoint.subsets }}
             {{- range .endpoint.subsets }}
                 {{- $ports := .ports }}
@@ -300,11 +304,13 @@
     {{- $ip := .address.ip }}
     {{- $hasTargetRef := not (not .address.targetRef) }}
     {{- if .address.targetRef }}
-        {{- .address.targetRef.kind | bold }}/{{.address.targetRef.name}} -n {{.address.targetRef.namespace}} on {{ "Node" | bold }}/{{.address.nodeName}}
+        {{- .address.targetRef.kind | bold }}/{{ .address.targetRef.name }}
+        {{- with .address.targetRef.namespace }} -n {{ . }}{{ end }}
+        {{- with .address.nodeName }} on {{ "Node" | bold }}/{{ . }}{{ end }}
     {{- end }}
     {{- range $index, $port := .ports }}
         {{- if $hasTargetRef }}, {{ else }}{{if $index}}, {{end}}{{ end }}
-        {{- $ip }}:{{ $port.port }}/{{ $port.protocol }}
+        {{- $ip }}:{{ $port.port }}/{{ $port.protocol }}{{ with $port.name }} ({{ . }}){{ end }}
     {{- end }}
 {{- end -}}
 
