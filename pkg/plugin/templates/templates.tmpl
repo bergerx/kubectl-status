@@ -3,6 +3,7 @@
     {{- template "observed_generation_summary" . }}
     {{- template "owner_references" . }}
     {{- template "replicas_status" . }}
+    {{- template "suspended" . }}
     {{- template "conditions_summary" .status.conditions }}
     {{- template "events" .events }}
 {{- end }}
@@ -48,9 +49,10 @@
     {{- end }}
     {{- if not (hasKey .status "currentReplicas") }}
         {{- $injectedStatus := set $injectedStatus "currentReplicas" 0.0 }}
-    {{- end}}
+    {{- end }}
     {{- $injectedManifest := set . "status" $injectedStatus }}
     {{- template "replicas_status" $injectedManifest }}
+    {{- template "suspended" . }}
     {{- template "conditions_summary" .status.conditions }}
     {{- if eq .status.currentRevision .status.updateRevision }}
         {{- if eq $injectedStatus.readyReplicas 0.0 }}
@@ -70,6 +72,92 @@
     {{- template "conditions_summary" .status.conditions }}
     {{- template "events" .events }}
 {{- end -}}
+
+{{- define "ReplicaSet" }}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "owner_references" . }}
+    {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
+           and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
+    {{- $injectedStatus := .status }}
+    {{- if not (hasKey .status "readyReplicas") }}
+        {{- $injectedStatus := set $injectedStatus "readyReplicas" 0.0 }}
+    {{- end }}
+    {{- if not (hasKey .status "availableReplicas") }}
+        {{- $injectedStatus := set $injectedStatus "availableReplicas" 0.0 }}
+    {{- end }}
+    {{- $injectedManifest := set . "status" $injectedStatus }}
+    {{- template "replicas_status" $injectedManifest }}
+    {{- template "conditions_summary" .status.conditions }}
+    {{- if and .spec.replicas (or (not .status.replicas) (not .status.readyReplicas)) }}
+  {{ "Outage" | red | bold }}: ReplicaSet has no Ready replicas.
+    {{- end }}
+    {{- if hasKey .metadata.annotations "deployment.kubernetes.io/desired-replicas" }}
+        {{- $deploymentDesiredReplicas := index .metadata.annotations "deployment.kubernetes.io/desired-replicas" | float64 }}
+        {{- if $deploymentDesiredReplicas }}
+            {{- if .spec.replicas }}
+                {{- if ne $deploymentDesiredReplicas .spec.replicas }}
+  {{ "Ongoing rollout" | yellow | bold }}, check Owner Reference resources.
+                {{- end }}
+            {{- else }}{{/* means .spec.replicas: 0 */}}
+  {{ "Old" | red }}: This ReplicaSet is likely replaced by a new one, check Owner Reference resources.
+            {{- end }}
+        {{- else }}{{/* means deployment.kubernetes.io/desired-replicas: "0" */}}
+            {{- template "suspended" . }}
+        {{- end }}
+    {{- end }}
+    {{- template "events" .events }}
+{{- end }}
+
+{{- define "Deployment" }}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "owner_references" . }}
+    {{- $injectedStatus := .status }}
+    {{- if not (hasKey .status "replicas") }}
+        {{- $injectedStatus := set $injectedStatus "replicas" 0.0 }}
+    {{- end }}
+    {{- if not (hasKey .status "readyReplicas") }}
+        {{- $injectedStatus := set $injectedStatus "readyReplicas" 0.0 }}
+    {{- end }}
+    {{- if not (hasKey .status "availableReplicas") }}
+        {{- $injectedStatus := set $injectedStatus "availableReplicas" 0.0 }}
+    {{- end }}
+    {{- $injectedManifest := set . "status" $injectedStatus }}
+    {{- template "replicas_status" $injectedManifest }}
+    {{- template "conditions_summary" .status.conditions }}
+    {{- template "suspended" . }}
+    {{- $currentReplicas := .status.replicas | default 0.0 }}
+    {{- $updatedReplicas := .status.updatedReplicas | default 0.0 }}
+    {{- $readyReplicas := .status.readyReplicas | default 0.0 }}
+    {{- $ongoingRollout := and $currentReplicas (not (eq $currentReplicas $updatedReplicas)) }}
+    {{- if $ongoingRollout }}
+  {{ "Ongoing Rollout" | yellow | bold }}: Update progress {{ $updatedReplicas }}/{{ .spec.replicas }} ({{ percent $updatedReplicas .spec.replicas | printf "%.0f"}}%).
+    {{- end }}
+    {{- if or (not $currentReplicas) (not $readyReplicas) }}
+  {{ "Outage" | red | bold }}: Deployment has no Ready replicas.
+        {{- if eq (.status.observedGeneration | default 1.0) 1.0 }}
+  {{ "Stuck Initial Rollout?" | yellow | bold }} First rollout not yet progressed.
+        {{- end }}
+    {{- else if ne $currentReplicas $readyReplicas }}
+        {{- if not $ongoingRollout }}
+  {{ "Not Ready Replicas" | yellow | bold }}: {{ sub $currentReplicas $readyReplicas }} replicas are not Ready.
+        {{- end }}
+    {{- else if .status.unavailableReplicas }}
+        {{- if not $ongoingRollout }}
+  {{ "Unavailable Replicas" | yellow | bold }}: {{ .status.unavailableReplicas }} replicas are not Available.
+        {{- end }}
+    {{- end }}
+    {{- template "events" .events }}
+{{- end }}
+
+{{- define "suspended" }}
+    {{- if hasKey .spec "replicas" }}
+        {{- if not .spec.replicas }}
+  {{ "Suspended" | red | bold }}: Scaled down to 0.
+        {{- end }}
+    {{- end }}
+{{- end }}
 
 {{- define "PersistentVolume" }}
     {{- template "status_summary_line" . }}
@@ -182,7 +270,7 @@
 {{- end -}}
 
 {{- define "replicas_status" }}
-    {{- if .status.replicas }}{{ $spec_replicas := .spec.replicas }}
+    {{- if hasKey .status "replicas" }}{{ $spec_replicas := .spec.replicas }}
   {{ "desired" | bold }}:{{ .spec.replicas }}
         {{- with .status.replicas }}, existing:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
         {{- if hasKey .status "readyReplicas" }}, ready:{{ .status.readyReplicas | toString | redIf (not ( eq $spec_replicas .status.readyReplicas )) }}{{ end }}
