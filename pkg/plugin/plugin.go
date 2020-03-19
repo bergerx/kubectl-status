@@ -285,6 +285,13 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 				continue
 			}
 		}
+		if objKind == "Service" {
+			err = includeEndpoint(obj, clientSet, out)
+			if err != nil {
+				allErrs = append(allErrs, err)
+				continue
+			}
+		}
 
 		err = renderTemplate(templateText, os.Stdout, out)
 		if err != nil {
@@ -409,6 +416,23 @@ func includePodMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]int
 		return errors.WithMessage(err, "Failed getting JSON for PodMetrics")
 	}
 	out["podMetrics"] = podMetricsKey
+	return nil
+}
+
+func includeEndpoint(obj runtime.Object, clientSet *kubernetes.Clientset, out map[string]interface{}) error {
+	objectMeta := obj.(metav1.Object)
+	endpoint, err := clientSet.CoreV1().
+		Endpoints(objectMeta.GetNamespace()).
+		Get(objectMeta.GetName(), v1.GetOptions{})
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting Endpoint")
+	}
+	endpointKey := make(map[string]interface{})
+	err = unmarshal(endpoint, &endpointKey)
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting JSON for Endpoint")
+	}
+	out["endpoint"] = endpointKey
 	return nil
 }
 

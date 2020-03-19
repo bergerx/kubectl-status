@@ -236,6 +236,29 @@
         {{- template "load_balancer_ingress" . }}
     {{- end }}
     {{- template "owner_references" . }}
+    {{- if .endpoint }}
+        {{- if .endpoint.subsets }}
+            {{- range .endpoint.subsets }}
+                {{- $ports := .ports }}
+                {{- if .addresses }}
+                    {{- range .addresses }}
+  Ready: {{ template "endpoint_subnet_address" (dict "address" . "ports" $ports) }}
+                    {{- end }}
+                {{- else }}
+  {{ "Outage" | red | bold }}: This service doesn't match any Ready pods.
+                {{- end }}
+                {{- with .notReadyAddresses }}
+                    {{- range . }}
+  {{ "NotReady" | red | bold }}: {{ template "endpoint_subnet_address" (dict "address" . "ports" $ports) }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- else }}
+  {{ "No matching pods" | red | bold }}: Service selector doens't match any Pods.
+        {{- end }}
+    {{- else }}
+  {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
+    {{- end }}
     {{- template "events" .events }}
 {{- end -}}
 
@@ -270,6 +293,18 @@
             {{- with (index .status.loadBalancer.ingress 0).ip }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
         {{- else }} {{ "Pending LoadBalancer" | red | bold }}
         {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "endpoint_subnet_address" }}
+    {{- $ip := .address.ip }}
+    {{- $hasTargetRef := not (not .address.targetRef) }}
+    {{- if .address.targetRef }}
+        {{- .address.targetRef.kind | bold }}/{{.address.targetRef.name}} -n {{.address.targetRef.namespace}} on {{ "Node" | bold }}/{{.address.nodeName}}
+    {{- end }}
+    {{- range $index, $port := .ports }}
+        {{- if $hasTargetRef }}, {{ else }}{{if $index}}, {{end}}{{ end }}
+        {{- $ip }}:{{ $port.port }}/{{ $port.protocol }}
     {{- end }}
 {{- end -}}
 
