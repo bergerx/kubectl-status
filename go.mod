@@ -9,11 +9,13 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/pkg/errors v0.8.1
+	github.com/pmezard/go-difflib v1.0.0
 	github.com/rakyll/statik v0.1.7
 	github.com/spf13/cobra v0.0.6
 	github.com/spf13/viper v1.6.2
 	golang.org/x/sys v0.0.0-20200223170610-d5e6a3e2c0ae // indirect
-	gopkg.in/yaml.v2 v2.2.8
+	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
+	k8s.io/api v0.17.4
 	k8s.io/apimachinery v0.17.4
 	k8s.io/cli-runtime v0.17.4
 	k8s.io/client-go v0.17.4

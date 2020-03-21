@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -19,15 +20,17 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 	"github.com/pkg/errors"
+	"github.com/pmezard/go-difflib/difflib"
 	sfs "github.com/rakyll/statik/fs"
 	"github.com/spf13/cobra"
+	v1 "k8s.io/api/apps/v1"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/kubernetes"
+	appsv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/scheme"
@@ -47,6 +50,7 @@ var funcMap = template.FuncMap{
 	"colorExitCode":         colorExitCode,
 	"markRed":               markRed,
 	"markYellow":            markYellow,
+	"markGreen":             markGreen,
 	"redIf":                 redIf,
 	"signalName":            signalName,
 	"isPodConditionHealthy": isPodConditionHealthy,
@@ -147,12 +151,28 @@ func redIf(cond bool, str string) string {
 	return str
 }
 
-func markRed(substr, s string) string {
-	return strings.ReplaceAll(s, substr, color.RedString(substr))
+func markRed(regex, s string) string {
+	return markWithColor(regex, s, color.RedString)
 }
 
-func markYellow(substr, s string) string {
-	return strings.ReplaceAll(s, substr, color.YellowString(substr))
+func markYellow(regex, s string) string {
+	return markWithColor(regex, s, color.YellowString)
+}
+
+func markGreen(regex, s string) string {
+	return markWithColor(regex, s, color.GreenString)
+}
+
+func markWithColor(regex string, s string, colorStringFunc func(format string, a ...interface{}) string) string {
+	re := regexp.MustCompile(regex)
+	var result []string
+	for _, line := range strings.Split(s, "\n") {
+		for _, match := range re.FindAllString(line, -1) {
+			line = strings.Replace(line, match, colorStringFunc(match), 1)
+		}
+		result = append(result, line)
+	}
+	return strings.Join(result, "\n")
 }
 
 func colorExitCode(exitCode int) string {
@@ -190,6 +210,12 @@ func colorAgo(kubeDate string) string {
 	t, _ := time.ParseInLocation("2006-01-02T15:04:05Z", kubeDate, time.Local)
 	duration := time.Since(t).Round(time.Second)
 	return colorDuration(duration)
+}
+
+func ago(t time.Time) string {
+	duration := time.Since(t).Round(time.Second)
+	durationRound := (sprig.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
+	return durationRound(duration.String())
 }
 
 func colorDuration(duration time.Duration) string {
@@ -292,6 +318,13 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 				continue
 			}
 		}
+		if objKind == "StatefulSet" {
+			err = includeStatefulSetDiff(obj, f, out)
+			if err != nil {
+				allErrs = append(allErrs, err)
+				continue
+			}
+		}
 
 		err = renderTemplate(templateText, os.Stdout, out)
 		if err != nil {
@@ -382,7 +415,7 @@ func includeNodeMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]in
 	objectMeta := obj.(metav1.Object)
 	nodeMetrics, err := clientSet.MetricsV1beta1().
 		NodeMetricses().
-		Get(objectMeta.GetName(), v1.GetOptions{})
+		Get(objectMeta.GetName(), metav1.GetOptions{})
 	if err != nil {
 		// swallow any errors while getting NodeMetrics
 		return nil
@@ -423,7 +456,7 @@ func includeEndpoint(obj runtime.Object, clientSet *kubernetes.Clientset, out ma
 	objectMeta := obj.(metav1.Object)
 	endpoint, err := clientSet.CoreV1().
 		Endpoints(objectMeta.GetNamespace()).
-		Get(objectMeta.GetName(), v1.GetOptions{})
+		Get(objectMeta.GetName(), metav1.GetOptions{})
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting Endpoint")
 	}
@@ -433,6 +466,62 @@ func includeEndpoint(obj runtime.Object, clientSet *kubernetes.Clientset, out ma
 		return errors.WithMessage(err, "Failed getting JSON for Endpoint")
 	}
 	out["endpoint"] = endpointKey
+	return nil
+}
+
+func includeStatefulSetDiff(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
+	sts := &v1.StatefulSet{}
+	err := scheme.Scheme.Convert(obj, sts, nil)
+	if err != nil {
+		return errors.WithMessage(err, "StatefulSet object conversion failed")
+	}
+
+	if sts.Status.UpdateRevision != "" && sts.Status.CurrentRevision == sts.Status.UpdateRevision {
+		// revision details are needed only when they differ
+		return nil
+	}
+
+	config, _ := f.ToRESTConfig()
+	clientSet, err := appsv1.NewForConfig(config)
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting apps/v1 client")
+	}
+
+	currentRevision, err := clientSet.ControllerRevisions(sts.GetNamespace()).
+		Get(sts.Status.CurrentRevision, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	currentBytes, err := json.MarshalIndent(currentRevision.Data, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	updateRevision, err := clientSet.ControllerRevisions(sts.GetNamespace()).
+		Get(sts.Status.UpdateRevision, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	updateBytes, err := json.MarshalIndent(updateRevision.Data, "", "  ")
+	if err != nil {
+		return err
+	}
+	currentTime := currentRevision.ObjectMeta.GetCreationTimestamp().Time
+	updateTime := updateRevision.ObjectMeta.GetCreationTimestamp().Time
+
+	diff := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(string(currentBytes)),
+		B:        difflib.SplitLines(string(updateBytes)),
+		FromFile: fmt.Sprintf("currentRevision ControllerRevision/%s", sts.Status.CurrentRevision),
+		FromDate: fmt.Sprintf("%s (%s ago)", currentTime.String(), ago(currentTime)),
+		ToFile:   fmt.Sprintf("updateRevision  ControllerRevision/%s", sts.Status.UpdateRevision),
+		ToDate:   fmt.Sprintf("%s (%s ago)", updateTime.String(), ago(updateTime)),
+		Context:  3,
+	}
+	diffString, _ := difflib.GetUnifiedDiffString(diff)
+
+	out["diff"] = diffString
+
 	return nil
 }
 
