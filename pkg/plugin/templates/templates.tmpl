@@ -128,7 +128,7 @@
   {{ "Ongoing rollout" | yellow | bold }}, check Owner Reference resources.
                 {{- end }}
             {{- else }}{{/* means .spec.replicas: 0 */}}
-  {{ "Old" | red }}: This ReplicaSet is likely replaced by a new one, check Owner Reference resources.
+  {{ "Old" | red | bold }}: This ReplicaSet is likely replaced by a new one, check Owner Reference resources.
             {{- end }}
         {{- else }}{{/* means deployment.kubernetes.io/desired-replicas: "0" */}}
             {{- template "suspended" . }}
@@ -340,26 +340,26 @@
 
 {{- define "daemonset_replicas_status" }}
     {{- if .status.desiredNumberScheduled }}{{ $desiredNumberScheduled := .status.desiredNumberScheduled }}
-  {{ "desired" | bold}}:{{ .status.desiredNumberScheduled }}
-        {{- if hasKey .status "currentNumberScheduled" }}, current:{{ .status.currentNumberScheduled | toString | redIf (not ( eq $desiredNumberScheduled .status.currentNumberScheduled )) }}{{ end }}
-        {{- if hasKey .status "numberAvailable" }}, available:{{ .status.numberAvailable | toString | redIf (not ( eq $desiredNumberScheduled .status.numberAvailable)) }}{{ end }}
-        {{- if hasKey .status "numberReady" }}, ready:{{ .status.numberReady | toString | redIf (not ( eq $desiredNumberScheduled .status.numberReady )) }}{{ end }}
-        {{- if hasKey .status "updatedNumberScheduled" }}, updated:{{ .status.updatedNumberScheduled | toString | redIf (not ( eq $desiredNumberScheduled .status.updatedNumberScheduled )) }}{{ end }}
+  {{ printf "desired:%.0f" .status.desiredNumberScheduled | bold }}
+        {{- if hasKey .status "currentNumberScheduled" }}, {{ printf "current:%.0f" .status.currentNumberScheduled | toString | redBoldIf (not ( eq $desiredNumberScheduled .status.currentNumberScheduled )) }}{{ end }}
+        {{- if hasKey .status "numberAvailable" }}, {{ printf "available:%.0f" .status.numberAvailable | toString | redBoldIf (not ( eq $desiredNumberScheduled .status.numberAvailable)) }}{{ end }}
+        {{- if hasKey .status "numberReady" }}, {{ printf "ready:%.0f" .status.numberReady | toString | redBoldIf (not ( eq $desiredNumberScheduled .status.numberReady )) }}{{ end }}
+        {{- if hasKey .status "updatedNumberScheduled" }}, {{ printf "updated:%.0f" .status.updatedNumberScheduled | toString | redBoldIf (not ( eq $desiredNumberScheduled .status.updatedNumberScheduled )) }}{{ end }}
         {{- with .status.numberMisscheduled }}{{ "numberMisscheduled" | red | bold }}:{{ . }}{{- end }}
     {{- end }}
 {{- end -}}
 
 {{- define "replicas_status" }}
     {{- if hasKey .status "replicas" }}{{ $spec_replicas := .spec.replicas }}
-  {{ "desired" | bold }}:{{ .spec.replicas }}
-        {{- with .status.replicas }}, existing:{{ . | toString | redIf (not ( eq $spec_replicas . )) }}{{ end }}
-        {{- if hasKey .status "readyReplicas" }}, ready:{{ .status.readyReplicas | toString | redIf (not ( eq $spec_replicas .status.readyReplicas )) }}{{ end }}
-        {{- if hasKey .status "currentReplicas" }}, current:{{ .status.currentReplicas | toString | redIf (not ( eq $spec_replicas .status.currentReplicas )) }}{{ end }}
-        {{- if hasKey .status "updatedReplicas" }}, updated:{{ .status.updatedReplicas | toString | redIf (not ( eq $spec_replicas .status.updatedReplicas )) }}{{ end }}
-        {{- if hasKey .status "availableReplicas" }}, available:{{ .status.availableReplicas | toString | redIf (not ( eq $spec_replicas .status.availableReplicas )) }}{{ end }}
-        {{- if hasKey .status "fullyLabeledReplicas" }}, fullyLabeled:{{ .status.fullyLabeledReplicas | toString | redIf (not ( eq $spec_replicas .status.fullyLabeledReplicas )) }}{{ end }}
-        {{- with .status.unavailableReplicas }}, unavailable:{{ . | toString | red | bold }}{{ end }}
-        {{- with .status.collisionCount }}, collisions:{{ .status.collisionCount | toString | red | bold }}{{ end }}
+  {{ printf "desired:%.0f" .spec.replicas | bold }}
+        {{- with .status.replicas }}, {{ printf "existing:%.0f" . | toString | redBoldIf (not ( eq $spec_replicas . )) }}{{ end }}
+        {{- if hasKey .status "readyReplicas" }}, {{ printf "ready:%.0f" .status.readyReplicas | toString | redBoldIf (not ( eq $spec_replicas .status.readyReplicas )) }}{{ end }}
+        {{- if hasKey .status "currentReplicas" }}, {{ printf "current:%.0f" .status.currentReplicas | toString | redBoldIf (not ( eq $spec_replicas .status.currentReplicas )) }}{{ end }}
+        {{- if hasKey .status "updatedReplicas" }}, {{ printf "updated:%.0f" .status.updatedReplicas | toString | redBoldIf (not ( eq $spec_replicas .status.updatedReplicas )) }}{{ end }}
+        {{- if hasKey .status "availableReplicas" }}, {{ printf "available:%.0f" .status.availableReplicas | toString | redBoldIf (not ( eq $spec_replicas .status.availableReplicas )) }}{{ end }}
+        {{- if hasKey .status "fullyLabeledReplicas" }}, {{ printf "fullyLabeled:%.0f" .status.fullyLabeledReplicas | toString | redBoldIf (not ( eq $spec_replicas .status.fullyLabeledReplicas )) }}{{ end }}
+        {{- with .status.unavailableReplicas }}, {{ printf "unavailable:%.0f" . | toString | red | bold }}{{ end }}
+        {{- with .status.collisionCount }}, {{ printf "collisions:%.0f" .status.collisionCount | toString | red | bold }}{{ end }}
   {{- end }}
 {{- end -}}
 
@@ -450,7 +450,7 @@
 {{- define "condition_summary" }}
     {{- $condition := . }}
     {{- .type | redIf (not (isPodConditionHealthy .)) | bold }}
-    {{- with .reason }} {{ . | redIf (not (isPodConditionHealthy $condition)) }}{{ end }}
+    {{- with .reason }} {{ . | redBoldIf (not (isPodConditionHealthy $condition)) }}{{ end }}
     {{- with .message }}, {{ . | redIf (not (isPodConditionHealthy $condition)) }}{{ end }}
     {{- with .lastTransitionTime }} for {{ . | colorAgo }}{{ end }}
     {{- if .lastUpdateTime }}

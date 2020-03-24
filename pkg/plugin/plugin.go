@@ -52,6 +52,7 @@ var funcMap = template.FuncMap{
 	"markYellow":            markYellow,
 	"markGreen":             markGreen,
 	"redIf":                 redIf,
+	"redBoldIf":             redBoldIf,
 	"signalName":            signalName,
 	"isPodConditionHealthy": isPodConditionHealthy,
 	"quantityToFloat64":     quantityToFloat64,
@@ -147,6 +148,13 @@ func signalName(signal int64) string {
 func redIf(cond bool, str string) string {
 	if cond {
 		return color.RedString(str)
+	}
+	return str
+}
+
+func redBoldIf(cond bool, str string) string {
+	if cond {
+		return color.New(color.FgRed, color.Bold).Sprintf(str)
 	}
 	return str
 }
