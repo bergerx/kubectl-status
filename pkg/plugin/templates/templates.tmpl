@@ -383,6 +383,7 @@
     {{- /* .status.state is used by e.g. Ambassador */ -}}
     {{- with .status.state }} {{ . | colorKeyword }}{{ end }}
     {{- with .status.reason }} {{ . | colorKeyword }}{{ end }}
+    {{- if .metadata.deletionTimestamp }} {{ "DELETING" | red | bold }} {{- end }}
 {{- end -}}
 
 {{- define "owner_references" }}
