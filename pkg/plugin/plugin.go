@@ -37,6 +37,8 @@ import (
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
+var durationRound = (sprig.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
+
 var funcMap = template.FuncMap{
 	"green":                 color.GreenString,
 	"yellow":                color.YellowString,
@@ -222,12 +224,10 @@ func colorAgo(kubeDate string) string {
 
 func ago(t time.Time) string {
 	duration := time.Since(t).Round(time.Second)
-	durationRound := (sprig.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
 	return durationRound(duration.String())
 }
 
 func colorDuration(duration time.Duration) string {
-	durationRound := (sprig.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
 	str := durationRound(duration.String())
 	if duration < time.Minute*5 {
 		return color.RedString(str)
