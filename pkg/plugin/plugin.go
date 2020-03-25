@@ -315,32 +315,21 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 			allErrs = append(allErrs, err)
 			continue
 		}
-		if objKind == "Node" {
-			err = includeNodeMetrics(obj, f, out)
-			if err != nil {
-				allErrs = append(allErrs, err)
-				continue
-			}
+		kindInjectFuncMap := map[string][]func(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error{
+			"Node":        {includeNodeMetrics},
+			"Pod":         {includePodMetrics},
+			"Service":     {includeEndpoint},
+			"StatefulSet": {includeStatefulSetDiff},
 		}
-		if objKind == "Pod" {
-			err = includePodMetrics(obj, f, out)
-			if err != nil {
-				allErrs = append(allErrs, err)
-				continue
-			}
-		}
-		if objKind == "Service" {
-			err = includeEndpoint(obj, clientSet, out)
-			if err != nil {
-				allErrs = append(allErrs, err)
-				continue
-			}
-		}
-		if objKind == "StatefulSet" {
-			err = includeStatefulSetDiff(obj, f, out)
-			if err != nil {
-				allErrs = append(allErrs, err)
-				continue
+		for kind, funcs := range kindInjectFuncMap {
+			if objKind == kind {
+				for _, fu := range funcs {
+					err = fu(obj, f, out)
+					if err != nil {
+						allErrs = append(allErrs, err)
+						continue
+					}
+				}
 			}
 		}
 
@@ -473,7 +462,8 @@ func includePodMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]int
 	return nil
 }
 
-func includeEndpoint(obj runtime.Object, clientSet *kubernetes.Clientset, out map[string]interface{}) error {
+func includeEndpoint(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
+	clientSet, _ := f.KubernetesClientSet()
 	objectMeta := obj.(metav1.Object)
 	endpoint, err := clientSet.CoreV1().
 		Endpoints(objectMeta.GetNamespace()).
