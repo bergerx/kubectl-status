@@ -21,6 +21,7 @@ func RootCmd() *cobra.Command {
 		WithAllNamespaces(false).
 		WithFile(false).
 		WithLabelSelector("").
+		WithFieldSelector("").
 		WithLatest()
 
 	f := cmdutil.NewFactory(KubernetesConfigFlags)

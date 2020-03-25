@@ -244,8 +244,9 @@ func colorDuration(duration time.Duration) string {
 func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 	//log := logger.NewLogger()
 	//log.Info(strings.Join(args, ","))
-	clientSet, err := f.KubernetesClientSet()
+	clientSet, _ := f.KubernetesClientSet()
 	clientConfig := f.ToRawKubeConfigLoader()
+	allNamespaces := cmdutil.GetFlagBool(cmd, "all-namespaces")
 	namespace, enforceNamespace, err := clientConfig.Namespace()
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting namespace")
@@ -267,11 +268,13 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 
 	r := f.NewBuilder().
 		Unstructured().
-		NamespaceParam(namespace).DefaultNamespace().AllNamespaces(cmdutil.GetFlagBool(cmd, "all-namespaces")).
+		NamespaceParam(namespace).DefaultNamespace().AllNamespaces(allNamespaces).
 		FilenameParam(enforceNamespace, &resource.FilenameOptions{Filenames: filenames}).
 		LabelSelectorParam(cmdutil.GetFlagString(cmd, "selector")).
+		FieldSelectorParam(cmdutil.GetFlagString(cmd, "field-selector")).
 		ResourceTypeOrNameArgs(true, args...).
 		ContinueOnError().
+		Latest().
 		Flatten().
 		Do()
 
@@ -289,6 +292,13 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 	infos, err := r.Infos()
 	if err != nil {
 		allErrs = append(allErrs, err)
+	}
+	if len(infos) == 0 {
+		if !allNamespaces && namespace != "" {
+			fmt.Printf("No resources found in %s namespace\n", namespace)
+		} else {
+			fmt.Printf("No resources found.\n")
+		}
 	}
 	for _, info := range infos {
 		var err error
