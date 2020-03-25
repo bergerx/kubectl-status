@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: "2020-03-18T00:51:06Z"
+  deletionGracePeriodSeconds: 0
+  deletionTimestamp: "2020-03-18T00:54:17Z"
+  generateName: hello-1584492660-
+  labels:
+    controller-uid: 2f9027bb-0df2-4bb3-af64-ce6c90b4e1fe
+    job-name: hello-1584492660
+  name: hello-1584492660-d2c6p
+  namespace: default
+  ownerReferences:
+  - apiVersion: batch/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Job
+    name: hello-1584492660
+    uid: 2f9027bb-0df2-4bb3-af64-ce6c90b4e1fe
+  resourceVersion: "307093"
+  selfLink: /api/v1/namespaces/default/pods/hello-1584492660-d2c6p
+  uid: 0c88ccfc-2abd-4169-926f-bb3acdc86ed3
+spec:
+  containers:
+  - args:
+    - /bin/sh
+    - -c
+    - date; echo Hello from the Kubernetes cluster
+    image: busybox
+    imagePullPolicy: Always
+    name: hello
+    resources: {}
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: default-token-5bc8k
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: minikube
+  priority: 0
+  restartPolicy: OnFailure
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: default-token-5bc8k
+    secret:
+      defaultMode: 420
+      secretName: default-token-5bc8k
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-18T00:51:06Z"
+    reason: PodCompleted
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-18T00:51:06Z"
+    reason: PodCompleted
+    status: "False"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-18T00:51:06Z"
+    reason: PodCompleted
+    status: "False"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-18T00:51:06Z"
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - containerID: docker://6cdc11d57e5c95402ff9448a578ce53d26609c6968859e4a702f0094391220d6
+    image: busybox:latest
+    imageID: docker-pullable://busybox@sha256:b26cd013274a657b86e706210ddd5cc1f82f50155791199d29b9e86e935ce135
+    lastState: {}
+    name: hello
+    ready: false
+    restartCount: 0
+    started: false
+    state:
+      terminated:
+        containerID: docker://6cdc11d57e5c95402ff9448a578ce53d26609c6968859e4a702f0094391220d6
+        exitCode: 0
+        finishedAt: "2020-03-18T00:51:10Z"
+        reason: Completed
+        startedAt: "2020-03-18T00:51:10Z"
+  hostIP: 192.168.99.102
+  phase: Succeeded
+  podIP: 172.17.0.4
+  podIPs:
+  - ip: 172.17.0.4
+  qosClass: BestEffort
+  startTime: "2020-03-18T00:51:06Z"

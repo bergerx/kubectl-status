@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: "2020-03-18T00:54:06Z"
+  generateName: hello-1584492840-
+  labels:
+    controller-uid: caad4bc2-2124-4e32-9240-c9caf90643fa
+    job-name: hello-1584492840
+  name: hello-1584492840-kqf62
+  namespace: default
+  ownerReferences:
+  - apiVersion: batch/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Job
+    name: hello-1584492840
+    uid: caad4bc2-2124-4e32-9240-c9caf90643fa
+  resourceVersion: "307059"
+  selfLink: /api/v1/namespaces/default/pods/hello-1584492840-kqf62
+  uid: 7bfad5cb-67f0-41c9-b480-0af4342450ff
+spec:
+  containers:
+  - args:
+    - /bin/sh
+    - -c
+    - date; echo Hello from the Kubernetes cluster
+    image: busybox
+    imagePullPolicy: Always
+    name: hello
+    resources: {}
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: default-token-5bc8k
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: minikube
+  priority: 0
+  restartPolicy: OnFailure
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: default-token-5bc8k
+    secret:
+      defaultMode: 420
+      secretName: default-token-5bc8k
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-18T00:54:06Z"
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-18T00:54:06Z"
+    message: 'containers with unready status: [hello]'
+    reason: ContainersNotReady
+    status: "False"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-18T00:54:06Z"
+    message: 'containers with unready status: [hello]'
+    reason: ContainersNotReady
+    status: "False"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-18T00:54:06Z"
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - image: busybox
+    imageID: ""
+    lastState: {}
+    name: hello
+    ready: false
+    restartCount: 0
+    started: false
+    state:
+      waiting:
+        reason: ContainerCreating
+  hostIP: 192.168.99.102
+  phase: Pending
+  qosClass: BestEffort
+  startTime: "2020-03-18T00:54:06Z"

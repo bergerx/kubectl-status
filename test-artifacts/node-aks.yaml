@@ -1,0 +1,296 @@
+apiVersion: v1
+kind: Node
+metadata:
+  annotations:
+    node.alpha.kubernetes.io/ttl: "0"
+    volumes.kubernetes.io/controller-managed-attach-detach: "true"
+  creationTimestamp: "2020-03-18T14:13:28Z"
+  labels:
+    agentpool: cpuworkers
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/instance-type: Standard_D8s_v3
+    beta.kubernetes.io/os: linux
+    failure-domain.beta.kubernetes.io/region: eastus
+    failure-domain.beta.kubernetes.io/zone: "0"
+    kubernetes.azure.com/cluster: MC_cluster-nimbus_cluster-nimbus_eastus
+    kubernetes.azure.com/role: agent
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: aks-cpuworkers-41776494-vmss00006u
+    kubernetes.io/os: linux
+    kubernetes.io/role: agent
+    node-role.kubernetes.io/agent: ""
+    storageprofile: managed
+    storagetier: Premium_LRS
+  name: aks-cpuworkers-41776494-vmss00006u
+  resourceVersion: "46883692"
+  selfLink: /api/v1/nodes/aks-cpuworkers-41776494-vmss00006u
+  uid: 4ecfbfa0-e12b-4868-9463-2bc9808d3aab
+spec:
+  providerID: azure:///subscriptions/f198f0d7-73af-486e-ad9c-f17f5c3f6664/resourceGroups/mc_cluster-nimbus_cluster-nimbus_eastus/providers/Microsoft.Compute/virtualMachineScaleSets/aks-cpuworkers-41776494-vmss/virtualMachines/246
+status:
+  addresses:
+  - address: aks-cpuworkers-41776494-vmss00006u
+    type: Hostname
+  - address: 10.250.4.65
+    type: InternalIP
+  allocatable:
+    attachable-volumes-azure-disk: "16"
+    cpu: 7820m
+    ephemeral-storage: "59775809028"
+    hugepages-1Gi: "0"
+    hugepages-2Mi: "0"
+    memory: 28418148Ki
+    pods: "30"
+  capacity:
+    attachable-volumes-azure-disk: "16"
+    cpu: "8"
+    ephemeral-storage: 64860904Ki
+    hugepages-1Gi: "0"
+    hugepages-2Mi: "0"
+    memory: 32918628Ki
+    pods: "30"
+  conditions:
+  - lastHeartbeatTime: "2020-03-18T17:27:09Z"
+    lastTransitionTime: "2020-03-18T14:13:28Z"
+    message: kubelet has sufficient memory available
+    reason: KubeletHasSufficientMemory
+    status: "False"
+    type: MemoryPressure
+  - lastHeartbeatTime: "2020-03-18T17:27:09Z"
+    lastTransitionTime: "2020-03-18T14:13:28Z"
+    message: kubelet has no disk pressure
+    reason: KubeletHasNoDiskPressure
+    status: "False"
+    type: DiskPressure
+  - lastHeartbeatTime: "2020-03-18T17:27:09Z"
+    lastTransitionTime: "2020-03-18T14:13:28Z"
+    message: kubelet has sufficient PID available
+    reason: KubeletHasSufficientPID
+    status: "False"
+    type: PIDPressure
+  - lastHeartbeatTime: "2020-03-18T17:27:09Z"
+    lastTransitionTime: "2020-03-18T14:13:29Z"
+    message: kubelet is posting ready status. AppArmor enabled
+    reason: KubeletReady
+    status: "True"
+    type: Ready
+  daemonEndpoints:
+    kubeletEndpoint:
+      Port: 10250
+  images:
+  - names:
+    - msairegistry.azurecr.io/automated-tests/tke-automated-tests/development@sha256:e73efb3a22213a816e060ddea04ac5dd01d6655b5de54b157898ad77d1cad605
+    - msairegistry.azurecr.io/automated-tests/tke-automated-tests/development:1.2.299.0
+    sizeBytes: 2429209679
+  - names:
+    - msairegistry.azurecr.io/thingworx_kepware_edge/development@sha256:47456fdc98f4cf3c41628f4c3f1862956d4d4cde162978404af28a9698f1865c
+    - msairegistry.azurecr.io/thingworx_kepware_edge/development:1.2.299.0
+    sizeBytes: 976570013
+  - names:
+    - mcr.microsoft.com/oss/kubernetes/hyperkube@sha256:554ea990b591655f5620c7a3e3a529853dcf6afaf51152e83293fd26ebf66412
+    - mcr.microsoft.com/oss/kubernetes/hyperkube:v1.15.7_f0.0.2
+    sizeBytes: 642982766
+  - names:
+    - mcr.microsoft.com/k8s/azurestack/core/hyperkube-amd64@sha256:cf134351e498e359ae7cf7c4b32455d6a180b3986ef0556e9625d35032cfe6f8
+    - mcr.microsoft.com/k8s/azurestack/core/hyperkube-amd64:v1.15.4-azs
+    sizeBytes: 642929430
+  - names:
+    - k8s.gcr.io/hyperkube-amd64@sha256:7305f0c6f8cbb2d99c57cde6b5fdd91face5db50e8d2e8c6fca0b236c9ef8c86
+    - k8s.gcr.io/hyperkube-amd64:v1.16.1
+    sizeBytes: 605073998
+  - names:
+    - k8s.gcr.io/hyperkube-amd64@sha256:19a550886de5fe94a930804834e5a6db3ddca48d2ef7de33e1944172708b5863
+    - k8s.gcr.io/hyperkube-amd64:v1.15.7
+    sizeBytes: 593454542
+  - names:
+    - msairegistry.azurecr.io/twxdevops/tw-platform-postgres@sha256:cf8aaf87c99f05fa1177729383dfc9c70754a3db730597d668c87c8891c3e0c8
+    - msairegistry.azurecr.io/twxdevops/tw-platform-postgres:development.server.build-latest
+    sizeBytes: 522871601
+  - names:
+    - mcr.microsoft.com/azuremonitor/containerinsights/ciprod@sha256:6a00d818e129b956a22b723e5543a6cdad1431666c090ea5e3676001a921c539
+    - mcr.microsoft.com/azuremonitor/containerinsights/ciprod:ciprod01072020
+    sizeBytes: 396298129
+  - names:
+    - mcr.microsoft.com/aks/hcp/hcp-tunnel-front@sha256:d237ae461a2f3f7d3f32c33b4d7b2f5fb1681c00b840e8515882c29267bc1c9b
+    - mcr.microsoft.com/aks/hcp/hcp-tunnel-front:v1.9.2-v4.0.11
+    sizeBytes: 357377808
+  - names:
+    - mcr.microsoft.com/aks/hcp/kube-svc-redirect@sha256:af50cfa03a6b02a4173f3adb476f403efde16193f91d02e2ae8123f57ee21204
+    - mcr.microsoft.com/aks/hcp/kube-svc-redirect:v1.0.7
+    sizeBytes: 353963611
+  - names:
+    - mcr.microsoft.com/aks/hcp/hcp-tunnel-front@sha256:cbd52a7489524e0389688fa9969d6e5c870500d3e5da33583b75bdcb75d40bbc
+    - mcr.microsoft.com/aks/hcp/hcp-tunnel-front:v1.9.2-v3.0.11
+    sizeBytes: 353663014
+  - names:
+    - mcr.microsoft.com/aks/hcp/kube-svc-redirect@sha256:cbb76d3c813ef07fb22fc00aed24dab249c1a2b05436aac447f9489e91bb8e54
+    - mcr.microsoft.com/aks/hcp/kube-svc-redirect:v1.0.5
+    sizeBytes: 346080999
+  - names:
+    - mcr.microsoft.com/k8s/csi/azurefile-csi@sha256:3f48233e04580a4344d69921be1a38a0bb1616d0bf86ac3920e9d3c8cc805093
+    - mcr.microsoft.com/k8s/csi/azurefile-csi:v0.3.0
+    sizeBytes: 245146481
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:b6834bb69e8fad88110b1dc57097a45bc79e6f2c5f2c2773c871d07389794771
+    - k8s.gcr.io/cluster-autoscaler:v1.12.3
+    sizeBytes: 232229241
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:dc5744fd8c22aebfe40d6b62ab97d18d7bfbfc7ab1782509d69a5a9ec514df2c
+    - k8s.gcr.io/cluster-autoscaler:v1.12.2
+    sizeBytes: 232167833
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:152cc054ae89f8c3277351057b74b0bc349cf362b6c0618ca142a048be046fe8
+    - k8s.gcr.io/cluster-autoscaler:v1.12.8
+    sizeBytes: 231571683
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:a1290d66f623bd7e8d4024ccd4b5b2786f7b2b62691c3d6aac40c1eaf84fc20a
+    - k8s.gcr.io/cluster-autoscaler:v1.12.7
+    sizeBytes: 231556587
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:193eaf37788dd5f971dd400b7e3d28e650bfd81c90fa46b234f03eb3d43880e3
+    - k8s.gcr.io/cluster-autoscaler:v1.12.5
+    sizeBytes: 231543459
+  - names:
+    - zookeeper@sha256:2afb57a028658d84efd47e1de32d86421abe7bc5a735317a0ec8ee98b6dc2c94
+    - zookeeper:3.5.6
+    sizeBytes: 223859026
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:e71851267764a068fbb091a4ef3bb874b5ce34db48cb757fcf77779f30ef0207
+    - k8s.gcr.io/cluster-autoscaler:v1.3.7
+    sizeBytes: 217353965
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:156b7b9bcba24ed474f67d0feaf27f2506013f15b030341bbd41c630283161b8
+    - k8s.gcr.io/cluster-autoscaler:v1.3.4
+    sizeBytes: 217264129
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:97896235bf66bde573d6f2ee150e212ea7010d314eb5d2cfb2ff1af93335db30
+    - k8s.gcr.io/cluster-autoscaler:v1.3.3
+    sizeBytes: 217259793
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:b416bf3b6687788b4da4c7ede2bcf067b34ad781862ee3d3dac1d720c5fa38b3
+    - k8s.gcr.io/cluster-autoscaler:v1.3.9
+    sizeBytes: 216696035
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:f37a2c84614bdd02475ccb020182caec562cde97fdfd9dae58de66ff89614bc5
+    - k8s.gcr.io/cluster-autoscaler:v1.3.8
+    sizeBytes: 216693526
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:b0777becbfc7a56e66b079d2767fdc173121a29165523bbbe309bcb2c0a226aa
+    - k8s.gcr.io/cluster-autoscaler:v1.2.5
+    sizeBytes: 212991966
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:36a369ca4643542d501bce0addf8b903f2141ae9e2608662b77a3d24f01d7780
+    - k8s.gcr.io/cluster-autoscaler:v1.2.2
+    sizeBytes: 208688449
+  - names:
+    - mcr.microsoft.com/k8s/csi/azuredisk-csi@sha256:b3379ebfc891c17312ecaf299977144af6f6ed5180f0eaf79110add8d7381f75
+    - mcr.microsoft.com/k8s/csi/azuredisk-csi:v0.4.0
+    sizeBytes: 206475565
+  - names:
+    - bitnami/postgresql@sha256:299421b85cbe64e2f2e14b1f2295029c1429f3adf06a75821b78d4a3fb751e36
+    - bitnami/postgresql:9.6.12-r69
+    sizeBytes: 190546225
+  - names:
+    - k8s.gcr.io/kube-apiserver@sha256:e3ec33d533257902ad9ebe3d399c17710e62009201a7202aec941e351545d662
+    - k8s.gcr.io/kube-apiserver:v1.17.0
+    sizeBytes: 170957331
+  - names:
+    - k8s.gcr.io/kube-controller-manager@sha256:0438efb5098a2ca634ea8c6b0d804742b733d0d13fd53cf62c73e32c659a3c39
+    - k8s.gcr.io/kube-controller-manager:v1.17.0
+    sizeBytes: 160877075
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:86ae2c68bdebbfeb5ac73ebe6bef790da6d8e9b4d186852f016f0a46355cd21d
+    - k8s.gcr.io/cluster-autoscaler:v1.14.7
+    sizeBytes: 155327664
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:e566a369b14648f257e25cae9bf4b6bea8af7fca47a8b7737fd91ea4934b35fa
+    - k8s.gcr.io/cluster-autoscaler:v1.14.6
+    sizeBytes: 155291832
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:06e09e19618609e2b90b9fbdf28786e26772c63bd76c2a156f52dfaafb9487dd
+    - k8s.gcr.io/cluster-autoscaler:v1.15.4
+    sizeBytes: 152245942
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:d2fc53a00910c12be4fa0e7f31dcce5af96767dfb481db8163976a8fd65d8042
+    - k8s.gcr.io/cluster-autoscaler:v1.15.3
+    sizeBytes: 152236996
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:5a80893ea1a16a066889ab06934cfa3996d87a7232b10554de4ed8788b1fa212
+    - k8s.gcr.io/cluster-autoscaler:v1.15.2
+    sizeBytes: 152220275
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:eea97bdf90e3f6074af2fdeb3df40969c44a721dc8f4d148844de85fe93508ff
+    - k8s.gcr.io/cluster-autoscaler:v1.15.1
+    sizeBytes: 152220275
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:760232bed2097b5ca742f05b15c94d56ff96ed6b5c93251edc613be045c8d78b
+    - k8s.gcr.io/cluster-autoscaler:v1.15.0
+    sizeBytes: 152214996
+  - names:
+    - k8s.gcr.io/cloud-controller-manager-amd64@sha256:c2034c0fe878dc4ca99e00cae0c433a303d6e03a8c1495fd13e33b2b16a153ca
+    - k8s.gcr.io/cloud-controller-manager-amd64:v1.15.7
+    sizeBytes: 142927422
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:69c10f2110ff8d62f0238145e7111564af81e7790491c2d6e078957073851e8f
+    - k8s.gcr.io/cluster-autoscaler:v1.14.5
+    sizeBytes: 142164738
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:e7b1e4ddd48f28a7545718a73af4db5f58c8ab8fead702cc3b0411148eb89682
+    - k8s.gcr.io/cluster-autoscaler:v1.14.4
+    sizeBytes: 142155886
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:a4e5a8e6d4dc011e6e7a104d6abdfda56274b90357ee9f6e42cc22b70482420b
+    - k8s.gcr.io/cluster-autoscaler:v1.14.0
+    sizeBytes: 142102721
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:cbc61e0f6c3ef1c591a0f22ec483826110e2c10acddd5415c0cc2305fd085e69
+    - k8s.gcr.io/cluster-autoscaler:v1.14.2
+    sizeBytes: 142099784
+  - names:
+    - msairegistry.azurecr.io/twxdevops/tw-integrationruntime@sha256:3ed5c5e4e226c3c8f3e6d603b8db02d1a819716c09b9e938606202a7d3db9617
+    - msairegistry.azurecr.io/twxdevops/tw-integrationruntime:latest
+    sizeBytes: 141505578
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:bf6be7abd987c4f4ddac13a8d41b9279157c8b461538c82ec318eae288d1cb8e
+    - k8s.gcr.io/cluster-autoscaler:v1.13.9
+    sizeBytes: 140638208
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:98b89af6737b96fd7fdd7172c0f59e34649f921a351f49fd05e7a845b701006e
+    - k8s.gcr.io/cluster-autoscaler:v1.13.7
+    sizeBytes: 136742204
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:fcfc7e4db54008b150406d9b21846b4ffcd23b8fed4f366256d01dd5fe204669
+    - k8s.gcr.io/cluster-autoscaler:v1.13.6
+    sizeBytes: 136729256
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:9dcbd91e79f33c44529de58a0024deb3da23a3a0bc7fd4d028c1255c68f62fb7
+    - k8s.gcr.io/cluster-autoscaler:v1.13.2
+    sizeBytes: 136684274
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:e4140dc3ab54e115ab4464331b25022fc5ffb947b568aaf81089efb72506c895
+    - k8s.gcr.io/cluster-autoscaler:v1.13.4
+    sizeBytes: 136681463
+  - names:
+    - k8s.gcr.io/cluster-autoscaler@sha256:7ff5a60304b344f2f29c804c7253632bbc818794f6932236a56db107a6a8f5af
+    - k8s.gcr.io/cluster-autoscaler:v1.13.1
+    sizeBytes: 136618018
+  - names:
+    - mcr.microsoft.com/containernetworking/azure-npm@sha256:2bcb232b4d8d21b4e5f90dbc088766968edef7daf6073c2ae6818848cc01450d
+    - mcr.microsoft.com/containernetworking/azure-npm:v1.0.32
+    sizeBytes: 133157858
+  nodeInfo:
+    architecture: amd64
+    bootID: 2df597ca-daa5-4dec-95d2-61237fafd4cf
+    containerRuntimeVersion: docker://3.0.8
+    kernelVersion: 4.15.0-1066-azure
+    kubeProxyVersion: v1.15.7
+    kubeletVersion: v1.15.7
+    machineID: 58d2ef1eaeaa4c80b42069f2fe5bb0cd
+    operatingSystem: linux
+    osImage: Ubuntu 16.04.6 LTS
+    systemUUID: F3DC2E84-279A-FF45-A31A-ADBBD8DD5DD3
+  volumesAttached:
+  - devicePath: "0"
+    name: kubernetes.io/azure-disk//subscriptions/f198f0d7-73af-486e-ad9c-f17f5c3f6664/resourceGroups/mc_cluster-nimbus_cluster-nimbus_eastus/providers/Microsoft.Compute/disks/kubernetes-dynamic-pvc-2c53aee2-c735-4c75-bc4a-52cc48aca72f
+  volumesInUse:
+  - kubernetes.io/azure-disk//subscriptions/f198f0d7-73af-486e-ad9c-f17f5c3f6664/resourceGroups/mc_cluster-nimbus_cluster-nimbus_eastus/providers/Microsoft.Compute/disks/kubernetes-dynamic-pvc-2c53aee2-c735-4c75-bc4a-52cc48aca72f

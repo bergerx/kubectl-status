@@ -373,11 +373,14 @@ func renderFile(manifestFilename string) (string, error) {
 }
 
 func renderTemplate(templateText string, wr io.Writer, v map[string]interface{}) error {
-	tmpl := template.Must(template.
+	tmpl, err := template.
 		New("templates.tmpl").
 		Funcs(sprig.TxtFuncMap()).
 		Funcs(funcMap).
-		Parse(templateText))
+		Parse(templateText)
+	if err != nil {
+		return err
+	}
 	kindTemplateName := findTemplateName(tmpl, v)
 	return tmpl.ExecuteTemplate(wr, kindTemplateName, v)
 }

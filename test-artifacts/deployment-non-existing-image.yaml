@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  creationTimestamp: "2020-03-18T13:07:42Z"
+  generation: 1
+  labels:
+    run: missing-image
+  name: missing-image
+  namespace: test1
+  resourceVersion: "347027"
+  selfLink: /apis/apps/v1/namespaces/test1/deployments/missing-image
+  uid: 4d11ce88-1f23-400d-81c2-ed4f8ac10faa
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      run: missing-image
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: missing-image
+    spec:
+      containers:
+      - image: this-image-doesnt-exist
+        imagePullPolicy: Always
+        name: missing-image
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  conditions:
+  - lastTransitionTime: "2020-03-18T13:07:42Z"
+    lastUpdateTime: "2020-03-18T13:07:42Z"
+    message: Deployment does not have minimum availability.
+    reason: MinimumReplicasUnavailable
+    status: "False"
+    type: Available
+  - lastTransitionTime: "2020-03-18T13:07:42Z"
+    lastUpdateTime: "2020-03-18T13:07:42Z"
+    message: ReplicaSet "missing-image-755c8c54f7" is progressing.
+    reason: ReplicaSetUpdated
+    status: "True"
+    type: Progressing
+  observedGeneration: 1
+  replicas: 1
+  unavailableReplicas: 1
+  updatedReplicas: 1

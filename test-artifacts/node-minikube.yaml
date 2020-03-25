@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: Node
+metadata:
+  annotations:
+    kubeadm.alpha.kubernetes.io/cri-socket: /var/run/dockershim.sock
+    node.alpha.kubernetes.io/ttl: "0"
+    volumes.kubernetes.io/controller-managed-attach-detach: "true"
+  creationTimestamp: "2020-02-24T20:05:52Z"
+  labels:
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: minikube
+    kubernetes.io/os: linux
+    node-role.kubernetes.io/master: ""
+  name: minikube
+  resourceVersion: "381343"
+  selfLink: /api/v1/nodes/minikube
+  uid: b2665321-4843-4c32-8e45-4fdb7024c4d7
+spec: {}
+status:
+  addresses:
+  - address: 192.168.99.102
+    type: InternalIP
+  - address: minikube
+    type: Hostname
+  allocatable:
+    cpu: "2"
+    ephemeral-storage: "16390427417"
+    hugepages-2Mi: "0"
+    memory: 1884340Ki
+    pods: "110"
+  capacity:
+    cpu: "2"
+    ephemeral-storage: 17784752Ki
+    hugepages-2Mi: "0"
+    memory: 1986740Ki
+    pods: "110"
+  conditions:
+  - lastHeartbeatTime: "2020-03-18T17:24:40Z"
+    lastTransitionTime: "2020-02-24T20:05:47Z"
+    message: kubelet has sufficient memory available
+    reason: KubeletHasSufficientMemory
+    status: "False"
+    type: MemoryPressure
+  - lastHeartbeatTime: "2020-03-18T17:24:40Z"
+    lastTransitionTime: "2020-02-24T20:05:47Z"
+    message: kubelet has no disk pressure
+    reason: KubeletHasNoDiskPressure
+    status: "False"
+    type: DiskPressure
+  - lastHeartbeatTime: "2020-03-18T17:24:40Z"
+    lastTransitionTime: "2020-02-24T20:05:47Z"
+    message: kubelet has sufficient PID available
+    reason: KubeletHasSufficientPID
+    status: "False"
+    type: PIDPressure
+  - lastHeartbeatTime: "2020-03-18T17:24:40Z"
+    lastTransitionTime: "2020-02-24T20:06:06Z"
+    message: kubelet is posting ready status
+    reason: KubeletReady
+    status: "True"
+    type: Ready
+  daemonEndpoints:
+    kubeletEndpoint:
+      Port: 10250
+  images:
+  - names:
+    - kennethreitz/httpbin@sha256:599fe5e5073102dbb0ee3dbb65f049dab44fa9fc251f6835c9990f8fb196a72b
+    - kennethreitz/httpbin:latest
+    sizeBytes: 533675008
+  - names:
+    - k8s.gcr.io/etcd:3.4.3-0
+    sizeBytes: 288426917
+  - names:
+    - k8s.gcr.io/kube-apiserver:v1.17.3
+    sizeBytes: 170986003
+  - names:
+    - k8s.gcr.io/kube-controller-manager:v1.17.3
+    sizeBytes: 160918035
+  - names:
+    - k8s.gcr.io/kube-proxy:v1.17.3
+    sizeBytes: 115964919
+  - names:
+    - k8s.gcr.io/nginx-slim@sha256:8b4501fe0fe221df663c22e16539f399e89594552f400408303c42f3dd8d0e52
+    - k8s.gcr.io/nginx-slim:0.8
+    sizeBytes: 110487599
+  - names:
+    - k8s.gcr.io/kube-scheduler:v1.17.3
+    sizeBytes: 94435859
+  - names:
+    - kubernetesui/dashboard:v2.0.0-beta8
+    sizeBytes: 90835427
+  - names:
+    - gcr.io/k8s-minikube/storage-provisioner:v1.8.1
+    sizeBytes: 80815640
+  - names:
+    - k8s.gcr.io/coredns:1.6.5
+    sizeBytes: 41578211
+  - names:
+    - kubernetesui/metrics-scraper:v1.0.2
+    sizeBytes: 40101552
+  - names:
+    - busybox@sha256:b26cd013274a657b86e706210ddd5cc1f82f50155791199d29b9e86e935ce135
+    - busybox:latest
+    sizeBytes: 1219590
+  - names:
+    - k8s.gcr.io/pause:3.1
+    sizeBytes: 742472
+  nodeInfo:
+    architecture: amd64
+    bootID: ec3cbcb4-67a8-406e-88f3-8baaa046f2bd
+    containerRuntimeVersion: docker://19.3.6
+    kernelVersion: 4.19.94
+    kubeProxyVersion: v1.17.3
+    kubeletVersion: v1.17.3
+    machineID: bf994b721cbb401db323f6d994cbe3c7
+    operatingSystem: linux
+    osImage: Buildroot 2019.02.9
+    systemUUID: b1d82a2f-42a0-417d-a2b2-017d5c21e14c

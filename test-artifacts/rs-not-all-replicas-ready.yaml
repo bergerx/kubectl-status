@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  annotations:
+    deployment.kubernetes.io/desired-replicas: "3"
+    deployment.kubernetes.io/max-replicas: "4"
+    deployment.kubernetes.io/revision: "1"
+  creationTimestamp: "2020-03-18T01:24:09Z"
+  generation: 1
+  labels:
+    pod-template-hash: 79f6dfbb9
+    run: httpbin-deployment
+  name: httpbin-deployment-79f6dfbb9
+  namespace: test1
+  ownerReferences:
+  - apiVersion: apps/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Deployment
+    name: httpbin-deployment
+    uid: 4feef9ce-7e6d-4a28-a973-7ea3c0a49d6f
+  resourceVersion: "311439"
+  selfLink: /apis/apps/v1/namespaces/test1/replicasets/httpbin-deployment-79f6dfbb9
+  uid: c112a8f1-fea8-4d23-a6eb-4ece01ea3ec6
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      pod-template-hash: 79f6dfbb9
+      run: httpbin-deployment
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        pod-template-hash: 79f6dfbb9
+        run: httpbin-deployment
+    spec:
+      containers:
+      - image: kennethreitz/httpbin
+        imagePullPolicy: Always
+        name: httpbin-deployment
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  availableReplicas: 1
+  fullyLabeledReplicas: 3
+  observedGeneration: 1
+  readyReplicas: 1
+  replicas: 3

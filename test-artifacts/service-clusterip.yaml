@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: "2020-03-18T01:24:09Z"
+  name: httpbin-deployment
+  namespace: test1
+  resourceVersion: "311329"
+  selfLink: /api/v1/namespaces/test1/services/httpbin-deployment
+  uid: 5edbf6d9-eb5b-4062-927a-151f604a07f6
+spec:
+  clusterIP: 10.106.38.176
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    run: httpbin-deployment
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}

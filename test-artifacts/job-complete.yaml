@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  creationTimestamp: "2020-03-18T01:03:07Z"
+  labels:
+    controller-uid: 237c7625-d81e-472d-8f8e-ed1f8ff06ef0
+    job-name: hello-1584493380
+  name: hello-1584493380
+  namespace: default
+  ownerReferences:
+  - apiVersion: batch/v1beta1
+    blockOwnerDeletion: true
+    controller: true
+    kind: CronJob
+    name: hello
+    uid: 8324766b-49a4-4bd6-9c9b-f1ffb5e62a0b
+  resourceVersion: "308438"
+  selfLink: /apis/batch/v1/namespaces/default/jobs/hello-1584493380
+  uid: 237c7625-d81e-472d-8f8e-ed1f8ff06ef0
+spec:
+  backoffLimit: 6
+  completions: 1
+  parallelism: 1
+  selector:
+    matchLabels:
+      controller-uid: 237c7625-d81e-472d-8f8e-ed1f8ff06ef0
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        controller-uid: 237c7625-d81e-472d-8f8e-ed1f8ff06ef0
+        job-name: hello-1584493380
+    spec:
+      containers:
+      - args:
+        - /bin/sh
+        - -c
+        - date; echo Hello from the Kubernetes cluster
+        image: busybox
+        imagePullPolicy: Always
+        name: hello
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: OnFailure
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  completionTime: "2020-03-18T01:03:11Z"
+  conditions:
+  - lastProbeTime: "2020-03-18T01:03:11Z"
+    lastTransitionTime: "2020-03-18T01:03:11Z"
+    status: "True"
+    type: Complete
+  startTime: "2020-03-18T01:03:07Z"
+  succeeded: 1

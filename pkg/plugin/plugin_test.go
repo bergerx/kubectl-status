@@ -1,13 +1,20 @@
 package plugin
 
 import (
-	"fmt"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestBasicPod(t *testing.T) {
-	manifestFilename := "../../test-artifacts/pod-regular.yaml"
-	out, _ := renderFile(manifestFilename)
-	fmt.Println(out)
-	//t.Errorf("%v", out.String())
+func TestArtifacts(t *testing.T) {
+	testArtifacts, _ := filepath.Glob("../../test-artifacts/*yaml")
+	for _, testArtifact := range testArtifacts {
+		testName := strings.TrimSuffix(filepath.Base(testArtifact), filepath.Ext(testArtifact))
+		t.Run(testName, func(t *testing.T) {
+			_, err := renderFile(testArtifact)
+			if err != nil {
+				t.Errorf("%v", err)
+			}
+		})
+	}
 }
