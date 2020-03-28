@@ -1,0 +1,236 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: "2020-03-28T22:18:46Z"
+  generateName: test-7d7bf58f7d-
+  labels:
+    pod-template-hash: 7d7bf58f7d
+    run: test
+  name: test-7d7bf58f7d-pvk2s
+  namespace: test1
+  ownerReferences:
+  - apiVersion: apps/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ReplicaSet
+    name: test-7d7bf58f7d
+    uid: 5ec470da-4a27-4f0d-8390-2c38554cdf07
+  resourceVersion: "334109"
+  selfLink: /api/v1/namespaces/test1/pods/test-7d7bf58f7d-pvk2s
+  uid: 3d60b5d2-512e-49b6-b56f-4635e4b11176
+spec:
+  containers:
+  - image: k8s.gcr.io/pause:3.1
+    imagePullPolicy: IfNotPresent
+    name: test
+    resources:
+      limits:
+        cpu: 200m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: default-token-dfmm7
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: minikube
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: default-token-dfmm7
+    secret:
+      defaultMode: 420
+      secretName: default-token-dfmm7
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-28T22:18:46Z"
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-28T22:18:47Z"
+    status: "True"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-28T22:18:47Z"
+    status: "True"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-28T22:18:46Z"
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - containerID: docker://581c0f5f405c388804550c3b6e22e2f563935dd3f8df2e8653240c47a1173975
+    image: k8s.gcr.io/pause:3.1
+    imageID: docker://sha256:da86e6ba6ca197bf6bc5e9d900febd906b133eaa4750e6bed647b0fbe50ed43e
+    lastState: {}
+    name: test
+    ready: true
+    restartCount: 0
+    started: true
+    state:
+      running:
+        startedAt: "2020-03-28T22:18:47Z"
+  hostIP: 192.168.99.105
+  phase: Running
+  podIP: 172.17.0.8
+  podIPs:
+  - ip: 172.17.0.8
+  qosClass: Burstable
+  startTime: "2020-03-28T22:18:46Z"
+podMetrics:
+  apiVersion: metrics.k8s.io/v1beta1
+  kind: PodMetrics
+  metadata:
+    creationTimestamp: "2020-03-28T22:22:05Z"
+    name: test-7d7bf58f7d-pvk2s
+    namespace: test1
+    selfLink: /apis/metrics.k8s.io/v1beta1/namespaces/test1/pods/test-7d7bf58f7d-pvk2s
+  containers:
+  - name: test
+    usage:
+      cpu: "0"
+      memory: 560Ki
+  timestamp: "2020-03-28T22:22:00Z"
+  window: 1m0s
+events:
+  apiVersion: v1
+  kind: List
+  metadata:
+    resourceVersion: ""
+    selfLink: ""
+  items:
+  - apiVersion: v1
+    count: 1
+    eventTime: null
+    firstTimestamp: "2020-03-28T22:18:46Z"
+    involvedObject:
+      apiVersion: v1
+      kind: Pod
+      name: test-7d7bf58f7d-pvk2s
+      namespace: test1
+      resourceVersion: "334093"
+      uid: 3d60b5d2-512e-49b6-b56f-4635e4b11176
+    kind: Event
+    lastTimestamp: "2020-03-28T22:18:46Z"
+    message: Successfully assigned test1/test-7d7bf58f7d-pvk2s to minikube
+    metadata:
+      creationTimestamp: "2020-03-28T22:18:46Z"
+      name: test-7d7bf58f7d-pvk2s.160097c181983686
+      namespace: test1
+      resourceVersion: "334098"
+      selfLink: /api/v1/namespaces/test1/events/test-7d7bf58f7d-pvk2s.160097c181983686
+      uid: c30a4818-5e9f-4c3f-b578-e85ed14eaf6c
+    reason: Scheduled
+    reportingComponent: ""
+    reportingInstance: ""
+    source:
+      component: default-scheduler
+    type: Normal
+  - apiVersion: v1
+    count: 1
+    eventTime: null
+    firstTimestamp: "2020-03-28T22:18:46Z"
+    involvedObject:
+      apiVersion: v1
+      fieldPath: spec.containers{test}
+      kind: Pod
+      name: test-7d7bf58f7d-pvk2s
+      namespace: test1
+      resourceVersion: "334097"
+      uid: 3d60b5d2-512e-49b6-b56f-4635e4b11176
+    kind: Event
+    lastTimestamp: "2020-03-28T22:18:46Z"
+    message: Container image "k8s.gcr.io/pause:3.1" already present on machine
+    metadata:
+      creationTimestamp: "2020-03-28T22:18:46Z"
+      name: test-7d7bf58f7d-pvk2s.160097c1a9817a21
+      namespace: test1
+      resourceVersion: "334104"
+      selfLink: /api/v1/namespaces/test1/events/test-7d7bf58f7d-pvk2s.160097c1a9817a21
+      uid: 72ec0af3-c52f-4e02-ac59-655659f4afd6
+    reason: Pulled
+    reportingComponent: ""
+    reportingInstance: ""
+    source:
+      component: kubelet
+      host: minikube
+    type: Normal
+  - apiVersion: v1
+    count: 1
+    eventTime: null
+    firstTimestamp: "2020-03-28T22:18:46Z"
+    involvedObject:
+      apiVersion: v1
+      fieldPath: spec.containers{test}
+      kind: Pod
+      name: test-7d7bf58f7d-pvk2s
+      namespace: test1
+      resourceVersion: "334097"
+      uid: 3d60b5d2-512e-49b6-b56f-4635e4b11176
+    kind: Event
+    lastTimestamp: "2020-03-28T22:18:46Z"
+    message: Created container test
+    metadata:
+      creationTimestamp: "2020-03-28T22:18:46Z"
+      name: test-7d7bf58f7d-pvk2s.160097c1acf2100d
+      namespace: test1
+      resourceVersion: "334105"
+      selfLink: /api/v1/namespaces/test1/events/test-7d7bf58f7d-pvk2s.160097c1acf2100d
+      uid: ff3944b8-d4ed-4fa1-8021-881e6b7d5d65
+    reason: Created
+    reportingComponent: ""
+    reportingInstance: ""
+    source:
+      component: kubelet
+      host: minikube
+    type: Normal
+  - apiVersion: v1
+    count: 1
+    eventTime: null
+    firstTimestamp: "2020-03-28T22:18:47Z"
+    involvedObject:
+      apiVersion: v1
+      fieldPath: spec.containers{test}
+      kind: Pod
+      name: test-7d7bf58f7d-pvk2s
+      namespace: test1
+      resourceVersion: "334097"
+      uid: 3d60b5d2-512e-49b6-b56f-4635e4b11176
+    kind: Event
+    lastTimestamp: "2020-03-28T22:18:47Z"
+    message: Started container test
+    metadata:
+      creationTimestamp: "2020-03-28T22:18:47Z"
+      name: test-7d7bf58f7d-pvk2s.160097c1b4a15160
+      namespace: test1
+      resourceVersion: "334106"
+      selfLink: /api/v1/namespaces/test1/events/test-7d7bf58f7d-pvk2s.160097c1b4a15160
+      uid: 5cc43261-79f0-46b4-bfe0-b56aead8cbb8
+    reason: Started
+    reportingComponent: ""
+    reportingInstance: ""
+    source:
+      component: kubelet
+      host: minikube
+    type: Normal
+  

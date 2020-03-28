@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: "2020-03-28T22:39:40Z"
+  name: test
+  namespace: test1
+  resourceVersion: "336925"
+  selfLink: /api/v1/namespaces/test1/services/test
+  uid: 333cc578-e563-429e-b246-f8098a99aa67
+spec:
+  clusterIP: 10.106.7.199
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    run: test
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}
+endpoint:
+  apiVersion: v1
+  kind: Endpoints
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2020-03-28T22:39:42Z"
+    creationTimestamp: "2020-03-28T22:39:40Z"
+    name: test
+    namespace: test1
+    resourceVersion: "336942"
+    selfLink: /api/v1/namespaces/test1/endpoints/test
+    uid: 0e965c84-5d52-4486-94da-30981db48d24
+  subsets: []

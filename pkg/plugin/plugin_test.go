@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestArtifacts(t *testing.T) {
+func TestArtifactRender(t *testing.T) {
 	testArtifacts, _ := filepath.Glob("../../test-artifacts/*yaml")
 	for _, testArtifact := range testArtifacts {
 		testName := strings.TrimSuffix(filepath.Base(testArtifact), filepath.Ext(testArtifact))

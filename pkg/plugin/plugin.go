@@ -35,6 +35,7 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/scheme"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
+	kyaml "sigs.k8s.io/yaml"
 )
 
 var durationRound = (sprig.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
@@ -347,8 +348,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 func renderFile(manifestFilename string) (string, error) {
 	var out map[string]interface{}
 	manifestFile, _ := ioutil.ReadFile(manifestFilename)
-	obj, _, _ := scheme.Codecs.UniversalDeserializer().Decode(manifestFile, nil, nil)
-	err := unmarshal(obj, &out)
+	err := kyaml.Unmarshal(manifestFile, &out)
 	if err != nil {
 		return "", errors.WithMessage(err, "Failed getting JSON for object")
 	}
