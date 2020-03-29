@@ -1,7 +1,6 @@
 {{- define "DefaultResource" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
-    {{- template "owner_references" . }}
     {{- template "replicas_status" . }}
     {{- template "suspended" . }}
     {{- template "conditions_summary" .status.conditions }}
@@ -13,7 +12,6 @@
     {{- with .status.qosClass }} {{ . | colorKeyword }}{{ end }}
     {{- with .status.message }}, message: {{ . }}{{ end }}
     {{- template "pod_conditions_summary" .status.conditions }}
-    {{- template "owner_references" . }}
     {{- if not .metadata.ownerReferences }}
         {{- $container := index .spec.containers 0 }}{{/* not ideal but will likely work in most cases if not all */}}
   {{ "Standalone POD" | red | bold }}{{ if $container.stdin }}, interactive{{ end }}{{ if $container.tty }} with attached TTY{{ end }}.
@@ -44,7 +42,6 @@
 {{- define "StatefulSet" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
-    {{- template "owner_references" . }}
     {{- $currentReplicas := .status.replicas | default 0.0 }}
     {{- $updatedReplicas := .status.updatedReplicas | default 0.0 }}
     {{- $readyReplicas := .status.readyReplicas | default 0.0 }}
@@ -95,7 +92,6 @@
 {{- define "DaemonSet" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
-    {{- template "owner_references" . }}
     {{- template "daemonset_replicas_status" . }}
     {{- template "conditions_summary" .status.conditions }}
     {{- template "events" .events }}
@@ -104,7 +100,6 @@
 {{- define "ReplicaSet" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
-    {{- template "owner_references" . }}
     {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
            and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
     {{- $injectedStatus := .status }}
@@ -140,7 +135,6 @@
 {{- define "Deployment" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
-    {{- template "owner_references" . }}
     {{- $injectedStatus := .status }}
     {{- if not (hasKey .status "replicas") }}
         {{- $injectedStatus := set $injectedStatus "replicas" 0.0 }}
@@ -189,7 +183,6 @@
 
 {{- define "PersistentVolume" }}
     {{- template "status_summary_line" . }}
-    {{- template "owner_references" . }}
     {{- with .status.message }}{{/* exists on failure */}}
   {{ "message" | red | bold }}: {{ . }}
     {{- end }}
@@ -199,13 +192,11 @@
 {{- define "PersistentVolumeClaim" }}
     {{- template "status_summary_line" . }}
     {{- with .status.capacity.storage }} {{ . }}{{ end }}
-    {{- template "owner_references" . }}
     {{- template "events" .events }}
 {{- end -}}
 
 {{- define "ComponentStatus" }}
     {{- template "status_summary_line" . }}
-    {{- template "owner_references" . }}
     {{- template "conditions_summary" .conditions }}
     {{- template "events" .events }}
 {{- end -}}
@@ -221,7 +212,6 @@
   {{ "Active" | green }}: {{ .kind | bold }}/{{ .name }} is running.
         {{- end }}
     {{- end }}
-    {{- template "owner_references" . }}
     {{- template "events" .events }}
 {{- end -}}
 
@@ -237,7 +227,6 @@
         {{- /* TODO: handle "work queue jobs" better */ -}}
         {{- template "job_parallel" . }}
     {{- end }}
-    {{- template "owner_references" . }}
     {{- template "conditions_summary" .status.conditions }}
     {{- template "events" .events }}
 {{- end -}}
@@ -260,7 +249,6 @@
     {{- if eq .spec.type "LoadBalancer" }}
         {{- template "load_balancer_ingress" . }}
     {{- end }}
-    {{- template "owner_references" . }}
     {{- if .endpoint }}
         {{- if hasKey .endpoint.metadata.annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
             , last endpoint change was {{ index .endpoint.metadata.annotations "endpoints.kubernetes.io/last-change-trigger-time"  | colorAgo }} ago
@@ -293,7 +281,6 @@
 {{- define "Ingress" }}
     {{- template "status_summary_line" . }}
     {{- template "load_balancer_ingress" . }}
-    {{- template "owner_references" . }}
     {{- template "events" .events }}
 {{- end -}}
 
@@ -367,6 +354,9 @@
 {{.kind | cyan | bold }}/{{ .metadata.name | cyan }}
     {{- with .metadata.namespace }} -n {{ . }}{{ end }}
     {{- with .metadata.creationTimestamp }}, created {{ . | colorAgo }} ago{{ end }}
+    {{- if .metadata.ownerReferences }} by {{ range $index, $ownerReference := .metadata.ownerReferences }}
+        {{- if $index }},{{ end }}{{ $ownerReference.kind | bold }}/{{ $ownerReference.name }}
+    {{- end }}{{ end }}
     {{- with .metadata.generation }}, gen:{{ . }}{{ end }}
     {{- if .status.startTime }}
         {{- $created := .metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
@@ -384,14 +374,6 @@
     {{- with .status.state }} {{ . | colorKeyword }}{{ end }}
     {{- with .status.reason }} {{ . | colorKeyword }}{{ end }}
     {{- if .metadata.deletionTimestamp }} {{ "DELETING" | red | bold }} {{- end }}
-{{- end -}}
-
-{{- define "owner_references" }}
-    {{- if .metadata.ownerReferences }}
-  Owners: {{ range $index, $ownerReference := .metadata.ownerReferences }}
-            {{- if $index }}, {{ end }}{{ $ownerReference.kind | bold }}/{{ $ownerReference.name }}
-        {{- end }}
-    {{- end }}
 {{- end -}}
 
 {{- define "observed_generation_summary" }}
