@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: "2020-03-29T12:26:48Z"
+  labels:
+    app: web
+  name: web
+  namespace: test1
+  resourceVersion: "363639"
+  selfLink: /api/v1/namespaces/test1/services/web
+  uid: 0decf327-5a03-47fc-b72c-5daaac8a4db9
+spec:
+  clusterIP: 10.98.108.181
+  ports:
+  - name: 80-80
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: nginx
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}
+endpoint:
+  apiVersion: v1
+  kind: Endpoints
+  metadata:
+    annotations:
+      endpoints.kubernetes.io/last-change-trigger-time: "2020-03-29T12:30:03Z"
+    creationTimestamp: "2020-03-29T12:26:48Z"
+    labels:
+      app: web
+    name: web
+    namespace: test1
+    resourceVersion: "364028"
+    selfLink: /api/v1/namespaces/test1/endpoints/web
+    uid: f9907ef2-9d23-4257-8e6a-0f961793174b
+  subsets:
+  - addresses:
+    - ip: 172.17.0.2
+      nodeName: minikube
+      targetRef:
+        kind: Pod
+        name: web-0
+        namespace: test1
+        resourceVersion: "363287"
+        uid: a216c1e9-b7c8-4c87-b03e-9057dd9f5a30
+    - ip: 172.17.0.4
+      nodeName: minikube
+      targetRef:
+        kind: Pod
+        name: web-1
+        namespace: test1
+        resourceVersion: "363297"
+        uid: 0f79e0c0-967c-4052-8002-85f9609072d1
+    notReadyAddresses:
+    - ip: 172.17.0.6
+      nodeName: minikube
+      targetRef:
+        kind: Pod
+        name: web-2
+        namespace: test1
+        resourceVersion: "364027"
+        uid: 02e518ef-c7a0-4c91-81c9-de48da572405
+    ports:
+    - name: 80-80
+      port: 80
+      protocol: TCP
