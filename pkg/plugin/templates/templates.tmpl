@@ -82,7 +82,7 @@
         */ -}}
         {{- end }}
     {{- else }}
-        {{- if eq $injectedStatus.readyReplicas 0.0 }}
+        {{- if and .spec.replicas (eq $injectedStatus.readyReplicas 0.0) }}
   {{ "Stuck rollout" | red | bold }}: No ready replicas, this StatefulSet won't likely go further.
         {{- end }}
     {{- end }}
