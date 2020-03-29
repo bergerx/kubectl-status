@@ -27,9 +27,49 @@ func RootCmd() *cobra.Command {
 	f := cmdutil.NewFactory(KubernetesConfigFlags)
 
 	cmd := &cobra.Command{
-		Use:   "status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
+		Use:   "kubectl-status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
 		Short: "Display status for one or many resources",
-		Long:  `.`,
+		Long: `Display status for one or many resources
+
+ Prints human-friendly output that focuses on the status of the resources in kubernetes.
+
+ In most cases replacing a "kubectl get ..." with a "kubectl status ..." would be sufficient.
+
+ This plugin uses templates for well known api-conventions and has support for hardcoded resources,
+not all resources are fully supported.
+
+Examples:
+  # Show status of all pods in the current namespace
+  kubectl status pods
+
+  # Show status of all pods in all namespaces
+  kubectl status pods --all-namespaces
+
+  # Show status of all Deployments and StatefulSets in the current namespace
+  kubectl status deploy,sts
+
+  # Show status of all nodes
+  kubectl status nodes
+
+  # Show status of some pods
+  kubectl status pod my-pod1 my-pod2
+
+  # Same with previous
+  kubectl status pod/my-pod1 pod/my-pod2
+
+  # Show status of various resources
+  kubectl status svc/my-svc1 pod/my-pod2
+
+  # Show status of a particular deployment
+  kubectl status deployment my-dep
+
+  # Show deployments in the "v1" version of the "apps" API group.
+  kubectl status deployments.v1.apps
+
+  # Show status of nodes marked as master
+  kubectl status node -l node-role.kubernetes.io/master
+
+`,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			viper.BindPFlags(cmd.Flags())
 		},

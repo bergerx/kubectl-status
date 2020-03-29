@@ -4,6 +4,9 @@ A `kubectl` plugin to print a human-friendly output that focuses on the status f
 
 Just a different representation of the kubernetes resources (next to `get` and `describe`).
 
+This plugin uses templates for well known api-conventions and has support for hardcoded resources,
+not all resources are fully supported.
+
 ## Installation
 
 ```bash
@@ -26,16 +29,18 @@ kubectl status --help
 
 In most cases replacing a `kubectl get ...` with a `kubectl status ...` would be sufficient.
 
+Examples:
 ```bash
-kubectl status pods --all-namespaces                             # Show status of all pods in all namespaces
-kubectl status pods                                              # Show status of all pods in the current namespace
-kubectl status deploy,sts                                        # Show status of all Deployments and StatefulSets in the current namespace
-kubectl status nodes                                             # Show status of all nodes
-kubectl status pod my-pod1 my-pod2                               # Show status of some pods
-kubectl status pod/my-pod1 pod/my-pod2                           # Same with previous
-kubectl status svc/my-svc1 pod/my-pod2                           # Show status of various resources
-kubectl status deployment my-dep                                 # Show status of a particular deployment
-kubectl status node --selector='node-role.kubernetes.io/master'  # Show status of nodes marked as master
+kubectl status pods                     # Show status of all pods in the current namespace
+kubectl status pods --all-namespaces    # Show status of all pods in all namespaces
+kubectl status deploy,sts               # Show status of all Deployments and StatefulSets in the current namespace
+kubectl status nodes                    # Show status of all nodes
+kubectl status pod my-pod1 my-pod2      # Show status of some pods
+kubectl status pod/my-pod1 pod/my-pod2  # Same with previous
+kubectl status svc/my-svc1 pod/my-pod2  # Show status of various resources
+kubectl status deployment my-dep        # Show status of a particular deployment
+kubectl status deployments.v1.apps      # Show deployments in the "v1" version of the "apps" API group.
+kubectl status node -l node-role.kubernetes.io/master  # Show status of nodes marked as master
 ```
 
 ## Development
