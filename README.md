@@ -14,6 +14,20 @@ kubectl krew install status
 kubectl status --help
 ```
 
+## Demo
+
+Example Pod:
+![pod](assets/pod.png)
+
+Example StatefulSet:
+![statefulset](assets/statefulset.png)
+
+Example Deployment and ReplicaSet
+![deployment-replicaset](assets/deployment-replicaset.png)
+
+Example Service:
+![service](assets/service.png)
+
 ## Features
 
 * aims for ease of understanding the status of given resource,
