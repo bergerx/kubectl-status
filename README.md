@@ -7,6 +7,15 @@ Just a different representation of the kubernetes resources (next to `get` and `
 This plugin uses templates for well known api-conventions and has support for hardcoded resources,
 not all resources are fully supported.
 
+- [Installation](#installation)
+- [Demo](#demo)
+- [Features](#features)
+- [Usage](#usage)
+- [Development](#development)
+  * [Guidelines for content](#guidelines-for-content)
+  * [Guidelines for colorization](#guidelines-for-colorization)
+- [License](#license)
+
 ## Installation
 
 ```bash
