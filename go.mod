@@ -8,7 +8,7 @@ require (
 	github.com/Masterminds/sprig/v3 v3.0.2
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/rakyll/statik v0.1.7
 	github.com/spf13/cobra v0.0.6
