@@ -1,0 +1,23 @@
+name: ci-test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v1
+        with:
+          go-version: 1.13.x
+      - name: setup go env
+        # workaround for make to be able to find build dependencies which are installed by go get
+        shell: bash
+        run: |
+          echo "::add-path::$(go env GOPATH)/bin"
+      - run: make
+      - run: make test
