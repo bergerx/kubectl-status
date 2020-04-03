@@ -1,0 +1,21 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  creationTimestamp: "2020-04-03T19:44:01Z"
+  generation: 2
+  name: web
+  namespace: test1
+  resourceVersion: "460204"
+  selfLink: /apis/extensions/v1beta1/namespaces/test1/ingresses/web
+  uid: 3d7ed81f-e2a6-46bc-84dd-8a2b99511daa
+spec:
+  rules:
+  - host: web.my.cool.domain.com
+    http:
+      paths:
+      - backend:
+          serviceName: web
+          servicePort: 80
+        path: /
+status:
+  loadBalancer: {}

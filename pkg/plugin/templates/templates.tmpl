@@ -281,6 +281,17 @@
 {{- define "Ingress" }}
     {{- template "status_summary_line" . }}
     {{- template "load_balancer_ingress" . }}
+    {{- with .backendIssues }}
+        {{- range . }}
+            {{- if eq .IssueType "serviceMissing" }}
+  {{ "Service doesn't exist" | red | bold }}: {{ "Service" | bold }}/{{ .Backend.ServiceName }}:{{ .Backend.ServicePort }} referenced in ingress, but it doesn't exist.
+            {{- else if eq .IssueType "serviceWithPortMismatch" }}
+  {{ "Service Port doesn't exist" | red | bold }}: {{ "Service" | bold }}/{{ .Backend.ServiceName }}:{{ .Backend.ServicePort }} referenced in ingress, but Service doesnt have that port defined.
+            {{- else if eq .IssueType "serviceWithNoReadyAddresses" }}
+  {{ "Service outage" | red | bold }}: {{ "Service" | bold }}/{{ .Backend.ServiceName }}:{{ .Backend.ServicePort }} referenced in ingress doesn't have any Healthy endpoints.
+            {{- end }}
+        {{- end }}
+    {{- end }}
     {{- template "events" .events }}
 {{- end -}}
 

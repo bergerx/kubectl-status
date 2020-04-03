@@ -24,6 +24,7 @@ import (
 	sfs "github.com/rakyll/statik/fs"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/apps/v1"
+	"k8s.io/api/extensions/v1beta1"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -37,6 +38,11 @@ import (
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 	kyaml "sigs.k8s.io/yaml"
 )
+
+type IngressBackendIssue struct {
+	IssueType string
+	Backend   v1beta1.IngressBackend
+}
 
 var durationRound = (sprig.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
 
@@ -321,6 +327,7 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 			"Pod":         {includePodMetrics},
 			"Service":     {includeEndpoint},
 			"StatefulSet": {includeStatefulSetDiff},
+			"Ingress":     {includeIngressServices},
 		}
 		for kind, funcs := range kindInjectFuncMap {
 			if objKind == kind {
@@ -477,6 +484,58 @@ func includeEndpoint(obj runtime.Object, f cmdutil.Factory, out map[string]inter
 		return errors.WithMessage(err, "Failed getting JSON for Endpoint")
 	}
 	out["endpoint"] = endpointKey
+	return nil
+}
+
+func includeIngressServices(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
+	clientSet, _ := f.KubernetesClientSet()
+	ing := &v1beta1.Ingress{}
+	err := scheme.Scheme.Convert(obj, ing, nil)
+	if err != nil {
+		return err
+	}
+	var backendIssues []IngressBackendIssue
+	for _, rule := range ing.Spec.Rules {
+	PATH:
+		for _, path := range rule.HTTP.Paths {
+			backend := path.Backend
+			svcName := backend.ServiceName
+			svcPort := backend.ServicePort
+			for _, issue := range backendIssues {
+				if issue.Backend.ServiceName == svcName &&
+					issue.Backend.ServicePort == svcPort {
+					continue PATH
+				}
+			}
+			svc, err := clientSet.CoreV1().Services(ing.Namespace).Get(svcName, metav1.GetOptions{})
+			if (err != nil) || (svc.Name == "") {
+				backendIssues = append(backendIssues, IngressBackendIssue{"serviceMissing", backend})
+				continue PATH
+			}
+			portExist := false
+			for _, port := range svc.Spec.Ports {
+				if (svcPort.IntVal == port.Port) || (svcPort.StrVal == port.Name) {
+					portExist = true
+				}
+			}
+			if !portExist {
+				backendIssues = append(backendIssues, IngressBackendIssue{"serviceWithPortMismatch", backend})
+				continue PATH
+			}
+			endpoint, err := clientSet.CoreV1().Endpoints(ing.Namespace).Get(svcName, metav1.GetOptions{})
+			if (err != nil) || (endpoint.Name == "") || (len(endpoint.Subsets) == 0) {
+				backendIssues = append(backendIssues, IngressBackendIssue{"serviceWithNoReadyAddresses", backend})
+				continue PATH
+			}
+			for _, subset := range endpoint.Subsets {
+				if len(subset.Addresses) == 0 {
+					backendIssues = append(backendIssues, IngressBackendIssue{"serviceWithNoReadyAddresses", backend})
+					continue PATH
+				}
+			}
+		}
+	}
+	out["backendIssues"] = backendIssues
 	return nil
 }
 
