@@ -224,7 +224,7 @@ func colorKeyword(phase string) string {
 }
 
 func colorAgo(kubeDate string) string {
-	t, _ := time.ParseInLocation("2006-01-02T15:04:05Z", kubeDate, time.Local)
+	t, _ := time.ParseInLocation("2006-01-02T15:04:05Z", kubeDate, time.UTC)
 	duration := time.Since(t).Round(time.Second)
 	return colorDuration(duration)
 }
