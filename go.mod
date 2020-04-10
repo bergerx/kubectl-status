@@ -19,7 +19,7 @@ require (
 	k8s.io/apimachinery v0.17.4
 	k8s.io/cli-runtime v0.17.4
 	k8s.io/client-go v0.17.4
-	k8s.io/kubectl v0.17.4
+	k8s.io/kubectl v0.18.1
 	k8s.io/metrics v0.17.4
 	sigs.k8s.io/yaml v1.2.0
 )
