@@ -309,10 +309,9 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 	}
 	for _, info := range infos {
 		var err error
-		out := map[string]interface{}{}
 		obj := info.Object
 		objKind := info.ResourceMapping().GroupVersionKind.Kind
-		err = includeObj(obj, out)
+		out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)
 		if err != nil {
 			allErrs = append(allErrs, err)
 			continue
@@ -392,30 +391,13 @@ func findTemplateName(tmpl *template.Template, v map[string]interface{}) string 
 	return kindTemplateName
 }
 
-func includeObj(obj runtime.Object, out map[string]interface{}) error {
-	return unmarshal(obj, &out)
-}
-
-func unmarshal(v interface{}, out *map[string]interface{}) error {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	err = json.Unmarshal(data, out)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func includeEvents(obj runtime.Object, clientSet *kubernetes.Clientset, out map[string]interface{}) error {
 	objectMeta := obj.(metav1.Object)
 	events, err := clientSet.CoreV1().Events(objectMeta.GetNamespace()).Search(scheme.Scheme, obj)
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting event")
 	}
-	eventsKey := make(map[string]interface{})
-	err = unmarshal(events, &eventsKey)
+	eventsKey, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&events)
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting JSON for Events")
 	}
@@ -437,8 +419,7 @@ func includeNodeMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]in
 		// swallow any errors while getting NodeMetrics
 		return nil
 	}
-	nodeMetricsKey := make(map[string]interface{})
-	err = unmarshal(nodeMetrics, &nodeMetricsKey)
+	nodeMetricsKey, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&nodeMetrics)
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting JSON for NodeMetrics")
 	}
@@ -460,8 +441,7 @@ func includePodMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]int
 		// swallow any errors while getting PodMetrics
 		return nil
 	}
-	podMetricsKey := make(map[string]interface{})
-	err = unmarshal(podMetrics, &podMetricsKey)
+	podMetricsKey, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&podMetrics)
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting JSON for PodMetrics")
 	}
@@ -478,8 +458,7 @@ func includeEndpoint(obj runtime.Object, f cmdutil.Factory, out map[string]inter
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting Endpoint")
 	}
-	endpointKey := make(map[string]interface{})
-	err = unmarshal(endpoint, &endpointKey)
+	endpointKey, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&endpoint)
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting JSON for Endpoint")
 	}
