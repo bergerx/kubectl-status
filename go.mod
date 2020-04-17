@@ -17,7 +17,7 @@ require (
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	k8s.io/api v0.17.4
 	k8s.io/apimachinery v0.17.4
-	k8s.io/cli-runtime v0.17.4
+	k8s.io/cli-runtime v0.18.2
 	k8s.io/client-go v0.17.4
 	k8s.io/kubectl v0.17.4
 	k8s.io/metrics v0.17.4
