@@ -16,7 +16,7 @@ require (
 	golang.org/x/sys v0.0.0-20200223170610-d5e6a3e2c0ae // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	k8s.io/api v0.17.4
-	k8s.io/apimachinery v0.17.4
+	k8s.io/apimachinery v0.18.8
 	k8s.io/cli-runtime v0.17.4
 	k8s.io/client-go v0.17.4
 	k8s.io/kubectl v0.17.4
