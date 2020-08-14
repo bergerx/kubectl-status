@@ -7,6 +7,7 @@ replace github.com/gorilla/rpc v1.2.0+incompatible => github.com/gorilla/rpc v1.
 require (
 	github.com/Masterminds/sprig/v3 v3.0.2
 	github.com/dustin/go-humanize v1.0.0
+	github.com/evanphx/json-patch v4.2.0+incompatible // indirect
 	github.com/fatih/color v1.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
@@ -14,12 +15,14 @@ require (
 	github.com/spf13/cobra v0.0.7
 	github.com/spf13/viper v1.6.3
 	golang.org/x/sys v0.0.0-20200223170610-d5e6a3e2c0ae // indirect
+	gonum.org/v1/netlib v0.0.0-20190331212654-76723241ea4e // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
-	k8s.io/api v0.17.4
-	k8s.io/apimachinery v0.17.4
-	k8s.io/cli-runtime v0.17.4
-	k8s.io/client-go v0.17.4
-	k8s.io/kubectl v0.17.4
-	k8s.io/metrics v0.17.4
+	k8s.io/api v0.18.8
+	k8s.io/apimachinery v0.18.8
+	k8s.io/cli-runtime v0.18.8
+	k8s.io/client-go v0.18.8
+	k8s.io/kubectl v0.18.8
+	k8s.io/metrics v0.18.8
+	sigs.k8s.io/structured-merge-diff v0.0.0-20190525122527-15d366b2352e // indirect
 	sigs.k8s.io/yaml v1.2.0
 )
