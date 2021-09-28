@@ -7,11 +7,15 @@
     {{- template "events" .events }}
 {{- end }}
 
-{{- define "Pod" }}
+{{- define "pod_status_summary_line" }}
     {{- template "status_summary_line" . }}
-    {{- with .status.qosClass }} {{ . | colorKeyword }}{{ end }}
+    {{- with .status.qosClass }} {{ if $.inline }}{{ . }}{{ else }}{{ . | colorKeyword }}{{ end }}{{ end }}
     {{- with .status.message }}, message: {{ . }}{{ end }}
-    {{- template "pod_conditions_summary" .status.conditions }}
+{{- end -}}
+
+{{- define "Pod" }}
+{{ template "pod_status_summary_line" . }}
+    {{- include "pod_conditions_summary" .status.conditions | nindent 2 }}
     {{- if not .metadata.ownerReferences }}
         {{- $container := index .spec.containers 0 }}{{/* not ideal but will likely work in most cases if not all */}}
   {{ "Standalone POD" | red | bold }}{{ if $container.stdin }}, interactive{{ end }}{{ if $container.tty }} with attached TTY{{ end }}.
@@ -19,7 +23,7 @@
     {{- with .status.initContainerStatuses }}
   InitContainers:
         {{- range . }}
-            {{- template "container_status_summary" . }}
+            {{- include "container_status_summary" . | nindent 4 }}
         {{- end }}
     {{- end }}
     {{- with .status.containerStatuses }}
@@ -33,14 +37,14 @@
                 {{- $containerSpec := getItemInList $.spec.containers "name" .name }}
                 {{- $containerStatus := set $containerStatus "spec" $containerSpec }}
             {{- end }}
-            {{- template "container_status_summary" $containerStatus }}
+            {{- include "container_status_summary" $containerStatus | nindent 4 }}
         {{- end }}
     {{- end }}
     {{- template "events" .events }}
 {{- end }}
 
 {{- define "StatefulSet" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- $currentReplicas := .status.replicas | default 0.0 }}
     {{- $updatedReplicas := .status.updatedReplicas | default 0.0 }}
@@ -82,7 +86,7 @@
         */ -}}
         {{- end }}
     {{- else }}
-        {{- if and .spec.replicas (eq $injectedStatus.readyReplicas 0.0) }}
+        {{- if and .spec.replicas (eq (float64 $injectedStatus.readyReplicas) 0.0) }}
   {{ "Stuck rollout" | red | bold }}: No ready replicas, this StatefulSet won't likely go further.
         {{- end }}
     {{- end }}
@@ -90,7 +94,7 @@
 {{- end }}
 
 {{- define "DaemonSet" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "daemonset_replicas_status" . }}
     {{- template "conditions_summary" .status.conditions }}
@@ -98,7 +102,7 @@
 {{- end -}}
 
 {{- define "ReplicaSet" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
            and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
@@ -113,17 +117,17 @@
     {{- template "replicas_status" $injectedManifest }}
     {{- template "conditions_summary" .status.conditions }}
     {{- if and .spec.replicas (or (not .status.replicas) (not .status.readyReplicas)) }}
-  {{ "Outage" | red | bold }}: ReplicaSet has no Ready replicas.
+        {{- "Outage" | red | bold | nindent 2 }}: ReplicaSet has no Ready replicas.
     {{- end }}
     {{- if hasKey .metadata.annotations "deployment.kubernetes.io/desired-replicas" }}
         {{- $deploymentDesiredReplicas := index .metadata.annotations "deployment.kubernetes.io/desired-replicas" | float64 }}
         {{- if $deploymentDesiredReplicas }}
             {{- if .spec.replicas }}
-                {{- if ne $deploymentDesiredReplicas .spec.replicas }}
-  {{ "Ongoing rollout" | yellow | bold }}, check Owner Reference resources.
+                {{- if ne $deploymentDesiredReplicas (.spec.replicas | float64) }}
+                    {{- "Ongoing rollout" | yellow | bold | nindent 2 }}, check Owner Reference resources.
                 {{- end }}
             {{- else }}{{/* means .spec.replicas: 0 */}}
-  {{ "Old" | red | bold }}: This ReplicaSet is likely replaced by a new one, check Owner Reference resources.
+                {{- "Old" | red | bold | nindent 2 }}: This ReplicaSet is likely replaced by a new one, check Owner Reference resources.
             {{- end }}
         {{- else }}{{/* means deployment.kubernetes.io/desired-replicas: "0" */}}
             {{- template "suspended" . }}
@@ -133,7 +137,7 @@
 {{- end }}
 
 {{- define "Deployment" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- $injectedStatus := .status }}
     {{- if not (hasKey .status "replicas") }}
@@ -154,20 +158,20 @@
     {{- $readyReplicas := .status.readyReplicas | default 0.0 }}
     {{- $ongoingRollout := and $currentReplicas (not (eq $currentReplicas $updatedReplicas)) }}
     {{- if $ongoingRollout }}
-  {{ "Ongoing Rollout" | yellow | bold }}: Update progress {{ $updatedReplicas }}/{{ .spec.replicas }} ({{ percent $updatedReplicas .spec.replicas | printf "%.0f"}}%).
+        {{- "Ongoing Rollout" | yellow | bold | nindent 2 }}: Update progress {{ $updatedReplicas }}/{{ .spec.replicas }} ({{ percent $updatedReplicas .spec.replicas | printf "%.0f"}}%).
     {{- end }}
     {{- if or (not $currentReplicas) (not $readyReplicas) }}
-  {{ "Outage" | red | bold }}: Deployment has no Ready replicas.
+        {{- "Outage" | red | bold | nindent 2 }}: Deployment has no Ready replicas.
         {{- if eq (.status.observedGeneration | default 1.0) 1.0 }}
-  {{ "Stuck Initial Rollout?" | yellow | bold }} First rollout not yet progressed.
+            {{- "Stuck Initial Rollout?" | yellow | bold | nindent 2 }} First rollout not yet progressed.
         {{- end }}
     {{- else if ne $currentReplicas $readyReplicas }}
         {{- if not $ongoingRollout }}
-  {{ "Not Ready Replicas" | yellow | bold }}: {{ sub $currentReplicas $readyReplicas }} replicas are not Ready.
+            {{- "Not Ready Replicas" | yellow | bold | nindent 2 }}: {{ sub $currentReplicas $readyReplicas }} replicas are not Ready.
         {{- end }}
     {{- else if .status.unavailableReplicas }}
         {{- if not $ongoingRollout }}
-  {{ "Unavailable Replicas" | yellow | bold }}: {{ .status.unavailableReplicas }} replicas are not Available.
+            {{- "Unavailable Replicas" | yellow | bold | nindent 2 }}: {{ .status.unavailableReplicas }} replicas are not Available.
         {{- end }}
     {{- end }}
     {{- template "events" .events }}
@@ -176,33 +180,33 @@
 {{- define "suspended" }}
     {{- if hasKey .spec "replicas" }}
         {{- if not .spec.replicas }}
-  {{ "Suspended" | red | bold }}: Scaled down to 0.
+            {{- "Suspended" | red | bold | nindent 2 }}: Scaled down to 0.
         {{- end }}
     {{- end }}
 {{- end }}
 
 {{- define "PersistentVolume" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- with .status.message }}{{/* exists on failure */}}
-  {{ "message" | red | bold }}: {{ . }}
+        {{- "message" | red | bold | nindent 2 }}: {{ . }}
     {{- end }}
     {{- template "events" .events }}
 {{- end -}}
 
 {{- define "PersistentVolumeClaim" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- with .status.capacity.storage }} {{ . }}{{ end }}
     {{- template "events" .events }}
 {{- end -}}
 
 {{- define "ComponentStatus" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- template "conditions_summary" .conditions }}
     {{- template "events" .events }}
 {{- end -}}
 
 {{- define "CronJob" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- if .status.lastScheduleTime }}, last ran at {{ .status.lastScheduleTime }} ({{ .status.lastScheduleTime | colorAgo }} ago)
     {{- else }}
   {{ "Not yet scheduled" | yellow | bold }}
@@ -216,7 +220,7 @@
 {{- end -}}
 
 {{- define "Job" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- /* See https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/#parallel-jobs */ -}}
     {{- if eq (coalesce .spec.completions .spec.parallelism 1 | toString) "1" }}
         {{- template "job_non_parallel" . }}
@@ -244,7 +248,7 @@
 {{- end -}}
 
 {{- define "Service" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- if eq .spec.clusterIP "None" }} {{ "Headless" | yellow | bold }}{{- end }}
     {{- if eq .spec.type "LoadBalancer" }}
         {{- template "load_balancer_ingress" . }}
@@ -270,7 +274,7 @@
                 {{- end }}
             {{- end }}
         {{- else }}
-  {{ "No matching pods" | red | bold }}: Service selector doens't match any Pods.
+  {{ "No matching pods" | red | bold }}: Service selector either doens't match any Pods or the Service's targetPort doesn't match the Pod's port.
         {{- end }}
     {{- else }}
   {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
@@ -279,7 +283,7 @@
 {{- end -}}
 
 {{- define "Ingress" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- template "load_balancer_ingress" . }}
     {{- with .backendIssues }}
         {{- range . }}
@@ -296,7 +300,7 @@
 {{- end -}}
 
 {{- define "HorizontalPodAutoscaler" }}
-    {{- template "status_summary_line" . }} last scale was {{ .status.lastScaleTime | colorAgo }} ago
+{{ template "status_summary_line" . }} last scale was {{ .status.lastScaleTime | colorAgo }} ago
   {{ "current" | bold }} replicas:{{ .status.currentReplicas }}/({{ .spec.minReplicas | default "1" }}-{{ .spec.maxReplicas }})
     {{- if .status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .status.currentCPUUtilizationPercentage | toString | redIf (ge .status.currentCPUUtilizationPercentage .spec.targetCPUUtilizationPercentage) }}%/{{ .spec.targetCPUUtilizationPercentage }}%{{ end }}
     {{- if (ne .status.currentReplicas .status.desiredReplicas) }}, {{ "desired" | red | bold}}: {{ .status.currentReplicas }} --> {{ .status.desiredReplicas }}{{ end }}
@@ -304,7 +308,7 @@
 {{- end -}}
 
 {{- define "ResourceQuota" }}
-    {{- template "status_summary_line" . }}
+{{ template "status_summary_line" . }}
     {{- $hard := .status.hard }}
     {{- range $key, $value := .status.used }}
   {{ $key }}: {{ $value }}/{{ index $hard $key }}
@@ -337,32 +341,36 @@
 {{- end -}}
 
 {{- define "daemonset_replicas_status" }}
-    {{- if .status.desiredNumberScheduled }}{{ $desiredNumberScheduled := .status.desiredNumberScheduled }}
-  {{ printf "desired:%.0f" .status.desiredNumberScheduled | bold }}
-        {{- if hasKey .status "currentNumberScheduled" }}, {{ printf "current:%.0f" .status.currentNumberScheduled | toString | redBoldIf (not ( eq $desiredNumberScheduled .status.currentNumberScheduled )) }}{{ end }}
-        {{- if hasKey .status "numberAvailable" }}, {{ printf "available:%.0f" .status.numberAvailable | toString | redBoldIf (not ( eq $desiredNumberScheduled .status.numberAvailable)) }}{{ end }}
-        {{- if hasKey .status "numberReady" }}, {{ printf "ready:%.0f" .status.numberReady | toString | redBoldIf (not ( eq $desiredNumberScheduled .status.numberReady )) }}{{ end }}
-        {{- if hasKey .status "updatedNumberScheduled" }}, {{ printf "updated:%.0f" .status.updatedNumberScheduled | toString | redBoldIf (not ( eq $desiredNumberScheduled .status.updatedNumberScheduled )) }}{{ end }}
+    {{- if .status.desiredNumberScheduled }}{{ $desiredNumberScheduled := float64 .status.desiredNumberScheduled }}
+  {{ printf "desired:%.0f" (float64 .status.desiredNumberScheduled) | bold }}
+        {{- if hasKey .status "currentNumberScheduled" }}, {{ printf "current:%.0f" (float64 .status.currentNumberScheduled) | toString | redBoldIf (not ( eq $desiredNumberScheduled (float64 .status.currentNumberScheduled) )) }}{{ end }}
+        {{- if hasKey .status "numberAvailable" }}, {{ printf "available:%.0f" (float64 .status.numberAvailable) | toString | redBoldIf (not ( eq $desiredNumberScheduled (float64 .status.numberAvailable) )) }}{{ end }}
+        {{- if hasKey .status "numberReady" }}, {{ printf "ready:%.0f" (float64 .status.numberReady) | toString | redBoldIf (not ( eq $desiredNumberScheduled (float64 .status.numberReady) )) }}{{ end }}
+        {{- if hasKey .status "updatedNumberScheduled" }}, {{ printf "updated:%.0f" (float64 .status.updatedNumberScheduled) | toString | redBoldIf (not ( eq $desiredNumberScheduled (float64 .status.updatedNumberScheduled) )) }}{{ end }}
         {{- with .status.numberMisscheduled }}{{ "numberMisscheduled" | red | bold }}:{{ . }}{{- end }}
     {{- end }}
 {{- end -}}
 
 {{- define "replicas_status" }}
-    {{- if hasKey .status "replicas" }}{{ $spec_replicas := .spec.replicas }}
-  {{ printf "desired:%.0f" .spec.replicas | bold }}
-        {{- with .status.replicas }}, {{ printf "existing:%.0f" . | toString | redBoldIf (not ( eq $spec_replicas . )) }}{{ end }}
-        {{- if hasKey .status "readyReplicas" }}, {{ printf "ready:%.0f" .status.readyReplicas | toString | redBoldIf (not ( eq $spec_replicas .status.readyReplicas )) }}{{ end }}
-        {{- if hasKey .status "currentReplicas" }}, {{ printf "current:%.0f" .status.currentReplicas | toString | redBoldIf (not ( eq $spec_replicas .status.currentReplicas )) }}{{ end }}
-        {{- if hasKey .status "updatedReplicas" }}, {{ printf "updated:%.0f" .status.updatedReplicas | toString | redBoldIf (not ( eq $spec_replicas .status.updatedReplicas )) }}{{ end }}
-        {{- if hasKey .status "availableReplicas" }}, {{ printf "available:%.0f" .status.availableReplicas | toString | redBoldIf (not ( eq $spec_replicas .status.availableReplicas )) }}{{ end }}
-        {{- if hasKey .status "fullyLabeledReplicas" }}, {{ printf "fullyLabeled:%.0f" .status.fullyLabeledReplicas | toString | redBoldIf (not ( eq $spec_replicas .status.fullyLabeledReplicas )) }}{{ end }}
-        {{- with .status.unavailableReplicas }}, {{ printf "unavailable:%.0f" . | toString | red | bold }}{{ end }}
-        {{- with .status.collisionCount }}, {{ printf "collisions:%.0f" .status.collisionCount | toString | red | bold }}{{ end }}
+    {{- if hasKey .status "replicas" }}{{ $spec_replicas := float64 .spec.replicas }}
+  {{ printf "desired:%.0f" (float64 .spec.replicas) | bold }}
+        {{- with .status.replicas }}, {{ printf "existing:%.0f" (float64 .) | toString | redBoldIf (not ( eq $spec_replicas (float64 .) )) }}{{ end }}
+        {{- if hasKey .status "readyReplicas" }}, {{ printf "ready:%.0f" (float64 .status.readyReplicas) | toString | redBoldIf (not ( eq $spec_replicas (float64 .status.readyReplicas) )) }}{{ end }}
+        {{- if hasKey .status "currentReplicas" }}, {{ printf "current:%.0f" (float64 .status.currentReplicas) | toString | redBoldIf (not ( eq $spec_replicas (float64 .status.currentReplicas) )) }}{{ end }}
+        {{- if hasKey .status "updatedReplicas" }}, {{ printf "updated:%.0f" (float64 .status.updatedReplicas) | toString | redBoldIf (not ( eq $spec_replicas (float64 .status.updatedReplicas) )) }}{{ end }}
+        {{- if hasKey .status "availableReplicas" }}, {{ printf "available:%.0f" (float64 .status.availableReplicas) | toString | redBoldIf (not ( eq $spec_replicas (float64 .status.availableReplicas) )) }}{{ end }}
+        {{- if hasKey .status "fullyLabeledReplicas" }}, {{ printf "fullyLabeled:%.0f" (float64 .status.fullyLabeledReplicas) | toString | redBoldIf (not ( eq $spec_replicas (float64 .status.fullyLabeledReplicas) )) }}{{ end }}
+        {{- with .status.unavailableReplicas }}, {{ printf "unavailable:%.0f" (float64 .) | toString | red | bold }}{{ end }}
+        {{- with .status.collisionCount }}, {{ printf "collisions:%.0f" (float64 .) | toString | red | bold }}{{ end }}
   {{- end }}
 {{- end -}}
 
 {{- define "status_summary_line" }}
-{{.kind | cyan | bold }}/{{ .metadata.name | cyan }}
+    {{- if .inline }}
+        {{- .kind | bold }}/{{ .metadata.name }}
+    {{- else}}
+        {{- .kind | cyan | bold }}/{{ .metadata.name | cyan }}
+    {{- end}}
     {{- with .metadata.namespace }} -n {{ . }}{{ end }}
     {{- with .metadata.creationTimestamp }}, created {{ . | colorAgo }} ago{{ end }}
     {{- if .metadata.ownerReferences }} by {{ range $index, $ownerReference := .metadata.ownerReferences }}
@@ -380,7 +388,7 @@
         {{- $completed := .status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
         {{- $ranfor := $completed.Sub $started }} and {{ "completed" | green }} in {{ $ranfor | colorDuration }}
     {{- end }}
-    {{- with .status.phase }} {{ . | colorKeyword }}{{ end }}
+    {{- with .status.phase }} {{ if $.nodeContext }}{{ . | redIf (eq . "Pending" ) }}{{else}}{{ . | colorKeyword }}{{ end }}{{ end }}
     {{- /* .status.state is used by e.g. Ambassador */ -}}
     {{- with .status.state }} {{ . | colorKeyword }}{{ end }}
     {{- with .status.reason }} {{ . | colorKeyword }}{{ end }}
@@ -390,14 +398,13 @@
 {{- define "observed_generation_summary" }}
     {{- if and .metadata.generation .status.observedGeneration }}
         {{- if ne .metadata.generation .status.observedGeneration }}
-  observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match generation({{ .metadata.generation | red | bold }})
-    {{ "This usually means related controller has not yet reconciled this resource!" | yellow }}
+observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match generation({{ .metadata.generation | red | bold }})
+  {{ "This usually means related controller has not yet reconciled this resource!" | yellow }}
         {{- end }}
     {{- end }}
 {{- end -}}
 
 {{- define "pod_conditions_summary" }}
-  {{ "" }} {{- /* To have the newline and two spaces */ -}}
     {{- $podScheduledCondition := getItemInList . "type" "PodScheduled" }}
     {{- $readyCondition := getItemInList . "type" "Ready" }}
     {{- if (isPodConditionHealthy $podScheduledCondition) }}
@@ -428,7 +435,7 @@
     {{- range . }}
         {{- /* show details for only unhealthy conditions */ -}}
         {{- if (not (isPodConditionHealthy .)) }}
-    {{ template "condition_summary" . }}
+            {{- include "condition_summary" . | nindent 2}}
         {{- end }}
     {{- end }}
 {{- end -}}
@@ -459,40 +466,41 @@
     {{- end }}
 {{- end -}}
 
+{{- define "container_usage" -}}
+    cpu usage:{{ .metrics.usage.cpu | quantityToFloat64 | printf "%.1g" -}}/[
+    {{- if .spec.resources.requests.cpu -}}
+        {{- percent (.metrics.usage.cpu | quantityToFloat64) (.spec.resources.requests.cpu | quantityToFloat64) | colorPercent "%.0f%% " -}}
+        of req:{{ .spec.resources.requests.cpu | quantityToFloat64 | printf "%.1g" }}
+    {{- else }}{{ "no-req" | yellow }}
+    {{- end }}, {{ if .spec.resources.limits.cpu -}}
+        {{- percent (.metrics.usage.cpu | quantityToFloat64) (.spec.resources.limits.cpu | quantityToFloat64) | colorPercent "%.0f%% " -}}
+        of lim:{{ .spec.resources.limits.cpu | quantityToFloat64 | printf "%.1g" }}
+    {{- else }}{{ "no-lim" | yellow }}
+    {{- end -}}
+    ], mem usage:{{- .metrics.usage.memory | quantityToFloat64 | humanizeSI "B" -}}/[
+    {{- if .spec.resources.requests.memory -}}
+        {{- percent (.metrics.usage.memory | quantityToFloat64) (.spec.resources.requests.memory | quantityToFloat64) | colorPercent "%.0f%% " -}}
+        of req:{{ .spec.resources.requests.memory | quantityToFloat64 | humanizeSI "B" }}
+    {{- else }}{{ "no-req" | yellow }}
+    {{- end }}, {{ if .spec.resources.limits.memory -}}
+        {{- percent (.metrics.usage.memory | quantityToFloat64) (.spec.resources.limits.memory | quantityToFloat64) | colorPercent "%.0f%% " -}}
+        of lim:{{ .spec.resources.limits.memory | quantityToFloat64 | humanizeSI "B" }}
+    {{- else }}{{ "no-lim" | yellow }}
+    {{- end -}}
+    ]
+{{- end -}}
+
 {{- define "container_status_summary" }}
-    {{ .name | bold }} ({{ .image | markYellow "latest" }}) {{ template "container_state_summary" .state }}
+    {{- .name | bold }} ({{ .image | markYellow "latest" }}) {{ template "container_state_summary" .state }}
     {{- if .state.running }}{{ if .ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
     {{- if gt (.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.restartCount | int) | yellow | bold }}{{ end }}
     {{- if .metrics }}
-      usage cpu:{{ .metrics.usage.cpu | quantityToFloat64 | printf "%.1g" }}
-        {{- if or .spec.resources.requests.cpu .spec.resources.limits.cpu -}}
-            /(
-            {{- if .spec.resources.requests.cpu -}}
-                {{- percent (.metrics.usage.cpu | quantityToFloat64) (.spec.resources.requests.cpu | quantityToFloat64) | printf "%.0f%% " -}}
-                of req:{{ .spec.resources.requests.cpu | quantityToFloat64 | printf "%.1g" }}
-            {{- end }}
-            {{- if and .spec.resources.requests.cpu .spec.resources.limits.cpu }}, {{ end }}
-            {{- with .spec.resources.limits.cpu -}}
-                lim:{{ . | quantityToFloat64 | printf "%.1g" }}
-            {{- end -}}
-            )
-        {{- end -}}
-        , mem:{{- .metrics.usage.memory | quantityToFloat64 | humanizeSI "B" | nospace }}
-        {{- if or .spec.resources.requests.memory .spec.resources.limits.memory -}}
-            /(
-            {{- if .spec.resources.requests.memory -}}
-                {{- percent (.metrics.usage.memory | quantityToFloat64) (.spec.resources.requests.memory | quantityToFloat64) | printf "%.0f%% " -}}
-                of req:{{ .spec.resources.requests.memory | quantityToFloat64 | humanizeSI "B" | nospace }}
-            {{- end }}
-            {{- if and .spec.resources.requests.memory .spec.resources.limits.memory }}, {{ end }}
-            {{- with .spec.resources.limits.memory -}}
-                lim:{{ . | quantityToFloat64 | humanizeSI "B" | nospace }}
-            {{- end -}}
-            )
-        {{- end -}}
+        {{- if .metrics.usage.cpu }}
+  usage {{ template "container_usage" . }}
+        {{- end }}
     {{- end }}
     {{- with .lastState }}
-      previously: {{ template "container_state_summary" . }}
+  previously: {{ template "container_state_summary" . }}
     {{- end }}
 {{- end -}}
 
@@ -529,29 +537,33 @@
         {{- range .items }}
     {{ "" }} {{- /* To have the newline and two spaces */ -}}
             {{- if eq .type "Warning" }}{{ .reason | red | bold }} {{ else }}{{ .reason }} {{ end }}
-            {{- .lastTimestamp | colorAgo }} ago {{ "" }}
+            {{- with .lastTimestamp }}{{ . | colorAgo }} ago {{ end }}
             {{- if gt (.count | int) 1 -}}
-                (x{{ .count }} over {{ .firstTimestamp | colorAgo }}) {{ "" }}
+                {{- if .firstTimestamp -}}
+                    (x{{ .count }} over {{ .firstTimestamp | colorAgo }}) {{ "" }}
+                {{- else -}}
+                    (x{{ .count }}) {{ "" }}
+                {{- end -}}
             {{- end -}}
             from {{ list .reportingComponent .reportingInstance .source.component .source.host .source.fieldPath | compact | join "," | bold }}: {{ .message }}
         {{- end }}
     {{- end }}
 {{- end -}}
 
-{{- define "Node" }}
-    {{- template "status_summary_line" . }}
-  {{ .status.nodeInfo.operatingSystem | bold }} {{ .status.nodeInfo.osImage }} ({{ .status.nodeInfo.architecture }}), kernel {{ .status.nodeInfo.kernelVersion }}, kubelet {{ .status.nodeInfo.kubeletVersion }}, kube-proxy {{ .status.nodeInfo.kubeProxyVersion }}
-    {{- if and .nodeMetrics .nodeMetrics.usage }}
-  cpu: {{ .nodeMetrics.usage.cpu | quantityToFloat64 | printf "%g" }}/
-        {{- .status.allocatable.cpu | quantityToFloat64 | printf "%g" }} (
-        {{- percent (.nodeMetrics.usage.cpu | quantityToFloat64) (.status.allocatable.cpu | quantityToFloat64) | printf "%.0f" }}%)
-  mem: {{ .nodeMetrics.usage.memory | quantityToFloat64 | humanizeSI "B" | nospace }}/
-        {{- .status.allocatable.memory | quantityToFloat64 | humanizeSI "B" | nospace }} (
-        {{- percent (.nodeMetrics.usage.memory | quantityToFloat64) (.status.allocatable.memory | quantityToFloat64) | printf "%.0f" }}%)
-  ephemeral-storage: {{index .status.allocatable "ephemeral-storage" | quantityToFloat64 | humanizeSI "B" | nospace }}
-    {{- else }}
-  cpu: {{ .status.allocatable.cpu }}, mem: {{ .status.allocatable.memory | quantityToFloat64 | humanizeSI "B" | nospace }}, ephemeral-storage: {{index .status.allocatable "ephemeral-storage" | quantityToFloat64 | humanizeSI "B" | nospace }}
+{{- define "NamespaceConfig" }}
+{{ template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "conditions_summary" .status.conditions }}
+    {{- range $resource, $valueList := .status.lockedResourceStatuses }}
+  {{ $resource }}: {{ range $status := $valueList }}{{ template "condition_summary" . }}{{- end }}
     {{- end }}
+    {{- template "events" .events }}
+{{- end }}
+
+{{- define "Node" }}
+    {{- /* also inlcude info from `kubectl get --raw /api/v1/nodes/<node>/proxy/stats/summary` */ -}}
+{{ template "status_summary_line" . }}
+  {{ .status.nodeInfo.operatingSystem | bold }} {{ .status.nodeInfo.osImage }} ({{ .status.nodeInfo.architecture }}), kernel {{ .status.nodeInfo.kernelVersion }}, kubelet {{ .status.nodeInfo.kubeletVersion }}, kube-proxy {{ .status.nodeInfo.kubeProxyVersion }}
     {{- if or (index .metadata.labels "node.kubernetes.io/instance") (index .metadata.labels "topology.kubernetes.io/region") (index .metadata.labels "failure-domain.beta.kubernetes.io/region") (index .metadata.labels "topology.kubernetes.io/zone") (index .metadata.labels "failure-domain.beta.kubernetes.io/region") }}
   {{ "cloudprovider" | bold }}
         {{- with index .metadata.labels "topology.kubernetes.io/region" | default (index .metadata.labels "failure-domain.beta.kubernetes.io/region") }} {{ . }}{{ end }}
@@ -565,5 +577,130 @@
         {{- with index .status.allocatable "attachable-volumes-azure-disk" }}/{{ . }}{{ end }}, attached={{ .status.volumesAttached | len }}
     {{- end}}
     {{- template "conditions_summary" .status.conditions }}
+    {{- with .lease }}
+  {{ "Lease" | bold }} for {{ .spec.leaseDurationSeconds }}s, renew in {{ .spec.renewTime | ago }}
+    {{- end }}
+    {{- $podCount := 0 }}
+    {{- $podsTotalCpuUsage := 0.0 }}
+    {{- $podsTotalCpuRequests := 0.0 }}
+    {{- $podsTotalCpuLimits := 0.0 }}
+    {{- $podsTotalMemUsage := 0.0 }}
+    {{- $podsTotalMemRequests := 0.0 }}
+    {{- $podsTotalMemRequestsBurstable := 0.0 }}
+    {{- $podsTotalMemRequestsGuaranteed := 0.0 }}
+    {{- $podsTotalMemLimits := 0.0 }}
+    {{- with .pods }}
+        {{- range $pod := . }}
+            {{- $podCount = $podCount | add 1 }}
+            {{- with .spec.containers }}
+                {{- range $containerSpec := . }}
+                    {{- if $containerSpec.resources.requests.cpu }}
+                        {{- $podsTotalCpuRequests = $podsTotalCpuRequests | addFloat64 ($containerSpec.resources.requests.cpu | quantityToFloat64) }}
+                    {{- end }}
+                    {{- if $containerSpec.resources.limits.cpu }}
+                        {{- $podsTotalCpuLimits = $podsTotalCpuLimits | addFloat64 ($containerSpec.resources.limits.cpu | quantityToFloat64) }}
+                    {{- end }}
+                    {{- if $containerSpec.resources.requests.memory }}
+                        {{- $podsTotalMemRequests = $podsTotalMemRequests | addFloat64 ($containerSpec.resources.requests.memory | quantityToFloat64) }}
+                        {{- if eq $pod.status.qosClass "Burstable" }}
+                            {{- $podsTotalMemRequestsBurstable = $podsTotalMemRequestsBurstable | addFloat64 ($containerSpec.resources.requests.memory | quantityToFloat64) }}
+                        {{- else if eq $pod.status.qosClass "Guaranteed"  }}
+                            {{- $podsTotalMemRequestsGuaranteed = $podsTotalMemRequestsGuaranteed | addFloat64 ($containerSpec.resources.requests.memory | quantityToFloat64) }}
+                        {{- end }}
+                    {{- end }}
+                    {{- if $containerSpec.resources.limits.memory }}
+                        {{- $podsTotalMemLimits = $podsTotalMemLimits | addFloat64 ($containerSpec.resources.limits.memory | quantityToFloat64) }}
+                    {{- end }}
+                    {{- if $pod.podMetrics.containers }}
+                        {{- $containerMetrics := getItemInList $pod.podMetrics.containers "name" .name }}
+                        {{- if $containerMetrics }}
+                            {{- $podsTotalCpuUsage = $podsTotalCpuUsage | addFloat64 ($containerMetrics.usage.cpu | quantityToFloat64) }}
+                            {{- $podsTotalMemUsage = $podsTotalMemUsage | addFloat64 ($containerMetrics.usage.memory | quantityToFloat64) }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- $inferredBurstableMemLimit := .status.allocatable.memory | quantityToFloat64 | subFloat64 $podsTotalMemRequestsGuaranteed }}
+    {{- $inferredBestEffortMemLimit := $inferredBurstableMemLimit | subFloat64 $podsTotalMemRequestsBurstable }}
+  Inferred memory limits for BestEffort: {{ $inferredBestEffortMemLimit | humanizeSI "B" }}, for Burstable: {{ $inferredBurstableMemLimit | humanizeSI "B" }}
+    {{- if .nodeMetrics.usage }}
+  {{ "pods" | bold }}: usage/allocatable:{{ $podCount }}/
+        {{- .status.allocatable.pods | quantityToFloat64 | printf "%g" }}(
+        {{- percent ($podCount | float64) (.status.allocatable.pods | quantityToFloat64) | colorPercent "%.0f%%" }})
+        {{- if eq ($podCount | float64) (.status.allocatable.pods | quantityToFloat64) }}
+    {{ "Reached Max Pods Limit" | red | bold }}: Number of Pods that can run on this Kubelet (`--max-pods`) limit is reached. No more pods will be scheduled to this Node even if there is free resource (E.g. cpu/mem).
+        {{- end }}
+  {{ "cpu" | bold }}: usage/allocatable:{{ .nodeMetrics.usage.cpu | quantityToFloat64 | printf "%g" }}/
+        {{- .status.allocatable.cpu | quantityToFloat64 | printf "%g" }}(
+        {{- percent (.nodeMetrics.usage.cpu | quantityToFloat64) (.status.allocatable.cpu | quantityToFloat64) | colorPercent "%.0f%%" }})
+        {{- $percent := percent $podsTotalCpuUsage (.status.allocatable.cpu | quantityToFloat64) }}
+        {{- "" }}, allocated usage:{{ $podsTotalCpuUsage | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)/[req:
+        {{- $percent := percent $podsTotalCpuRequests (.status.allocatable.cpu | quantityToFloat64) }}
+        {{- $podsTotalCpuRequests | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable), lim:
+        {{- $percent := percent $podsTotalCpuLimits (.status.allocatable.cpu | quantityToFloat64) }}
+        {{- $podsTotalCpuLimits | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)]
+        {{- if ge $podsTotalCpuLimits (.status.allocatable.cpu | quantityToFloat64) }}
+    {{ "CPU overcommitted" | red | bold }}: Application may be slow, applications are more likely to race for free cpu cycles.
+        {{- end }}
+  {{ "mem" | bold }}: usage/allocatable:{{ .nodeMetrics.usage.memory | quantityToFloat64 | humanizeSI "B" }}/
+        {{- .status.allocatable.memory | quantityToFloat64 | humanizeSI "B" }}(
+        {{- percent (.nodeMetrics.usage.memory | quantityToFloat64) (.status.allocatable.memory | quantityToFloat64) | colorPercent "%.0f%%" }})
+        {{- $percent := percent $podsTotalMemUsage (.status.allocatable.memory | quantityToFloat64) }}
+        {{- "" }}, allocated usage:{{ $podsTotalMemUsage | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)/[req:
+        {{- $percent := percent $podsTotalMemRequests (.status.allocatable.memory | quantityToFloat64) }}
+        {{- $podsTotalMemRequests | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable), lim:
+        {{- $percent := percent $podsTotalMemLimits (.status.allocatable.memory | quantityToFloat64) }}
+        {{- $podsTotalMemLimits | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)]
+        {{- if ge $podsTotalMemLimits (.status.allocatable.memory | quantityToFloat64) }}
+    {{ "Memory overcommitted" | red | bold }}: Application may be OOMKilled. Expect BestEffort and then Burstable pods to have OOMKill due to overcommitted memory on the node.
+        {{- end }}
+  {{ "ephemeral-storage" | bold }}: {{index .status.allocatable "ephemeral-storage" | quantityToFloat64 | humanizeSI "B" }}
+    {{- else }}
+  allocatable: pods:{{ .status.allocatable.pods }}, cpu:{{ .status.allocatable.cpu }}, mem:{{ .status.allocatable.memory | quantityToFloat64 | humanizeSI "B" }}, ephemeral-storage:{{index .status.allocatable "ephemeral-storage" | quantityToFloat64 | humanizeSI "B" }}
+    {{- end }}
+    {{- with .nodeStatsSummary }}
+  {{ "kubelet-api/stats/summary" }}:
+    node overall: {{ template "node_stats_summary_resources" .node }}
+        {{- range .node.systemContainers }}
+    {{ .name }}: {{ template "node_stats_summary_resources" . }}
+        {{- end }}
+    {{- end }}
     {{- template "events" .events }}
+{{- end -}}
+
+{{- define "node_stats_summary_fs" }}
+    {{- .usedBytes | float64 | humanizeSI "B" }}/{{ .capacityBytes | float64 | humanizeSI "B" -}}, {{ .availableBytes | float64 | humanizeSI "B" }} still free; {{ "" }}
+    {{- .inodesUsed | float64 | humanizeSI "" }}/{{ .inodes | float64 | humanizeSI "" }} inode, {{ .inodesFree | float64 | humanizeSI "" }} inode still free
+{{- end -}}
+
+{{- /* -}}
+     usage 0.135core/sec(0.01% of available), 1.8GB(%), workingSet 1.4GB, rss 660MB, available 608MB, pageFaults major/minor 0/0,
+     TODO: 0.135core/sec(0.01% of available)
+     TODO: .cpu.usageCoreNanoSeconds: 71853537319612
+    {{- */ -}}
+{{- define "node_stats_summary_resources" }}
+    {{- with .cpu.usageNanoCores }}cpu {{ . | float64 | divFloat64 1000000000 | printf "%.2g" }}core/sec, {{ end }}
+    {{- with .memory -}}
+        mem {{ .usageBytes | float64 | humanizeSI "B" -}}
+        , workingSet {{ .workingSetBytes | float64 | humanizeSI "B" -}}
+        , rss {{ .rssBytes | float64 | humanizeSI "B" -}}
+        {{- if .available -}}
+        , available {{ .available | float64 | humanizeSI "B" -}}
+        {{- end -}}
+        , pageFaults/major {{ .pageFaults | float64 | humanizeSI "" }}/{{ .majorPageFaults | float64 | humanizeSI "" }}
+    {{- end }}
+    {{- with .rlimit -}}
+    , processes {{ .curproc | float64  | humanizeSI "" }}/{{ .maxpid | float64  | humanizeSI "" }} (rlimit)
+    {{- end }}
+    {{- with .network }}
+      network: rx/tx {{ .rxBytes | float64 | humanizeSI "B" }}/{{ .txBytes | float64 | humanizeSI "B" }}, rx/tx errors {{ .rxErrors | humanizeSI "" }}/{{ .txErrors | humanizeSI "" }}
+    {{- end }}
+    {{- if .fs }}
+      {{ "rootfs" | bold }}: {{ template "node_stats_summary_fs" .fs }}
+        {{- with .runtime.imageFs }}
+      {{ "imagefs" | bold }}: {{ template "node_stats_summary_fs" . }}
+        {{- end }}
+      {{- end }}
 {{- end -}}
