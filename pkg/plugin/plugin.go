@@ -3,6 +3,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -414,7 +415,7 @@ func includeNodeMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]in
 	objectMeta := obj.(metav1.Object)
 	nodeMetrics, err := clientSet.MetricsV1beta1().
 		NodeMetricses().
-		Get(objectMeta.GetName(), metav1.GetOptions{})
+		Get(context.TODO(), objectMeta.GetName(), metav1.GetOptions{})
 	if err != nil {
 		// swallow any errors while getting NodeMetrics
 		return nil
@@ -436,7 +437,7 @@ func includePodMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]int
 	objectMeta := obj.(metav1.Object)
 	podMetrics, err := clientSet.MetricsV1beta1().
 		PodMetricses(objectMeta.GetNamespace()).
-		Get(objectMeta.GetName(), metav1.GetOptions{})
+		Get(context.TODO(), objectMeta.GetName(), metav1.GetOptions{})
 	if err != nil {
 		// swallow any errors while getting PodMetrics
 		return nil
@@ -454,7 +455,7 @@ func includeEndpoint(obj runtime.Object, f cmdutil.Factory, out map[string]inter
 	objectMeta := obj.(metav1.Object)
 	endpoint, err := clientSet.CoreV1().
 		Endpoints(objectMeta.GetNamespace()).
-		Get(objectMeta.GetName(), metav1.GetOptions{})
+		Get(context.TODO(), objectMeta.GetName(), metav1.GetOptions{})
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting Endpoint")
 	}
@@ -486,7 +487,7 @@ func includeIngressServices(obj runtime.Object, f cmdutil.Factory, out map[strin
 					continue PATH
 				}
 			}
-			svc, err := clientSet.CoreV1().Services(ing.Namespace).Get(svcName, metav1.GetOptions{})
+			svc, err := clientSet.CoreV1().Services(ing.Namespace).Get(context.TODO(), svcName, metav1.GetOptions{})
 			if (err != nil) || (svc.Name == "") {
 				backendIssues = append(backendIssues, IngressBackendIssue{"serviceMissing", backend})
 				continue PATH
@@ -501,7 +502,7 @@ func includeIngressServices(obj runtime.Object, f cmdutil.Factory, out map[strin
 				backendIssues = append(backendIssues, IngressBackendIssue{"serviceWithPortMismatch", backend})
 				continue PATH
 			}
-			endpoint, err := clientSet.CoreV1().Endpoints(ing.Namespace).Get(svcName, metav1.GetOptions{})
+			endpoint, err := clientSet.CoreV1().Endpoints(ing.Namespace).Get(context.TODO(), svcName, metav1.GetOptions{})
 			if (err != nil) || (endpoint.Name == "") || (len(endpoint.Subsets) == 0) {
 				backendIssues = append(backendIssues, IngressBackendIssue{"serviceWithNoReadyAddresses", backend})
 				continue PATH
@@ -537,7 +538,7 @@ func includeStatefulSetDiff(obj runtime.Object, f cmdutil.Factory, out map[strin
 	}
 
 	currentRevision, err := clientSet.ControllerRevisions(sts.GetNamespace()).
-		Get(sts.Status.CurrentRevision, metav1.GetOptions{})
+		Get(context.TODO(), sts.Status.CurrentRevision, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -547,7 +548,7 @@ func includeStatefulSetDiff(obj runtime.Object, f cmdutil.Factory, out map[strin
 	}
 
 	updateRevision, err := clientSet.ControllerRevisions(sts.GetNamespace()).
-		Get(sts.Status.UpdateRevision, metav1.GetOptions{})
+		Get(context.TODO(), sts.Status.UpdateRevision, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
