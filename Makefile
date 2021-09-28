@@ -15,7 +15,7 @@ bin: fmt vet
 generate: pkg/plugin/statik/statik.go
 
 pkg/plugin/statik/statik.go: pkg/plugin/templates/templates.tmpl
-	go get github.com/rakyll/statik@v0.1.7
+	go install github.com/rakyll/statik@v0.1.7
 	go generate ./pkg/... ./cmd/...
 	# statik generates non-fmt compliant files, so we have an extra "go fmt" here
 	go fmt pkg/plugin/statik/statik.go
