@@ -18,6 +18,10 @@ not all resources are fully supported.
 
 ## Installation
 
+You can install `kubectl status` using the [Krew](https://github.com/kubernetes-sigs/krew), the package manager for kubectl plugins.
+
+After you [install Krew](https://krew.sigs.k8s.io/docs/user-guide/setup/install/), just run:
+
 ```bash
 kubectl krew install status
 kubectl status --help
