@@ -285,6 +285,9 @@
 {{- define "Ingress" }}
 {{ template "status_summary_line" . }}
     {{- template "load_balancer_ingress" . }}
+    {{- with .unsupportedApiVersion }}
+  {{ "Unsupported Api version" | yellow }}: apiVersion {{ . }} is not supported for detailed backend issues!
+    {{- end }}
     {{- with .backendIssues }}
         {{- range . }}
             {{- if eq .IssueType "serviceMissing" }}

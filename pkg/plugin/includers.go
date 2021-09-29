@@ -168,6 +168,10 @@ func includeNodeStatsSummary(obj runtime.Object, f cmdutil.Factory, out map[stri
 
 func includeIngressServices(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
 	clientSet, _ := f.KubernetesClientSet()
+	if unsupportedApiVersion := checkUnsupportedIngressApiVersion(obj); unsupportedApiVersion != "" {
+		out["unsupportedApiVersion"] = unsupportedApiVersion
+		return nil
+	}
 	ing := &v1beta1.Ingress{}
 	err := scheme.Scheme.Convert(obj, ing, nil)
 	if err != nil {
@@ -216,6 +220,15 @@ func includeIngressServices(obj runtime.Object, f cmdutil.Factory, out map[strin
 	}
 	out["backendIssues"] = backendIssues
 	return nil
+}
+
+func checkUnsupportedIngressApiVersion(obj runtime.Object) string {
+	objectGroupVersion := obj.GetObjectKind().GroupVersionKind().GroupVersion().String()
+	supportedGroupVersion := v1beta1.SchemeGroupVersion.String()
+	if objectGroupVersion != supportedGroupVersion {
+		return objectGroupVersion
+	}
+	return ""
 }
 
 func includeStatefulSetDiff(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
