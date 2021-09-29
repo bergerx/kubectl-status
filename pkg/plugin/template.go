@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -21,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubectl/pkg/scheme"
-	kyaml "sigs.k8s.io/yaml"
 )
 
 var durationRound = (sprig.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
@@ -271,21 +269,6 @@ func colorDuration(duration time.Duration) string {
 		return color.MagentaString(str)
 	}
 	return str
-}
-
-func renderFile(manifestFilename string) (string, error) {
-	var out map[string]interface{}
-	manifestFile, _ := ioutil.ReadFile(manifestFilename)
-	err := kyaml.Unmarshal(manifestFile, &out)
-	if err != nil {
-		return "", errors.WithMessage(err, "Failed getting JSON for object")
-	}
-	var output bytes.Buffer
-	err = renderTemplateForMap(&output, out)
-	if err != nil {
-		return "", err
-	}
-	return output.String(), nil
 }
 
 func renderTemplateForMap(wr io.Writer, v map[string]interface{}) error {

@@ -2,8 +2,9 @@
 package plugin
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	_ "unsafe" // required for using go:linkname in the file
 
@@ -13,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/cli-runtime/pkg/resource"
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Initialize all known client auth plugins.
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	kyaml "sigs.k8s.io/yaml"
@@ -29,28 +31,20 @@ type IngressBackendIssue struct {
 func signame(sig uint32) string
 
 func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
-	clientSet, _ := f.KubernetesClientSet()
+	filenames := cmdutil.GetFlagStringSlice(cmd, "filename")
+	if cmdutil.GetFlagBool(cmd, "test") {
+		return runAgainstFile(filenames)
+	}
+	return runAgainstCluster(f, cmd, args, filenames)
+}
+
+func getResources(f cmdutil.Factory, cmd *cobra.Command, args []string, filenames []string) ([]*resource.Info, error) {
 	clientConfig := f.ToRawKubeConfigLoader()
 	allNamespaces := cmdutil.GetFlagBool(cmd, "all-namespaces")
 	namespace, enforceNamespace, err := clientConfig.Namespace()
 	if err != nil {
-		return errors.WithMessage(err, "Failed getting namespace")
+		return nil, errors.WithMessage(err, "Failed getting namespace")
 	}
-	filenames := cmdutil.GetFlagStringSlice(cmd, "filename")
-	isTest := cmdutil.GetFlagBool(cmd, "test")
-	if isTest {
-		if len(filenames) != 1 {
-			return errors.New("when using --test, exactly one --filename must be provided")
-		}
-		filename := filenames[0]
-		out, err := renderFile(filename)
-		if err != nil {
-			return err
-		}
-		fmt.Println(out)
-		return nil
-	}
-
 	r := f.NewBuilder().
 		Unstructured().
 		NamespaceParam(namespace).DefaultNamespace().AllNamespaces(allNamespaces).
@@ -62,70 +56,103 @@ func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
 		Latest().
 		Flatten().
 		Do()
-
 	err = r.Err()
 	if err != nil {
-		return errors.WithMessage(err, "Failed during querying of resources")
+		return nil, errors.WithMessage(err, "Failed during querying of resources")
 	}
-
-	var allErrs []error
-	infos, err := r.Infos()
+	resourceInfos, err := r.Infos()
 	if err != nil {
-		allErrs = append(allErrs, err)
+		return nil, err
 	}
-	if len(infos) == 0 {
+	if len(resourceInfos) == 0 {
 		if !allNamespaces && namespace != "" {
 			fmt.Printf("No resources found in %s namespace\n", namespace)
 		} else {
 			fmt.Printf("No resources found.\n")
 		}
 	}
-	for _, info := range infos {
-		var err error
-		obj := info.Object
-		objKind := info.ResourceMapping().GroupVersionKind.Kind
-		out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)
+	return resourceInfos, nil
+}
+
+func runAgainstFile(filenames []string) error {
+	if len(filenames) != 1 {
+		return errors.New("when using --test, exactly one --filename must be provided")
+	}
+	filename := filenames[0]
+	out, err := renderFile(filename)
+	if err != nil {
+		return err
+	}
+	fmt.Println(out)
+	return nil
+}
+
+func runAgainstCluster(f cmdutil.Factory, cmd *cobra.Command, args []string, filenames []string) error {
+	clientSet, _ := f.KubernetesClientSet()
+	resourceInfos, err := getResources(f, cmd, args, filenames)
+	if err != nil {
+		return err
+	}
+	var allRenderErrs []error
+	for _, resourceInfo := range resourceInfos {
+		err := renderResource(f, resourceInfo, clientSet)
 		if err != nil {
-			allErrs = append(allErrs, err)
-			continue
+			allRenderErrs = append(allRenderErrs, err)
 		}
-		err = includeEvents(obj, clientSet, out)
-		if err != nil {
-			allErrs = append(allErrs, err)
-			continue
-		}
-		kindInjectFuncMap := map[string][]func(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error{
-			"Node":        {includeNodeMetrics, includeNodeLease, includePodDetailsOnNode, includeNodeStatsSummary},
-			"Pod":         {includePodMetrics}, // kubectl get --raw /api/v1/nodes/minikube/proxy/stats/summary --> .pods[] | select podRef | containers[] | select name
-			"Service":     {includeEndpoint},
-			"StatefulSet": {includeStatefulSetDiff},
-			"Ingress":     {includeIngressServices},
-		}
-		for kind, funcs := range kindInjectFuncMap {
-			if objKind == kind {
-				for _, fu := range funcs {
-					err = fu(obj, f, out)
-					if err != nil {
-						allErrs = append(allErrs, err)
-						continue
-					}
-				}
-				if objKind == "Node" {
-					x, _ := json.Marshal(out)
-					y, _ := kyaml.JSONToYAML(x)
-					_ = y
-					//fmt.Println(string(y))
+	}
+	return utilerrors.NewAggregate(allRenderErrs)
+}
+
+func renderFile(manifestFilename string) (string, error) {
+	var out map[string]interface{}
+	manifestFile, _ := ioutil.ReadFile(manifestFilename)
+	err := kyaml.Unmarshal(manifestFile, &out)
+	if err != nil {
+		return "", errors.WithMessage(err, "Failed getting JSON for object")
+	}
+	var output bytes.Buffer
+	err = renderTemplateForMap(&output, out)
+	if err != nil {
+		return "", err
+	}
+	return output.String(), nil
+}
+
+func renderResource(f cmdutil.Factory, resourceInfo *resource.Info, clientSet *kubernetes.Clientset) error {
+	var err error
+	obj := resourceInfo.Object
+	objKind := resourceInfo.ResourceMapping().GroupVersionKind.Kind
+	out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)
+	if err != nil {
+		return err
+	}
+	err = includeEvents(obj, clientSet, out)
+	if err != nil {
+		return err
+	}
+	kindInjectFuncMap := map[string][]func(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error{
+		"Node":        {includeNodeMetrics, includeNodeLease, includePodDetailsOnNode, includeNodeStatsSummary},
+		"Pod":         {includePodMetrics}, // kubectl get --raw /api/v1/nodes/minikube/proxy/stats/summary --> .pods[] | select podRef | containers[] | select name
+		"Service":     {includeEndpoint},
+		"StatefulSet": {includeStatefulSetDiff},
+		"Ingress":     {includeIngressServices},
+	}
+	for kind, funcs := range kindInjectFuncMap {
+		if objKind == kind {
+			for _, fu := range funcs {
+				err = fu(obj, f, out)
+				if err != nil {
+					return err
 				}
 			}
 		}
-
-		err = renderTemplateForMap(os.Stdout, out)
-		if err != nil {
-			allErrs = append(allErrs, err)
-			continue
-		}
-		// Add a newline at the end of every template
-		fmt.Println("")
 	}
-	return utilerrors.NewAggregate(allErrs)
+
+	err = renderTemplateForMap(os.Stdout, out)
+	if err != nil {
+		return err
+	}
+	// Add a newline at the end of every template
+	fmt.Println("")
+	return nil
 }
