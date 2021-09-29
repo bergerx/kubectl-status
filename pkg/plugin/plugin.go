@@ -29,8 +29,6 @@ type IngressBackendIssue struct {
 func signame(sig uint32) string
 
 func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
-	//log := logger.NewLogger()
-	//log.Info(strings.Join(args, ","))
 	clientSet, _ := f.KubernetesClientSet()
 	clientConfig := f.ToRawKubeConfigLoader()
 	allNamespaces := cmdutil.GetFlagBool(cmd, "all-namespaces")
