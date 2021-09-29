@@ -153,12 +153,12 @@
     {{- template "replicas_status" $injectedManifest }}
     {{- template "conditions_summary" .status.conditions }}
     {{- template "suspended" . }}
-    {{- $currentReplicas := .status.replicas | default 0.0 }}
-    {{- $updatedReplicas := .status.updatedReplicas | default 0.0 }}
-    {{- $readyReplicas := .status.readyReplicas | default 0.0 }}
+    {{- $currentReplicas := .status.replicas | default 0 | float64 }}
+    {{- $updatedReplicas := .status.updatedReplicas | default 0 | float64 }}
+    {{- $readyReplicas := .status.readyReplicas | default 0 | float64 }}
     {{- $ongoingRollout := and $currentReplicas (not (eq $currentReplicas $updatedReplicas)) }}
     {{- if $ongoingRollout }}
-        {{- "Ongoing Rollout" | yellow | bold | nindent 2 }}: Update progress {{ $updatedReplicas }}/{{ .spec.replicas }} ({{ percent $updatedReplicas .spec.replicas | printf "%.0f"}}%).
+        {{- "Ongoing Rollout" | yellow | bold | nindent 2 }}: Update progress {{ $updatedReplicas }}/{{ .spec.replicas }} ({{ percent $updatedReplicas (float64 .spec.replicas) | printf "%.0f"}}%).
     {{- end }}
     {{- if or (not $currentReplicas) (not $readyReplicas) }}
         {{- "Outage" | red | bold | nindent 2 }}: Deployment has no Ready replicas.
