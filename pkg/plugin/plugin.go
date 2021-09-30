@@ -9,13 +9,10 @@ import (
 	_ "unsafe" // required for using go:linkname in the file
 
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth" // Initialize all known client auth plugins.
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	kyaml "sigs.k8s.io/yaml"
 
@@ -30,37 +27,32 @@ type IngressBackendIssue struct {
 //go:linkname signame runtime.signame
 func signame(sig uint32) string
 
-func RunPlugin(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
-	filenames := cmdutil.GetFlagStringSlice(cmd, "filename")
-	if cmdutil.GetFlagBool(cmd, "test") {
-		return runAgainstFile(filenames)
-	}
-	return runAgainstCluster(f, cmd, args, filenames)
-}
-
-func getResources(f cmdutil.Factory, cmd *cobra.Command, args []string, filenames []string) ([]*resource.Info, error) {
-	clientConfig := f.ToRawKubeConfigLoader()
-	allNamespaces := cmdutil.GetFlagBool(cmd, "all-namespaces")
-	namespace, enforceNamespace, err := clientConfig.Namespace()
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed getting namespace")
-	}
-	r := f.NewBuilder().
+func GetResources(
+	f cmdutil.Factory,
+	namespace string,
+	allNamespaces bool,
+	enforceNamespace bool,
+	filenames []string,
+	selector string,
+	fieldSelector string,
+	args []string,
+) ([]*resource.Info, error) {
+	resourceResult := f.NewBuilder().
 		Unstructured().
 		NamespaceParam(namespace).DefaultNamespace().AllNamespaces(allNamespaces).
 		FilenameParam(enforceNamespace, &resource.FilenameOptions{Filenames: filenames}).
-		LabelSelectorParam(cmdutil.GetFlagString(cmd, "selector")).
-		FieldSelectorParam(cmdutil.GetFlagString(cmd, "field-selector")).
+		LabelSelectorParam(selector).
+		FieldSelectorParam(fieldSelector).
 		ResourceTypeOrNameArgs(true, args...).
 		ContinueOnError().
 		Latest().
 		Flatten().
 		Do()
-	err = r.Err()
+	err := resourceResult.Err()
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed during querying of resources")
 	}
-	resourceInfos, err := r.Infos()
+	resourceInfos, err := resourceResult.Infos()
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +66,7 @@ func getResources(f cmdutil.Factory, cmd *cobra.Command, args []string, filename
 	return resourceInfos, nil
 }
 
-func runAgainstFile(filenames []string) error {
+func RunAgainstFile(filenames []string) error {
 	if len(filenames) != 1 {
 		return errors.New("when using --test, exactly one --filename must be provided")
 	}
@@ -85,22 +77,6 @@ func runAgainstFile(filenames []string) error {
 	}
 	fmt.Println(out)
 	return nil
-}
-
-func runAgainstCluster(f cmdutil.Factory, cmd *cobra.Command, args []string, filenames []string) error {
-	clientSet, _ := f.KubernetesClientSet()
-	resourceInfos, err := getResources(f, cmd, args, filenames)
-	if err != nil {
-		return err
-	}
-	var allRenderErrs []error
-	for _, resourceInfo := range resourceInfos {
-		err := renderResource(f, resourceInfo, clientSet)
-		if err != nil {
-			allRenderErrs = append(allRenderErrs, err)
-		}
-	}
-	return utilerrors.NewAggregate(allRenderErrs)
 }
 
 func renderFile(manifestFilename string) (string, error) {
@@ -118,7 +94,7 @@ func renderFile(manifestFilename string) (string, error) {
 	return output.String(), nil
 }
 
-func renderResource(f cmdutil.Factory, resourceInfo *resource.Info, clientSet *kubernetes.Clientset) error {
+func RenderResource(f cmdutil.Factory, resourceInfo *resource.Info, clientSet *kubernetes.Clientset) error {
 	var err error
 	obj := resourceInfo.Object
 	objKind := resourceInfo.ResourceMapping().GroupVersionKind.Kind

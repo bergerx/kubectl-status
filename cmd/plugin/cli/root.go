@@ -5,11 +5,17 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bergerx/kubectl-status/pkg/plugin"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/resource"
+	_ "k8s.io/client-go/plugin/pkg/client/auth" // Initialize all known client auth plugins.
+	"k8s.io/kubectl/pkg/cmd/util"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	"github.com/bergerx/kubectl-status/pkg/plugin"
 )
 
 func RootCmd() *cobra.Command {
@@ -89,7 +95,7 @@ Examples:
 
 // Complete takes the command arguments and factory and infers any remaining options.
 func Run(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
-	if err := plugin.RunPlugin(f, cmd, args); err != nil {
+	if err := runPlugin(f, cmd, args); err != nil {
 		return cmdutil.UsageErrorf(cmd, err.Error())
 	}
 	return nil
@@ -100,4 +106,40 @@ func InitAndExecute() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func runPlugin(f util.Factory, cmd *cobra.Command, args []string) error {
+	filenames := util.GetFlagStringSlice(cmd, "filename")
+	if util.GetFlagBool(cmd, "test") {
+		return plugin.RunAgainstFile(filenames)
+	}
+	return runAgainstCluster(f, cmd, args, filenames)
+}
+
+func getResourcesByCmd(f util.Factory, cmd *cobra.Command, args []string, filenames []string) ([]*resource.Info, error) {
+	clientConfig := f.ToRawKubeConfigLoader()
+	allNamespaces := util.GetFlagBool(cmd, "all-namespaces")
+	namespace, enforceNamespace, err := clientConfig.Namespace()
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed getting namespace")
+	}
+	selector := util.GetFlagString(cmd, "selector")
+	fieldSelector := util.GetFlagString(cmd, "field-selector")
+	return plugin.GetResources(f, namespace, allNamespaces, enforceNamespace, filenames, selector, fieldSelector, args)
+}
+
+func runAgainstCluster(f cmdutil.Factory, cmd *cobra.Command, args []string, filenames []string) error {
+	clientSet, _ := f.KubernetesClientSet()
+	resourceInfos, err := getResourcesByCmd(f, cmd, args, filenames)
+	if err != nil {
+		return err
+	}
+	var allRenderErrs []error
+	for _, resourceInfo := range resourceInfos {
+		err := plugin.RenderResource(f, resourceInfo, clientSet)
+		if err != nil {
+			allRenderErrs = append(allRenderErrs, err)
+		}
+	}
+	return utilerrors.NewAggregate(allRenderErrs)
 }
