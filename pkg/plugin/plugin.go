@@ -35,7 +35,8 @@ func GetResources(
 	fieldSelector string,
 	args []string,
 ) ([]*resource.Info, error) {
-	resourceResult := resource.NewBuilder(clientGetter).
+	resourceResult := resource.
+		NewBuilder(clientGetter).
 		Unstructured().
 		NamespaceParam(namespace).DefaultNamespace().AllNamespaces(allNamespaces).
 		FilenameParam(enforceNamespace, &resource.FilenameOptions{Filenames: filenames}).
@@ -80,9 +81,7 @@ func RenderFile(manifestFilename string) (string, error) {
 }
 
 func RenderResource(restConfig *rest.Config, resourceInfo *resource.Info, clientSet *kubernetes.Clientset) error {
-	var err error
 	obj := resourceInfo.Object
-	objKind := resourceInfo.ResourceMapping().GroupVersionKind.Kind
 	out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)
 	if err != nil {
 		return err
@@ -98,14 +97,11 @@ func RenderResource(restConfig *rest.Config, resourceInfo *resource.Info, client
 		"StatefulSet": {includeStatefulSetDiff},
 		"Ingress":     {includeIngressServices},
 	}
-	for kind, functions := range kindInjectFuncMap {
-		if objKind == kind {
-			for _, f := range functions {
-				err = f(obj, restConfig, out)
-				if err != nil {
-					return err
-				}
-			}
+	functions := kindInjectFuncMap[obj.GetObjectKind().GroupVersionKind().Kind]
+	for _, f := range functions {
+		err = f(obj, restConfig, out)
+		if err != nil {
+			return err
 		}
 	}
 
