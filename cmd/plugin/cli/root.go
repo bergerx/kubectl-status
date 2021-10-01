@@ -11,31 +11,15 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/resource"
-	_ "k8s.io/client-go/plugin/pkg/client/auth" // Initialize all known client auth plugins.
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubectl/pkg/cmd/util"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/bergerx/kubectl-status/pkg/plugin"
 )
 
-func RootCmd() *cobra.Command {
-	KubernetesConfigFlags := genericclioptions.
-		NewConfigFlags(false)
-	ResourceBuilderFlags := genericclioptions.
-		NewResourceBuilderFlags().
-		WithAll(false).
-		WithAllNamespaces(false).
-		WithFile(false).
-		WithLabelSelector("").
-		WithFieldSelector("").
-		WithLatest()
-
-	f := cmdutil.NewFactory(KubernetesConfigFlags)
-
-	cmd := &cobra.Command{
-		Use:   "kubectl-status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
-		Short: "Display status for one or many resources",
-		Long: `Display status for one or many resources
+var (
+	longCmdMessage = `Display status for one or many resources
 
  Prints human-friendly output that focuses on the status of the resources in kubernetes.
 
@@ -75,31 +59,8 @@ Examples:
   # Show status of nodes marked as master
   kubectl status node -l node-role.kubernetes.io/master
 
-`,
-		PreRun: func(cmd *cobra.Command, args []string) {
-			viper.BindPFlags(cmd.Flags())
-		},
-		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(Run(f, cmd, args))
-		},
-	}
-	KubernetesConfigFlags.AddFlags(cmd.Flags())
-	ResourceBuilderFlags.AddFlags(cmd.Flags())
-	var x bool
-	cmd.Flags().BoolVarP(&x, "test", "t", false, "Run the template against the provided yaml manifest. Need to be used with a --filename parameter. No request to apiserver is done.")
-
-	cobra.OnInitialize(viper.AutomaticEnv)
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	return cmd
-}
-
-// Complete takes the command arguments and factory and infers any remaining options.
-func Run(f cmdutil.Factory, cmd *cobra.Command, args []string) error {
-	if err := runPlugin(f, cmd, args); err != nil {
-		return cmdutil.UsageErrorf(cmd, err.Error())
-	}
-	return nil
-}
+`
+)
 
 func InitAndExecute() {
 	if err := RootCmd().Execute(); err != nil {
@@ -108,38 +69,93 @@ func InitAndExecute() {
 	}
 }
 
-func runPlugin(f util.Factory, cmd *cobra.Command, args []string) error {
+func RootCmd() *cobra.Command {
+	clientGetter := genericclioptions.NewConfigFlags(false)
+	cmd := &cobra.Command{
+		Use:   "kubectl-status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
+		Short: "Display status for one or many resources",
+		Long:  longCmdMessage,
+		PreRun: func(cmd *cobra.Command, args []string) {
+			viper.BindPFlags(cmd.Flags())
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			cmdutil.CheckErr(run(clientGetter, cmd, args))
+		},
+	}
+	clientGetter.AddFlags(cmd.Flags())
+	genericclioptions.
+		NewResourceBuilderFlags().
+		WithAll(false).
+		WithAllNamespaces(false).
+		WithFile(false).
+		WithLabelSelector("").
+		WithFieldSelector("").
+		WithLatest().
+		AddFlags(cmd.Flags())
+	cmd.Flags().BoolP("test", "t", false,
+		"run the template against the provided yaml manifest. Need to be used with a --filename parameter. No request to apiserver is done.")
+
+	cobra.OnInitialize(viper.AutomaticEnv)
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	return cmd
+}
+
+// Complete takes the command arguments and factory and infers any remaining options.
+func run(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string) error {
+	if err := runPlugin(clientGetter, cmd, args); err != nil {
+		return cmdutil.UsageErrorf(cmd, err.Error())
+	}
+	return nil
+}
+
+func runPlugin(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string) error {
 	filenames := util.GetFlagStringSlice(cmd, "filename")
 	if util.GetFlagBool(cmd, "test") {
-		return plugin.RunAgainstFile(filenames)
+		return runAgainstFile(filenames)
 	}
-	return runAgainstCluster(f, cmd, args, filenames)
+	return runAgainstCluster(clientGetter, cmd, args, filenames)
 }
 
-func getResourcesByCmd(f util.Factory, cmd *cobra.Command, args []string, filenames []string) ([]*resource.Info, error) {
-	clientConfig := f.ToRawKubeConfigLoader()
-	allNamespaces := util.GetFlagBool(cmd, "all-namespaces")
-	namespace, enforceNamespace, err := clientConfig.Namespace()
+func runAgainstFile(filenames []string) error {
+	if len(filenames) != 1 {
+		return errors.New("when using --test, exactly one --filename must be provided")
+	}
+	filename := filenames[0]
+	out, err := plugin.RenderFile(filename)
 	if err != nil {
-		return nil, errors.WithMessage(err, "Failed getting namespace")
+		return err
 	}
-	selector := util.GetFlagString(cmd, "selector")
-	fieldSelector := util.GetFlagString(cmd, "field-selector")
-	return plugin.GetResources(f, namespace, allNamespaces, enforceNamespace, filenames, selector, fieldSelector, args)
+	fmt.Println(out)
+	return nil
 }
 
-func runAgainstCluster(f cmdutil.Factory, cmd *cobra.Command, args []string, filenames []string) error {
-	clientSet, _ := f.KubernetesClientSet()
-	resourceInfos, err := getResourcesByCmd(f, cmd, args, filenames)
+func runAgainstCluster(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string, filenames []string) error {
+	restConfig, err := clientGetter.ToRESTConfig()
+	if err != nil {
+		return err
+	}
+	clientSet, _ := kubernetes.NewForConfig(restConfig)
+	resourceInfos, err := getResourcesByCmd(clientGetter, cmd, args, filenames)
 	if err != nil {
 		return err
 	}
 	var allRenderErrs []error
 	for _, resourceInfo := range resourceInfos {
-		err := plugin.RenderResource(f, resourceInfo, clientSet)
+		err := plugin.RenderResource(restConfig, resourceInfo, clientSet)
 		if err != nil {
 			allRenderErrs = append(allRenderErrs, err)
 		}
 	}
 	return utilerrors.NewAggregate(allRenderErrs)
+}
+
+func getResourcesByCmd(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string, filenames []string) ([]*resource.Info, error) {
+	allNamespaces := util.GetFlagBool(cmd, "all-namespaces")
+	namespace, enforceNamespace, err := clientGetter.ToRawKubeConfigLoader().Namespace()
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed getting namespace")
+	}
+	selector := util.GetFlagString(cmd, "selector")
+	fieldSelector := util.GetFlagString(cmd, "field-selector")
+	return plugin.GetResources(clientGetter, namespace, allNamespaces, enforceNamespace, filenames, selector, fieldSelector, args)
 }

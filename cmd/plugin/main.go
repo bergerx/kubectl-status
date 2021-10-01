@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"github.com/bergerx/kubectl-status/cmd/plugin/cli"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // required for GKE
+	_ "k8s.io/client-go/plugin/pkg/client/auth" // Initialize all known client auth plugins.
 )
 
 func main() {

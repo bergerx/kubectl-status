@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	appsv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/scheme"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
@@ -34,11 +34,10 @@ func includeEvents(obj runtime.Object, clientSet *kubernetes.Clientset, out map[
 	return nil
 }
 
-func includeNodeMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
+func includeNodeMetrics(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
 	// mind that metrics-server is reporting the workingSetSize rather than RSS,
 	// see: https://github.com/kubernetes-sigs/metrics-server/issues/187
-	config, _ := f.ToRESTConfig()
-	clientSet, err := metricsv.NewForConfig(config)
+	clientSet, err := metricsv.NewForConfig(restConfig)
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting metrics clientSet")
 	}
@@ -58,9 +57,8 @@ func includeNodeMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]in
 	return nil
 }
 
-func includePodMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
-	config, _ := f.ToRESTConfig()
-	clientSet, err := metricsv.NewForConfig(config)
+func includePodMetrics(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
+	clientSet, err := metricsv.NewForConfig(restConfig)
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting metrics clientSet")
 	}
@@ -80,8 +78,11 @@ func includePodMetrics(obj runtime.Object, f cmdutil.Factory, out map[string]int
 	return nil
 }
 
-func includeEndpoint(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
-	clientSet, _ := f.KubernetesClientSet()
+func includeEndpoint(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
+	clientSet, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting clientSet")
+	}
 	objectMeta := obj.(metav1.Object)
 	endpoint, err := clientSet.CoreV1().
 		Endpoints(objectMeta.GetNamespace()).
@@ -97,8 +98,11 @@ func includeEndpoint(obj runtime.Object, f cmdutil.Factory, out map[string]inter
 	return nil
 }
 
-func includeNodeLease(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
-	clientSet, _ := f.KubernetesClientSet()
+func includeNodeLease(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
+	clientSet, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting clientSet")
+	}
 	objectMeta := obj.(metav1.Object)
 	lease, err := clientSet.CoordinationV1().
 		Leases(corev1.NamespaceNodeLease).
@@ -114,8 +118,11 @@ func includeNodeLease(obj runtime.Object, f cmdutil.Factory, out map[string]inte
 	return nil
 }
 
-func includePodDetailsOnNode(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
-	clientSet, _ := f.KubernetesClientSet()
+func includePodDetailsOnNode(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
+	clientSet, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting clientSet")
+	}
 	objectMeta := obj.(metav1.Object)
 	fieldSelector, err := fields.ParseSelector("spec.nodeName=" + objectMeta.GetName() +
 		",status.phase!=" + string(corev1.PodSucceeded) +
@@ -133,7 +140,7 @@ func includePodDetailsOnNode(obj runtime.Object, f cmdutil.Factory, out map[stri
 	for _, pod := range nodeNonTerminatedPodsList.Items {
 		pod.Kind = "Pod"
 		podKey, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&pod)
-		err = includePodMetrics(unstructuredToRuntimeObject(podKey), f, podKey)
+		err = includePodMetrics(unstructuredToRuntimeObject(podKey), restConfig, podKey)
 		if err != nil {
 			return errors.WithMessage(err, "Failed including PodMetrics for Pods for Node")
 		}
@@ -143,9 +150,12 @@ func includePodDetailsOnNode(obj runtime.Object, f cmdutil.Factory, out map[stri
 	return nil
 }
 
-func includeNodeStatsSummary(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
+func includeNodeStatsSummary(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
 	// This endpoint will be disabled soon https://github.com/kubernetes/kubernetes/issues/68522
-	clientSet, _ := f.KubernetesClientSet()
+	clientSet, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting clientSet")
+	}
 	objectMeta := obj.(metav1.Object)
 	getBytes, err := clientSet.CoreV1().RESTClient().Get().
 		Resource("nodes").
@@ -166,14 +176,17 @@ func includeNodeStatsSummary(obj runtime.Object, f cmdutil.Factory, out map[stri
 	return nil
 }
 
-func includeIngressServices(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
-	clientSet, _ := f.KubernetesClientSet()
+func includeIngressServices(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
+	clientSet, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting clientSet")
+	}
 	if unsupportedApiVersion := checkUnsupportedIngressApiVersion(obj); unsupportedApiVersion != "" {
 		out["unsupportedApiVersion"] = unsupportedApiVersion
 		return nil
 	}
 	ing := &v1beta1.Ingress{}
-	err := scheme.Scheme.Convert(obj, ing, nil)
+	err = scheme.Scheme.Convert(obj, ing, nil)
 	if err != nil {
 		return err
 	}
@@ -231,7 +244,7 @@ func checkUnsupportedIngressApiVersion(obj runtime.Object) string {
 	return ""
 }
 
-func includeStatefulSetDiff(obj runtime.Object, f cmdutil.Factory, out map[string]interface{}) error {
+func includeStatefulSetDiff(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
 	sts := &v1.StatefulSet{}
 	err := runtimeObjectToSpecificObject(obj, sts)
 	if err != nil {
@@ -243,8 +256,7 @@ func includeStatefulSetDiff(obj runtime.Object, f cmdutil.Factory, out map[strin
 		return nil
 	}
 
-	config, _ := f.ToRESTConfig()
-	clientSet, err := appsv1.NewForConfig(config)
+	clientSet, err := appsv1.NewForConfig(restConfig)
 	if err != nil {
 		return errors.WithMessage(err, "Failed getting apps/v1 client")
 	}

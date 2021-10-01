@@ -11,7 +11,7 @@ func TestArtifactRender(t *testing.T) {
 	for _, testArtifact := range testArtifacts {
 		testName := strings.TrimSuffix(filepath.Base(testArtifact), filepath.Ext(testArtifact))
 		t.Run(testName, func(t *testing.T) {
-			_, err := renderFile(testArtifact)
+			_, err := RenderFile(testArtifact)
 			if err != nil {
 				t.Errorf("%v", err)
 			}
