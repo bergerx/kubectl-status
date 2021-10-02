@@ -10,8 +10,6 @@ import (
 	"github.com/spf13/viper"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/cli-runtime/pkg/resource"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubectl/pkg/cmd/util"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
@@ -130,26 +128,14 @@ func runAgainstFile(filenames []string) error {
 }
 
 func runAgainstCluster(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string, filenames []string) error {
-	restConfig, err := clientGetter.ToRESTConfig()
+	q, err := GetResourceStatusQuery(clientGetter, cmd, args, filenames)
 	if err != nil {
 		return err
 	}
-	clientSet, _ := kubernetes.NewForConfig(restConfig)
-	resourceInfos, err := getResourcesByCmd(clientGetter, cmd, args, filenames)
-	if err != nil {
-		return err
-	}
-	var allRenderErrs []error
-	for _, resourceInfo := range resourceInfos {
-		err := plugin.RenderResource(restConfig, resourceInfo, clientSet)
-		if err != nil {
-			allRenderErrs = append(allRenderErrs, err)
-		}
-	}
-	return utilerrors.NewAggregate(allRenderErrs)
+	return utilerrors.NewAggregate(q.RenderQueriedResources())
 }
 
-func getResourcesByCmd(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string, filenames []string) ([]*resource.Info, error) {
+func GetResourceStatusQuery(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string, filenames []string) (*plugin.ResourceStatusQuery, error) {
 	allNamespaces := util.GetFlagBool(cmd, "all-namespaces")
 	namespace, enforceNamespace, err := clientGetter.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
@@ -157,5 +143,16 @@ func getResourcesByCmd(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.C
 	}
 	selector := util.GetFlagString(cmd, "selector")
 	fieldSelector := util.GetFlagString(cmd, "field-selector")
-	return plugin.GetResources(clientGetter, namespace, allNamespaces, enforceNamespace, filenames, selector, fieldSelector, args)
+	q := plugin.NewResourceStatusQuery(
+		clientGetter,
+		namespace,
+		allNamespaces,
+		enforceNamespace,
+		filenames,
+		selector,
+		fieldSelector,
+		args,
+	)
+
+	return q, nil
 }

@@ -25,7 +25,7 @@ type IngressBackendIssue struct {
 //go:linkname signame runtime.signame
 func signame(sig uint32) string
 
-func GetResources(
+func NewResourceStatusQuery(
 	clientGetter *genericclioptions.ConfigFlags,
 	namespace string,
 	allNamespaces bool,
@@ -34,30 +34,61 @@ func GetResources(
 	selector string,
 	fieldSelector string,
 	args []string,
-) ([]*resource.Info, error) {
-	resourceResult := resource.
-		NewBuilder(clientGetter).
-		Unstructured().
-		NamespaceParam(namespace).DefaultNamespace().AllNamespaces(allNamespaces).
-		FilenameParam(enforceNamespace, &resource.FilenameOptions{Filenames: filenames}).
-		LabelSelectorParam(selector).
-		FieldSelectorParam(fieldSelector).
-		ResourceTypeOrNameArgs(true, args...).
-		ContinueOnError().
-		Latest().
-		Flatten().
-		Do()
+) *ResourceStatusQuery {
+	return &ResourceStatusQuery{
+		clientGetter,
+		namespace,
+		allNamespaces,
+		enforceNamespace,
+		filenames,
+		selector,
+		fieldSelector,
+		args,
+	}
+}
+
+type ResourceStatusQuery struct {
+	clientGetter     *genericclioptions.ConfigFlags
+	namespace        string
+	allNamespaces    bool
+	enforceNamespace bool
+	filenames        []string
+	selector         string
+	fieldSelector    string
+	args             []string
+}
+
+func (q ResourceStatusQuery) getResourceInfos(resourceResult *resource.Result) ([]*resource.Info, error) {
 	err := resourceResult.Err()
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed during querying of resources")
 	}
 	resourceInfos, err := resourceResult.Infos()
 	if err != nil {
-		return nil, err
+		return nil, errors.WithMessage(err, "Failed getting resource  infos")
+	}
+	return resourceInfos, nil
+}
+
+func (q ResourceStatusQuery) getQueriedResources() ([]*resource.Info, error) {
+	resourceInfos, err := q.getResourceInfos(resource.
+		NewBuilder(q.clientGetter).
+		Unstructured().
+		NamespaceParam(q.namespace).DefaultNamespace().AllNamespaces(q.allNamespaces).
+		FilenameParam(q.enforceNamespace, &resource.FilenameOptions{Filenames: q.filenames}).
+		LabelSelectorParam(q.selector).
+		FieldSelectorParam(q.fieldSelector).
+		ResourceTypeOrNameArgs(true, q.args...).
+		ContinueOnError().
+		Latest().
+		Flatten().
+		Do())
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed getting resource infos")
 	}
 	if len(resourceInfos) == 0 {
-		if !allNamespaces && namespace != "" {
-			fmt.Printf("No resources found in %s namespace\n", namespace)
+		if !q.allNamespaces && q.namespace != "" {
+			fmt.Printf("No resources found in %s namespace\n", q.namespace)
 		} else {
 			fmt.Printf("No resources found.\n")
 		}
@@ -65,30 +96,75 @@ func GetResources(
 	return resourceInfos, nil
 }
 
-func RenderFile(manifestFilename string) (string, error) {
-	var out map[string]interface{}
-	manifestFile, _ := ioutil.ReadFile(manifestFilename)
-	err := kyaml.Unmarshal(manifestFile, &out)
-	if err != nil {
-		return "", errors.WithMessage(err, "Failed getting JSON for object")
+func (q ResourceStatusQuery) RenderResourceInfos(resourceInfos []*resource.Info) []error {
+	var allRenderErrs []error
+	for _, resourceInfo := range resourceInfos {
+		err := q.RenderResource(resourceInfo)
+		if err != nil {
+			allRenderErrs = append(allRenderErrs, err)
+		}
 	}
-	var output bytes.Buffer
-	err = renderTemplateForMap(&output, out)
-	if err != nil {
-		return "", err
-	}
-	return output.String(), nil
+	return allRenderErrs
 }
 
-func RenderResource(restConfig *rest.Config, resourceInfo *resource.Info, clientSet *kubernetes.Clientset) error {
-	obj := resourceInfo.Object
-	out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)
+func (q ResourceStatusQuery) RenderQueriedResources() []error {
+	resourceInfos, err := q.getQueriedResources()
 	if err != nil {
-		return err
+		return []error{err}
 	}
+	return q.RenderResourceInfos(resourceInfos)
+}
+
+func (q ResourceStatusQuery) RenderOtherResources(namespace, kind, name string) []error {
+	resourceInfos, err := q.getResourceInfos(resource.
+		NewBuilder(q.clientGetter).
+		Unstructured().
+		NamespaceParam(namespace).
+		ResourceTypeOrNameArgs(true, kind, name).
+		ContinueOnError().
+		Latest().
+		Flatten().
+		Do())
+	if err != nil {
+		return []error{err}
+	}
+	return q.RenderResourceInfos(resourceInfos)
+}
+
+func (q ResourceStatusQuery) GetResourcesQueryFunc() func(string, string, string) (interface{}, error) {
+	return func(namespace, kind, name string) (interface{}, error) {
+		resourceInfos, err := q.getResourceInfos(resource.
+			NewBuilder(q.clientGetter).
+			Unstructured().
+			NamespaceParam(namespace).
+			ResourceTypeOrNameArgs(true, kind, name).
+			ContinueOnError().
+			Latest().
+			Flatten().
+			Do())
+		if err != nil {
+			return nil, err
+		}
+		return q.getUnstructuredObj(resourceInfos)
+	}
+}
+func (q ResourceStatusQuery) RenderResource(resourceInfo *resource.Info) error {
+	out, err := q.getUnstructuredObj(resourceInfo.Object)
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting unstructured object")
+	}
+	restConfig, err := q.clientGetter.ToRESTConfig()
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting rest config")
+	}
+	clientSet, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return errors.WithMessage(err, "Failed getting clientset")
+	}
+	obj := resourceInfo.Object
 	err = includeEvents(obj, clientSet, out)
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "Failed to include events")
 	}
 	kindInjectFuncMap := map[string][]func(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error{
 		"Node":        {includeNodeMetrics, includeNodeLease, includePodDetailsOnNode, includeNodeStatsSummary},
@@ -112,4 +188,23 @@ func RenderResource(restConfig *rest.Config, resourceInfo *resource.Info, client
 	// Add a newline at the end of every template
 	fmt.Println("")
 	return nil
+}
+
+func (q ResourceStatusQuery) getUnstructuredObj(obj interface{}) (map[string]interface{}, error) {
+	return runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+}
+
+func RenderFile(manifestFilename string) (string, error) {
+	var out map[string]interface{}
+	manifestFile, _ := ioutil.ReadFile(manifestFilename)
+	err := kyaml.Unmarshal(manifestFile, &out)
+	if err != nil {
+		return "", errors.WithMessage(err, "Failed getting JSON for object")
+	}
+	var output bytes.Buffer
+	err = renderTemplateForMap(&output, out)
+	if err != nil {
+		return "", err
+	}
+	return output.String(), nil
 }
