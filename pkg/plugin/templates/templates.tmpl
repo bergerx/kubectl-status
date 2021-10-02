@@ -162,7 +162,7 @@
     {{- end }}
     {{- if or (not $currentReplicas) (not $readyReplicas) }}
         {{- "Outage" | red | bold | nindent 2 }}: Deployment has no Ready replicas.
-        {{- if eq (.status.observedGeneration | default 1.0) 1.0 }}
+        {{- if eq (.status.observedGeneration | default 1.0 | float64) 1.0 }}
             {{- "Stuck Initial Rollout?" | yellow | bold | nindent 2 }} First rollout not yet progressed.
         {{- end }}
     {{- else if ne $currentReplicas $readyReplicas }}
