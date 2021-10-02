@@ -14,7 +14,7 @@
 {{- end -}}
 
 {{- define "Pod" }}
-{{ template "pod_status_summary_line" . }}
+    {{- template "pod_status_summary_line" . }}
     {{- include "pod_conditions_summary" .status.conditions | nindent 2 }}
     {{- if not .metadata.ownerReferences }}
         {{- $container := index .spec.containers 0 }}{{/* not ideal but will likely work in most cases if not all */}}
@@ -44,7 +44,7 @@
 {{- end }}
 
 {{- define "StatefulSet" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- $currentReplicas := .status.replicas | default 0.0 }}
     {{- $updatedReplicas := .status.updatedReplicas | default 0.0 }}
@@ -94,7 +94,7 @@
 {{- end }}
 
 {{- define "DaemonSet" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "daemonset_replicas_status" . }}
     {{- template "conditions_summary" .status.conditions }}
@@ -102,7 +102,7 @@
 {{- end -}}
 
 {{- define "ReplicaSet" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
            and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
@@ -137,7 +137,7 @@
 {{- end }}
 
 {{- define "Deployment" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- $injectedStatus := .status }}
     {{- if not (hasKey .status "replicas") }}
@@ -186,7 +186,7 @@
 {{- end }}
 
 {{- define "PersistentVolume" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- with .status.message }}{{/* exists on failure */}}
         {{- "message" | red | bold | nindent 2 }}: {{ . }}
     {{- end }}
@@ -194,19 +194,19 @@
 {{- end -}}
 
 {{- define "PersistentVolumeClaim" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- with .status.capacity.storage }} {{ . }}{{ end }}
     {{- template "events" .events }}
 {{- end -}}
 
 {{- define "ComponentStatus" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- template "conditions_summary" .conditions }}
     {{- template "events" .events }}
 {{- end -}}
 
 {{- define "CronJob" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- if .status.lastScheduleTime }}, last ran at {{ .status.lastScheduleTime }} ({{ .status.lastScheduleTime | colorAgo }} ago)
     {{- else }}
   {{ "Not yet scheduled" | yellow | bold }}
@@ -220,7 +220,7 @@
 {{- end -}}
 
 {{- define "Job" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- /* See https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/#parallel-jobs */ -}}
     {{- if eq (coalesce .spec.completions .spec.parallelism 1 | toString) "1" }}
         {{- template "job_non_parallel" . }}
@@ -248,7 +248,7 @@
 {{- end -}}
 
 {{- define "Service" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- if eq .spec.clusterIP "None" }} {{ "Headless" | yellow | bold }}{{- end }}
     {{- if eq .spec.type "LoadBalancer" }}
         {{- template "load_balancer_ingress" . }}
@@ -283,7 +283,7 @@
 {{- end -}}
 
 {{- define "Ingress" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- template "load_balancer_ingress" . }}
     {{- with .unsupportedApiVersion }}
   {{ "Unsupported Api version" | yellow }}: apiVersion {{ . }} is not supported for detailed backend issues!
@@ -303,7 +303,7 @@
 {{- end -}}
 
 {{- define "HorizontalPodAutoscaler" }}
-{{ template "status_summary_line" . }} last scale was {{ .status.lastScaleTime | colorAgo }} ago
+    {{- template "status_summary_line" . }} last scale was {{ .status.lastScaleTime | colorAgo }} ago
   {{ "current" | bold }} replicas:{{ .status.currentReplicas }}/({{ .spec.minReplicas | default "1" }}-{{ .spec.maxReplicas }})
     {{- if .status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .status.currentCPUUtilizationPercentage | toString | redIf (ge .status.currentCPUUtilizationPercentage .spec.targetCPUUtilizationPercentage) }}%/{{ .spec.targetCPUUtilizationPercentage }}%{{ end }}
     {{- if (ne .status.currentReplicas .status.desiredReplicas) }}, {{ "desired" | red | bold}}: {{ .status.currentReplicas }} --> {{ .status.desiredReplicas }}{{ end }}
@@ -311,7 +311,7 @@
 {{- end -}}
 
 {{- define "ResourceQuota" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- $hard := .status.hard }}
     {{- range $key, $value := .status.used }}
   {{ $key }}: {{ $value }}/{{ index $hard $key }}
@@ -365,7 +365,7 @@
         {{- if hasKey .status "fullyLabeledReplicas" }}, {{ printf "fullyLabeled:%.0f" (float64 .status.fullyLabeledReplicas) | toString | redBoldIf (not ( eq $spec_replicas (float64 .status.fullyLabeledReplicas) )) }}{{ end }}
         {{- with .status.unavailableReplicas }}, {{ printf "unavailable:%.0f" (float64 .) | toString | red | bold }}{{ end }}
         {{- with .status.collisionCount }}, {{ printf "collisions:%.0f" (float64 .) | toString | red | bold }}{{ end }}
-  {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "status_summary_line" }}
@@ -554,7 +554,7 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
 {{- end -}}
 
 {{- define "NamespaceConfig" }}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "conditions_summary" .status.conditions }}
     {{- range $resource, $valueList := .status.lockedResourceStatuses }}
@@ -565,7 +565,7 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
 
 {{- define "Node" }}
     {{- /* also inlcude info from `kubectl get --raw /api/v1/nodes/<node>/proxy/stats/summary` */ -}}
-{{ template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}
   {{ .status.nodeInfo.operatingSystem | bold }} {{ .status.nodeInfo.osImage }} ({{ .status.nodeInfo.architecture }}), kernel {{ .status.nodeInfo.kernelVersion }}, kubelet {{ .status.nodeInfo.kubeletVersion }}, kube-proxy {{ .status.nodeInfo.kubeProxyVersion }}
     {{- if or (index .metadata.labels "node.kubernetes.io/instance") (index .metadata.labels "topology.kubernetes.io/region") (index .metadata.labels "failure-domain.beta.kubernetes.io/region") (index .metadata.labels "topology.kubernetes.io/zone") (index .metadata.labels "failure-domain.beta.kubernetes.io/region") }}
   {{ "cloudprovider" | bold }}

@@ -181,12 +181,15 @@ func (q ResourceStatusQuery) RenderResource(resourceInfo *resource.Info) error {
 		}
 	}
 
+	// Add a newline at the beginning of every template for readability
+	fmt.Println("")
 	err = renderTemplateForMap(os.Stdout, out)
+	// Add a newline at the end of every template, as they don't end with a newline
+	fmt.Println("")
+
 	if err != nil {
 		return err
 	}
-	// Add a newline at the end of every template
-	fmt.Println("")
 	return nil
 }
 
