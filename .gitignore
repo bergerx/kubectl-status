@@ -9,7 +9,8 @@
 *.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE
-*.out
+cover.out
+cover.html
 
 bin/
 dist/

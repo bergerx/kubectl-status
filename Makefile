@@ -6,6 +6,7 @@ export GO111MODULE=on
 .PHONY: test
 test: generate
 	go test ./pkg/... ./cmd/... -coverprofile cover.out
+	go tool cover -html=cover.out -o cover.html
 
 .PHONY: bin
 bin: fmt vet
