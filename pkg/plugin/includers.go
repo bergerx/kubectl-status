@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -19,6 +20,11 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
+
+type IngressBackendIssue struct {
+	IssueType string
+	Backend   v1beta1.IngressBackend
+}
 
 func includeEvents(obj runtime.Object, clientSet *kubernetes.Clientset, out map[string]interface{}) error {
 	objectMeta := obj.(metav1.Object)
@@ -148,6 +154,10 @@ func includePodDetailsOnNode(obj runtime.Object, restConfig *rest.Config, out ma
 	}
 	out["pods"] = podsList
 	return nil
+}
+
+func unstructuredToRuntimeObject(obj map[string]interface{}) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: obj}
 }
 
 func includeNodeStatsSummary(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
@@ -297,4 +307,8 @@ func includeStatefulSetDiff(obj runtime.Object, restConfig *rest.Config, out map
 	out["diff"] = diffString
 
 	return nil
+}
+
+func runtimeObjectToSpecificObject(obj runtime.Object, out interface{}) error {
+	return scheme.Scheme.Convert(obj, out, nil)
 }
