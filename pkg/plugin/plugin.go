@@ -131,60 +131,52 @@ func (q ResourceStatusQuery) RenderOtherResources(namespace, kind, name string) 
 	return q.PrintRenderedResourceInfos(resourceInfos)
 }
 
-func (q ResourceStatusQuery) GetKubectlGetFunc() func(string, ...string) (interface{}, error) {
-	return func(namespace string, args ...string) (interface{}, error) {
-		resourceInfos, err := q.resolveResourceInfos(q.getResourceQueryResults(namespace, args))
-		if err != nil {
-			return nil, err
-		}
+func (q ResourceStatusQuery) GetKubeGetFunc() func(string, ...string) interface{} {
+	return func(namespace string, args ...string) interface{} {
+		resourceInfos, _ := q.resolveResourceInfos(q.getResourceQueryResults(namespace, args))
 
 		var out []interface{}
-		var allRenderErrs []error
 		for _, resourceInfo := range resourceInfos {
 			obj := resourceInfo.Object
-			unstructuredObj, err := getUnstructuredObj(obj)
-			if err != nil {
-				allRenderErrs = append(allRenderErrs, err)
-			}
+			unstructuredObj, _ := getUnstructuredObj(obj)
 			out = append(out, unstructuredObj)
 		}
-		if len(allRenderErrs) > 0 {
-			return out, allRenderErrs[0]
-		} else {
-			return out, nil
-		}
+		return out
 	}
 }
 
-func (q ResourceStatusQuery) GetIncludeObjFunc() func(string, ...string) (string, error) {
-	return func(namespace string, args ...string) (string, error) {
+func (q ResourceStatusQuery) GetKubeGetFirstFunc() func(string, ...string) interface{} {
+	return func(namespace string, args ...string) interface{} {
+		resourceInfos, _ := q.resolveResourceInfos(q.getResourceQueryResults(namespace, args))
+		if len(resourceInfos) < 1 {
+			return ""
+		}
+		unstructuredObj, _ := getUnstructuredObj(resourceInfos[0].Object)
+		return unstructuredObj
+	}
+}
+
+func (q ResourceStatusQuery) GetIncludeObjFunc() func(string, ...string) string {
+	return func(namespace string, args ...string) string {
 		if namespace == "" && len(args) == 0 {
-			return "", nil
+			return ""
 		}
 		resourceInfos, err := q.resolveResourceInfos(q.getResourceQueryResults(namespace, args))
 		if err != nil {
-			return "", err
+			return ""
 		}
 
 		output := ""
-		var allRenderErrs []error
 		for _, resourceInfo := range resourceInfos {
-			renderOutput, err := q.RenderResource(resourceInfo)
-			if err != nil {
-				allRenderErrs = append(allRenderErrs, err)
-			}
+			renderOutput, _ := q.RenderResource(resourceInfo)
 			output = fmt.Sprintf("%s\n%s", output, renderOutput)
 		}
-		if len(allRenderErrs) > 0 {
-			return output, allRenderErrs[0]
-		} else {
-			return output, nil
-		}
+		return output
 	}
 }
 
-func (q ResourceStatusQuery) GetIncludeOwnersFunc() func(map[string]interface{}) (string, error) {
-	return func(obj map[string]interface{}) (string, error) {
+func (q ResourceStatusQuery) GetIncludeOwnersFunc() func(map[string]interface{}) string {
+	return func(obj map[string]interface{}) string {
 		//objR := obj.(runtime.Object)
 		unstructuredObj := unstructured.Unstructured{Object: obj}
 		owners := unstructuredObj.GetOwnerReferences()
@@ -194,14 +186,15 @@ func (q ResourceStatusQuery) GetIncludeOwnersFunc() func(map[string]interface{})
 	}
 }
 
-func (q ResourceStatusQuery) getGetEventsFunc() func(map[string]interface{}) (map[string]interface{}, error) {
-	return func(obj map[string]interface{}) (map[string]interface{}, error) {
+func (q ResourceStatusQuery) getGetEventsFunc() func(map[string]interface{}) map[string]interface{} {
+	return func(obj map[string]interface{}) map[string]interface{} {
 		unstructuredObj := unstructured.Unstructured{Object: obj}
 		restConfig, _ := q.clientGetter.ToRESTConfig()
 		clientSet, _ := kubernetes.NewForConfig(restConfig)
 		runtimeObj := unstructuredObj.DeepCopyObject()
 		events, _ := clientSet.CoreV1().Events(unstructuredObj.GetNamespace()).Search(scheme.Scheme, runtimeObj)
-		return runtime.DefaultUnstructuredConverter.ToUnstructured(&events)
+		unstructuredEvents, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&events)
+		return unstructuredEvents
 	}
 }
 
@@ -235,7 +228,7 @@ func (q ResourceStatusQuery) RenderResource(resourceInfo *resource.Info) (string
 		return "", errors.WithMessage(err, "Failed getting rest config")
 	}
 	kindInjectFuncMap := map[string][]func(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error{
-		"Node":        {includeNodeMetrics, includeNodeLease, includePodDetailsOnNode, includeNodeStatsSummary},
+		"Node":        {includeNodeLease, includePodDetailsOnNode, includeNodeStatsSummary},
 		"Pod":         {includePodMetrics}, // kubectl get --raw /api/v1/nodes/minikube/proxy/stats/summary --> .pods[] | select podRef | containers[] | select name
 		"Service":     {includeEndpoint},
 		"StatefulSet": {includeStatefulSetDiff},
@@ -274,7 +267,8 @@ func RenderFile(manifestFilename string) (string, error) {
 func renderTemplateForMap(wr io.Writer, v map[string]interface{}, queries ...*ResourceStatusQuery) error {
 	if len(queries) > 0 {
 		// If a ResourceStatusQuery is passed than we can allow running queries in
-		funcMap["kubectlGet"] = queries[0].GetKubectlGetFunc()
+		funcMap["kubeGet"] = queries[0].GetKubeGetFunc()
+		funcMap["kubeGetFirst"] = queries[0].GetKubeGetFirstFunc()
 		funcMap["includeObj"] = queries[0].GetIncludeObjFunc()
 		funcMap["includeOwners"] = queries[0].GetIncludeOwnersFunc()
 		funcMap["getEvents"] = queries[0].getGetEventsFunc()

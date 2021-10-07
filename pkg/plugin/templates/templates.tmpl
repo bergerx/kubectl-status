@@ -650,16 +650,17 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
     {{- $inferredBurstableMemLimit := .status.allocatable.memory | quantityToFloat64 | subFloat64 $podsTotalMemRequestsGuaranteed }}
     {{- $inferredBestEffortMemLimit := $inferredBurstableMemLimit | subFloat64 $podsTotalMemRequestsBurstable }}
   Inferred memory limits for BestEffort: {{ $inferredBestEffortMemLimit | humanizeSI "B" }}, for Burstable: {{ $inferredBurstableMemLimit | humanizeSI "B" }}
-    {{- if .nodeMetrics.usage }}
+    {{- $nodeMetrics := kubeGetFirst  "" "NodeMetrics" .metadata.name | default dict }}
+    {{- if $nodeMetrics.usage }}
   {{ "pods" | bold }}: usage/allocatable:{{ $podCount }}/
         {{- .status.allocatable.pods | quantityToFloat64 | printf "%g" }}(
         {{- percent ($podCount | float64) (.status.allocatable.pods | quantityToFloat64) | colorPercent "%.0f%%" }})
         {{- if eq ($podCount | float64) (.status.allocatable.pods | quantityToFloat64) }}
     {{ "Reached Max Pods Limit" | red | bold }}: Number of Pods that can run on this Kubelet (`--max-pods`) limit is reached. No more pods will be scheduled to this Node even if there is free resource (E.g. cpu/mem).
         {{- end }}
-  {{ "cpu" | bold }}: usage/allocatable:{{ .nodeMetrics.usage.cpu | quantityToFloat64 | printf "%g" }}/
+  {{ "cpu" | bold }}: usage/allocatable:{{ $nodeMetrics.usage.cpu | quantityToFloat64 | printf "%g" }}/
         {{- .status.allocatable.cpu | quantityToFloat64 | printf "%g" }}(
-        {{- percent (.nodeMetrics.usage.cpu | quantityToFloat64) (.status.allocatable.cpu | quantityToFloat64) | colorPercent "%.0f%%" }})
+        {{- percent ($nodeMetrics.usage.cpu | quantityToFloat64) (.status.allocatable.cpu | quantityToFloat64) | colorPercent "%.0f%%" }})
         {{- $percent := percent $podsTotalCpuUsage (.status.allocatable.cpu | quantityToFloat64) }}
         {{- "" }}, allocated usage:{{ $podsTotalCpuUsage | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)/[req:
         {{- $percent := percent $podsTotalCpuRequests (.status.allocatable.cpu | quantityToFloat64) }}
@@ -669,9 +670,9 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
         {{- if ge $podsTotalCpuLimits (.status.allocatable.cpu | quantityToFloat64) }}
     {{ "CPU overcommitted" | red | bold }}: Application may be slow, applications are more likely to race for free cpu cycles.
         {{- end }}
-  {{ "mem" | bold }}: usage/allocatable:{{ .nodeMetrics.usage.memory | quantityToFloat64 | humanizeSI "B" }}/
+  {{ "mem" | bold }}: usage/allocatable:{{ $nodeMetrics.usage.memory | quantityToFloat64 | humanizeSI "B" }}/
         {{- .status.allocatable.memory | quantityToFloat64 | humanizeSI "B" }}(
-        {{- percent (.nodeMetrics.usage.memory | quantityToFloat64) (.status.allocatable.memory | quantityToFloat64) | colorPercent "%.0f%%" }})
+        {{- percent ($nodeMetrics.usage.memory | quantityToFloat64) (.status.allocatable.memory | quantityToFloat64) | colorPercent "%.0f%%" }})
         {{- $percent := percent $podsTotalMemUsage (.status.allocatable.memory | quantityToFloat64) }}
         {{- "" }}, allocated usage:{{ $podsTotalMemUsage | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)/[req:
         {{- $percent := percent $podsTotalMemRequests (.status.allocatable.memory | quantityToFloat64) }}

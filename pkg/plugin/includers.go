@@ -26,29 +26,6 @@ type IngressBackendIssue struct {
 	Backend   v1beta1.IngressBackend
 }
 
-func includeNodeMetrics(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
-	// mind that metrics-server is reporting the workingSetSize rather than RSS,
-	// see: https://github.com/kubernetes-sigs/metrics-server/issues/187
-	clientSet, err := metricsv.NewForConfig(restConfig)
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting metrics clientSet")
-	}
-	objectMeta := obj.(metav1.Object)
-	nodeMetrics, err := clientSet.MetricsV1beta1().
-		NodeMetricses().
-		Get(context.TODO(), objectMeta.GetName(), metav1.GetOptions{})
-	if err != nil {
-		// swallow any errors while getting NodeMetrics
-		return nil
-	}
-	nodeMetricsKey, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&nodeMetrics)
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting JSON for NodeMetrics")
-	}
-	out["nodeMetrics"] = nodeMetricsKey
-	return nil
-}
-
 func includePodMetrics(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
 	clientSet, err := metricsv.NewForConfig(restConfig)
 	if err != nil {
