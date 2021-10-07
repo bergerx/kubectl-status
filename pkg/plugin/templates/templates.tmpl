@@ -4,7 +4,7 @@
     {{- template "replicas_status" . }}
     {{- template "suspended" . }}
     {{- template "conditions_summary" .status.conditions }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end }}
 
@@ -41,7 +41,7 @@
             {{- include "container_status_summary" $containerStatus | nindent 4 }}
         {{- end }}
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end }}
 
@@ -92,7 +92,7 @@
   {{ "Stuck rollout" | red | bold }}: No ready replicas, this StatefulSet won't likely go further.
         {{- end }}
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end }}
 
@@ -101,7 +101,7 @@
     {{- template "observed_generation_summary" . }}
     {{- template "daemonset_replicas_status" . }}
     {{- template "conditions_summary" .status.conditions }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
@@ -137,7 +137,7 @@
             {{- template "suspended" . }}
         {{- end }}
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end }}
 
@@ -179,7 +179,7 @@
             {{- "Unavailable Replicas" | yellow | bold | nindent 2 }}: {{ .status.unavailableReplicas }} replicas are not Available.
         {{- end }}
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end }}
 
@@ -196,21 +196,21 @@
     {{- with .status.message }}{{/* exists on failure */}}
         {{- "message" | red | bold | nindent 2 }}: {{ . }}
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
 {{- define "PersistentVolumeClaim" }}
     {{- template "status_summary_line" . }}
     {{- with .status.capacity.storage }} {{ . }}{{ end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
 {{- define "ComponentStatus" }}
     {{- template "status_summary_line" . }}
     {{- template "conditions_summary" .conditions }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
@@ -225,7 +225,7 @@
   {{ "Active" | green }}: {{ .kind | bold }}/{{ .name }} is running.
         {{- end }}
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
@@ -242,7 +242,7 @@
         {{- template "job_parallel" . }}
     {{- end }}
     {{- template "conditions_summary" .status.conditions }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
@@ -290,7 +290,7 @@
     {{- else }}
   {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
@@ -311,7 +311,7 @@
             {{- end }}
         {{- end }}
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
@@ -320,7 +320,7 @@
   {{ "current" | bold }} replicas:{{ .status.currentReplicas }}/({{ .spec.minReplicas | default "1" }}-{{ .spec.maxReplicas }})
     {{- if .status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .status.currentCPUUtilizationPercentage | toString | redIf (ge .status.currentCPUUtilizationPercentage .spec.targetCPUUtilizationPercentage) }}%/{{ .spec.targetCPUUtilizationPercentage }}%{{ end }}
     {{- if (ne .status.currentReplicas .status.desiredReplicas) }}, {{ "desired" | red | bold}}: {{ .status.currentReplicas }} --> {{ .status.desiredReplicas }}{{ end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
@@ -330,7 +330,7 @@
     {{- range $key, $value := .status.used }}
   {{ $key }}: {{ $value }}/{{ index $hard $key }}
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
@@ -550,7 +550,7 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
 {{- end -}}
 
 {{- define "events" }}
-    {{- if .items }}
+    {{- with getEvents . }}{{ if .items }}
   Events:
         {{- range .items }}
     {{ "" }} {{- /* To have the newline and two spaces */ -}}
@@ -565,7 +565,7 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
             {{- end -}}
             from {{ list .reportingComponent .reportingInstance .source.component .source.host .source.fieldPath | compact | join "," | bold }}: {{ .message }}
         {{- end }}
-    {{- end }}
+    {{- end }}{{- end }}
 {{- end -}}
 
 {{- define "owners" }}
@@ -581,7 +581,7 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
     {{- range $resource, $valueList := .status.lockedResourceStatuses }}
   {{ $resource }}: {{ range $status := $valueList }}{{ template "condition_summary" . }}{{- end }}
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end }}
 
@@ -692,7 +692,7 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
     {{ .name }}: {{ template "node_stats_summary_resources" . }}
         {{- end }}
     {{- end }}
-    {{- template "events" .events }}
+    {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 

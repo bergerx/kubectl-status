@@ -49,6 +49,7 @@ var funcMap = template.FuncMap{
 	"divFloat64":               divFloat64,
 	"include":                  func(string, interface{}) (string, error) { return "include function is not implemented", nil },
 	"kubectlGet":               func(...string) (interface{}, error) { return "", nil },
+	"getEvents":                func(map[string]interface{}) (map[string]interface{}, error) { return nil, nil },
 	"includeObj":               func(...string) (interface{}, error) { return "", nil },
 	"includeOwners":            func(interface{}) (interface{}, error) { return "", nil },
 }

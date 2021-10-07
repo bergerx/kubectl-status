@@ -15,6 +15,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	kyaml "sigs.k8s.io/yaml"
 
@@ -141,7 +142,7 @@ func (q ResourceStatusQuery) GetKubectlGetFunc() func(string, ...string) (interf
 		var allRenderErrs []error
 		for _, resourceInfo := range resourceInfos {
 			obj := resourceInfo.Object
-			unstructuredObj, err := q.getUnstructuredObj(obj)
+			unstructuredObj, err := getUnstructuredObj(obj)
 			if err != nil {
 				allRenderErrs = append(allRenderErrs, err)
 			}
@@ -193,6 +194,17 @@ func (q ResourceStatusQuery) GetIncludeOwnersFunc() func(map[string]interface{})
 	}
 }
 
+func (q ResourceStatusQuery) getGetEventsFunc() func(map[string]interface{}) (map[string]interface{}, error) {
+	return func(obj map[string]interface{}) (map[string]interface{}, error) {
+		unstructuredObj := unstructured.Unstructured{Object: obj}
+		restConfig, _ := q.clientGetter.ToRESTConfig()
+		clientSet, _ := kubernetes.NewForConfig(restConfig)
+		runtimeObj := unstructuredObj.DeepCopyObject()
+		events, _ := clientSet.CoreV1().Events(unstructuredObj.GetNamespace()).Search(scheme.Scheme, runtimeObj)
+		return runtime.DefaultUnstructuredConverter.ToUnstructured(&events)
+	}
+}
+
 func (q ResourceStatusQuery) getResourceQueryResults(namespace string, args []string) *resource.Result {
 	return resource.
 		NewBuilder(q.clientGetter).
@@ -214,21 +226,13 @@ func (q ResourceStatusQuery) PrintRenderedResource(resourceInfo *resource.Info) 
 
 func (q ResourceStatusQuery) RenderResource(resourceInfo *resource.Info) (string, error) {
 	obj := resourceInfo.Object
-	out, err := q.getUnstructuredObj(obj)
+	out, err := getUnstructuredObj(obj)
 	if err != nil {
 		return "", errors.WithMessage(err, "Failed getting unstructured object")
 	}
 	restConfig, err := q.clientGetter.ToRESTConfig()
 	if err != nil {
 		return "", errors.WithMessage(err, "Failed getting rest config")
-	}
-	clientSet, err := kubernetes.NewForConfig(restConfig)
-	if err != nil {
-		return "", errors.WithMessage(err, "Failed getting clientset")
-	}
-	err = includeEvents(obj, clientSet, out)
-	if err != nil {
-		return "", errors.WithMessage(err, "Failed to include events")
 	}
 	kindInjectFuncMap := map[string][]func(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error{
 		"Node":        {includeNodeMetrics, includeNodeLease, includePodDetailsOnNode, includeNodeStatsSummary},
@@ -252,10 +256,6 @@ func (q ResourceStatusQuery) RenderResource(resourceInfo *resource.Info) (string
 	return renderOutput, err
 }
 
-func (q ResourceStatusQuery) getUnstructuredObj(obj interface{}) (map[string]interface{}, error) {
-	return runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
-}
-
 func RenderFile(manifestFilename string) (string, error) {
 	var out map[string]interface{}
 	manifestFile, _ := ioutil.ReadFile(manifestFilename)
@@ -277,6 +277,7 @@ func renderTemplateForMap(wr io.Writer, v map[string]interface{}, queries ...*Re
 		funcMap["kubectlGet"] = queries[0].GetKubectlGetFunc()
 		funcMap["includeObj"] = queries[0].GetIncludeObjFunc()
 		funcMap["includeOwners"] = queries[0].GetIncludeOwnersFunc()
+		funcMap["getEvents"] = queries[0].getGetEventsFunc()
 	}
 	tmpl, err := getParsedTemplates()
 	if err != nil {
@@ -335,4 +336,8 @@ func getTemplate() (string, error) {
 		return "", errors.WithMessage(err, "Failed reading template from statikFS")
 	}
 	return string(contents), nil
+}
+
+func getUnstructuredObj(obj interface{}) (map[string]interface{}, error) {
+	return runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 }

@@ -26,20 +26,6 @@ type IngressBackendIssue struct {
 	Backend   v1beta1.IngressBackend
 }
 
-func includeEvents(obj runtime.Object, clientSet *kubernetes.Clientset, out map[string]interface{}) error {
-	objectMeta := obj.(metav1.Object)
-	events, err := clientSet.CoreV1().Events(objectMeta.GetNamespace()).Search(scheme.Scheme, obj)
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting event")
-	}
-	eventsKey, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&events)
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting JSON for Events")
-	}
-	out["events"] = eventsKey
-	return nil
-}
-
 func includeNodeMetrics(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
 	// mind that metrics-server is reporting the workingSetSize rather than RSS,
 	// see: https://github.com/kubernetes-sigs/metrics-server/issues/187
