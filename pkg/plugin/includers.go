@@ -47,26 +47,6 @@ func includePodMetrics(obj runtime.Object, restConfig *rest.Config, out map[stri
 	return nil
 }
 
-func includeEndpoint(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
-	clientSet, err := kubernetes.NewForConfig(restConfig)
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting clientSet")
-	}
-	objectMeta := obj.(metav1.Object)
-	endpoint, err := clientSet.CoreV1().
-		Endpoints(objectMeta.GetNamespace()).
-		Get(context.TODO(), objectMeta.GetName(), metav1.GetOptions{})
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting Endpoint")
-	}
-	endpointKey, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&endpoint)
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting JSON for Endpoint")
-	}
-	out["endpoint"] = endpointKey
-	return nil
-}
-
 func includePodDetailsOnNode(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
 	clientSet, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {

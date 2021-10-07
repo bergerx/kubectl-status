@@ -230,7 +230,6 @@ func (q ResourceStatusQuery) RenderResource(resourceInfo *resource.Info) (string
 	kindInjectFuncMap := map[string][]func(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error{
 		"Node":        {includePodDetailsOnNode, includeNodeStatsSummary},
 		"Pod":         {includePodMetrics}, // kubectl get --raw /api/v1/nodes/minikube/proxy/stats/summary --> .pods[] | select podRef | containers[] | select name
-		"Service":     {includeEndpoint},
 		"StatefulSet": {includeStatefulSetDiff},
 		"Ingress":     {includeIngressServices},
 	}

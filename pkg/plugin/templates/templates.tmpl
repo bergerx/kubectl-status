@@ -264,12 +264,13 @@
     {{- if eq .spec.type "LoadBalancer" }}
         {{- template "load_balancer_ingress" . }}
     {{- end }}
-    {{- if .endpoint }}
-        {{- if hasKey .endpoint.metadata.annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
-            , last endpoint change was {{ index .endpoint.metadata.annotations "endpoints.kubernetes.io/last-change-trigger-time"  | colorAgo }} ago
+    {{- $endpoint := kubeGetFirst .metadata.namespace "Endpoints" .metadata.name }}
+    {{- if $endpoint }}
+        {{- if hasKey $endpoint.metadata.annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
+            , last endpoint change was {{ index $endpoint.metadata.annotations "endpoints.kubernetes.io/last-change-trigger-time"  | colorAgo }} ago
         {{- end}}
-        {{- if .endpoint.subsets }}
-            {{- range .endpoint.subsets }}
+        {{- if $endpoint.subsets }}
+            {{- range $endpoint.subsets }}
                 {{- $ports := .ports }}
                 {{- if .addresses }}
                     {{- range .addresses }}
@@ -650,7 +651,7 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
     {{- $inferredBurstableMemLimit := .status.allocatable.memory | quantityToFloat64 | subFloat64 $podsTotalMemRequestsGuaranteed }}
     {{- $inferredBestEffortMemLimit := $inferredBurstableMemLimit | subFloat64 $podsTotalMemRequestsBurstable }}
   Inferred memory limits for BestEffort: {{ $inferredBestEffortMemLimit | humanizeSI "B" }}, for Burstable: {{ $inferredBurstableMemLimit | humanizeSI "B" }}
-    {{- $nodeMetrics := kubeGetFirst  "" "NodeMetrics" .metadata.name | default dict }}
+    {{- $nodeMetrics := kubeGetFirst "" "NodeMetrics" .metadata.name | default dict }}
     {{- if $nodeMetrics.usage }}
   {{ "pods" | bold }}: usage/allocatable:{{ $podCount }}/
         {{- .status.allocatable.pods | quantityToFloat64 | printf "%g" }}(
