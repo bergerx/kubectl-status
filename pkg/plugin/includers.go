@@ -67,26 +67,6 @@ func includeEndpoint(obj runtime.Object, restConfig *rest.Config, out map[string
 	return nil
 }
 
-func includeNodeLease(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
-	clientSet, err := kubernetes.NewForConfig(restConfig)
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting clientSet")
-	}
-	objectMeta := obj.(metav1.Object)
-	lease, err := clientSet.CoordinationV1().
-		Leases(corev1.NamespaceNodeLease).
-		Get(context.TODO(), objectMeta.GetName(), metav1.GetOptions{})
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting Node Lease")
-	}
-	leaseKey, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&lease)
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting JSON for Lease")
-	}
-	out["lease"] = leaseKey
-	return nil
-}
-
 func includePodDetailsOnNode(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
 	clientSet, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {

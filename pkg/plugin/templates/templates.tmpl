@@ -602,7 +602,7 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
         {{- with index .status.allocatable "attachable-volumes-azure-disk" }}/{{ . }}{{ end }}, attached={{ .status.volumesAttached | len }}
     {{- end}}
     {{- template "conditions_summary" .status.conditions }}
-    {{- with .lease }}
+    {{- with kubeGetFirst "kube-node-lease" "Lease" .metadata.name }}
   {{ "Lease" | bold }} for {{ .spec.leaseDurationSeconds }}s, renew in {{ .spec.renewTime | ago }}
     {{- end }}
     {{- $podCount := 0 }}

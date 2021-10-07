@@ -228,7 +228,7 @@ func (q ResourceStatusQuery) RenderResource(resourceInfo *resource.Info) (string
 		return "", errors.WithMessage(err, "Failed getting rest config")
 	}
 	kindInjectFuncMap := map[string][]func(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error{
-		"Node":        {includeNodeLease, includePodDetailsOnNode, includeNodeStatsSummary},
+		"Node":        {includePodDetailsOnNode, includeNodeStatsSummary},
 		"Pod":         {includePodMetrics}, // kubectl get --raw /api/v1/nodes/minikube/proxy/stats/summary --> .pods[] | select podRef | containers[] | select name
 		"Service":     {includeEndpoint},
 		"StatefulSet": {includeStatefulSetDiff},
