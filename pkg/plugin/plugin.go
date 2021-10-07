@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"text/template"
 	_ "unsafe" // required for using go:linkname in the file
 
 	"github.com/pkg/errors"
 	sfs "github.com/rakyll/statik/fs"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/resource"
@@ -57,7 +57,7 @@ type ResourceStatusQuery struct {
 	args             []string
 }
 
-func (q ResourceStatusQuery) getResourceInfos(resourceResult *resource.Result) ([]*resource.Info, error) {
+func (q ResourceStatusQuery) resolveResourceInfos(resourceResult *resource.Result) ([]*resource.Info, error) {
 	err := resourceResult.Err()
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed during querying of resources")
@@ -70,7 +70,7 @@ func (q ResourceStatusQuery) getResourceInfos(resourceResult *resource.Result) (
 }
 
 func (q ResourceStatusQuery) getQueriedResources() ([]*resource.Info, error) {
-	resourceInfos, err := q.getResourceInfos(resource.
+	resourceInfos, err := q.resolveResourceInfos(resource.
 		NewBuilder(q.clientGetter).
 		Unstructured().
 		NamespaceParam(q.namespace).DefaultNamespace().AllNamespaces(q.allNamespaces).
@@ -95,10 +95,10 @@ func (q ResourceStatusQuery) getQueriedResources() ([]*resource.Info, error) {
 	return resourceInfos, nil
 }
 
-func (q ResourceStatusQuery) RenderResourceInfos(resourceInfos []*resource.Info) []error {
+func (q ResourceStatusQuery) PrintRenderedResourceInfos(resourceInfos []*resource.Info) []error {
 	var allRenderErrs []error
 	for _, resourceInfo := range resourceInfos {
-		err := q.RenderResource(resourceInfo)
+		err := q.PrintRenderedResource(resourceInfo)
 		if err != nil {
 			allRenderErrs = append(allRenderErrs, err)
 		}
@@ -106,16 +106,16 @@ func (q ResourceStatusQuery) RenderResourceInfos(resourceInfos []*resource.Info)
 	return allRenderErrs
 }
 
-func (q ResourceStatusQuery) RenderQueriedResources() []error {
+func (q ResourceStatusQuery) PrintRenderedQueriedResources() []error {
 	resourceInfos, err := q.getQueriedResources()
 	if err != nil {
 		return []error{err}
 	}
-	return q.RenderResourceInfos(resourceInfos)
+	return q.PrintRenderedResourceInfos(resourceInfos)
 }
 
 func (q ResourceStatusQuery) RenderOtherResources(namespace, kind, name string) []error {
-	resourceInfos, err := q.getResourceInfos(resource.
+	resourceInfos, err := q.resolveResourceInfos(resource.
 		NewBuilder(q.clientGetter).
 		Unstructured().
 		NamespaceParam(namespace).
@@ -127,43 +127,108 @@ func (q ResourceStatusQuery) RenderOtherResources(namespace, kind, name string) 
 	if err != nil {
 		return []error{err}
 	}
-	return q.RenderResourceInfos(resourceInfos)
+	return q.PrintRenderedResourceInfos(resourceInfos)
 }
 
-func (q ResourceStatusQuery) GetResourcesQueryFunc() func(string, string, string) (interface{}, error) {
-	return func(namespace, kind, name string) (interface{}, error) {
-		resourceInfos, err := q.getResourceInfos(resource.
-			NewBuilder(q.clientGetter).
-			Unstructured().
-			NamespaceParam(namespace).
-			ResourceTypeOrNameArgs(true, kind, name).
-			ContinueOnError().
-			Latest().
-			Flatten().
-			Do())
+func (q ResourceStatusQuery) GetKubectlGetFunc() func(string, ...string) (interface{}, error) {
+	return func(namespace string, args ...string) (interface{}, error) {
+		resourceInfos, err := q.resolveResourceInfos(q.getResourceQueryResults(namespace, args))
 		if err != nil {
 			return nil, err
 		}
-		return q.getUnstructuredObj(resourceInfos)
+
+		var out []interface{}
+		var allRenderErrs []error
+		for _, resourceInfo := range resourceInfos {
+			obj := resourceInfo.Object
+			unstructuredObj, err := q.getUnstructuredObj(obj)
+			if err != nil {
+				allRenderErrs = append(allRenderErrs, err)
+			}
+			out = append(out, unstructuredObj)
+		}
+		if len(allRenderErrs) > 0 {
+			return out, allRenderErrs[0]
+		} else {
+			return out, nil
+		}
 	}
 }
-func (q ResourceStatusQuery) RenderResource(resourceInfo *resource.Info) error {
-	out, err := q.getUnstructuredObj(resourceInfo.Object)
+
+func (q ResourceStatusQuery) GetIncludeObjFunc() func(string, ...string) (string, error) {
+	return func(namespace string, args ...string) (string, error) {
+		if namespace == "" && len(args) == 0 {
+			return "", nil
+		}
+		resourceInfos, err := q.resolveResourceInfos(q.getResourceQueryResults(namespace, args))
+		if err != nil {
+			return "", err
+		}
+
+		output := ""
+		var allRenderErrs []error
+		for _, resourceInfo := range resourceInfos {
+			renderOutput, err := q.RenderResource(resourceInfo)
+			if err != nil {
+				allRenderErrs = append(allRenderErrs, err)
+			}
+			output = fmt.Sprintf("%s\n%s", output, renderOutput)
+		}
+		if len(allRenderErrs) > 0 {
+			return output, allRenderErrs[0]
+		} else {
+			return output, nil
+		}
+	}
+}
+
+func (q ResourceStatusQuery) GetIncludeOwnersFunc() func(map[string]interface{}) (string, error) {
+	return func(obj map[string]interface{}) (string, error) {
+		//objR := obj.(runtime.Object)
+		unstructuredObj := unstructured.Unstructured{Object: obj}
+		owners := unstructuredObj.GetOwnerReferences()
+		owner := owners[0] // TODO: We should pick the one with controller, but using first item addresses most cases if not all.
+		includeObjFunc := q.GetIncludeObjFunc()
+		return includeObjFunc(unstructuredObj.GetNamespace(), owner.Kind, owner.Name)
+	}
+}
+
+func (q ResourceStatusQuery) getResourceQueryResults(namespace string, args []string) *resource.Result {
+	return resource.
+		NewBuilder(q.clientGetter).
+		Unstructured().
+		NamespaceParam(namespace).
+		ResourceTypeOrNameArgs(true, args...).
+		ContinueOnError().
+		Flatten().
+		Do()
+}
+
+func (q ResourceStatusQuery) PrintRenderedResource(resourceInfo *resource.Info) error {
+	renderOutput, err := q.RenderResource(resourceInfo)
+	// Add a newline at the beginning of every template for readability
+	// Add a newline at the end of every template, as they don't end with a newline
+	fmt.Printf("\n%s\n", renderOutput)
+	return err
+}
+
+func (q ResourceStatusQuery) RenderResource(resourceInfo *resource.Info) (string, error) {
+	obj := resourceInfo.Object
+	out, err := q.getUnstructuredObj(obj)
 	if err != nil {
-		return errors.WithMessage(err, "Failed getting unstructured object")
+		return "", errors.WithMessage(err, "Failed getting unstructured object")
 	}
 	restConfig, err := q.clientGetter.ToRESTConfig()
 	if err != nil {
-		return errors.WithMessage(err, "Failed getting rest config")
+		return "", errors.WithMessage(err, "Failed getting rest config")
 	}
 	clientSet, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		return errors.WithMessage(err, "Failed getting clientset")
+		return "", errors.WithMessage(err, "Failed getting clientset")
 	}
-	obj := resourceInfo.Object
 	err = includeEvents(obj, clientSet, out)
 	if err != nil {
-		return errors.WithMessage(err, "Failed to include events")
+		return "", errors.WithMessage(err, "Failed to include events")
 	}
 	kindInjectFuncMap := map[string][]func(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error{
 		"Node":        {includeNodeMetrics, includeNodeLease, includePodDetailsOnNode, includeNodeStatsSummary},
@@ -172,24 +237,19 @@ func (q ResourceStatusQuery) RenderResource(resourceInfo *resource.Info) error {
 		"StatefulSet": {includeStatefulSetDiff},
 		"Ingress":     {includeIngressServices},
 	}
-	functions := kindInjectFuncMap[obj.GetObjectKind().GroupVersionKind().Kind]
+	kind := obj.GetObjectKind().GroupVersionKind().Kind
+	functions := kindInjectFuncMap[kind]
 	for _, f := range functions {
 		err = f(obj, restConfig, out)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
-	// Add a newline at the beginning of every template for readability
-	fmt.Println("")
-	err = renderTemplateForMap(os.Stdout, out)
-	// Add a newline at the end of every template, as they don't end with a newline
-	fmt.Println("")
-
-	if err != nil {
-		return err
-	}
-	return nil
+	var output bytes.Buffer
+	err = renderTemplateForMap(&output, out, &q)
+	renderOutput := output.String()
+	return renderOutput, err
 }
 
 func (q ResourceStatusQuery) getUnstructuredObj(obj interface{}) (map[string]interface{}, error) {
@@ -211,20 +271,27 @@ func RenderFile(manifestFilename string) (string, error) {
 	return output.String(), nil
 }
 
-func renderTemplateForMap(wr io.Writer, v map[string]interface{}) error {
+func renderTemplateForMap(wr io.Writer, v map[string]interface{}, queries ...*ResourceStatusQuery) error {
+	if len(queries) > 0 {
+		// If a ResourceStatusQuery is passed than we can allow running queries in
+		funcMap["kubectlGet"] = queries[0].GetKubectlGetFunc()
+		funcMap["includeObj"] = queries[0].GetIncludeObjFunc()
+		funcMap["includeOwners"] = queries[0].GetIncludeOwnersFunc()
+	}
 	tmpl, err := getParsedTemplates()
 	if err != nil {
 		return err
 	}
-	kindTemplateName := findTemplateName(tmpl, v)
+	objKind := v["kind"].(string)
+	kindTemplateName := findTemplateName(tmpl, objKind)
 	return tmpl.ExecuteTemplate(wr, kindTemplateName, v)
 }
 
-func findTemplateName(tmpl *template.Template, v map[string]interface{}) string {
-	objKind := v["kind"].(string)
+func findTemplateName(tmpl *template.Template, kind string) string {
+	// Returns the kind name if such template exists in templates, else returnDefaultResource
 	var kindTemplateName string
-	if t := tmpl.Lookup(objKind); t != nil {
-		kindTemplateName = objKind
+	if t := tmpl.Lookup(kind); t != nil {
+		kindTemplateName = kind
 	} else {
 		kindTemplateName = "DefaultResource"
 	}

@@ -132,7 +132,7 @@ func runAgainstCluster(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.C
 	if err != nil {
 		return err
 	}
-	return utilerrors.NewAggregate(q.RenderQueriedResources())
+	return utilerrors.NewAggregate(q.PrintRenderedQueriedResources())
 }
 
 func GetResourceStatusQuery(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string, filenames []string) (*plugin.ResourceStatusQuery, error) {
