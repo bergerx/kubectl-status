@@ -1,6 +1,7 @@
 {{- define "DefaultResource" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
     {{- template "replicas_status" . }}
     {{- template "suspended" . }}
     {{- template "conditions_summary" .status.conditions }}
@@ -17,6 +18,7 @@
 
 {{- define "Pod" }}
     {{- template "pod_status_summary_line" . }}
+    {{- template "application_details" . }}
     {{- include "pod_conditions_summary" .status.conditions | nindent 2 }}
     {{- if not .metadata.ownerReferences }}
         {{- $container := index .spec.containers 0 }}{{/* not ideal but will likely work in most cases if not all */}}
@@ -50,6 +52,7 @@
 {{- define "StatefulSet" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
     {{- $currentReplicas := .status.replicas | default 0.0 }}
     {{- $updatedReplicas := .status.updatedReplicas | default 0.0 }}
     {{- $readyReplicas := .status.readyReplicas | default 0.0 }}
@@ -102,6 +105,7 @@
 {{- define "DaemonSet" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
     {{- template "daemonset_replicas_status" . }}
     {{- template "conditions_summary" .status.conditions }}
     {{- template "recent_updates" . }}
@@ -112,6 +116,7 @@
 {{- define "ReplicaSet" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
     {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
            and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
     {{- $injectedStatus := .status }}
@@ -149,6 +154,7 @@
 {{- define "Deployment" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
     {{- $injectedStatus := .status }}
     {{- if not (hasKey .status "replicas") }}
         {{- $injectedStatus := set $injectedStatus "replicas" 0.0 }}
@@ -616,6 +622,7 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
 {{- define "NamespaceConfig" }}
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
     {{- template "conditions_summary" .status.conditions }}
     {{- range $resource, $valueList := .status.lockedResourceStatuses }}
   {{ $resource }}: {{ range $status := $valueList }}{{ template "condition_summary" . }}{{- end }}
@@ -771,4 +778,33 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
       {{ "imagefs" | bold }}: {{ template "node_stats_summary_fs" . }}
         {{- end }}
       {{- end }}
+{{- end -}}
+
+{{- define "application_details" }}
+    {{- $labels := .metadata.labels | default dict }}
+    {{- $annotations := .metadata.annotations | default dict }}
+    {{- $clusterService := get $labels "kubernetes.io/cluster-service" }}
+    {{- $addonManager := get $labels "addonmanager.kubernetes.io/mode" }}
+    {{- $managedBy := coalesce (get $labels "app.kubernetes.io/managed-by") $labels.heritage }}
+    {{- $createdBy := get $labels "app.kubernetes.io/created-by" }}
+    {{- $name := coalesce (get $labels "helm.sh/chart") $labels.chart (get $labels "app.kubernetes.io/name") $labels.app (get $labels "k8s-app") (get $labels "kubernetes.io/name") $labels.ame  }}
+    {{- $partOf := get $labels "app.kubernetes.io/part-of" }}
+    {{- $component := get $labels "app.kubernetes.io/component" }}
+    {{- $instance := coalesce (get $annotations "meta.helm.sh/release-name") $labels.release (get $labels "app.kubernetes.io/instance") }}
+    {{- $releaseNamespace := get $annotations "meta.helm.sh/release-namespace" }}
+    {{- $namespace := eq $releaseNamespace $.metadata.namespace | ternary "" $releaseNamespace }}
+    {{- $version := coalesce (get $labels "app.kubernetes.io/version") $labels.version }}
+    {{- if or $clusterService $addonManager $managedBy $createdBy $name $partOf $component $instance $namespace $version }}
+  Managed
+        {{- with $clusterService }} as a {{ "cluster-service" | yellow | bold }}{{end}}
+        {{- with $addonManager }} by {{ "AddonManager" | bold | yellow }} in {{ . | redBoldIf (eq . "Reconcile") }} mode{{ end }}
+        {{- with $managedBy }} by {{ . | bold }}{{ end }}
+        {{- with $createdBy }} (created by {{ . | bold }}){{ end }}
+        {{- with $instance }} with {{ . | bold }} {{ eq $managedBy "Helm" | ternary "release" "instance" }}{{end}}
+        {{- with $namespace }} in {{ . | bold | yellow }} namespace (different than the current resource){{end}}
+        {{- with $name }} by {{ . | bold }} {{ eq $managedBy "Helm" | ternary "chart" "application" }}{{ end }}
+        {{- with $partOf }}{{ if (not contains $partOf $name) }} as part of {{ . | bold }}{{ end }}{{ end }}
+        {{- with $component }} within component {{ . | bold }}{{ end }}
+        {{- with $version }}{{ if not (contains $version $name) }} using version {{ . | bold }}{{ end }}{{ end }}
+    {{- end -}}
 {{- end -}}
