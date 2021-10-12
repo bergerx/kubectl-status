@@ -235,7 +235,7 @@
     {{- with .metadata.managedFields }}
   Known/recorded manage events:
         {{- range . }}
-    {{ .time | colorAgo }} ago {{ .operation | bold }}d by {{ .manager | bold }} ({{ .fieldsV1 | default dict | keys | join ", " | replace "f:" "" }})
+    {{ .time | colorAgo }} ago {{ .operation | bold }}d by {{ .manager | bold }} ({{ .fieldsV1 | default dict | keys | sortAlpha | join ", " | replace "f:" "" }})
         {{- end }}
     {{- end }}
 {{- end }}
@@ -260,6 +260,7 @@
 
 {{- define "ComponentStatus" }}
     {{- template "status_summary_line" . }}
+    {{- template "application_details" . }}
     {{- template "conditions_summary" .conditions }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
@@ -277,6 +278,7 @@
   {{ "Active" | green }}: {{ .kind | bold }}/{{ .name }} is running.
         {{- end }}
     {{- end }}
+    {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
@@ -295,6 +297,7 @@
         {{- template "job_parallel" . }}
     {{- end }}
     {{- template "conditions_summary" .status.conditions }}
+    {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
@@ -345,6 +348,7 @@
     {{- else }}
   {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
     {{- end }}
+    {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
@@ -367,6 +371,7 @@
             {{- end }}
         {{- end }}
     {{- end }}
+    {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
@@ -377,6 +382,7 @@
   {{ "current" | bold }} replicas:{{ .status.currentReplicas }}/({{ .spec.minReplicas | default "1" }}-{{ .spec.maxReplicas }})
     {{- if .status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .status.currentCPUUtilizationPercentage | toString | redIf (ge .status.currentCPUUtilizationPercentage .spec.targetCPUUtilizationPercentage) }}%/{{ .spec.targetCPUUtilizationPercentage }}%{{ end }}
     {{- if (ne .status.currentReplicas .status.desiredReplicas) }}, {{ "desired" | red | bold}}: {{ .status.currentReplicas }} --> {{ .status.desiredReplicas }}{{ end }}
+    {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
@@ -388,6 +394,7 @@
     {{- range $key, $value := .status.used }}
   {{ $key }}: {{ $value }}/{{ index $hard $key }}
     {{- end }}
+    {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
@@ -647,8 +654,9 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
 {{- end }}
 
 {{- define "Node" }}
-    {{- /* also inlcude info from `kubectl get --raw /api/v1/nodes/<node>/proxy/stats/summary` */ -}}
+    {{- /* also include info from `kubectl get --raw /api/v1/nodes/<node>/proxy/stats/summary` */ -}}
     {{- template "status_summary_line" . }}
+    {{- template "application_details" . }}
   {{ .status.nodeInfo.operatingSystem | bold }} {{ .status.nodeInfo.osImage }} ({{ .status.nodeInfo.architecture }}), kernel {{ .status.nodeInfo.kernelVersion }}, kubelet {{ .status.nodeInfo.kubeletVersion }}, kube-proxy {{ .status.nodeInfo.kubeProxyVersion }}
     {{- if or (index .metadata.labels "node.kubernetes.io/instance") (index .metadata.labels "topology.kubernetes.io/region") (index .metadata.labels "failure-domain.beta.kubernetes.io/region") (index .metadata.labels "topology.kubernetes.io/zone") (index .metadata.labels "failure-domain.beta.kubernetes.io/region") }}
   {{ "cloudprovider" | bold }}
