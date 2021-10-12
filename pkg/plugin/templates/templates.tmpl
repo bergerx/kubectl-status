@@ -97,9 +97,23 @@
   {{ "Stuck rollout" | red | bold }}: No ready replicas, this StatefulSet won't likely go further.
         {{- end }}
     {{- end }}
+    {{- template "recent_statefullset_rollouts" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
+{{- end }}
+
+{{- define "recent_statefullset_rollouts" }}
+    {{- $sectionHeader := false }}
+    {{- range kubeGet .metadata.namespace "controllerrevisions" | default list }}
+        {{- if eq (index .metadata.ownerReferences 0).name $.metadata.name }}
+            {{- if not $sectionHeader }}
+  Rollouts:
+                {{- $sectionHeader = true }}
+            {{- end }}
+    {{ with .metadata.creationTimestamp }}{{ . | colorAgo }} ago{{ end }} managed by {{ .kind | bold }}/{{ .metadata.name }}
+        {{- end }}
+    {{- end }}
 {{- end }}
 
 {{- define "DaemonSet" }}
