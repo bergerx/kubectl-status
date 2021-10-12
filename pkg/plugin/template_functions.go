@@ -36,7 +36,7 @@ var funcMap = template.FuncMap{
 	"redIf":                    redIf,
 	"redBoldIf":                redBoldIf,
 	"signalName":               signalName,
-	"isPodConditionHealthy":    isPodConditionHealthy,
+	"isStatusConditionHealthy": isStatusConditionHealthy,
 	"quantityToFloat64":        quantityToFloat64,
 	"quantityToInt64":          quantityToInt64,
 	"percent":                  percent,
@@ -143,7 +143,7 @@ func getPodInNodeStatsSummary(namespace, name string, nodeStatsSummary []interfa
 	return item
 }
 
-func isPodConditionHealthy(condition map[string]interface{}) bool {
+func isStatusConditionHealthy(condition map[string]interface{}) bool {
 	switch {
 	/*
 		From https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties:
@@ -159,7 +159,24 @@ func isPodConditionHealthy(condition map[string]interface{}) bool {
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Unavailable"), // Node NetworkUnavailable condition
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Failure"),     // ReplicaSet ReplicaFailure: condition
 		strings.HasPrefix(fmt.Sprint(condition["type"]), "Non"),         // CRD NonStructuralSchema condition
-		condition["type"] == "Failed":                                   // Failed Jobs has this condition
+		condition["type"] == "Failed",                                   // Failed Jobs has this condition
+
+		// Conditions from "Node Problem Detector"
+		condition["type"] == "CorruptDockerImage",
+		condition["type"] == "CorruptDockerOverlay2",
+		condition["type"] == "DockerContainerStartupFailure",
+		condition["type"] == "DockerHung",
+		condition["type"] == "Ext4Error",
+		condition["type"] == "Ext4Warning",
+		condition["type"] == "FilesystemIsReadOnly",
+		condition["type"] == "IOError",
+		condition["type"] == "KernelDeadlock",
+		condition["type"] == "KernelOops",
+		condition["type"] == "MemoryReadError",
+		condition["type"] == "OOMKilling",
+		condition["type"] == "ReadonlyFilesystem",
+		condition["type"] == "TaskHung",
+		condition["type"] == "UnregisterNetDevice":
 		switch condition["status"] {
 		case "False":
 			return true

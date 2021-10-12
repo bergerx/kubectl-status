@@ -470,34 +470,34 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
 {{- define "pod_conditions_summary" }}
     {{- $podScheduledCondition := getItemInList . "type" "PodScheduled" }}
     {{- $readyCondition := getItemInList . "type" "Ready" }}
-    {{- if (isPodConditionHealthy $podScheduledCondition) }}
+    {{- if (isStatusConditionHealthy $podScheduledCondition) }}
         {{- "PodScheduled" | bold }}
     {{- else }}
         {{- "Not PodScheduled" | red | bold }}
     {{- end }}
     {{- " -> "}}
     {{- $initializedCondition := getItemInList . "type" "Initialized" }}
-    {{- if (isPodConditionHealthy $initializedCondition) }}
+    {{- if (isStatusConditionHealthy $initializedCondition) }}
         {{- "Initialized" | bold }}
     {{- else }}
         {{- "Not Initialized" | red | bold }}
     {{- end }}
     {{- " -> "}}
     {{- $containersReadyCondition := getItemInList . "type" "ContainersReady" }}
-    {{- if (isPodConditionHealthy $containersReadyCondition) }}
+    {{- if (isStatusConditionHealthy $containersReadyCondition) }}
         {{- "ContainersReady" | bold }}
     {{- else }}
         {{- "Not ContainersReady" | red | bold }}
     {{- end }}
     {{- " -> "}}
-    {{- if (isPodConditionHealthy $readyCondition) }}
+    {{- if (isStatusConditionHealthy $readyCondition) }}
         {{- template "condition_summary" $readyCondition }}
     {{- else }}
         {{- "Not Ready" | red | bold }}
     {{- end }}
     {{- range . }}
         {{- /* show details for only unhealthy conditions */ -}}
-        {{- if (not (isPodConditionHealthy .)) }}
+        {{- if (not (isStatusConditionHealthy .)) }}
             {{- include "condition_summary" . | nindent 2}}
         {{- end }}
     {{- end }}
@@ -513,9 +513,9 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
 
 {{- define "condition_summary" }}
     {{- $condition := . }}
-    {{- .type | redIf (not (isPodConditionHealthy .)) | bold }}
-    {{- with .reason }} {{ . | redBoldIf (not (isPodConditionHealthy $condition)) }}{{ end }}
-    {{- with .message }}, {{ . | redIf (not (isPodConditionHealthy $condition)) }}{{ end }}
+    {{- .type | redIf (not (isStatusConditionHealthy .)) | bold }}
+    {{- with .reason }} {{ . | redBoldIf (not (isStatusConditionHealthy $condition)) }}{{ end }}
+    {{- with .message }}, {{ . | redIf (not (isStatusConditionHealthy $condition)) }}{{ end }}
     {{- with .lastTransitionTime }} for {{ . | colorAgo }}{{ end }}
     {{- if .lastUpdateTime }}
         {{- if ne (.lastUpdateTime | colorAgo) (.lastTransitionTime | colorAgo) -}}
@@ -787,7 +787,7 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
     {{- $addonManager := get $labels "addonmanager.kubernetes.io/mode" }}
     {{- $managedBy := coalesce (get $labels "app.kubernetes.io/managed-by") $labels.heritage }}
     {{- $createdBy := get $labels "app.kubernetes.io/created-by" }}
-    {{- $name := coalesce (get $labels "helm.sh/chart") $labels.chart (get $labels "app.kubernetes.io/name") $labels.app (get $labels "k8s-app") (get $labels "kubernetes.io/name") $labels.ame  }}
+    {{- $name := coalesce (get $labels "helm.sh/chart") $labels.chart (get $labels "app.kubernetes.io/name") $labels.app (get $labels "k8s-app") (get $labels "kubernetes.io/name") $labels.ame | default "" }}
     {{- $partOf := get $labels "app.kubernetes.io/part-of" }}
     {{- $component := get $labels "app.kubernetes.io/component" }}
     {{- $instance := coalesce (get $annotations "meta.helm.sh/release-name") $labels.release (get $labels "app.kubernetes.io/instance") }}
@@ -796,14 +796,14 @@ observedGeneration({{ .status.observedGeneration | red | bold }}) doesn't match 
     {{- $version := coalesce (get $labels "app.kubernetes.io/version") $labels.version }}
     {{- if or $clusterService $addonManager $managedBy $createdBy $name $partOf $component $instance $namespace $version }}
   Managed
-        {{- with $clusterService }} as a {{ "cluster-service" | yellow | bold }}{{end}}
         {{- with $addonManager }} by {{ "AddonManager" | bold | yellow }} in {{ . | redBoldIf (eq . "Reconcile") }} mode{{ end }}
+        {{- with $clusterService }} as a {{ "cluster-service" | yellow | bold }}{{end}}
         {{- with $managedBy }} by {{ . | bold }}{{ end }}
         {{- with $createdBy }} (created by {{ . | bold }}){{ end }}
         {{- with $instance }} with {{ . | bold }} {{ eq $managedBy "Helm" | ternary "release" "instance" }}{{end}}
         {{- with $namespace }} in {{ . | bold | yellow }} namespace (different than the current resource){{end}}
         {{- with $name }} by {{ . | bold }} {{ eq $managedBy "Helm" | ternary "chart" "application" }}{{ end }}
-        {{- with $partOf }}{{ if (not contains $partOf $name) }} as part of {{ . | bold }}{{ end }}{{ end }}
+        {{- with $partOf }}{{ if not (contains $partOf $name) }} as part of {{ . | bold }}{{ end }}{{ end }}
         {{- with $component }} within component {{ . | bold }}{{ end }}
         {{- with $version }}{{ if not (contains $version $name) }} using version {{ . | bold }}{{ end }}{{ end }}
     {{- end -}}
