@@ -97,13 +97,13 @@
   {{ "Stuck rollout" | red | bold }}: No ready replicas, this StatefulSet won't likely go further.
         {{- end }}
     {{- end }}
-    {{- template "recent_statefullset_rollouts" . }}
+    {{- template "recent_statefulset_rollouts" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
 {{- end }}
 
-{{- define "recent_statefullset_rollouts" }}
+{{- define "recent_statefulset_rollouts" }}
     {{- $sectionHeader := false }}
     {{- range kubeGet .metadata.namespace "controllerrevisions" | default list }}
         {{- if eq (index .metadata.ownerReferences 0).name $.metadata.name }}
