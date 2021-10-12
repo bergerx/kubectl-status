@@ -242,9 +242,40 @@
 
 {{- define "PersistentVolume" }}
     {{- template "status_summary_line" . }}
-    {{- with .status.message }}{{/* exists on failure */}}
-        {{- "message" | red | bold | nindent 2 }}: {{ . }}
+  PV is {{- with .status.phase }} {{ . | colorKeyword }}{{ end }}
+    {{- with .spec.storageClassName  }} managed by {{ "StorageClass" | bold }}/{{ . }}{{ end }}
+    {{- with index .metadata.annotations "kubernetes.io/createdby" }} created by {{ . | bold }}{{ end }}
+    {{- with index .metadata.annotations "pv.kubernetes.io/provisioned-by" }} provisioned by {{ . | bold }}{{ end }}
+    {{- with index .spec.accessModes 0 }} with {{ . | bold }} mode{{ end }}
+    {{- with .status.reason }}{{ "reason" | bold }}: {{ . }}{{ end }}
+    {{- with .status.message }}{{ "message" | red | bold | nindent 2 }}: {{ . }}{{- end }}{{/* Exists usually when there is problem */}}
+    {{- with .spec.claimRef }}
+  Created for {{ .kind | bold }}/{{ .name }} -n {{ .namespace }}
+        {{- $pvc := kubeGetFirst .namespace .kind .name }}
+        {{- if $pvc }}
+            {{- if ne $pvc.metadata.uid .uid }}
+    {{ "Dangling" | red | bold }}: The PVC referenced in this PV is replaced by a new one. And a new PV is created for the replacement PVC.
+      PVC uid referenced in this PV: {{ .uid }}
+      Current PVC uid: {{ $pvc.metadata.uid }}
+            {{- end }}
+        {{- else }}
+    {{ "Replaced" | red | bold }}: This PVC doesn't exist anymore. Its likely that this PV is dangling.
+        {{- end }}
     {{- end }}
+    {{- with .spec.azureDisk }}
+  {{ "Azure Disk" | bold }}
+        {{- with .kind }} of kind {{ . | bold }}{{ end }}
+        {{- with .readOnly }}, in {{ "RO" | bold | yellow }} mode{{ end }}
+        {{- with .cachingMode }}, with {{ . | bold }} host cache{{end}}
+        {{- with .fsType }}, using {{ . | bold }} FS type{{end}}
+    Disk URI: {{ .diskURI }}
+    {{- end }}
+    {{- with .spec.azureFiles }}
+  {{ "Azure Files" | bold }}
+        {{- with .shareName }}, share name is {{ . | bold }}{{end}}
+        {{- with .readOnly }}, in {{ "RO" | bold | yellow }} mode{{ end }}
+    {{- end }}
+    {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
@@ -252,10 +283,26 @@
 
 {{- define "PersistentVolumeClaim" }}
     {{- template "status_summary_line" . }}
-    {{- with .status.capacity.storage }} {{ . }}{{ end }}
+    {{- template "application_details" . }}
+    {{- template "conditions_summary" .conditions }}
+  {{ "PVC" }}
+    {{- with .spec.volumeName }} uses {{ "PersistentVolume" | bold }}/{{ . }}{{ end }}
+    {{- with .spec.volumeMode }}, with {{ . | bold }} mode{{ end }}
+    {{- with .status.capacity.storage }}, asks for {{ . | bold }}{{ end }}
+    {{- with .metadata.annotations }}
+        {{- with index . "volume.beta.kubernetes.io/storage-provisioner" }}, provisioned by {{ . | bold }}{{ end }}
+        {{- with index . "volume.kubernetes.io/selected-node" }}, attached on {{ "Node" | bold }}/{{ . }}{{ end }}
+    {{- end }}
+    {{- if not .spec.volumeName }}
+  {{ "Pending" | red | bold }}: This PVC doesnt yet have a paired PV.
+    {{- end }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
+    {{- with .spec.volumeName }}
+  Binds:
+        {{- include "PersistentVolume" (kubeGetFirst "" "PersistentVolume" .) | nindent 4 }}
+    {{- end }}
 {{- end -}}
 
 {{- define "ComponentStatus" }}
