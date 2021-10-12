@@ -8,10 +8,12 @@ This plugin uses templates for well known api-conventions and has support for ha
 not all resources are fully supported.
 
 - [Installation](#installation)
+  * [Upgrade](#upgrade)
 - [Demo](#demo)
 - [Features](#features)
 - [Usage](#usage)
 - [Development](#development)
+  * [Release new version](#release-new-version)
   * [Guidelines for content](#guidelines-for-content)
   * [Guidelines for colorization](#guidelines-for-colorization)
 - [License](#license)
@@ -25,6 +27,14 @@ After you [install Krew](https://krew.sigs.k8s.io/docs/user-guide/setup/install/
 ```bash
 kubectl krew install status
 kubectl status --help
+```
+
+### Upgrade
+
+Assuming you installed using [Krew](https://github.com/kubernetes-sigs/krew):
+
+```bash
+kubectl krew upgrade status
 ```
 
 ## Demo
@@ -102,6 +112,15 @@ bin/status -t -f test-pod.yaml
 ```
 
 kubectl-status follows below guidelines to have a consistent user experince across different resources.
+
+### Release new version
+
+This will release the head, gitlab's goreleaser action will publish the new release to krew index as well.
+
+```bash
+git tag vX.X.X
+git push --tags
+```
 
 ### Guidelines for content
 
