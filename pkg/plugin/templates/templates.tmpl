@@ -54,7 +54,10 @@
             {{- if $pvcsHeader }}{{- $pvcsHeader = false }}
   PVCs:
             {{- end }}
-            {{- include "PersistentVolumeClaim" (kubeGetFirst $.metadata.namespace "PersistentVolumeClaim" .claimName) | nindent 4 }}
+            {{- $pvc := kubeGetFirst $.metadata.namespace "PersistentVolumeClaim" .claimName}}
+            {{- with $pvc }}
+                {{- include "PersistentVolumeClaim" . | nindent 4 }}
+            {{- end }}
         {{- end }}
     {{- end }}
 {{- end }}
