@@ -32,10 +32,11 @@
     {{- end }}
     {{- with .status.containerStatuses }}
   Containers:
+        {{- $podMetrics := kubeGetFirst $.metadata.namespace "PodMetrics" $.metadata.name | default dict }}
         {{- range $containerStatus := . }}
-            {{- if $.podMetrics.containers }}
+            {{- if $podMetrics.containers }}
                 {{- /* inject container metrics */ -}}
-                {{- $containerMetrics := getItemInList $.podMetrics.containers "name" .name }}
+                {{- $containerMetrics := getItemInList $podMetrics.containers "name" .name }}
                 {{- $containerStatus := set $containerStatus "metrics" $containerMetrics }}
                 {{- /* inject container spec  */ -}}
                 {{- $containerSpec := getItemInList $.spec.containers "name" .name }}
@@ -47,6 +48,15 @@
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
+    {{- $pvcsHeader := true }}
+    {{- range .spec.volumes }}
+        {{- with .persistentVolumeClaim }}
+            {{- if $pvcsHeader }}{{- $pvcsHeader = false }}
+  PVCs:
+            {{- end }}
+            {{- include "PersistentVolumeClaim" (kubeGetFirst $.metadata.namespace "PersistentVolumeClaim" .claimName) | nindent 4 }}
+        {{- end }}
+    {{- end }}
 {{- end }}
 
 {{- define "StatefulSet" }}
