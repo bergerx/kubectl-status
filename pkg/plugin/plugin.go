@@ -2,16 +2,21 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"strings"
 	"text/template"
 	_ "unsafe" // required for using go:linkname in the file
 
 	"github.com/pkg/errors"
 	sfs "github.com/rakyll/statik/fs"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/kubernetes"
@@ -138,12 +143,71 @@ func (q ResourceStatusQuery) GetKubeGetFunc() func(string, ...string) []interfac
 
 		var out []interface{}
 		for _, resourceInfo := range resourceInfos {
-			obj := resourceInfo.Object
-			unstructuredObj, _ := getUnstructuredObj(obj)
+			unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(resourceInfo.Object)
 			out = append(out, unstructuredObj)
 		}
 		return out
 	}
+}
+
+func (q ResourceStatusQuery) GetKubeGetByLabelsMapFunc() func(string, string, map[string]interface{}) []interface{} {
+	return func(namespace, kind string, labels map[string]interface{}) []interface{} {
+		var labelPairs []string
+		for k, v := range labels {
+			labelPairs = append(labelPairs, fmt.Sprintf("%s=%s", k, v))
+		}
+		selector := strings.Join(labelPairs, ",")
+		resourceResult := resource.
+			NewBuilder(q.clientGetter).
+			Unstructured().
+			NamespaceParam(q.namespace).
+			LabelSelectorParam(selector).
+			ContinueOnError().
+			Latest().
+			Flatten().
+			Do()
+		resourceInfos, _ := q.resolveResourceInfos(resourceResult)
+		var out []interface{}
+		for _, resourceInfo := range resourceInfos {
+			obj := resourceInfo.Object
+			unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+			out = append(out, unstructuredObj)
+		}
+		return out
+	}
+}
+
+func (q ResourceStatusQuery) GetKubeGetServicesMatchingPod() func(map[string]interface{}) []interface{} {
+	return func(podMap map[string]interface{}) []interface{} {
+		var pod v1.Pod
+		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(podMap, &pod)
+		restConfig, _ := q.clientGetter.ToRESTConfig()
+		clientSet, _ := kubernetes.NewForConfig(restConfig)
+		svcs, _ := clientSet.CoreV1().Services(q.namespace).List(context.TODO(), metav1.ListOptions{})
+		var out []interface{}
+		for _, svc := range svcs.Items {
+			if svc.Spec.Type == "ExternalName" {
+				continue
+			}
+			if isSubset(svc.Spec.Selector, pod.Labels) {
+				// TODO: its likely that this serialisation method is not the right one
+				svc.SetGroupVersionKind(schema.GroupVersionKind{Version: "v1", Kind: "Service"})
+				svcUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&svc)
+				out = append(out, svcUnstructured)
+			}
+		}
+		return out
+	}
+}
+
+// Checks if a is subset of b
+func isSubset(a, b map[string]string) bool {
+	for k, v := range a {
+		if v != b[k] {
+			return false
+		}
+	}
+	return true
 }
 
 func (q ResourceStatusQuery) GetKubeGetFirstFunc() func(string, ...string) interface{} {
@@ -152,7 +216,7 @@ func (q ResourceStatusQuery) GetKubeGetFirstFunc() func(string, ...string) inter
 		if len(resourceInfos) < 1 {
 			return ""
 		}
-		unstructuredObj, _ := getUnstructuredObj(resourceInfos[0].Object)
+		unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(resourceInfos[0].Object)
 		return unstructuredObj
 	}
 }
@@ -224,7 +288,7 @@ func (q ResourceStatusQuery) PrintRenderedResource(resourceInfo *resource.Info) 
 }
 
 func (q ResourceStatusQuery) RenderResource(obj runtime.Object) (string, error) {
-	out, err := getUnstructuredObj(obj)
+	out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
 		return "", errors.WithMessage(err, "Failed getting unstructured object")
 	}
@@ -270,12 +334,15 @@ func RenderFile(manifestFilename string) (string, error) {
 
 func renderTemplateForMap(wr io.Writer, v map[string]interface{}, queries ...*ResourceStatusQuery) error {
 	if len(queries) > 0 {
-		// If a ResourceStatusQuery is passed than we can allow running queries in
-		funcMap["kubeGet"] = queries[0].GetKubeGetFunc()
-		funcMap["kubeGetFirst"] = queries[0].GetKubeGetFirstFunc()
-		funcMap["includeObj"] = queries[0].GetIncludeObjFunc()
-		funcMap["includeOwners"] = queries[0].GetIncludeOwnersFunc()
-		funcMap["getEvents"] = queries[0].getGetEventsFunc()
+		// If a ResourceStatusQuery is passed than use it, if not than its likely a test run with a local file.
+		query := queries[0]
+		funcMap["kubeGet"] = query.GetKubeGetFunc()
+		funcMap["kubeGetByLabelsMap"] = query.GetKubeGetByLabelsMapFunc()
+		funcMap["kubeGetServicesMatchingPod"] = query.GetKubeGetServicesMatchingPod()
+		funcMap["kubeGetFirst"] = query.GetKubeGetFirstFunc()
+		funcMap["includeObj"] = query.GetIncludeObjFunc()
+		funcMap["includeOwners"] = query.GetIncludeOwnersFunc()
+		funcMap["getEvents"] = query.getGetEventsFunc()
 	}
 	tmpl, err := getParsedTemplates()
 	if err != nil {
@@ -336,6 +403,17 @@ func getTemplate() (string, error) {
 	return string(contents), nil
 }
 
-func getUnstructuredObj(obj interface{}) (map[string]interface{}, error) {
+// obj is usually a runtime.Object (resourceInfo.Object)
+func objInterfaceToObjMap(obj interface{}) (map[string]interface{}, error) {
 	return runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+}
+
+func objMapToUnstructured(obj map[string]interface{}) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: obj}
+}
+
+// example out is "out := &v1.StatefulSet{}"
+// in also supports runtime.Unstructured types
+func objInterfaceToSpecificObject(in interface{}, out interface{}) error {
+	return scheme.Scheme.Convert(in, out, nil)
 }

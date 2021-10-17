@@ -60,6 +60,14 @@
             {{- end }}
         {{- end }}
     {{- end }}
+    {{- $svcs := kubeGetServicesMatchingPod . }}
+    {{- $svcsHeader := true }}
+    {{- range $svcs }}
+        {{- if $svcsHeader }}{{- $svcsHeader = false }}
+  Services matching this pod:
+        {{- end }}
+        {{- include "Service" . | nindent 4 }}
+    {{- end}}
 {{- end }}
 
 {{- define "StatefulSet" }}

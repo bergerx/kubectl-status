@@ -69,7 +69,7 @@ func includePodDetailsOnNode(obj runtime.Object, restConfig *rest.Config, out ma
 	for _, pod := range nodeNonTerminatedPodsList.Items {
 		pod.Kind = "Pod"
 		podKey, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&pod)
-		err = includePodMetrics(unstructuredToRuntimeObject(podKey), restConfig, podKey)
+		err = includePodMetrics(&unstructured.Unstructured{Object: podKey}, restConfig, podKey)
 		if err != nil {
 			return errors.WithMessage(err, "Failed including PodMetrics for Pods for Node")
 		}
@@ -77,10 +77,6 @@ func includePodDetailsOnNode(obj runtime.Object, restConfig *rest.Config, out ma
 	}
 	out["pods"] = podsList
 	return nil
-}
-
-func unstructuredToRuntimeObject(obj map[string]interface{}) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: obj}
 }
 
 func includeNodeStatsSummary(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
@@ -179,7 +175,7 @@ func checkUnsupportedIngressApiVersion(obj runtime.Object) string {
 
 func includeStatefulSetDiff(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
 	sts := &v1.StatefulSet{}
-	err := runtimeObjectToSpecificObject(obj, sts)
+	err := objInterfaceToSpecificObject(obj, sts)
 	if err != nil {
 		return errors.WithMessage(err, "StatefulSet object conversion failed")
 	}
@@ -230,8 +226,4 @@ func includeStatefulSetDiff(obj runtime.Object, restConfig *rest.Config, out map
 	out["diff"] = diffString
 
 	return nil
-}
-
-func runtimeObjectToSpecificObject(obj runtime.Object, out interface{}) error {
-	return scheme.Scheme.Convert(obj, out, nil)
 }
