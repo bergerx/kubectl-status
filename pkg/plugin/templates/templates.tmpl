@@ -436,9 +436,21 @@
   {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
     {{- end }}
     {{- template "recent_updates" . }}
+    {{- template "ingresses_matching_svc" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
+
+{{- define "ingresses_matching_svc" }}
+    {{- $ingresses := kubeGetIngressesMatchingService . }}
+    {{- $ingHeader := true }}
+    {{- range $ingresses }}
+        {{- if $ingHeader }}{{- $ingHeader = false }}
+  Ingresses matching this Service:
+        {{- end }}
+        {{- include "Ingress" . | nindent 4 }}
+    {{- end}}
+{{- end }}
 
 {{- define "Ingress" }}
     {{- template "status_summary_line" . }}

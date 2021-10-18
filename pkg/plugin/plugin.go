@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	sfs "github.com/rakyll/statik/fs"
 	v1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -203,6 +204,26 @@ func doesServiceMatchPod(svc v1.Service, pod v1.Pod) bool {
 	return isSubset(svc.Spec.Selector, pod.Labels)
 }
 
+func (q ResourceStatusQuery) GetIngressesMatchingService() func(map[string]interface{}) []interface{} {
+	return func(podMap map[string]interface{}) []interface{} {
+		var svc v1.Service
+		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(podMap, &svc)
+		var out []interface{}
+		clientSet, _ := q.getKubernetesClientSet()
+		// The old v1beta1 Ingress which will no longer served as of v1.22. Not implementing it.
+		ingresses, _ := clientSet.NetworkingV1().Ingresses(q.namespace).List(context.TODO(), metav1.ListOptions{})
+		for _, ing := range ingresses.Items {
+			if doesIngressUseService(ing, svc) {
+				// TODO: its likely that this serialisation method is not the right one
+				ing.SetGroupVersionKind(netv1.SchemeGroupVersion.WithKind("Ingress"))
+				ingUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&ing)
+				out = append(out, ingUnstructured)
+			}
+		}
+		return out
+	}
+}
+
 func (q ResourceStatusQuery) getKubernetesClientSet() (*kubernetes.Clientset, error) {
 	restConfig, err := q.clientGetter.ToRESTConfig()
 	if err != nil {
@@ -210,6 +231,16 @@ func (q ResourceStatusQuery) getKubernetesClientSet() (*kubernetes.Clientset, er
 	}
 	return kubernetes.NewForConfig(restConfig)
 }
+
+func doesIngressUseService(ing netv1.Ingress, svc v1.Service) bool {
+	for _, rule := range ing.Spec.Rules {
+		for _, path := range rule.HTTP.Paths {
+			if path.Backend.Service.Name == svc.GetName() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Checks if a is subset of b
@@ -349,6 +380,7 @@ func renderTemplateForMap(wr io.Writer, v map[string]interface{}, queries ...*Re
 		funcMap["kubeGet"] = query.GetKubeGetFunc()
 		funcMap["kubeGetByLabelsMap"] = query.GetKubeGetByLabelsMapFunc()
 		funcMap["kubeGetServicesMatchingPod"] = query.GetKubeGetServicesMatchingPod()
+		funcMap["kubeGetIngressesMatchingService"] = query.GetIngressesMatchingService()
 		funcMap["kubeGetFirst"] = query.GetKubeGetFirstFunc()
 		funcMap["includeObj"] = query.GetIncludeObjFunc()
 		funcMap["includeOwners"] = query.GetIncludeOwnersFunc()
