@@ -181,15 +181,11 @@ func (q ResourceStatusQuery) GetKubeGetServicesMatchingPod() func(map[string]int
 	return func(podMap map[string]interface{}) []interface{} {
 		var pod v1.Pod
 		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(podMap, &pod)
-		restConfig, _ := q.clientGetter.ToRESTConfig()
-		clientSet, _ := kubernetes.NewForConfig(restConfig)
+		clientSet, _ := q.getKubernetesClientSet()
 		svcs, _ := clientSet.CoreV1().Services(q.namespace).List(context.TODO(), metav1.ListOptions{})
 		var out []interface{}
 		for _, svc := range svcs.Items {
-			if svc.Spec.Type == "ExternalName" {
-				continue
-			}
-			if isSubset(svc.Spec.Selector, pod.Labels) {
+			if doesServiceMatchPod(svc, pod) {
 				// TODO: its likely that this serialisation method is not the right one
 				svc.SetGroupVersionKind(schema.GroupVersionKind{Version: "v1", Kind: "Service"})
 				svcUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&svc)
@@ -198,6 +194,22 @@ func (q ResourceStatusQuery) GetKubeGetServicesMatchingPod() func(map[string]int
 		}
 		return out
 	}
+}
+
+func doesServiceMatchPod(svc v1.Service, pod v1.Pod) bool {
+	if svc.Spec.Type == "ExternalName" {
+		return false
+	}
+	return isSubset(svc.Spec.Selector, pod.Labels)
+}
+
+func (q ResourceStatusQuery) getKubernetesClientSet() (*kubernetes.Clientset, error) {
+	restConfig, err := q.clientGetter.ToRESTConfig()
+	if err != nil {
+		return nil, err
+	}
+	return kubernetes.NewForConfig(restConfig)
+}
 }
 
 // Checks if a is subset of b
@@ -259,9 +271,8 @@ func (q ResourceStatusQuery) GetIncludeOwnersFunc() func(map[string]interface{})
 func (q ResourceStatusQuery) getGetEventsFunc() func(map[string]interface{}) map[string]interface{} {
 	return func(obj map[string]interface{}) map[string]interface{} {
 		unstructuredObj := unstructured.Unstructured{Object: obj}
-		restConfig, _ := q.clientGetter.ToRESTConfig()
-		clientSet, _ := kubernetes.NewForConfig(restConfig)
 		runtimeObj := unstructuredObj.DeepCopyObject()
+		clientSet, _ := q.getKubernetesClientSet()
 		events, _ := clientSet.CoreV1().Events(unstructuredObj.GetNamespace()).Search(scheme.Scheme, runtimeObj)
 		unstructuredEvents, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&events)
 		return unstructuredEvents
