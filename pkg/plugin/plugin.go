@@ -300,7 +300,6 @@ func (q ResourceStatusQuery) RenderResource(obj runtime.Object) (string, error) 
 		"Node":        {includePodDetailsOnNode, includeNodeStatsSummary},
 		"Pod":         {includePodMetrics}, // kubectl get --raw /api/v1/nodes/minikube/proxy/stats/summary --> .pods[] | select podRef | containers[] | select name
 		"StatefulSet": {includeStatefulSetDiff},
-		"Ingress":     {includeIngressServices},
 	}
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
 	functions := kindInjectFuncMap[kind]

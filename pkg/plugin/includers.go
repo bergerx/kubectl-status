@@ -9,7 +9,6 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
@@ -17,14 +16,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	appsv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/client-go/rest"
-	"k8s.io/kubectl/pkg/scheme"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
-
-type IngressBackendIssue struct {
-	IssueType string
-	Backend   v1beta1.IngressBackend
-}
 
 func includePodMetrics(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
 	clientSet, err := metricsv.NewForConfig(restConfig)
@@ -103,74 +96,6 @@ func includeNodeStatsSummary(obj runtime.Object, restConfig *rest.Config, out ma
 	}
 	out["nodeStatsSummary"] = nodeStatsSummary
 	return nil
-}
-
-func includeIngressServices(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
-	clientSet, err := kubernetes.NewForConfig(restConfig)
-	if err != nil {
-		return errors.WithMessage(err, "Failed getting clientSet")
-	}
-	if unsupportedApiVersion := checkUnsupportedIngressApiVersion(obj); unsupportedApiVersion != "" {
-		out["unsupportedApiVersion"] = unsupportedApiVersion
-		return nil
-	}
-	ing := &v1beta1.Ingress{}
-	err = scheme.Scheme.Convert(obj, ing, nil)
-	if err != nil {
-		return err
-	}
-	var backendIssues []IngressBackendIssue
-	for _, rule := range ing.Spec.Rules {
-	PATH:
-		for _, path := range rule.HTTP.Paths {
-			backend := path.Backend
-			svcName := backend.ServiceName
-			svcPort := backend.ServicePort
-			for _, issue := range backendIssues {
-				if issue.Backend.ServiceName == svcName &&
-					issue.Backend.ServicePort == svcPort {
-					continue PATH
-				}
-			}
-			svc, err := clientSet.CoreV1().Services(ing.Namespace).Get(context.TODO(), svcName, metav1.GetOptions{})
-			if (err != nil) || (svc.Name == "") {
-				backendIssues = append(backendIssues, IngressBackendIssue{"serviceMissing", backend})
-				continue PATH
-			}
-			portExist := false
-			for _, port := range svc.Spec.Ports {
-				if (svcPort.IntVal == port.Port) || (svcPort.StrVal == port.Name) {
-					portExist = true
-				}
-			}
-			if !portExist {
-				backendIssues = append(backendIssues, IngressBackendIssue{"serviceWithPortMismatch", backend})
-				continue PATH
-			}
-			endpoint, err := clientSet.CoreV1().Endpoints(ing.Namespace).Get(context.TODO(), svcName, metav1.GetOptions{})
-			if (err != nil) || (endpoint.Name == "") || (len(endpoint.Subsets) == 0) {
-				backendIssues = append(backendIssues, IngressBackendIssue{"serviceWithNoReadyAddresses", backend})
-				continue PATH
-			}
-			for _, subset := range endpoint.Subsets {
-				if len(subset.Addresses) == 0 {
-					backendIssues = append(backendIssues, IngressBackendIssue{"serviceWithNoReadyAddresses", backend})
-					continue PATH
-				}
-			}
-		}
-	}
-	out["backendIssues"] = backendIssues
-	return nil
-}
-
-func checkUnsupportedIngressApiVersion(obj runtime.Object) string {
-	objectGroupVersion := obj.GetObjectKind().GroupVersionKind().GroupVersion().String()
-	supportedGroupVersion := v1beta1.SchemeGroupVersion.String()
-	if objectGroupVersion != supportedGroupVersion {
-		return objectGroupVersion
-	}
-	return ""
 }
 
 func includeStatefulSetDiff(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
