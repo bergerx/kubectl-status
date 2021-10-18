@@ -24,12 +24,25 @@
         {{- $container := index .spec.containers 0 }}{{/* not ideal but will likely work in most cases if not all */}}
   {{ "Standalone POD" | red | bold }}{{ if $container.stdin }}, interactive{{ end }}{{ if $container.tty }} with attached TTY{{ end }}.
     {{- end }}
+    {{- template "pod_init_containers" . }}
+    {{- template "pod_containers" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+    {{- template "pod_pvcs" . }}
+    {{- template "svcs_mathing_pod" . }}
+{{- end }}
+
+{{- define "pod_init_containers" }}
     {{- with .status.initContainerStatuses }}
   InitContainers:
         {{- range . }}
             {{- include "container_status_summary" . | nindent 4 }}
         {{- end }}
     {{- end }}
+{{- end }}
+
+{{- define "pod_containers" }}
     {{- with .status.containerStatuses }}
   Containers:
         {{- $podMetrics := kubeGetFirst $.metadata.namespace "PodMetrics" $.metadata.name | default dict }}
@@ -45,9 +58,9 @@
             {{- include "container_status_summary" $containerStatus | nindent 4 }}
         {{- end }}
     {{- end }}
-    {{- template "recent_updates" . }}
-    {{- template "events" . }}
-    {{- template "owners" . }}
+{{- end }}
+
+{{- define "pod_pvcs" }}
     {{- $pvcsHeader := true }}
     {{- range .spec.volumes }}
         {{- with .persistentVolumeClaim }}
@@ -60,6 +73,9 @@
             {{- end }}
         {{- end }}
     {{- end }}
+{{- end }}
+
+{{- define "svcs_mathing_pod" }}
     {{- $svcs := kubeGetServicesMatchingPod . }}
     {{- $svcsHeader := true }}
     {{- range $svcs }}
