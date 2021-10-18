@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	appsv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/client-go/rest"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
@@ -100,7 +101,7 @@ func includeNodeStatsSummary(obj runtime.Object, restConfig *rest.Config, out ma
 
 func includeStatefulSetDiff(obj runtime.Object, restConfig *rest.Config, out map[string]interface{}) error {
 	sts := &v1.StatefulSet{}
-	err := objInterfaceToSpecificObject(obj, sts)
+	err := scheme.Scheme.Convert(obj, sts, nil)
 	if err != nil {
 		return errors.WithMessage(err, "StatefulSet object conversion failed")
 	}

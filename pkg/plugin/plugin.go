@@ -401,18 +401,3 @@ func getTemplate() (string, error) {
 	}
 	return string(contents), nil
 }
-
-// obj is usually a runtime.Object (resourceInfo.Object)
-func objInterfaceToObjMap(obj interface{}) (map[string]interface{}, error) {
-	return runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
-}
-
-func objMapToUnstructured(obj map[string]interface{}) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: obj}
-}
-
-// example out is "out := &v1.StatefulSet{}"
-// in also supports runtime.Unstructured types
-func objInterfaceToSpecificObject(in interface{}, out interface{}) error {
-	return scheme.Scheme.Convert(in, out, nil)
-}
