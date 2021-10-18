@@ -90,25 +90,25 @@
     {{- template "status_summary_line" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
-    {{- $currentReplicas := .status.replicas | default 0.0 }}
-    {{- $updatedReplicas := .status.updatedReplicas | default 0.0 }}
-    {{- $readyReplicas := .status.readyReplicas | default 0.0 }}
+    {{- $currentReplicas := .status.replicas | default 0.0 | float64 }}
+    {{- $updatedReplicas := .status.updatedReplicas | default 0.0 | float64 }}
+    {{- $readyReplicas := .status.readyReplicas | default 0.0 | float64 }}
     {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
-           and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
+           and apparently the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
     {{- $injectedStatus := .status }}
     {{- $injectedStatus = set $injectedStatus "readyReplicas" $readyReplicas }}
     {{- $injectedStatus = set $injectedStatus "currentReplicas" $currentReplicas }}
     {{- $injectedManifest := set . "status" $injectedStatus }}
     {{- template "replicas_status" $injectedManifest }}
     {{- template "suspended" . }}
+    {{- template "conditions_summary" .status.conditions }}
     {{- $ongoingRollout := false }}
     {{- if and .status.currentRevision .status.updateRevision }}
         {{- $ongoingRollout = ne .status.currentRevision .status.updateRevision }}
     {{- end }}
-    {{- template "conditions_summary" .status.conditions }}
     {{- if or (not $currentReplicas) (not $readyReplicas) }}
   {{ "Outage" | red | bold }}: Deployment has no Ready replicas.
-        {{- if and .status.currentRevision (eq (.status.observedGeneration | default 1.0) 1.0) }}
+        {{- if and .status.currentRevision (eq (.status.observedGeneration | default 1.0 | float64) 1.0) }}
   {{ "Stuck Initial Rollout?" | yellow | bold }} First rollout not yet progressed.
         {{- end }}
     {{- else if ne $currentReplicas $readyReplicas }}
@@ -118,7 +118,7 @@
     {{- end }}
     {{- if $ongoingRollout }}
   {{ "Ongoing rollout" | yellow | bold }}: Update in progress ControllerRevision/{{ .status.currentRevision }} -> ControllerRevision/{{ .status.updateRevision }}, {{ $updatedReplicas }}/{{ .spec.replicas }} ({{ percent $updatedReplicas .spec.replicas | printf "%.0f"}}%).
-        {{- if eq (.status.updatedCount | default 0.0) 1.0 }}
+        {{- if eq (.status.updatedCount | default 0.0 | float64) 1.0 }}
   {{ "Sruck Rollout?" | yellow | bold }}: Still replacing the first Pod, may indicate a stuck rollout.
         {{- end }}
         {{- with .diff }}
@@ -130,7 +130,7 @@
         */ -}}
         {{- end }}
     {{- else }}
-        {{- if and .spec.replicas (eq (float64 $injectedStatus.readyReplicas) 0.0) }}
+        {{- if and .spec.replicas (eq (float64 .status.readyReplicas) 0.0) }}
   {{ "Stuck rollout" | red | bold }}: No ready replicas, this StatefulSet won't likely go further.
         {{- end }}
     {{- end }}
