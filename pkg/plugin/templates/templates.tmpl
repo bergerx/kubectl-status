@@ -394,6 +394,9 @@
         {{- if hasKey $endpoint.metadata.annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
             , last endpoint change was {{ index $endpoint.metadata.annotations "endpoints.kubernetes.io/last-change-trigger-time"  | colorAgo }} ago
         {{- end}}
+    {{- end}}
+    {{- template "application_details" . }}
+    {{- if $endpoint }}
         {{- if $endpoint.subsets }}
             {{- range $endpoint.subsets }}
                 {{- $ports := .ports }}
@@ -416,7 +419,6 @@
     {{- else }}
   {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
     {{- end }}
-    {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
