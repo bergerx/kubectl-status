@@ -64,7 +64,7 @@ jobs:
     #    uses a compiled language
 
     - run: |
-       make
+        env GO111MODULE=on make
     #   make bootstrap
     #   make release
 
