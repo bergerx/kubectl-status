@@ -1,0 +1,33 @@
+{{- define "Job" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- /* See https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/#parallel-jobs */ -}}
+    {{- if eq (coalesce .Spec.completions .Spec.parallelism 1 | toString) "1" }}
+        {{- template "job_non_parallel" . }}
+    {{- else if .Spec.completions }}
+        {{- /* TODO: handle "fixed completion count jobs" better */ -}}
+        {{- template "job_parallel" . }}
+    {{- else if .Spec.parallelism }}
+        {{- /* TODO: handle "work queue jobs" better */ -}}
+        {{- template "job_parallel" . }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "job_non_parallel" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if .Status.active }}, {{ "Active" | green }}{{ end }}
+    {{- if .Status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
+    {{- if .Status.failed }}, {{ "Failed" | red | bold }}{{ end }}
+{{- end -}}
+
+{{- define "job_parallel" }}
+    TODO: handle parallel jobs  better
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if .Status.active }}, {{ "active" | green }}:{{ . }}{{ end }}
+    {{- if .Status.failed }}, {{ "failed" | red | bold }} {{ .Status.failed }}/{{ .Spec.backoffLimit }} times{{ end }}
+{{- end -}}

@@ -1,10 +1,10 @@
-//go:generate statik -src templates/
 package plugin
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
-	"strconv"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -14,56 +14,40 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cast"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/kubectl/pkg/scheme"
+	"k8s.io/klog/v2"
 )
 
 var durationRound = (sprig.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
 
-var funcMap = template.FuncMap{
-	"green":                           color.GreenString,
-	"yellow":                          color.YellowString,
-	"red":                             color.RedString,
-	"cyan":                            color.CyanString,
-	"bold":                            color.New(color.Bold).SprintfFunc(),
-	"colorAgo":                        colorAgo,
-	"colorDuration":                   colorDuration,
-	"colorBool":                       colorBool,
-	"colorKeyword":                    colorKeyword,
-	"colorExitCode":                   colorExitCode,
-	"markRed":                         markRed,
-	"markYellow":                      markYellow,
-	"markGreen":                       markGreen,
-	"redIf":                           redIf,
-	"redBoldIf":                       redBoldIf,
-	"signalName":                      signalName,
-	"isStatusConditionHealthy":        isStatusConditionHealthy,
-	"quantityToFloat64":               quantityToFloat64,
-	"quantityToInt64":                 quantityToInt64,
-	"percent":                         percent,
-	"colorPercent":                    colorPercent,
-	"humanizeSI":                      humanizeSI,
-	"getItemInList":                   getItemInList,
-	"getPodInNodeStatsSummary":        getPodInNodeStatsSummary,
-	"addFloat64":                      addFloat64,
-	"subFloat64":                      subFloat64,
-	"divFloat64":                      divFloat64,
-	"include":                         func(string, interface{}) (string, error) { return "include function is not implemented", nil },
-	"kubeGet":                         func(...string) []interface{} { var empty []interface{}; return empty },
-	"kubeGetByLabelsMap":              func(string, string, map[string]interface{}) []interface{} { var empty []interface{}; return empty },
-	"kubeGetServicesMatchingPod":      func(map[string]interface{}) []interface{} { var empty []interface{}; return empty },
-	"kubeGetIngressesMatchingService": func(map[string]interface{}) []interface{} { var empty []interface{}; return empty },
-	"kubeGetFirst":                    func(...string) interface{} { return "" },
-	"getEvents":                       func(map[string]interface{}) map[string]interface{} { return nil },
-	"includeObj":                      func(...string) interface{} { return "" },
-	"includeOwners":                   func(interface{}) interface{} { return "" },
-}
-
-func getFuncMap() template.FuncMap {
-	f := sprig.TxtFuncMap()
-	for k, v := range funcMap {
-		f[k] = v
+func funcMap() template.FuncMap {
+	return template.FuncMap{
+		"green":                    color.GreenString,
+		"yellow":                   color.YellowString,
+		"red":                      color.RedString,
+		"cyan":                     color.CyanString,
+		"bold":                     color.New(color.Bold).SprintfFunc(),
+		"colorAgo":                 colorAgo,
+		"colorDuration":            colorDuration,
+		"colorBool":                colorBool,
+		"colorKeyword":             colorKeyword,
+		"markRed":                  markRed,
+		"markYellow":               markYellow,
+		"markGreen":                markGreen,
+		"redIf":                    redIf,
+		"redBoldIf":                redBoldIf,
+		"signalName":               signalName,
+		"isStatusConditionHealthy": isStatusConditionHealthy,
+		"quantityToFloat64":        quantityToFloat64,
+		"quantityToInt64":          quantityToInt64,
+		"percent":                  percent,
+		"colorPercent":             colorPercent,
+		"humanizeSI":               humanizeSI,
+		"getMatchingItemInMapList": getMatchingItemInMapList,
+		"sortMapListByKeysValue":   sortMapListByKeysValue,
+		"addFloat64":               addFloat64,
+		"subFloat64":               subFloat64,
+		"divFloat64":               divFloat64,
 	}
-	return f
 }
 
 func addFloat64(i ...interface{}) float64 {
@@ -121,29 +105,86 @@ func colorBool(cond bool, str string) string {
 	}
 }
 
-func getItemInList(list []interface{}, itemKey, itemValue string) map[string]interface{} {
-	var item map[string]interface{}
-	for _, untypedItem := range list {
-		typedItem := untypedItem.(map[string]interface{})
-		if typedItem[itemKey].(string) == itemValue {
-			item = typedItem
-			break
+// getMatchingItemInMapList checks if the provided searchFor map is a subset of an item in the given mapList.
+// Returns the first matching item.
+//
+// mapList parameter should actually be a "[]map[string]interface{}" but due to unstructured json serialisation
+// we need to use "[]interface{}" and cast it inside.
+//
+// searchFor parameter should actually be a "map[string]string" but due to unstructured json serialisation
+// we need to use "map[string]interface{}" and cast the value to string inside.
+func getMatchingItemInMapList(searchFor map[string]interface{}, mapList []interface{}) (item map[string]interface{}) {
+	for _, untypedMapListItem := range mapList {
+		typedMapListItem := untypedMapListItem.(map[string]interface{})
+		if hasMapListAMatchingItem(searchFor, typedMapListItem) {
+			klog.V(5).InfoS("getMatchingItemInMapList found a matching item", "typedMapListItem", typedMapListItem)
+			return typedMapListItem
 		}
 	}
-	return item
+	klog.V(5).InfoS("getMatchingItemInMapList couldn't find any matching item", "searchFor", searchFor, "typedMapListItem", mapList)
+	return
 }
 
-func getPodInNodeStatsSummary(namespace, name string, nodeStatsSummary []interface{}) map[string]interface{} {
-	var item map[string]interface{}
-	for _, untypedItem := range nodeStatsSummary {
-		typedItem := untypedItem.(map[string]interface{})
-		podRef := typedItem["podRef"].(map[string]interface{})
-		if podRef["namespace"].(string) == namespace && podRef["name"].(string) == name {
-			scheme.Scheme.Convert(&typedItem, &item, nil)
-			break
+func hasMapListAMatchingItem(searchFor map[string]interface{}, typedMapListItem map[string]interface{}) bool {
+	klog.V(5).InfoS("hasMapListAMatchingItem will search", "searchFor", searchFor, "typedMapListItem", typedMapListItem)
+	if len(searchFor) == 0 {
+		return false
+	}
+	for searchKey, searchValue := range searchFor {
+		if searchValue == nil {
+			continue
+		}
+		if strings.Contains(searchKey, ".") {
+			splitSearchKey := strings.SplitN(searchKey, ".", 2)
+			outerKey := splitSearchKey[0]
+			innerMapListItem, exists := typedMapListItem[outerKey]
+			if !exists {
+				return false
+			}
+			innerTypedMapListItem, ok := innerMapListItem.(map[string]interface{})
+			if !ok {
+				return false
+			}
+			innerKey := splitSearchKey[1]
+			innerSearchFor := map[string]interface{}{innerKey: searchValue}
+			if !hasMapListAMatchingItem(innerSearchFor, innerTypedMapListItem) {
+				return false
+			}
+			continue
+		}
+		mapListItem, exists := typedMapListItem[searchKey]
+		if !exists || mapListItem == nil {
+			return false
+		}
+		mapListItemValue, ok := mapListItem.(string)
+		if !ok {
+			return false
+		}
+		searchForValue, ok := searchValue.(string)
+		if !ok {
+			return false
+		}
+		if mapListItemValue != searchForValue {
+			return false
 		}
 	}
-	return item
+	return true
+}
+
+// sortMapListByKeysValue returns a sorted copy of mapList based on the provided key's value.
+//
+// mapList parameter should actually be a "[]map[string]interface{}" but due to unstructured json serialisation
+// we need to use "[]interface{}" and cast it inside.
+func sortMapListByKeysValue(key string, mapList []interface{}) (result []interface{}) {
+	for i := range mapList {
+		result = append(result, mapList[i])
+	}
+	sort.Slice(result, func(i, j int) bool {
+		typedMapListItemI := result[i].(map[string]interface{})[key].(string)
+		typedMapListItemJ := result[j].(map[string]interface{})[key].(string)
+		return typedMapListItemI < typedMapListItemJ
+	})
+	return
 }
 
 func isStatusConditionHealthy(condition map[string]interface{}) bool {
@@ -205,15 +246,15 @@ func signalName(signal int64) string {
 	return signame(uint32(signal))
 }
 
-func redIf(cond bool, str string) string {
-	if cond {
+func redIf(cond interface{}, str string) string {
+	if !reflect.ValueOf(cond).IsZero() {
 		return color.RedString(str)
 	}
 	return str
 }
 
-func redBoldIf(cond bool, str string) string {
-	if cond {
+func redBoldIf(cond interface{}, str string) string {
+	if !reflect.ValueOf(cond).IsZero() {
 		return color.New(color.FgRed, color.Bold).Sprintf(str)
 	}
 	return str
@@ -241,15 +282,6 @@ func markWithColor(regex string, s string, colorStringFunc func(format string, a
 		result = append(result, line)
 	}
 	return strings.Join(result, "\n")
-}
-
-func colorExitCode(exitCode int) string {
-	switch exitCode {
-	case 0:
-		return strconv.Itoa(exitCode)
-	default:
-		return color.RedString("%d", exitCode)
-	}
 }
 
 func colorKeyword(phase string) string {
@@ -299,15 +331,13 @@ func colorDuration(duration time.Duration) string {
 	return str
 }
 
-func include(name string, data interface{}) (string, error) {
-	var buf strings.Builder
-	tmpl, err := getParsedTemplates()
-	if err != nil {
-		return "", err
-	}
-	funcMap := getFuncMap()
-	funcMap["include"] = include
-	tmpl.Funcs(funcMap)
-	err = tmpl.ExecuteTemplate(&buf, name, data)
-	return buf.String(), err
+func (r RenderableObject) Include(templateName string, data interface{}) (string, error) {
+	klog.V(5).InfoS("Include", "r", r, "templateName", templateName, "data", data)
+	return r.renderTemplate(templateName, data)
+}
+
+func (r RenderableObject) IncludeRenderableObject(obj RenderableObject) (output string) {
+	klog.V(5).InfoS("called IncludeRenderableObject", "r", r, "obj", obj)
+	renderString, _ := obj.renderString()
+	return renderString
 }

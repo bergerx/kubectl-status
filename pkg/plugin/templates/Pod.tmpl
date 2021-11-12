@@ -1,0 +1,222 @@
+{{- define "Pod" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "pod_status_summary_line" . }}
+    {{- template "application_details" . }}
+    {{- .Include "pod_conditions_summary" . | nindent 2 }}
+    {{- if not .Metadata.ownerReferences }}
+        {{- $container := index .Spec.containers 0 }}{{/* not ideal but will likely work in most cases if not all */}}
+        {{- "Standalone POD" | red | bold | nindent 2 }}{{ if $container.stdin }}, interactive{{ end }}{{ if $container.tty }} with attached TTY{{ end }}.
+    {{- end }}
+    {{- template "pod_init_containers" . }}
+    {{- template "pod_containers" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "pod_volumes" . }}
+    {{- template "owners" . }}
+    {{- template "matching_services" . }}
+{{- end }}
+
+{{- define "pod_status_summary_line" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- with .Status.qosClass }} {{ if ($.Object | default dict).inline }}{{ . }}{{ else }}{{ . | colorKeyword }}{{ end }}{{ end }}
+    {{- with .Status.message }}, message: {{ . }}{{ end }}
+{{- end -}}
+
+{{- define "pod_init_containers" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- with .Status.initContainerStatuses }}
+        {{- "InitContainers:" | nindent 2 }}
+        {{- range $containerStatus := . }}
+            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus) | nindent 4 }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "pod_containers" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- with .Status.containerStatuses }}
+        {{- "Containers:" | nindent 2 }}
+        {{- $podMetrics := $.KubeGetFirst $.Namespace "PodMetrics" $.Name }}
+        {{- range $containerStatus := . }}
+            {{- if ($podMetrics.Object | default dict).containers }}
+                {{- $containerMetrics := $podMetrics.Object.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
+                {{- $containerSpec := $.Spec.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
+                {{- $containerStatusSummaryDict := dict "containerStatus" $containerStatus "containerMetrics" $containerMetrics "containerSpec" $containerSpec }}
+                {{- $.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
+            {{- else }}
+                {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus) | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "pod_volumes" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if .RenderOptions.IncludesEnabled }}
+        {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary $.Spec.nodeName }}
+        {{- $podStatsSummary := $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
+        {{- $ephemeralStorage := index $podStatsSummary "ephemeral-storage" }}
+        {{- if $ephemeralStorage }}
+            {{- "Ephemeral storage" | bold | nindent 2 }} {{ template "pod_volume_stats" $ephemeralStorage }}
+        {{- end }}
+        {{- $emptyDirsHeader := true }}
+        {{- range $volume := .Spec.volumes }}
+            {{- if hasKey $volume "emptyDir" }}
+                {{- with $volumeStats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $volume.name) }}
+                    {{- if $emptyDirsHeader }}{{ $emptyDirsHeader = false }}
+                        {{- "EmptyDirs:" | nindent 2 }}
+                    {{- end }}
+                    {{- $volume.name | bold | nindent 4 }}
+                    {{- with $volume.emptyDir.medium }} ({{ . | bold }}){{ end }}
+                    {{- " " }}{{ template "pod_volume_stats" $volumeStats }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+        {{- $pvcsHeader := true }}
+        {{- range $volume := .Spec.volumes }}
+            {{- with .persistentVolumeClaim }}
+                {{- if $pvcsHeader }}{{ $pvcsHeader = false }}
+                    {{- "PVCs:" | nindent 2 }}
+                {{- end }}
+                {{- "Volume" | bold | nindent 4 }}: {{ $volume.name }}
+                {{- $volumeStats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $volume.name) }}
+                {{- with $volumeStats }}, {{ template "pod_volume_stats" . }}{{ end }}
+                {{- $pvc := $.KubeGetFirst $.Namespace "PersistentVolumeClaim" .claimName}}
+                {{- with $pvc }}
+                    {{- $.Include "PersistentVolumeClaim" . | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "pod_volume_stats" }}
+    {{- /* pod_volume_stats returns a single liner representing all the known volume details */ -}}
+    {{- $bytesUsagePercentOfCapacity := percent (.usedBytes | float64) (.capacityBytes | float64) }}
+    {{- .usedBytes | humanizeSI "B" }}/{{ .capacityBytes | humanizeSI "B" }}({{- $bytesUsagePercentOfCapacity | colorPercent "%.0f%%" }}) used, {{ .availableBytes | humanizeSI "B" }} free, {{""}}
+    {{- $inodesUsagePercentOfCapacity := percent (.inodesUsed | float64) (.inodes | float64) }}
+    {{- .inodesUsed | humanizeSI "" }}/{{ .inodes | humanizeSI "" }}({{- $inodesUsagePercentOfCapacity | colorPercent "%.0f%%" }}) inodes used, {{ .inodesFree | humanizeSI "" }} free.
+{{- end }}
+
+{{- define "matching_services" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if and .RenderOptions.IncludesEnabled .RenderOptions.IncludeMatchingServices }}
+        {{- range $index, $svc := .KubeGetServicesMatchingLabels .Namespace .Labels }}
+            {{- if eq $index 0 }}
+                {{- "Services matching this pod:" | nindent 2 }}
+            {{- end }}
+            {{- $.Include "Service" $svc | nindent 4 }}
+        {{- end}}
+    {{- end}}
+{{- end }}
+
+{{- define "pod_conditions_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- $podScheduledCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
+    {{- $readyCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "Ready") }}
+    {{- if (isStatusConditionHealthy $podScheduledCondition) }}
+        {{- "PodScheduled" | bold }}
+    {{- else }}
+        {{- "Not PodScheduled" | red | bold }}
+    {{- end }}
+    {{- " -> "}}
+    {{- $initializedCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "Initialized") }}
+    {{- if (isStatusConditionHealthy $initializedCondition) }}
+        {{- "Initialized" | bold }}
+    {{- else }}
+        {{- "Not Initialized" | red | bold }}
+    {{- end }}
+    {{- " -> "}}
+    {{- $containersReadyCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "ContainersReady") }}
+    {{- if (isStatusConditionHealthy $containersReadyCondition) }}
+        {{- "ContainersReady" | bold }}
+    {{- else }}
+        {{- "Not ContainersReady" | red | bold }}
+    {{- end }}
+    {{- " -> "}}
+    {{- if (isStatusConditionHealthy $readyCondition) }}
+        {{- template "condition_summary" $readyCondition }}
+    {{- else }}
+        {{- "Not Ready" | red | bold }}
+    {{- end }}
+    {{- range .Status.conditions }}
+        {{- /* show details for only unhealthy conditions */ -}}
+        {{- if (not (isStatusConditionHealthy .)) }}
+            {{- $.Include "condition_summary" . | nindent 2}}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "container_usage" -}}
+    {{- /* Expects to get a map with these keys (and also their initContainer counterparts):
+           * containerMetrics (required): PodMetrics.containers[name=container]
+           * containerSpec (required): Pod.spec.containers[name=container]
+        */ -}}
+    cpu usage:{{ .containerMetrics.usage.cpu | quantityToFloat64 | printf "%.1g" -}}/[
+    {{- if .containerSpec.resources.requests.cpu -}}
+        {{- percent (.containerMetrics.usage.cpu | quantityToFloat64) (.containerSpec.resources.requests.cpu | quantityToFloat64) | colorPercent "%.0f%% " -}}
+        of req:{{ .containerSpec.resources.requests.cpu | quantityToFloat64 | printf "%.1g" }}
+    {{- else }}{{ "no-req" | yellow }}
+    {{- end }}, {{ if .containerSpec.resources.limits.cpu -}}
+        {{- percent (.containerMetrics.usage.cpu | quantityToFloat64) (.containerSpec.resources.limits.cpu | quantityToFloat64) | colorPercent "%.0f%% " -}}
+        of lim:{{ .containerSpec.resources.limits.cpu | quantityToFloat64 | printf "%.1g" }}
+    {{- else }}{{ "no-lim" | yellow }}
+    {{- end -}}
+    ], mem usage:{{- .containerMetrics.usage.memory | quantityToFloat64 | humanizeSI "B" -}}/[
+    {{- if .containerSpec.resources.requests.memory -}}
+        {{- percent (.containerMetrics.usage.memory | quantityToFloat64) (.containerSpec.resources.requests.memory | quantityToFloat64) | colorPercent "%.0f%% " -}}
+        of req:{{ .containerSpec.resources.requests.memory | quantityToFloat64 | humanizeSI "B" }}
+    {{- else }}{{ "no-req" | yellow }}
+    {{- end }}, {{ if .containerSpec.resources.limits.memory -}}
+        {{- percent (.containerMetrics.usage.memory | quantityToFloat64) (.containerSpec.resources.limits.memory | quantityToFloat64) | colorPercent "%.0f%% " -}}
+        of lim:{{ .containerSpec.resources.limits.memory | quantityToFloat64 | humanizeSI "B" }}
+    {{- else }}{{ "no-lim" | yellow }}
+    {{- end -}}
+    ]
+{{- end -}}
+
+{{- define "container_status_summary" }}
+    {{- /* Expects to get a map with these keys (and also their initContainer counterparts):
+           * containerStatus (required): Pod.status.containerStatuses[name=container]
+           * containerMetrics (optional): PodMetrics.containers[name=container]
+           * containerSpec (optional): Pod.spec.containers[name=container]
+        */ -}}
+    {{- .containerStatus.name | bold }} ({{ .containerStatus.image | markYellow "latest" }}) {{ template "container_state_summary" .containerStatus.state }}
+    {{- if .containerStatus.state.running }}{{ if .containerStatus.ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
+    {{- if gt (.containerStatus.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.containerStatus.restartCount | int) | yellow | bold }}{{ end }}
+    {{- if .containerMetrics }}{{ if .containerMetrics.usage.cpu }}{{ "usage" | nindent 2 }} {{ template "container_usage" . }}{{ end }}{{ end }}
+    {{- with .containerStatus.lastState }}
+        {{- "previously:" | yellow | nindent 2 }} {{ template "container_state_summary" . }}
+    {{- end }}
+{{- end -}}
+
+{{- define "container_state_summary" }}
+    {{- /* Expects one of:
+           * Pod.status.containerStatuses[name=container].state
+           * Pod.status.containerStatuses[name=container].lastState
+     https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#pod-and-container-status */ -}}
+    {{- with .waiting }}
+        {{- "Waiting" | red | bold }} {{ .reason | red | bold }}{{ with .message }}: {{ . | red | bold }}{{ end }}
+    {{- end }}
+    {{- with .running }}
+        {{- "Running" | green }} for {{ .startedAt | colorAgo }}
+    {{- end }}
+    {{- with .terminated }}
+        {{- if .startedAt }}
+            {{- $started := .startedAt | toDate "2006-01-02T15:04:05Z" -}}
+            {{- $finished := .finishedAt | toDate "2006-01-02T15:04:05Z" -}}
+            {{- $ranfor := $finished.Sub $started -}}
+            Started {{ .startedAt | colorAgo }} ago and {{ if .reason }}{{ .reason | colorKeyword }}{{ else }}terminated{{ end }} after {{ $ranfor | colorDuration }}
+            {{- if .exitCode }} with {{ "exit code" | redIf (ne (.exitCode | toString) "0") }} {{ template "exit_code_summary" . }}{{ end }}
+        {{- else }}
+            {{ template "exit_code_summary" . }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "exit_code_summary" }}
+    {{- .exitCode | toString | redBoldIf (ne (.exitCode | toString) "0" ) }}
+    {{- with .signal }} (signal: {{ . }}){{ end }}
+    {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | signalName }}) {{ end }}
+{{- end -}}

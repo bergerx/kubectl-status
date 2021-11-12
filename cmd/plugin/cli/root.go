@@ -1,17 +1,16 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/kubectl/pkg/cmd/util"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	"k8s.io/klog/v2"
 
 	"github.com/bergerx/kubectl-status/pkg/plugin"
 )
@@ -19,15 +18,14 @@ import (
 var (
 	longCmdMessage = `Display status for one or many resources
 
- Prints human-friendly output that focuses on the status of the resources in kubernetes.
+Prints human-friendly output that focuses on the status of the resources in kubernetes.
 
- In most cases replacing a "kubectl get ..." with a "kubectl status ..." would be sufficient.
+In most cases replacing a "kubectl get ..." with a "kubectl status ..." would be sufficient.
 
- This plugin uses templates for well known api-conventions and has support for hardcoded resources,
-not all resources are fully supported.
+This plugin uses templates for well known api-conventions and has support for hardcoded resources,
+not all resources are fully supported.`
 
-Examples:
-  # Show status of all pods in the current namespace
+	examplesMessage = `  # Show status of all pods in the current namespace
   kubectl status pods
 
   # Show status of all pods in all namespaces
@@ -56,7 +54,6 @@ Examples:
 
   # Show status of nodes marked as master
   kubectl status node -l node-role.kubernetes.io/master
-
 `
 )
 
@@ -67,92 +64,69 @@ func InitAndExecute() {
 	}
 }
 
+// This variable is populated by goreleaser
+var version string
+
 func RootCmd() *cobra.Command {
-	clientGetter := genericclioptions.NewConfigFlags(false)
+	options := plugin.NewOptions()
 	cmd := &cobra.Command{
-		Use:   "kubectl-status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
-		Short: "Display status for one or many resources",
-		Long:  longCmdMessage,
+		Use:     "kubectl-status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
+		Short:   "Display status for one or many resources",
+		Long:    longCmdMessage,
+		Example: examplesMessage,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			viper.BindPFlags(cmd.Flags())
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(run(clientGetter, cmd, args))
+			klog.V(5).InfoS("running the cobra.Command ...")
+			cmdutil.CheckErr(validate(options))
+			cmdutil.CheckErr(plugin.Run(options, args))
 		},
+		Version: versionString(),
 	}
-	clientGetter.AddFlags(cmd.Flags())
-	genericclioptions.
-		NewResourceBuilderFlags().
-		WithAll(false).
-		WithAllNamespaces(false).
-		WithFile(false).
-		WithLabelSelector("").
-		WithFieldSelector("").
-		WithLatest().
-		AddFlags(cmd.Flags())
-	cmd.Flags().BoolP("test", "t", false,
-		"run the template against the provided yaml manifest. Need to be used with a --filename parameter. No request to apiserver is done.")
-
+	// We Follow https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md
+	// for the logs.
+	fs := flag.NewFlagSet("", flag.PanicOnError)
+	klog.InitFlags(fs)
+	defer klog.Flush()
+	cmd.Flags().AddGoFlagSet(fs)
+	options.AddFlags(cmd.Flags())
+	cmd.Flags().BoolVar(&options.RenderOptions.Local, "local", false,
+		"Run the template against the provided yaml manifest. Need to be used with a --filename parameter. No request to apiserver is done.")
+	cmd.Flags().BoolVar(&options.RenderOptions.IncludeOwners, "include-owners", true,
+		"Follow the ownerReferences in the objects and render them as well.")
+	cmd.Flags().BoolVar(&options.RenderOptions.IncludeEvents, "include-events", true,
+		"Include events in the output.")
+	cmd.Flags().BoolVar(&options.RenderOptions.IncludeMatchingServices, "include-matching-services", true,
+		"Include Services matching the Pod in the output.")
+	cmd.Flags().BoolVar(&options.RenderOptions.IncludeMatchingIngresses, "include-matching-ingresses", true,
+		"Include Ingresses referencing the Service in the output.")
+	cmd.Flags().BoolVar(&options.RenderOptions.IncludeApplicationDetails, "include-application-details", true,
+		"This will include well known application metadata into the output.")
+	cmd.Flags().BoolVar(&options.RenderOptions.IncludeRolloutDiffs, "include-rollout-diffs", false,
+		"Include unified diff between stored revisions of Deployment, DaemonSet and StatefulSets.")
+	cmd.Flags().BoolVar(&options.RenderOptions.Shallow, "shallow", false,
+		"Render only the immediate object and disable all other --include-* flags. This will override any other flags.")
 	cobra.OnInitialize(viper.AutomaticEnv)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	return cmd
 }
 
-// Complete takes the command arguments and factory and infers any remaining options.
-func run(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string) error {
-	if err := runPlugin(clientGetter, cmd, args); err != nil {
-		return cmdutil.UsageErrorf(cmd, err.Error())
+// versionString returns the version prefixed by 'v'
+// or an empty string if no version has been populated by goreleaser.
+// In this case, the --version flag will not be added by cobra.
+func versionString() string {
+	if len(version) == 0 {
+		return ""
+	}
+	return "v" + version
+}
+
+func validate(o *plugin.Options) error {
+	klog.V(5).InfoS("Validating cli options...")
+	filenames := *o.ResourceBuilderFlags.FileNameFlags.Filenames
+	if o.RenderOptions.Local && len(filenames) == 0 {
+		return fmt.Errorf("when using --local, --filename must be provided")
 	}
 	return nil
-}
-
-func runPlugin(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string) error {
-	filenames := util.GetFlagStringSlice(cmd, "filename")
-	if util.GetFlagBool(cmd, "test") {
-		return runAgainstFile(filenames)
-	}
-	return runAgainstCluster(clientGetter, cmd, args, filenames)
-}
-
-func runAgainstFile(filenames []string) error {
-	if len(filenames) != 1 {
-		return errors.New("when using --test, exactly one --filename must be provided")
-	}
-	filename := filenames[0]
-	out, err := plugin.RenderFile(filename)
-	if err != nil {
-		return err
-	}
-	fmt.Println(out)
-	return nil
-}
-
-func runAgainstCluster(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string, filenames []string) error {
-	q, err := GetResourceStatusQuery(clientGetter, cmd, args, filenames)
-	if err != nil {
-		return err
-	}
-	return utilerrors.NewAggregate(q.PrintRenderedQueriedResources())
-}
-
-func GetResourceStatusQuery(clientGetter *genericclioptions.ConfigFlags, cmd *cobra.Command, args []string, filenames []string) (*plugin.ResourceStatusQuery, error) {
-	allNamespaces := util.GetFlagBool(cmd, "all-namespaces")
-	namespace, enforceNamespace, err := clientGetter.ToRawKubeConfigLoader().Namespace()
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed getting namespace")
-	}
-	selector := util.GetFlagString(cmd, "selector")
-	fieldSelector := util.GetFlagString(cmd, "field-selector")
-	q := plugin.NewResourceStatusQuery(
-		clientGetter,
-		namespace,
-		allNamespaces,
-		enforceNamespace,
-		filenames,
-		selector,
-		fieldSelector,
-		args,
-	)
-
-	return q, nil
 }

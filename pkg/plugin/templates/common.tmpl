@@ -1,0 +1,177 @@
+{{- define "DefaultResource" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "replicas_status" . }}
+    {{- template "suspended" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}
+
+{{- define "suspended" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if hasKey .Spec "replicas" }}{{ if not .Spec.replicas }}
+        {{- "Suspended" | red | bold | nindent 2 }}: Scaled down to 0.
+    {{- end }}{{ end }}
+{{- end }}
+
+{{- define "recent_updates" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- with .Metadata.managedFields | default list | sortMapListByKeysValue "time" }}
+        {{- "Known/recorded manage events:" | nindent 2 }}
+        {{- range . }}
+            {{- .time | colorAgo | nindent 4 }} ago {{ .operation | bold }}d by {{ .manager | bold }} ({{ .fieldsV1 | default dict | keys | sortAlpha | join ", " | replace "f:" "" }})
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "replicas_status" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if hasKey .Status "replicas" }}
+        {{- $spec_replicas := .Spec.replicas }}
+        {{- printf "desired:%d" $spec_replicas | bold | nindent 2 }}
+        {{- with .Status.replicas }}, {{ printf "existing:%d" . | redBoldIf (not (eq $spec_replicas .)) }}{{ end }}
+        {{- if hasKey .Status "readyReplicas" }}, {{ printf "ready:%d" .Status.readyReplicas | redBoldIf (not (eq $spec_replicas .Status.readyReplicas)) }}{{ end }}
+        {{- if hasKey .Status "currentReplicas" }}, {{ printf "current:%d" .Status.currentReplicas | redBoldIf (not (eq $spec_replicas .Status.currentReplicas)) }}{{ end }}
+        {{- if hasKey .Status "updatedReplicas" }}, {{ printf "updated:%d" .Status.updatedReplicas | redBoldIf (not (eq $spec_replicas .Status.updatedReplicas)) }}{{ end }}
+        {{- if hasKey .Status "availableReplicas" }}, {{ printf "available:%d" .Status.availableReplicas | redBoldIf (not (eq $spec_replicas .Status.availableReplicas)) }}{{ end }}
+        {{- if hasKey .Status "fullyLabeledReplicas" }}, {{ printf "fullyLabeled:%d" .Status.fullyLabeledReplicas | redBoldIf (not (eq $spec_replicas .Status.fullyLabeledReplicas)) }}{{ end }}
+        {{- with .Status.unavailableReplicas }}, {{ printf "unavailable:%d" . | red | bold }}{{ end }}
+        {{- with .Status.collisionCount }}, {{ printf "collisions:%d" . | red | bold }}{{ end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "status_summary_line" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if (.Object | default dict).inline }}
+        {{- .Kind | bold }}/{{ .Name }}
+    {{- else }}
+        {{- .Kind | cyan | bold }}/{{ .Name | cyan }}
+    {{- end }}
+    {{- with .Namespace }} -n {{ . }}{{ end }}
+    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }} ago{{ end }}
+    {{- if .Metadata.ownerReferences }} by {{ range $index, $ownerReference := .Metadata.ownerReferences }}
+        {{- if $index }},{{ end }}{{ $ownerReference.kind | bold }}/{{ $ownerReference.name }}
+    {{- end }}{{ end }}
+    {{- with .Metadata.generation }}, gen:{{ . }}{{ end }}
+    {{- if .Status.startTime }}
+        {{- $created := .Metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
+        {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" }}
+        {{- $startedIn := $started.Sub $created}}
+        {{- if gt ($startedIn.Seconds | int) 0 }}, started after {{ $startedIn.Seconds | ago }}{{ end }}
+    {{- end }}
+    {{- if .Status.completionTime }}
+        {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" -}}
+        {{- $completed := .Status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
+        {{- $ranfor := $completed.Sub $started }} and {{ "completed" | green }} in {{ $ranfor | colorDuration }}
+    {{- end }}
+    {{- with .Status.phase }} {{ if $.Object.nodeContext }}{{ . | redIf (eq . "Pending" ) }}{{else}}{{ . | colorKeyword }}{{ end }}{{ end }}
+    {{- /* .status.state is used by e.g. Ambassador */ -}}
+    {{- with .Status.state }} {{ . | colorKeyword }}{{ end }}
+    {{- with .Status.reason }} {{ . | colorKeyword }}{{ end }}
+    {{- if .Metadata.deletionTimestamp }} {{ "DELETING" | red | bold }} {{- end }}
+{{- end -}}
+
+{{- define "observed_generation_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if and .Metadata.generation .Status.observedGeneration }}
+        {{- if ne .Metadata.generation .Status.observedGeneration }}
+            {{- "Observed generation" | nindent 2 }}({{ .Status.observedGeneration | toString | red | bold }}) doesn't match generation({{ .Metadata.generation | toString | red | bold }})
+            {{- "This usually means related controller has not yet reconciled this resource!" | yellow | nindent 4}}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "conditions_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- range .StatusConditions }}
+  {{ template "condition_summary" . }}
+    {{- end }}
+{{- end -}}
+
+{{- define "condition_summary" }}
+    {{- $notHealthy := not (isStatusConditionHealthy .) }}
+    {{- .type | redIf $notHealthy | bold }}
+    {{- with .reason }} {{ . | redBoldIf $notHealthy }}{{ end }}
+    {{- with .message }}, {{ . | redIf $notHealthy }}{{ end }}
+    {{- with .lastTransitionTime }} for {{ . | colorAgo }}{{ end }}
+    {{- if .lastUpdateTime }}
+        {{- if ne (.lastUpdateTime | colorAgo) (.lastTransitionTime | colorAgo) -}}
+            , last update was {{ .lastUpdateTime | colorAgo }} ago
+        {{- end }}
+    {{- end }}
+    {{- if .lastProbeTime}}
+        {{- if ne (.lastProbeTime | colorAgo) (.lastTransitionTime | colorAgo) -}}
+            , last probe was {{ .lastProbeTime | colorAgo }} ago
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "events" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if and .RenderOptions.IncludesEnabled .RenderOptions.IncludeEvents }}
+        {{- with .KubeGetEvents }}{{ if .Object }}{{ if .Object.items }}
+            {{- "Events:" | nindent 2 }}
+            {{- range .Object.items }}
+                {{- "" | nindent 4 }}
+                {{- if eq .type "Warning" }}{{ .reason | red | bold }} {{ else }}{{ .reason }} {{ end }}
+                {{- with .lastTimestamp }}{{ . | colorAgo }} ago {{ end }}
+                {{- if gt (.count | int) 1 -}}
+                    {{- if .firstTimestamp -}}
+                        (x{{ .count }} over {{ .firstTimestamp | colorAgo }}) {{ "" }}
+                    {{- else -}}
+                        (x{{ .count }}) {{ "" }}
+                    {{- end -}}
+                {{- end -}}
+                from {{ list .reportingComponent .reportingInstance .source.component .source.host .source.fieldPath | compact | join "," | bold }}: {{ .message }}
+            {{- end }}
+        {{- end }}{{ end }}{{ end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "owners" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject */ -}}
+    {{- if and .RenderOptions.IncludesEnabled .RenderOptions.IncludeOwners }}
+        {{- with .KubeGetOwners }}
+            {{- "Owners:" | nindent 2 }}
+            {{- range . }}{{ if .Object }}
+                {{- $.IncludeRenderableObject . | nindent 4 }}
+            {{- end }}{{ end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "application_details" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if .RenderOptions.IncludeApplicationDetails }}
+        {{- $labels := .Labels }}
+        {{- $annotations := .Annotations }}
+        {{- $clusterService := get $labels "kubernetes.io/cluster-service" }}
+        {{- $addonManager := get $labels "addonmanager.kubernetes.io/mode" }}
+        {{- $managedBy := coalesce (get $labels "app.kubernetes.io/managed-by") $labels.heritage }}
+        {{- $createdBy := get $labels "app.kubernetes.io/created-by" }}
+        {{- $name := coalesce (get $labels "helm.sh/chart") $labels.chart (get $labels "app.kubernetes.io/name") $labels.app (get $labels "k8s-app") (get $labels "kubernetes.io/name") $labels.ame | default "" }}
+        {{- $partOf := get $labels "app.kubernetes.io/part-of" }}
+        {{- $component := get $labels "app.kubernetes.io/component" }}
+        {{- $instance := coalesce (get $annotations "meta.helm.sh/release-name") $labels.release (get $labels "app.kubernetes.io/instance") }}
+        {{- $releaseNamespace := get $annotations "meta.helm.sh/release-namespace" }}
+        {{- $namespace := eq $releaseNamespace .Namespace | ternary "" $releaseNamespace }}
+        {{- $version := coalesce (get $labels "app.kubernetes.io/version") $labels.version }}
+        {{- if or $clusterService $addonManager $managedBy $createdBy $name $partOf $component $instance $namespace $version }}
+            {{- "Managed" | nindent 2 }}
+            {{- with $addonManager }} by {{ "AddonManager" | bold | yellow }} in {{ . | redBoldIf (eq . "Reconcile") }} mode{{ end }}
+            {{- with $clusterService }} as a {{ "cluster-service" | yellow | bold }}{{end}}
+            {{- with $managedBy }} by {{ . | bold }}{{ end }}
+            {{- with $createdBy }} (created by {{ . | bold }}){{ end }}
+            {{- with $instance }} with {{ . | bold }} {{ eq $managedBy "Helm" | ternary "release" "instance" }}{{end}}
+            {{- with $namespace }} in {{ . | bold | yellow }} namespace (different than the current resource){{end}}
+            {{- with $name }} by {{ . | bold }} {{ eq $managedBy "Helm" | ternary "chart" "application" }}{{ end }}
+            {{- with $partOf }}{{ if not (contains $partOf $name) }} as part of {{ . | bold }}{{ end }}{{ end }}
+            {{- with $component }} within component {{ . | bold }}{{ end }}
+            {{- with $version }}{{ if not (contains $version $name) }} using version {{ . | bold }}{{ end }}{{ end }}
+        {{- end -}}
+    {{- end }}
+{{- end -}}

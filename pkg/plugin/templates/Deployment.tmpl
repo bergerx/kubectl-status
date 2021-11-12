@@ -1,0 +1,59 @@
+{{- define "Deployment" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- $injectedStatus := .Status }}
+    {{- $_ := set $injectedStatus "replicas" ( $injectedStatus.replicas | default 0 ) }}
+    {{- $_ := set $injectedStatus "readyReplicas" ( $injectedStatus.readyReplicas | default 0) }}
+    {{- $_ := set $injectedStatus "availableReplicas" ( $injectedStatus.availableReplicas | default 0 ) }}
+    {{- $_ := set $injectedStatus "updatedReplicas" ( $injectedStatus.updatedReplicas | default 0 ) }}
+    {{- $_ := set .Object "status" $injectedStatus }}
+    {{- template "replicas_status" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "suspended" . }}
+    {{- $rolloutStatus := .RolloutStatus . }}
+    {{- if not $rolloutStatus.done }}
+        {{- "Ongoing Rollout" | yellow | bold | redBoldIf $rolloutStatus.error | nindent 2 }}
+        {{- with $rolloutStatus.message }}: {{ . | yellow }}{{ end }}
+        {{- with $rolloutStatus.error }}: Error: {{ . | red }}{{ end }}
+    {{- end }}
+    {{- if not .Status.readyReplicas }}
+        {{- "Outage" | red | bold | nindent 2 }}: Deployment has no Ready replicas.
+    {{- else if ne .Status.replicas .Status.readyReplicas }}
+        {{- if $rolloutStatus.done }}
+            {{- "Not Ready Replicas" | yellow | bold | nindent 2 }}: {{ sub .Status.replicas .Status.readyReplicas }} replicas are not Ready.
+        {{- end }}
+    {{- else if .Status.unavailableReplicas }}
+        {{- if $rolloutStatus.done }}
+            {{- "Unavailable Replicas" | yellow | bold | nindent 2 }}: {{ .status.unavailableReplicas }} replicas are not Available.
+        {{- end }}
+    {{- end }}
+    {{- template "recent_deployment_rollouts" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}
+
+{{- define "recent_deployment_rollouts" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- $sectionHeader := false }}
+    {{- $previousReplicaSet := "" }}
+    {{- range .KubeGet .Namespace "ReplicaSets" }}
+        {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+        {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
+            {{- if not $sectionHeader }}
+  Rollouts:
+                {{- $sectionHeader = true }}
+            {{- end }}
+    {{ with .Metadata.creationTimestamp }}{{ . | colorAgo }} ago{{ end }} managed by {{ .Kind | bold }}/{{ .Name }}
+            {{- if and $previousReplicaSet $.RenderOptions.IncludeRolloutDiffs }}
+                {{- with $.KubeGetUnifiedDiffString "ReplicaSet" $.Namespace $previousReplicaSet.Name .Name }}
+      {{ "Diff" | bold }}:
+                    {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 6 }}
+                {{- end }}
+            {{- end }}
+            {{- $previousReplicaSet = . }}
+        {{- end }}
+    {{- end }}
+{{- end }}

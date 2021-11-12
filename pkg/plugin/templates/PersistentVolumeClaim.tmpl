@@ -1,0 +1,23 @@
+{{- define "PersistentVolumeClaim" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "application_details" . }}
+    {{- template "conditions_summary" . }}
+    {{- "PVC" | nindent 2 }}
+    {{- with .Spec.volumeName }} uses {{ "PersistentVolume" | bold }}/{{ . }}{{ end }}
+    {{- with .Spec.volumeMode }}, with {{ . | bold }} mode{{ end }}
+    {{- with .Status.capacity.storage }}, asks for {{ . | bold }}{{ end }}
+    {{- with index .Annotations "volume.beta.kubernetes.io/storage-provisioner" }}, provisioned by {{ . | bold }}{{ end }}
+    {{- with index .Annotations "volume.kubernetes.io/selected-node" }}, attached on {{ "Node" | bold }}/{{ . }}{{ end }}
+    {{- if not .Spec.volumeName }}
+        {{- "Pending" | red | bold | nindent 2 }}: This PVC doesnt yet have a paired PV.
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+    {{- with $volumeName := .Spec.volumeName }}
+        {{- "Binds:" | nindent 2 }}
+        {{- $pv := $.KubeGetFirst "" "PersistentVolume" $volumeName }}
+        {{- $.Include "PersistentVolume" $pv | nindent 4 -}}
+    {{- end }}
+{{- end -}}

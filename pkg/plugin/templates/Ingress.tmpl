@@ -1,0 +1,71 @@
+{{- define "Ingress" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "load_balancer_ingress" . }}
+    {{- template "application_details" . }}
+    {{- $missingSvcs := list }}
+    {{- $unhealthySvcs := list }}
+    {{- range .Spec.rules }}
+        {{- range .http.paths }}
+            {{- $ingSvcName := coalesce .backend.service.name .backend.serviceName }}
+            {{- $ingSvcPortNumber := coalesce .backend.service.port.number .backend.servicePort }}
+            {{- $ingSvcPortName := coalesce .backend.service.port.name .backend.serviceName }}
+            {{- $ingSvcPort := coalesce $ingSvcPortNumber $ingSvcPortName }}
+            {{- if not (and $ingSvcName $ingSvcPort) }}
+                {{- "Ingress has no service reference" | yellow | bold | nindent 2 }}: Ingress doesn't have either a name ({{ $ingSvcName }}) or a port ({{ $ingSvcPort }}).
+            {{- else }}
+                {{- $svc := $.KubeGetFirst $.Namespace "Service" $ingSvcName }}
+                {{- if not $svc }}
+                    {{- if not ($missingSvcs | has $ingSvcName) }}
+                        {{- "Service" | bold | nindent 2 }}/{{ $ingSvcName }} {{ "doesn't exist" | red | bold }}, but it's referenced in Ingress.
+                        {{- $missingSvcs = append $missingSvcs $ingSvcName }}
+                    {{- end }}
+                {{- else }}
+                    {{- $portDefinedInSvc := false }}
+                    {{- range $svc.Spec.ports }}
+                        {{- if or (eq $ingSvcPortName .name) (eq ($ingSvcPortNumber | int) (.port | int)) }}
+                            {{- $portDefinedInSvc = true }}
+                        {{- end }}
+                    {{- end }}
+                    {{- if not $portDefinedInSvc }}
+                        {{- "Service port doesnt exist" | red | bold | nindent 2 }}: {{ "Service" | bold }}/{{ $ingSvcName }}:{{ $ingSvcPort }} referenced in ingress, but Service doesn't have that port defined.
+                    {{- else }}
+                        {{- $ep := $.KubeGetFirst $.Namespace "EndPoints" $ingSvcName }}
+                        {{- if not $ep.Object }}
+                            {{ "Service" | bold | nindent 2 }}/{{ $ingSvcName }} is {{ "experiencing outage" | red | bold }}, it doesn't have the corresponding {{ "EndPoints" | bold }}/{{ $ingSvcName }}.
+                        {{- else }}
+                            {{- $addressCount := 0 }}
+                            {{- range $ep.Object.subsets }}
+                                {{- range .addresses }}
+                                    {{- $addressCount = add1 $addressCount }}
+                                {{- end }}
+                            {{- end }}
+                            {{- if not $addressCount }}
+                                {{- if not ($unhealthySvcs | has $ingSvcName) }}
+                                    {{- "Service" | bold | nindent 2 }}/{{ $ingSvcName }} is {{ "experiencing outage" | red | bold }}, it doesn't have any Healthy endpoints.
+                                    {{- $unhealthySvcs = append $unhealthySvcs $ingSvcName }}
+                                {{- end }}
+                            {{- else }}
+                                {{- "Service" | bold | nindent 2 }}/{{ $ingSvcName }}:{{ $ingSvcPort }} has {{ printf "%d" $addressCount | green }} endpoints.
+                            {{- end }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "load_balancer_ingress" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- with .Status.loadBalancer.ingress }}
+        {{- if or (index . 0).hostname (index . 0).ip }}
+            {{- with (index . 0).hostname }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
+            {{- with (index . 0).ip }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
+        {{- else }} {{ "Pending LoadBalancer" | red | bold }}
+        {{- end }}
+    {{- end }}
+{{- end -}}

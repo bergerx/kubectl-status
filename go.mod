@@ -11,12 +11,14 @@ require (
 	github.com/rakyll/statik v0.1.7
 	github.com/spf13/cast v1.4.1
 	github.com/spf13/cobra v1.2.1
+	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.9.0
-	k8s.io/api v0.22.3
-	k8s.io/apimachinery v0.22.3
-	k8s.io/cli-runtime v0.22.3
-	k8s.io/client-go v0.22.3
-	k8s.io/kubectl v0.22.3
-	k8s.io/metrics v0.22.3
+	k8s.io/api v0.22.4
+	k8s.io/apimachinery v0.22.4
+	k8s.io/cli-runtime v0.22.4
+	k8s.io/client-go v0.22.4
+	k8s.io/klog/v2 v2.30.0
+	k8s.io/kubectl v0.22.4
+	k8s.io/metrics v0.22.4
 	sigs.k8s.io/yaml v1.3.0
 )

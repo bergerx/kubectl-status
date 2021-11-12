@@ -1,0 +1,55 @@
+{{- define "DaemonSet" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "daemonset_replicas_status" . }}
+    {{- template "conditions_summary" . }}
+    {{- $rolloutStatus := .RolloutStatus . }}
+    {{- if not $rolloutStatus.done }}
+        {{- "Ongoing Rollout" | yellow | bold | redBoldIf $rolloutStatus.error | nindent 2 }}
+        {{- with $rolloutStatus.message }}: {{ . | yellow }}{{ end }}
+        {{- with $rolloutStatus.error }}: Error: {{ . | red }}{{ end }}
+    {{- end }}
+    {{- template "recent_daemonset_rollouts" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "daemonset_replicas_status" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if .Status.desiredNumberScheduled }}
+        {{- printf "desired:%d" .Status.desiredNumberScheduled | bold | nindent 2 }}
+        {{- if hasKey .Status "currentNumberScheduled" }}, {{ printf "current:%d" .Status.currentNumberScheduled | redBoldIf (not ( eq .Status.desiredNumberScheduled .Status.currentNumberScheduled)) }}{{ end }}
+        {{- if hasKey .Status "numberAvailable" }}, {{ printf "available:%d" .Status.numberAvailable | redBoldIf (not ( eq .Status.desiredNumberScheduled .Status.numberAvailable)) }}{{ end }}
+        {{- if hasKey .Status "numberReady" }}, {{ printf "ready:%d" .Status.numberReady | redBoldIf (not (eq .Status.desiredNumberScheduled .Status.numberReady)) }}{{ end }}
+        {{- if hasKey .Status "updatedNumberScheduled" }}, {{ printf "updated:%d" .Status.updatedNumberScheduled | redBoldIf (not (eq .Status.desiredNumberScheduled .Status.updatedNumberScheduled)) }}{{ end }}
+        {{- with .Status.numberMisscheduled }}{{ "numberMisscheduled" | red | bold }}:{{ . }}{{- end }}
+    {{- else }}
+        {{- "Fault!" | red | bold | nindent 2 }}:  The total number of nodes that should be running the daemon pod is not yet set (".status.desiredNumberScheduled").
+    {{- end }}
+{{- end -}}
+
+{{- define "recent_daemonset_rollouts" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- $sectionHeader := false }}
+    {{- $previousRevision := "" }}
+    {{- range .KubeGetByLabelsMap .Namespace "controllerrevisions" .Spec.selector.matchLabels }}
+        {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+        {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
+            {{- if not $sectionHeader }}
+                {{- "Rollouts:" | nindent 2 }}
+                {{- $sectionHeader = true }}
+            {{- end }}
+            {{- "" | nindent 4 }}
+            {{- with .Metadata.creationTimestamp }}{{ . | colorAgo }} ago{{ end }} used {{ .Kind | bold }}/{{ .Name }}.
+            {{- if and $previousRevision $.RenderOptions.IncludeRolloutDiffs }}
+                {{- with $.KubeGetUnifiedDiffString "ControllerRevision" $.Namespace $previousRevision.Name .Name }}
+                    {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 6 }}
+                {{- end }}
+            {{- end }}
+            {{- $previousRevision = . }}
+        {{- end }}
+    {{- end }}
+{{- end }}

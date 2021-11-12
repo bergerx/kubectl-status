@@ -1,0 +1,17 @@
+{{- define "CronJob" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- if .Status.lastScheduleTime }}, last ran at {{ .Status.lastScheduleTime }} ({{ .Status.lastScheduleTime | colorAgo }} ago)
+    {{- else }}
+        {{- "Not yet scheduled" | yellow | bold | nindent 2 }}
+    {{- end }}
+    {{- with .Status.active }}
+        {{- range . }}
+            {{- "Active" | green | nindent 2 }}: {{ .kind | bold }}/{{ .name }} is running.
+        {{- end }}
+    {{- end }}
+    {{- template "application_details" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

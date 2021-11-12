@@ -1,0 +1,41 @@
+{{- define "PersistentVolume" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- "PV" | nindent 2 }} is {{- with .Status.phase }} {{ . | colorKeyword }}{{ end }}
+    {{- with .Spec.storageClassName  }} managed by {{ "StorageClass" | bold }}/{{ . }}{{ end }}
+    {{- with index .Annotations "kubernetes.io/createdby" }} created by {{ . | bold }}{{ end }}
+    {{- with index .Annotations "pv.kubernetes.io/provisioned-by" }} provisioned by {{ . | bold }}{{ end }}
+    {{- with index .Spec.accessModes 0 }} with {{ . | bold }} mode{{ end }}
+    {{- with .Status.reason }}{{ "reason" | bold }}: {{ . }}{{ end }}
+    {{- with .Status.message }}{{ "message" | red | bold | nindent 2 }}: {{ . }}{{- end }}{{/* Exists usually when there is problem */}}
+    {{- with .Spec.claimRef }}
+        {{- "Created" | nindent 2 }} for {{ .kind | bold }}/{{ .name }} -n {{ .namespace }}
+        {{- $pvc := $.KubeGetFirst .namespace .kind .name }}
+        {{- if $pvc.Object }}
+            {{- if ne $pvc.Metadata.uid .uid }}
+                {{- "Dangling" | red | bold | nindent 4 }}: The PVC referenced in this PV is replaced by a new one. And a new PV is created for the replacement PVC.
+                {{- "PVC" | nindent 6 }} uid referenced in this PV: {{ .uid }}
+                {{- "Current PVC" | nindent 6 }} uid: {{ $pvc.Metadata.uid }}
+            {{- end }}
+        {{- else }}
+            {{- "Replaced" | red | bold | nindent 4 }}: This PVC doesn't exist anymore. Its likely that this PV is dangling.
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.azureDisk }}
+        {{- "Azure Disk" | bold | nindent 2 }}
+        {{- with .kind }} of kind {{ . | bold }}{{ end }}
+        {{- with .readOnly }}, in {{ "RO" | bold | yellow }} mode{{ end }}
+        {{- with .cachingMode }}, with {{ . | bold }} host cache{{end}}
+        {{- with .fsType }}, using {{ . | bold }} FS type{{end}}
+        {{- "Disk URI" | nindent 4 }}: {{ .diskURI }}
+    {{- end }}
+    {{- with .Spec.azureFiles }}
+        {{- "Azure Files" | bold | nindent 2 }}
+        {{- with .shareName }}, share name is {{ . | bold }}{{end}}
+        {{- with .readOnly }}, in {{ "RO" | bold | yellow }} mode{{ end }}
+    {{- end }}
+    {{- template "application_details" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

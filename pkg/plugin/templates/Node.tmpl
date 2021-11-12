@@ -1,0 +1,145 @@
+{{- define "Node" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "application_details" . }}
+    {{- .Status.nodeInfo.operatingSystem | bold | nindent 2 }} {{ .Status.nodeInfo.osImage }} ({{ .Status.nodeInfo.architecture }}), kernel {{ .Status.nodeInfo.kernelVersion }}, kubelet {{ .Status.nodeInfo.kubeletVersion }}, kube-proxy {{ .Status.nodeInfo.kubeProxyVersion }}
+    {{- if or (index .Labels "node.kubernetes.io/instance") (index .Labels "topology.kubernetes.io/region") (index .Labels "failure-domain.beta.kubernetes.io/region") (index .Labels "topology.kubernetes.io/zone") (index .Labels "failure-domain.beta.kubernetes.io/region") }}
+        {{- "cloudprovider" | bold | nindent 2 }}
+        {{- with index .Labels "topology.kubernetes.io/region" | default (index .Labels "failure-domain.beta.kubernetes.io/region") }} {{ . }}{{ end }}
+        {{- with index .Labels "topology.kubernetes.io/zone" | default (index .Labels "failure-domain.beta.kubernetes.io/zone") }}{{ . }}{{ end }}
+        {{- with index .Labels "node.kubernetes.io/instance" | default (index .Labels "beta.kubernetes.io/instance-type") }} {{ . }}{{ end }}
+        {{- with .Labels.agentpool }}, agentpool:{{ . }}{{ end }}
+        {{- with index .Labels "kubernetes.io/role" }}, role:{{ . }}{{ end }}
+    {{- end }}
+    {{- "images" | bold | nindent 2 }} {{ .Status.images | len }}
+    {{- if .Status.volumesInUse }} {{ "volumes" | bold }} inuse={{ .Status.volumesInUse | len }}
+        {{- with index .Status.allocatable "attachable-volumes-azure-disk" }}/{{ . }}{{ end }}, attached={{ .Status.volumesAttached | default list | len }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- with .KubeGetFirst "kube-node-lease" "Lease" .Name }}{{/*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject */}}
+        {{- "Lease" | bold | nindent 2 }} for {{ .Spec.leaseDurationSeconds }}s, renew in {{ .Spec.renewTime | ago }}
+    {{- end }}
+    {{- $podCount := 0 }}
+    {{- $podsTotalCpuUsage := 0.0 }}
+    {{- $podsTotalCpuRequests := 0.0 }}
+    {{- $podsTotalCpuLimits := 0.0 }}
+    {{- $podsTotalMemUsage := 0.0 }}
+    {{- $podsTotalMemRequests := 0.0 }}
+    {{- $podsTotalMemRequestsBurstable := 0.0 }}
+    {{- $podsTotalMemRequestsGuaranteed := 0.0 }}
+    {{- $podsTotalMemLimits := 0.0 }}
+    {{- range $pod := .KubeGetNonTerminatedPodsOnNode .Name }}
+        {{- $podCount = $podCount | add 1 }}
+        {{- range $containerSpec := $pod.Spec.containers | default list }}
+            {{- if $containerSpec.resources.requests.cpu }}
+                {{- $podsTotalCpuRequests = $podsTotalCpuRequests | addFloat64 ($containerSpec.resources.requests.cpu | quantityToFloat64) }}
+            {{- end }}
+            {{- if $containerSpec.resources.limits.cpu }}
+                {{- $podsTotalCpuLimits = $podsTotalCpuLimits | addFloat64 ($containerSpec.resources.limits.cpu | quantityToFloat64) }}
+            {{- end }}
+            {{- if $containerSpec.resources.requests.memory }}
+                {{- $podsTotalMemRequests = $podsTotalMemRequests | addFloat64 ($containerSpec.resources.requests.memory | quantityToFloat64) }}
+                {{- if eq $pod.Status.qosClass "Burstable" }}
+                    {{- $podsTotalMemRequestsBurstable = $podsTotalMemRequestsBurstable | addFloat64 ($containerSpec.resources.requests.memory | quantityToFloat64) }}
+                {{- else if eq $pod.Status.qosClass "Guaranteed"  }}
+                    {{- $podsTotalMemRequestsGuaranteed = $podsTotalMemRequestsGuaranteed | addFloat64 ($containerSpec.resources.requests.memory | quantityToFloat64) }}
+                {{- end }}
+            {{- end }}
+            {{- if $containerSpec.resources.limits.memory }}
+                {{- $podsTotalMemLimits = $podsTotalMemLimits | addFloat64 ($containerSpec.resources.limits.memory | quantityToFloat64) }}
+            {{- end }}
+            {{- if eq $pod.Status.phase "Running" }}
+                {{- $podMetrics := $.KubeGetFirst $pod.Namespace "PodMetrics" $pod.Name }}
+                {{- if $podMetrics.Object }}{{- if $podMetrics.Object.containers }}
+                    {{- $containerMetrics := $podMetrics.Object.containers | getMatchingItemInMapList (dict "name" .name) }}
+                    {{- if $containerMetrics }}
+                        {{- $podsTotalCpuUsage = $podsTotalCpuUsage | addFloat64 ($containerMetrics.usage.cpu | quantityToFloat64) }}
+                        {{- $podsTotalMemUsage = $podsTotalMemUsage | addFloat64 ($containerMetrics.usage.memory | quantityToFloat64) }}
+                    {{- end }}
+                {{- end }}{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- $inferredBurstableMemLimit := .Status.allocatable.memory | quantityToFloat64 | subFloat64 $podsTotalMemRequestsGuaranteed }}
+    {{- $inferredBestEffortMemLimit := $inferredBurstableMemLimit | subFloat64 $podsTotalMemRequestsBurstable }}
+    {{- "Inferred memory limits" | nindent 2 }} for BestEffort: {{ $inferredBestEffortMemLimit | humanizeSI "B" }}, for Burstable: {{ $inferredBurstableMemLimit | humanizeSI "B" }}
+    {{- $nodeMetrics := $.KubeGetFirst "" "NodeMetrics" .Name }}
+    {{- if ($nodeMetrics.Object | default dict).usage }}
+        {{- "pods" | bold | nindent 2 }}: usage/allocatable:{{ $podCount }}/
+        {{- .Status.allocatable.pods | quantityToFloat64 | printf "%g" }}(
+        {{- percent ($podCount | float64) (.Status.allocatable.pods | quantityToFloat64) | colorPercent "%.0f%%" }})
+        {{- if eq ($podCount | float64) (.Status.allocatable.pods | quantityToFloat64) }}
+            {{- "Reached Max Pods Limit" | red | bold | nindent 4 }}: Number of Pods that can run on this Kubelet (`--max-pods`) limit is reached. No more pods will be scheduled to this Node even if there is free resource (E.g. cpu/mem).
+        {{- end }}
+        {{- "cpu" | bold | nindent 2 }}: usage/allocatable:{{ $nodeMetrics.Object.usage.cpu | quantityToFloat64 | printf "%g" }}/
+        {{- .Status.allocatable.cpu | quantityToFloat64 | printf "%g" }}(
+        {{- percent ($nodeMetrics.Object.usage.cpu | quantityToFloat64) (.Status.allocatable.cpu | quantityToFloat64) | colorPercent "%.0f%%" }})
+        {{- $percent := percent $podsTotalCpuUsage (.Status.allocatable.cpu | quantityToFloat64) }}
+        {{- "" }}, allocated usage:{{ $podsTotalCpuUsage | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)/[req:
+        {{- $percent := percent $podsTotalCpuRequests (.Status.allocatable.cpu | quantityToFloat64) }}
+        {{- $podsTotalCpuRequests | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable), lim:
+        {{- $percent := percent $podsTotalCpuLimits (.Status.allocatable.cpu | quantityToFloat64) }}
+        {{- $podsTotalCpuLimits | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)]
+        {{- if ge $podsTotalCpuLimits (.Status.allocatable.cpu | quantityToFloat64) }}
+            {{- "CPU overcommitted" | red | bold | nindent 4 }}: Application may be slow, applications are more likely to race for free cpu cycles.
+        {{- end }}
+        {{- "mem" | bold  | nindent 2 }}: usage/allocatable:{{ $nodeMetrics.Object.usage.memory | quantityToFloat64 | humanizeSI "B" }}/
+        {{- .Status.allocatable.memory | quantityToFloat64 | humanizeSI "B" }}(
+        {{- percent ($nodeMetrics.Object.usage.memory | quantityToFloat64) (.Status.allocatable.memory | quantityToFloat64) | colorPercent "%.0f%%" }})
+        {{- $percent := percent $podsTotalMemUsage (.Status.allocatable.memory | quantityToFloat64) }}
+        {{- "" }}, allocated usage:{{ $podsTotalMemUsage | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)/[req:
+        {{- $percent := percent $podsTotalMemRequests (.Status.allocatable.memory | quantityToFloat64) }}
+        {{- $podsTotalMemRequests | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable), lim:
+        {{- $percent := percent $podsTotalMemLimits (.Status.allocatable.memory | quantityToFloat64) }}
+        {{- $podsTotalMemLimits | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)]
+        {{- if ge $podsTotalMemLimits (.Status.allocatable.memory | quantityToFloat64) }}
+            {{- "Memory overcommitted" | red | bold | nindent 4 }}: Application may be OOMKilled. Expect BestEffort and then Burstable pods to have OOMKill due to overcommitted memory on the node.
+        {{- end }}
+        {{- "ephemeral-storage" | bold | nindent 2 }}: {{index .Status.allocatable "ephemeral-storage" | quantityToFloat64 | humanizeSI "B" }}
+    {{- else }}
+        {{- "allocatable" | nindent 2 }}: pods:{{ .Status.allocatable.pods }}, cpu:{{ .Status.allocatable.cpu }}, mem:{{ .Status.allocatable.memory | quantityToFloat64 | humanizeSI "B" }}, ephemeral-storage:{{index .Status.allocatable "ephemeral-storage" | quantityToFloat64 | humanizeSI "B" }}
+    {{- end }}
+    {{- with .KubeGetNodeStatsSummary .Name }}
+        {{- "kubelet-api/stats/summary"  | nindent 2 }}:
+        {{- "node overall" | nindent 4 }}: {{ template "node_stats_summary_resources" .node }}
+        {{- range .node.systemContainers }}
+            {{- .name | nindent 4 }}: {{ template "node_stats_summary_resources" . }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "node_stats_summary_fs" }}
+    {{- .usedBytes | float64 | humanizeSI "B" }}/{{ .capacityBytes | float64 | humanizeSI "B" -}}, {{ .availableBytes | float64 | humanizeSI "B" }} still free; {{ "" }}
+    {{- .inodesUsed | float64 | humanizeSI "" }}/{{ .inodes | float64 | humanizeSI "" }} inode, {{ .inodesFree | float64 | humanizeSI "" }} inode still free
+{{- end -}}
+
+{{- define "node_stats_summary_resources" }}
+    {{- /* Expects one of:
+           * kubelet-api/stats/summary -> node
+           * kubelet-api/stats/summary -> node.systemContainers */ -}}
+    {{- with .cpu.usageNanoCores }}cpu {{ . | float64 | divFloat64 1000000000 | printf "%.2g" }}core/sec, {{ end }}
+    {{- with .memory -}}
+        mem {{ .usageBytes | float64 | humanizeSI "B" -}}
+        , workingSet {{ .workingSetBytes | float64 | humanizeSI "B" -}}
+        , rss {{ .rssBytes | float64 | humanizeSI "B" -}}
+        {{- if .available -}}
+        , available {{ .available | float64 | humanizeSI "B" -}}
+        {{- end -}}
+        , pageFaults/major {{ .pageFaults | float64 | humanizeSI "" }}/{{ .majorPageFaults | float64 | humanizeSI "" }}
+    {{- end }}
+    {{- with .rlimit -}}
+    , processes {{ .curproc | float64  | humanizeSI "" }}/{{ .maxpid | float64  | humanizeSI "" }} (rlimit)
+    {{- end }}
+    {{- with .network }}
+      network: rx/tx {{ .rxBytes | float64 | humanizeSI "B" }}/{{ .txBytes | float64 | humanizeSI "B" }}, rx/tx errors {{ .rxErrors | humanizeSI "" }}/{{ .txErrors | humanizeSI "" }}
+    {{- end }}
+    {{- if .fs }}
+      {{ "rootfs" | bold }}: {{ template "node_stats_summary_fs" .fs }}
+        {{- with .runtime.imageFs }}
+      {{ "imagefs" | bold }}: {{ template "node_stats_summary_fs" . }}
+        {{- end }}
+      {{- end }}
+{{- end -}}

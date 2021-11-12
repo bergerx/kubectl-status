@@ -1,0 +1,38 @@
+{{- define "ReplicaSet" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
+           and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
+    {{- $injectedStatus := .Status }}
+    {{- if not (hasKey .Status "readyReplicas") }}
+        {{- $injectedStatus := set $injectedStatus "readyReplicas" 0.0 }}
+    {{- end }}
+    {{- if not (hasKey .Status "availableReplicas") }}
+        {{- $injectedStatus := set $injectedStatus "availableReplicas" 0.0 }}
+    {{- end }}
+    {{- $injectedManifest := set .Object "status" $injectedStatus }}
+    {{- template "replicas_status" $injectedManifest }}
+    {{- template "conditions_summary" . }}
+    {{- if and .Spec.replicas (or (not .Status.replicas) (not .Status.readyReplicas)) }}
+        {{- "Outage" | red | bold | nindent 2 }}: ReplicaSet has no Ready replicas.
+    {{- end }}
+    {{- if hasKey .Annotations "deployment.kubernetes.io/desired-replicas" }}
+        {{- $deploymentDesiredReplicas := index .Annotations "deployment.kubernetes.io/desired-replicas" | float64 }}
+        {{- if $deploymentDesiredReplicas }}
+            {{- if .Spec.replicas }}
+                {{- if ne $deploymentDesiredReplicas (.Spec.replicas | float64) }}
+                    {{- "Ongoing rollout" | yellow | bold | nindent 2 }}, check Owner Reference resources.
+                {{- end }}
+            {{- else }}{{/* means .Spec.replicass: 0 */}}
+                {{- "Old" | red | bold | nindent 2 }}: This ReplicaSet is likely replaced by a new one, check Owner Reference resources.
+            {{- end }}
+        {{- else }}{{/* means deployment.kubernetes.io/desired-replicas: "0" */}}
+            {{- template "suspended" . }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

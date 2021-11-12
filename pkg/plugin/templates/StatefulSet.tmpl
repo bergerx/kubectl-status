@@ -1,0 +1,68 @@
+{{- define "StatefulSet" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- /* When there is no readyReplicas, STS may not have related fields at all */ -}}
+    {{- $status := .Status }}
+    {{- $_ := set $status "readyReplicas" ($status.readyReplicas | default 0) }}
+    {{- $_ := set $status "currentReplicas" ($status.replicas | default 0) }}
+    {{- $_ := set .Object "status" $status }}
+    {{- template "replicas_status" . }}
+    {{- template "suspended" . }}
+    {{- template "conditions_summary" . }}
+    {{- $rolloutStatus := .RolloutStatus . }}
+    {{- if not $status.readyReplicas }}
+        {{- "Outage" | red | bold | nindent 2 }}: StatefulSet has no Ready replicas.
+        {{- if and $status.currentRevision (eq ($status.observedGeneration | default 1) 1) }}
+            {{- "Stuck Initial Rollout?" | yellow | bold | nindent 2 }} First rollout not yet progressed.
+        {{- end }}
+    {{- else if ne $status.currentReplicas $status.readyReplicas }}
+        {{- if $rolloutStatus.done }}
+            {{- "Not Ready Replicas" | yellow | bold | nindent 2 }}: {{ sub $status.currentReplicas $status.readyReplicas }} replicas are not Ready.
+        {{- end }}
+    {{- end }}
+    {{- if not $rolloutStatus.done }}
+        {{- "Ongoing rollout" | yellow | bold | redBoldIf $rolloutStatus.error | nindent 2 }}
+        {{- with $rolloutStatus.message }}: {{ . | yellow }}{{ end }}
+        {{- with $rolloutStatus.error }}: Error: {{ . | red }}{{ end }}
+        {{- if eq ($status.updatedCount | default 0) 0 }}
+            {{- "Stuck Rollout?" | yellow | bold | nindent 2 }}: Still replacing the first Pod, may indicate a stuck rollout.
+        {{- end }}
+        {{- with .KubeGetUnifiedDiffString "ControllerRevision" .Namespace $status.currentRevision $status.updateRevision }}
+            {{- "Active Rollout Diff:" | nindent 2 }}
+            {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 4 }}
+        {{- end }}
+    {{- else }}
+        {{- if and .Spec.replicas (eq $status.readyReplicas 0) }}
+            {{- "Stuck rollout" | red | bold | nindent 2 }}: No ready replicas, this StatefulSet won't likely go further.
+        {{- end }}
+    {{- end }}
+    {{- template "recent_statefulset_rollouts" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}
+
+{{- define "recent_statefulset_rollouts" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- $sectionHeader := false }}
+    {{- $previousRevision := "" }}
+    {{- range .KubeGetByLabelsMap .Namespace "controllerrevisions" .Spec.selector.matchLabel }}
+        {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+        {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
+            {{- if not $sectionHeader }}
+                {{- "Rollouts:" | nindent 2 }}
+                {{- $sectionHeader = true }}
+            {{- end }}
+            {{- "" | nindent 4 }}
+            {{- with .Metadata.creationTimestamp }}{{ . | colorAgo }} ago{{ end }} used {{ .Kind | bold }}/{{ .Name }}.
+            {{- if and $previousRevision $.RenderOptions.IncludeRolloutDiffs }}
+                {{- with $.KubeGetUnifiedDiffString "ControllerRevision" $.Namespace $previousRevision.Name .Name }}
+                    {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 6 }}
+                {{- end }}
+            {{- end }}
+            {{- $previousRevision = . }}
+        {{- end }}
+    {{- end }}
+{{- end }}

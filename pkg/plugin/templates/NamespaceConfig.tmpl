@@ -1,0 +1,13 @@
+{{- define "NamespaceConfig" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "conditions_summary" . }}
+    {{- range $resource, $valueList := .Status.lockedResourceStatuses }}
+        {{- $resource | nindent 2 }}: {{ range $status := $valueList }}{{ template "condition_summary" . }}{{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

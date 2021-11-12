@@ -1,0 +1,72 @@
+{{- define "Service" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- if eq .Spec.clusterIP "None" }} {{ "Headless" | yellow | bold }}{{- end }}
+    {{- if eq .Spec.type "LoadBalancer" }}
+        {{- template "load_balancer_ingress" . }}
+    {{- end }}
+    {{- $endpoint := .KubeGetFirst .Namespace "Endpoints" .Name }}
+    {{- if $endpoint.Object }}
+        {{- if hasKey $endpoint.Annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
+            , last endpoint change was {{ index $endpoint.Annotations "endpoints.kubernetes.io/last-change-trigger-time"  | colorAgo }} ago
+        {{- end}}
+    {{- end}}
+    {{- template "application_details" . }}
+    {{- if $endpoint.Object }}
+        {{- if $endpoint.Object.subsets }}
+            {{- range $endpoint.Object.subsets }}
+                {{- $ports := .ports }}
+                {{- if .addresses }}
+                    {{- range .addresses }}
+  Ready: {{ template "endpoint_subset_address" (dict "address" . "ports" $ports) }}
+                    {{- end }}
+                {{- else }}
+  {{ "Outage" | red | bold }}: This service doesn't match any Ready pods.
+                {{- end }}
+                {{- with .notReadyAddresses }}
+                    {{- range . }}
+  {{ "NotReady" | red | bold }}: {{ template "endpoint_subset_address" (dict "address" . "ports" $ports) }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- else }}
+  {{ "No matching pods" | red | bold }}: Service selector either doens't match any Pods or the Service's targetPort doesn't match the Pod's port.
+        {{- end }}
+    {{- else }}
+  {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "matching_ingresses" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "matching_ingresses" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if and .RenderOptions.IncludesEnabled .RenderOptions.IncludeMatchingIngresses }}
+        {{- range $index, $ing := .KubeGetIngressesMatchingService .Namespace .Name }}
+            {{- if eq $index 0 }}
+                {{- "Ingresses matching this Service:" | nindent 2}}
+            {{- end }}
+            {{- $.Include "Ingress" $ing | nindent 4 }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "endpoint_subset_address" }}
+    {{- /* Expects to get a map with these keys:
+           * address: either Endpoints.subsets.addresses[N] or Endpoints.subsets.notReadyAddresses
+           * ports: Endpoints.subsets.ports
+        */ -}}
+    {{- $ip := .address.ip }}
+    {{- $hasTargetRef := not (not .address.targetRef) }}
+    {{- if .address.targetRef }}
+        {{- .address.targetRef.kind | bold }}/{{ .address.targetRef.name }}
+        {{- with .address.targetRef.namespace }} -n {{ . }}{{ end }}
+        {{- with .address.nodeName }} on {{ "Node" | bold }}/{{ . }}{{ end }}
+    {{- end }}
+    {{- range $index, $port := .ports }}
+        {{- if $hasTargetRef }}, {{ else }}{{if $index}}, {{end}}{{ end }}
+        {{- $ip }}:{{ $port.port }}/{{ $port.protocol }}{{ with $port.name }} ({{ . }}){{ end }}
+    {{- end }}
+{{- end -}}
