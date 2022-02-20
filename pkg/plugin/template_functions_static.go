@@ -220,7 +220,19 @@ func isStatusConditionHealthy(condition map[string]interface{}) bool {
 		condition["type"] == "OOMKilling",
 		condition["type"] == "ReadonlyFilesystem",
 		condition["type"] == "TaskHung",
-		condition["type"] == "UnregisterNetDevice":
+		condition["type"] == "UnregisterNetDevice",
+		condition["type"] == "FrequentDockerRestart",
+		condition["type"] == "FilesystemCorruptionProblem",
+		condition["type"] == "FrequentContainerdRestart",
+		condition["type"] == "FrequentKubeletRestart",
+		condition["type"] == "RebootScheduled",
+		condition["type"] == "KubeletProblem",
+		condition["type"] == "TerminateScheduled",
+		condition["type"] == "ContainerRuntimeProblem",
+		condition["type"] == "RedeployScheduled",
+		condition["type"] == "PreemptScheduled",
+		condition["type"] == "FreezeScheduled",
+		condition["type"] == "FrequentUnregisterNetDevice":
 		switch condition["status"] {
 		case "False":
 			return true
