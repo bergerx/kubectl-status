@@ -13,9 +13,7 @@ fully supported.
 - [Features](#features)
 - [Usage](#usage)
 - [Development](#development)
-    * [Release new version](#release-new-version)
-    * [Guidelines for content](#guidelines-for-content)
-    * [Guidelines for colorization](#guidelines-for-colorization)
+    * [Guidelines](./CONTRIBUTING.md#general-guidelines)
 - [License](#license)
 
 ## Installation
@@ -82,6 +80,10 @@ kubectl status deployment my-dep        # Show status of a particular deployment
 kubectl status deployments.v1.apps      # Show deployments in the "v1" version of the "apps" API group.
 kubectl status node -l node-role.kubernetes.io/master  # Show status of nodes marked as master
 ```
+
+## Development
+
+Please see [CONTRIBUTING.md](./CONTRIBUTING.md) file for development related documents.
 
 ## License
 
