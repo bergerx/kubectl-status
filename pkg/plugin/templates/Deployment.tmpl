@@ -43,13 +43,14 @@
         {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
         {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
             {{- if not $sectionHeader }}
-  Rollouts:
+                {{- "Rollouts:" | nindent 2}}
+                {{- template "rollout_diffs_flag_help" $ }}
                 {{- $sectionHeader = true }}
             {{- end }}
     {{ with .Metadata.creationTimestamp }}{{ . | colorAgo }} ago{{ end }} managed by {{ .Kind | bold }}/{{ .Name }}
             {{- if and $previousReplicaSet $.RenderOptions.IncludeRolloutDiffs }}
                 {{- with $.KubeGetUnifiedDiffString "ReplicaSet" $.Namespace $previousReplicaSet.Name .Name }}
-      {{ "Diff" | bold }}:
+                    {{- "Diff" | bold | nindent 6 }}:
                     {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 6 }}
                 {{- end }}
             {{- end }}

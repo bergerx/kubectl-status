@@ -25,6 +25,7 @@ func funcMap() template.FuncMap {
 		"yellow":                   color.YellowString,
 		"red":                      color.RedString,
 		"cyan":                     color.CyanString,
+		"blue":                     color.BlueString,
 		"bold":                     color.New(color.Bold).SprintfFunc(),
 		"colorAgo":                 colorAgo,
 		"colorDuration":            colorDuration,

@@ -53,6 +53,7 @@
         {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
             {{- if not $sectionHeader }}
                 {{- "Rollouts:" | nindent 2 }}
+                {{- template "rollout_diffs_flag_help" $ }}
                 {{- $sectionHeader = true }}
             {{- end }}
             {{- "" | nindent 4 }}
