@@ -54,7 +54,7 @@
 {{- define "pod_volumes" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- if .RenderOptions.IncludesEnabled }}
-        {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary $.Spec.nodeName }}
+        {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
         {{- $podStatsSummary := $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
         {{- $ephemeralStorage := index $podStatsSummary "ephemeral-storage" }}
         {{- if $ephemeralStorage }}
@@ -75,7 +75,7 @@
         {{- end }}
         {{- $pvcsHeader := true }}
         {{- range $volume := .Spec.volumes }}
-            {{- with .persistentVolumeClaim }}
+            {{- with and $podStatsSummary.volume .persistentVolumeClaim }}
                 {{- if $pvcsHeader }}{{ $pvcsHeader = false }}
                     {{- "PVCs:" | nindent 2 }}
                 {{- end }}
