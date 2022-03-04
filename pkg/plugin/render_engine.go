@@ -177,7 +177,7 @@ func (e renderEngine) newBuilder() *resource.Builder {
 }
 
 // getQueriedResources is the main entrypoint when using the cli.
-func (e renderEngine) getQueriedResources(args []string) ([]*resource.Info, error) {
+func (e renderEngine) getQueriedResources(args []string) (*resource.Result, []*resource.Info, error) {
 	filenameOptions := e.ResourceBuilderFlags.FileNameFlags.ToOptions()
 	builder := e.newBuilder().
 		FilenameParam(false, &filenameOptions).
@@ -187,10 +187,7 @@ func (e renderEngine) getQueriedResources(args []string) ([]*resource.Info, erro
 		ContinueOnError()
 	results := builder.Do()
 	resourceInfos, err := results.Infos()
-	if err == nil && len(resourceInfos) == 0 {
-		return nil, fmt.Errorf("no resources found")
-	}
-	return resourceInfos, err
+	return results, resourceInfos, err
 }
 
 func (e renderEngine) getResourceQueryResults(namespace string, args []string) *resource.Result {

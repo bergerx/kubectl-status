@@ -177,7 +177,8 @@
 {{- end -}}
 
 {{- define "rollout_diffs_flag_help" }}
-    {{- with not $.RenderOptions.IncludeRolloutDiffs }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- with not .RenderOptions.IncludeRolloutDiffs }}
       {{- " Use the `--include-rollout-diffs` flag to see the diff between each rollout!" | blue }}
     {{- end }}
 {{- end }}

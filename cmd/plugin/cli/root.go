@@ -107,6 +107,8 @@ func RootCmd() *cobra.Command {
 		"Include unified diff between stored revisions of Deployment, DaemonSet and StatefulSets.")
 	cmd.Flags().BoolVar(&options.RenderOptions.Shallow, "shallow", false,
 		"Render only the immediate object and disable all other --include-* flags. This will override any other flags.")
+	cmd.Flags().BoolVarP(&options.RenderOptions.Watch, "watch", "w", false,
+		"After listing/getting the requested object, watch for changes.")
 	cobra.OnInitialize(viper.AutomaticEnv)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	return cmd

@@ -10,6 +10,7 @@ type RenderOptions struct {
 	IncludeRolloutDiffs       bool
 	Shallow                   bool
 	Local                     bool
+	Watch                     bool
 }
 
 // IncludesEnabled is for templates to use.
