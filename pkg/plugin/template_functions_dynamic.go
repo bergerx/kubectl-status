@@ -170,9 +170,9 @@ func (r RenderableObject) KubeGetOwners() (out []RenderableObject) {
 		if err != nil {
 			klog.V(3).InfoS("KubeGetOwners failed parsing apiVersion", "apiVersion", owner.APIVersion)
 			kindVersionGroup = owner.Kind
-		} else if gv.Group == "" {
+		} else if gv.Group == "" && gv.Version != "v1" {
 			kindVersionGroup = fmt.Sprintf("%s.%s", owner.Kind, gv.Version)
-			klog.V(5).InfoS("KubeGetOwners", "kindVersionGroup", kindVersionGroup)
+			klog.V(5).InfoS("KubeGetOwners", "kindVersionGroup", kindVersionGroup, "gv", gv)
 		} else {
 			kindVersionGroup = fmt.Sprintf("%s.%s.%s", owner.Kind, gv.Version, gv.Group)
 			klog.V(5).InfoS("KubeGetOwners", "kindVersionGroup", kindVersionGroup)
