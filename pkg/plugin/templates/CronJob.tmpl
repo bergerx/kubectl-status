@@ -10,6 +10,7 @@
             {{- "Active" | green | nindent 2 }}: {{ .kind | bold }}/{{ .name }} is running.
         {{- end }}
     {{- end }}
+    {{- template "kstatus_summary" . }}
     {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}

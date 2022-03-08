@@ -11,6 +11,7 @@
         {{- /* TODO: handle "work queue jobs" better */ -}}
         {{- template "job_parallel" . }}
     {{- end }}
+    {{- template "kstatus_summary" . }}
     {{- template "conditions_summary" . }}
     {{- template "application_details" . }}
     {{- template "recent_updates" . }}

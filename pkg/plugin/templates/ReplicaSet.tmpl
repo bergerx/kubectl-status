@@ -1,6 +1,7 @@
 {{- define "ReplicaSet" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
     {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,

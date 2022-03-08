@@ -1,6 +1,7 @@
 {{- define "PersistentVolumeClaim" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
     {{- template "application_details" . }}
     {{- template "conditions_summary" . }}
     {{- "PVC" | nindent 2 }}

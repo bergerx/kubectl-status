@@ -1,6 +1,7 @@
 {{- define "PersistentVolume" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
     {{- "PV" | nindent 2 }} is {{- with .Status.phase }} {{ . | colorKeyword }}{{ end }}
     {{- with .Spec.storageClassName  }} managed by {{ "StorageClass" | bold }}/{{ . }}{{ end }}
     {{- with index .Annotations "kubernetes.io/createdby" }} created by {{ . | bold }}{{ end }}

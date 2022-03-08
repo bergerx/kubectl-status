@@ -15,6 +15,7 @@
     {{- if .Status.volumesInUse }} {{ "volumes" | bold }} inuse={{ .Status.volumesInUse | len }}
         {{- with index .Status.allocatable "attachable-volumes-azure-disk" }}/{{ . }}{{ end }}, attached={{ .Status.volumesAttached | default list | len }}
     {{- end }}
+    {{- template "kstatus_summary" . }}
     {{- template "conditions_summary" . }}
     {{- with .KubeGetFirst "kube-node-lease" "Lease" .Name }}{{/*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject */}}
         {{- "Lease" | bold | nindent 2 }} for {{ .Spec.leaseDurationSeconds }}s, renew in {{ .Spec.renewTime | ago }}

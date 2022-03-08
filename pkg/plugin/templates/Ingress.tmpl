@@ -1,6 +1,7 @@
 {{- define "Ingress" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
     {{- template "load_balancer_ingress" . }}
     {{- template "application_details" . }}
     {{- $missingSvcs := list }}

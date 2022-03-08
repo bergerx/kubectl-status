@@ -19,5 +19,6 @@ require (
 	k8s.io/client-go v0.23.4
 	k8s.io/klog/v2 v2.40.1
 	k8s.io/kubectl v0.23.4
+	sigs.k8s.io/cli-utils v0.29.2
 	sigs.k8s.io/yaml v1.3.0
 )

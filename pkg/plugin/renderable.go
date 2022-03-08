@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
 func newRenderableObject(obj map[string]interface{}, engine renderEngine) RenderableObject {
@@ -23,6 +24,15 @@ func newRenderableObject(obj map[string]interface{}, engine renderEngine) Render
 type RenderableObject struct {
 	unstructured.Unstructured
 	engine *renderEngine
+}
+
+// KStatus return a Result object of kstatus for the object.
+func (r RenderableObject) KStatus() *kstatus.Result {
+	result, err := kstatus.Compute(&r.Unstructured)
+	if err != nil {
+		klog.V(2).ErrorS(err, "kstatus.Compute failed", "r", r)
+	}
+	return result
 }
 
 func (r RenderableObject) newRenderableObject(obj map[string]interface{}) RenderableObject {
@@ -106,11 +116,6 @@ func (r RenderableObject) RenderOptions() *RenderOptions {
 func (r RenderableObject) render(wr io.Writer) error {
 	klog.V(5).InfoS("called render, calling findTemplateName", "r", r)
 	templateName := findTemplateName(r.engine.Template, r.Kind())
-	klog.V(5).InfoS("found template, calling injectExtras", "r", r, "templateName", templateName)
-	//err := r.injectExtras()
-	//if err != nil {
-	//	klog.V(3).ErrorS(err, "ignoring error while injecting arbitrary extras", "r", r)
-	//}
 	klog.V(5).InfoS("calling executeTemplate on renderable", "r", r, "templateName", templateName)
 	err := r.engine.ExecuteTemplate(wr, templateName, r)
 	if err != nil {

@@ -11,6 +11,7 @@
             , last endpoint change was {{ index $endpoint.Annotations "endpoints.kubernetes.io/last-change-trigger-time"  | colorAgo }} ago
         {{- end}}
     {{- end}}
+    {{- template "kstatus_summary" . }}
     {{- template "application_details" . }}
     {{- if $endpoint.Object }}
         {{- if $endpoint.Object.subsets }}

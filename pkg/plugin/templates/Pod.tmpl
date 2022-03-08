@@ -1,6 +1,7 @@
 {{- define "Pod" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "pod_status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
     {{- template "application_details" . }}
     {{- .Include "pod_conditions_summary" . | nindent 2 }}
     {{- if not .Metadata.ownerReferences }}

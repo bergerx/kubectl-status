@@ -308,11 +308,11 @@ func colorKeyword(phase string) string {
 	    * pvc: .status.phase Bound
 	*/
 	switch phase {
-	case "Running", "Succeeded", "Active", "Available", "Bound", "valid", "Guaranteed", "Completed":
+	case "Running", "Succeeded", "Available", "Bound", "valid", "Guaranteed", "Completed", "Current":
 		return color.GreenString(phase)
-	case "Pending", "Released", "Burstable":
+	case "Pending", "Released", "Burstable", "Active", "InProgress":
 		return color.YellowString(phase)
-	case "Failed", "Unknown", "Terminating", "Evicted", "BestEffort", "OOMKilled", "ContainerCannotRun", "Error":
+	case "Failed", "Unknown", "Terminating", "Evicted", "BestEffort", "OOMKilled", "ContainerCannotRun", "Error", "NotFound":
 		return color.New(color.FgRed, color.Bold).Sprintf(phase)
 	default:
 		return phase

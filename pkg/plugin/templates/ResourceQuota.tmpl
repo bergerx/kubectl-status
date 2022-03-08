@@ -1,6 +1,7 @@
 {{- define "ResourceQuota" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
     {{- $hard := .Status.hard }}
     {{- range $key, $value := .Status.used }}
         {{- $key | nindent 2 }}: {{ $value }}/{{ index $hard $key }}
