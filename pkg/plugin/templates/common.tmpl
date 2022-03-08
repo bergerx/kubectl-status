@@ -81,8 +81,8 @@
         {{- /*gotype: sigs.k8s.io/cli-utils/pkg/kstatus/status.Result*/}}
         {{- .Status.String | colorKeyword | nindent 2 }}: {{ .Message }}
         {{- range .Conditions }}
-            {{- $notHealthy := ne .Status "True"  }}
-            {{- .Type.String | redIf $notHealthy | bold | nindent 4}}
+            {{- $notHealthy := eq .Status "True"  }}
+            {{- .Type.String | redIf $notHealthy | bold | nindent 4 }}:
             {{- with .Reason }} {{ . | redBoldIf $notHealthy }}{{ end }}
             {{- with .Message }}, {{ . | redIf $notHealthy }}{{ end }}
         {{- end }}
