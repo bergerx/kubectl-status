@@ -21,14 +21,13 @@
 
 {{- define "job_non_parallel" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if .Status.active }}, {{ "Active" | green }}{{ end }}
+    {{- if .Status.active }}, {{ "Active" | yellow | bold }}{{ end }}
     {{- if .Status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
     {{- if .Status.failed }}, {{ "Failed" | red | bold }}{{ end }}
 {{- end -}}
 
 {{- define "job_parallel" }}
-    TODO: handle parallel jobs  better
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if .Status.active }}, {{ "active" | green }}:{{ . }}{{ end }}
-    {{- if .Status.failed }}, {{ "failed" | red | bold }} {{ .Status.failed }}/{{ .Spec.backoffLimit }} times{{ end }}
+    {{- if .Status.active }}, {{ "Active" | yellow | bold }}{{ end }}
+    {{- if .Status.failed }}, {{ "Failed" | red | bold }} {{ .Status.failed }}/{{ .Spec.backoffLimit }} times.{{ end }}
 {{- end -}}

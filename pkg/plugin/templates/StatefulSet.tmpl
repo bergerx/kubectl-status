@@ -30,9 +30,11 @@
         {{- if eq ($status.updatedCount | default 0) 0 }}
             {{- "Stuck Rollout?" | yellow | bold | nindent 2 }}: Still replacing the first Pod, may indicate a stuck rollout.
         {{- end }}
-        {{- with .KubeGetUnifiedDiffString "ControllerRevision" .Namespace $status.currentRevision $status.updateRevision }}
-            {{- "Active Rollout Diff:" | nindent 2 }}
-            {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 4 }}
+        {{- if and (hasKey $status "currentRevision") (hasKey $status "updateRevision") }}
+            {{- with .KubeGetUnifiedDiffString "ControllerRevision" .Namespace $status.currentRevision $status.updateRevision }}
+                {{- "Active Rollout Diff:" | nindent 2 }}
+                {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 4 }}
+            {{- end }}
         {{- end }}
     {{- else }}
         {{- if and .Spec.replicas (eq $status.readyReplicas 0) }}
