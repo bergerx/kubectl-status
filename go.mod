@@ -20,6 +20,6 @@ require (
 	k8s.io/klog/v2 v2.60.1
 	k8s.io/kubectl v0.23.5
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 // indirect
-	sigs.k8s.io/cli-utils v0.29.2
+	sigs.k8s.io/cli-utils v0.29.4
 	sigs.k8s.io/yaml v1.3.0
 )
