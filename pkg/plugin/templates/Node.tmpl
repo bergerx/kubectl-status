@@ -135,7 +135,7 @@
     , processes {{ .curproc | float64  | humanizeSI "" }}/{{ .maxpid | float64  | humanizeSI "" }} (rlimit)
     {{- end }}
     {{- with .network }}
-      network: rx/tx {{ .rxBytes | float64 | humanizeSI "B" }}/{{ .txBytes | float64 | humanizeSI "B" }}, rx/tx errors {{ .rxErrors | humanizeSI "" }}/{{ .txErrors | humanizeSI "" }}
+      network: rx/tx {{ .rxBytes | float64 | humanizeSI "B" }}/{{ .txBytes | float64 | humanizeSI "B" }}, rx/tx errors {{ .rxErrors | float64 | humanizeSI "" }}/{{ .txErrors | float64 | humanizeSI "" }}
     {{- end }}
     {{- if .fs }}
       {{ "rootfs" | bold }}: {{ template "node_stats_summary_fs" .fs }}
