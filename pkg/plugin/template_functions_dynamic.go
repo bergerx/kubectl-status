@@ -418,12 +418,7 @@ func removeFieldsThatCreateDiffNoise(obj *unstructured.Unstructured) {
 	// https://github.com/kubernetes/kubernetes/issues/47554#issuecomment-522924195
 	unstructured.RemoveNestedField(obj.Object, "metadata", "labels", "controller.kubernetes.io/hash") // StatefulSet
 	unstructured.RemoveNestedField(obj.Object, "metadata", "labels", "controller-revision-hash")      // DaemonSet
-	// Well known helm hack to trigger workload rollouts:
-	// https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "checksum/config")
-	unstructured.RemoveNestedField(obj.Object, "spec", "template", "metadata", "annotations", "checksum/config")
-	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "checksum/secret")
-	unstructured.RemoveNestedField(obj.Object, "spec", "template", "metadata", "annotations", "checksum/secret")
+
 	unstructured.RemoveNestedField(obj.Object, "status")
 }
 
