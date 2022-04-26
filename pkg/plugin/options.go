@@ -28,4 +28,5 @@ func NewOptions() *Options {
 func (o Options) AddFlags(flags *pflag.FlagSet) {
 	o.ConfigFlags.AddFlags(flags)
 	o.ResourceBuilderFlags.AddFlags(flags)
+	o.RenderOptions.AddFlags(flags)
 }

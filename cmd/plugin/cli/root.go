@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
@@ -84,34 +85,21 @@ func RootCmd() *cobra.Command {
 		},
 		Version: versionString(),
 	}
+	flags := cmd.Flags()
+	initKlog(flags)
+	options.AddFlags(flags)
+	cobra.OnInitialize(viper.AutomaticEnv)
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	return cmd
+}
+
+func initKlog(flags *pflag.FlagSet) {
 	// We Follow https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md
 	// for the logs.
 	fs := flag.NewFlagSet("", flag.PanicOnError)
 	klog.InitFlags(fs)
 	defer klog.Flush()
-	cmd.Flags().AddGoFlagSet(fs)
-	options.AddFlags(cmd.Flags())
-	cmd.Flags().BoolVar(&options.RenderOptions.Local, "local", false,
-		"Run the template against the provided yaml manifest. Need to be used with a --filename parameter. No request to apiserver is done.")
-	cmd.Flags().BoolVar(&options.RenderOptions.IncludeOwners, "include-owners", true,
-		"Follow the ownerReferences in the objects and render them as well.")
-	cmd.Flags().BoolVar(&options.RenderOptions.IncludeEvents, "include-events", true,
-		"Include events in the output.")
-	cmd.Flags().BoolVar(&options.RenderOptions.IncludeMatchingServices, "include-matching-services", true,
-		"Include Services matching the Pod in the output.")
-	cmd.Flags().BoolVar(&options.RenderOptions.IncludeMatchingIngresses, "include-matching-ingresses", true,
-		"Include Ingresses referencing the Service in the output.")
-	cmd.Flags().BoolVar(&options.RenderOptions.IncludeApplicationDetails, "include-application-details", true,
-		"This will include well known application metadata into the output.")
-	cmd.Flags().BoolVar(&options.RenderOptions.IncludeRolloutDiffs, "include-rollout-diffs", false,
-		"Include unified diff between stored revisions of Deployment, DaemonSet and StatefulSets.")
-	cmd.Flags().BoolVar(&options.RenderOptions.Shallow, "shallow", false,
-		"Render only the immediate object and disable all other --include-* flags. This will override any other flags.")
-	cmd.Flags().BoolVarP(&options.RenderOptions.Watch, "watch", "w", false,
-		"After listing/getting the requested object, watch for changes.")
-	cobra.OnInitialize(viper.AutomaticEnv)
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	return cmd
+	flags.AddGoFlagSet(fs)
 }
 
 // versionString returns the version prefixed by 'v'
