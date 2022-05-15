@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func TestRenderableObject_StatusConditions(t *testing.T) {
+func TestRenderableObjectStatusConditions(t *testing.T) {
 	type fields struct {
 		Unstructured unstructured.Unstructured
 		engine       *renderEngine

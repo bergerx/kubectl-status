@@ -27,7 +27,7 @@ func checkTemplate(t *testing.T, templateName string, obj map[string]interface{}
 	}
 }
 
-func Test_observed_generation_summary_template(t *testing.T) {
+func TestObservedGenerationSummaryTemplate(t *testing.T) {
 	tests := []struct {
 		name string
 		obj  map[string]interface{}
@@ -75,7 +75,7 @@ func Test_observed_generation_summary_template(t *testing.T) {
 		})
 	}
 }
-func Test_suspend_template(t *testing.T) {
+func TestSuspendTemplate(t *testing.T) {
 	tests := []struct {
 		name string
 		obj  map[string]interface{}
@@ -111,7 +111,7 @@ func Test_suspend_template(t *testing.T) {
 		})
 	}
 }
-func Test_owners_template(t *testing.T) {
+func TestOwnersTemplate(t *testing.T) {
 	tests := []struct {
 		name string
 		obj  map[string]interface{}

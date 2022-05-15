@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func Test_getTemplate(t *testing.T) {
+func TestGetTemplate(t *testing.T) {
 	t.Run("templates are parsable", func(t *testing.T) {
 		_, err := getTemplate()
 		if err != nil {

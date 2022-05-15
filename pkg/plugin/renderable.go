@@ -39,10 +39,6 @@ func (r RenderableObject) newRenderableObject(obj map[string]interface{}) Render
 	return newRenderableObject(obj, *r.engine)
 }
 
-func (r RenderableObject) options() *Options {
-	return &r.engine.Options
-}
-
 func (r RenderableObject) String() string {
 	kindAndName := fmt.Sprintf("%s/%s", r.Kind(), r.Name())
 	if namespace := r.Namespace(); namespace != "" {

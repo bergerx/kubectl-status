@@ -84,7 +84,7 @@ func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, lab
 	if !r.RenderOptions().IncludesEnabled() {
 		return
 	}
-	klog.V(5).InfoS("called template method KubeGetFirst",
+	klog.V(5).InfoS("called template method KubeGetByLabelsMap",
 		"r", r, "namespace", namespace, "labels", labels)
 	var labelPairs []string
 	for k, v := range labels {
@@ -129,7 +129,7 @@ func (r RenderableObject) KubeGetResourcesOwnedOf(resourceOrKind string) (out []
 	if !r.RenderOptions().IncludesEnabled() {
 		return
 	}
-	klog.V(5).InfoS("called template method KubeGetFirst", "r", r)
+	klog.V(5).InfoS("called template method KubeGetResourcesOwnedOf", "r", r)
 	restMapper, _ := r.engine.mappingFor(resourceOrKind)
 	dynamicInterface, _ := r.engine.dynamicInterface()
 	controllerRevisions, _ := dynamicInterface.
@@ -422,7 +422,6 @@ func removeFieldsThatCreateDiffNoise(obj *unstructured.Unstructured) {
 	unstructured.RemoveNestedField(obj.Object, "status")
 }
 
-// TODO: write one test that verifies this
 // RolloutStatus returns a map[string]interface{} with 3 keys: done: bool, message, error: string
 func (r RenderableObject) RolloutStatus(obj RenderableObject) map[string]interface{} {
 	klog.V(5).InfoS("called RolloutStatus", "r", r, "obj", obj)
