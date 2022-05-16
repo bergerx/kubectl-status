@@ -206,15 +206,8 @@ Then use `make` to get the compiled binary:
 
 ```bash
 make
-# the binary will be in bin/ folder
+# the binary will be linked into the bin/ folder
 bin/status pods
-```
-
-Cross compile (used by GitHub actions for new releases)
-
-```bash
-goreleaser release --skip-publish --skip-validate
-# the binaries will be in dist/ folder
 ```
 
 When working on a specific object, it may be easier to save the object and work on it locally:

@@ -1,4 +1,3 @@
-//go:generate statik -src templates -include *.tmpl
 package plugin
 
 import (

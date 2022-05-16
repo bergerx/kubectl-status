@@ -42,7 +42,7 @@ var (
 	}
 )
 
-func Test_getMatchingItemInMapList(t *testing.T) {
+func TestGetMatchingItemInMapList(t *testing.T) {
 	type args struct {
 		searchFor map[string]interface{}
 		mapList   []interface{}

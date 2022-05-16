@@ -5,27 +5,26 @@ release:
     name: kubectl-status
 before:
   hooks:
-    - go install github.com/rakyll/statik@v0.1.7
     - go generate ./...
 builds:
   - id: status
     goos:
-    - linux
-    - windows
-    - darwin
+      - linux
+      - windows
+      - darwin
     goarch:
-    - amd64
+      - amd64
     env:
       - CGO_ENABLED=0
       - GO111MODULE=on
     main: cmd/plugin/main.go
     ldflags: -s -w
-      -X github.com/bergerx/kubectl-status/pkg/version.version=
+      -X github.com/bergerx/kubectl-status/cmd/plugin/cli.version={{ trimprefix .Summary "v" }}
 archives:
   - id: status
     builds:
-    - status
+      - status
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
-    - goos: windows
-      format: zip
+      - goos: windows
+        format: zip
