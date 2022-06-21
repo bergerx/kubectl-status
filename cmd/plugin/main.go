@@ -3,8 +3,9 @@ package main
 import (
 	"os"
 
-	"github.com/bergerx/kubectl-status/cmd/plugin/cli"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Initialize all known client auth plugins.
+
+	"github.com/bergerx/kubectl-status/cmd/plugin/cli"
 )
 
 func main() {

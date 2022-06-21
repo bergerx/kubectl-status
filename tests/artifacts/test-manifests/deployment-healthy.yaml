@@ -1,0 +1,24 @@
+# wait-for: condition=Available=True
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpbin-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      run: httpbin-deployment
+  template:
+    metadata:
+      labels:
+        run: httpbin-deployment
+    spec:
+      containers:
+      - image: mccutchen/go-httpbin
+        name: go-httpbin
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            port: 80

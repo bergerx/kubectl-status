@@ -1,19 +1,17 @@
 package plugin
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
-func newRenderableObject(obj map[string]interface{}, engine renderEngine) RenderableObject {
+func newRenderableObject(obj map[string]interface{}, engine *renderEngine) RenderableObject {
 	r := RenderableObject{
 		Unstructured: unstructured.Unstructured{Object: obj},
-		engine:       &engine,
+		engine:       engine,
 	}
 	return r
 }
@@ -36,14 +34,21 @@ func (r RenderableObject) KStatus() *kstatus.Result {
 }
 
 func (r RenderableObject) newRenderableObject(obj map[string]interface{}) RenderableObject {
-	return newRenderableObject(obj, *r.engine)
+	return newRenderableObject(obj, r.engine)
+}
+
+func (r RenderableObject) newIndentedRenderableObject(indent int, obj map[string]interface{}) RenderableObject {
+	newEngine, _ := newRenderEngine(r.engine.Options, r.engine.Output, indent, &r.engine.Template)
+	return newRenderableObject(obj, newEngine)
 }
 
 func (r RenderableObject) String() string {
 	kindAndName := fmt.Sprintf("%s/%s", r.Kind(), r.Name())
 	if namespace := r.Namespace(); namespace != "" {
 		kindAndName = fmt.Sprintf("%s[%s]", kindAndName, namespace)
-
+	}
+	if r.engine.indent > 0 {
+		kindAndName = fmt.Sprintf("%s[indent=%d]", kindAndName, r.engine.indent)
 	}
 	return kindAndName
 }
@@ -109,32 +114,17 @@ func (r RenderableObject) RenderOptions() *RenderOptions {
 	return r.engine.RenderOptions
 }
 
-func (r RenderableObject) render(wr io.Writer) error {
+func (r RenderableObject) render() error {
 	klog.V(5).InfoS("called render, calling findTemplateName", "r", r)
 	templateName := findTemplateName(r.engine.Template, r.Kind())
+	return r.renderTemplate(templateName, r)
+}
+
+func (r RenderableObject) renderTemplate(templateName string, data interface{}) error {
 	klog.V(5).InfoS("calling executeTemplate on renderable", "r", r, "templateName", templateName)
-	err := r.engine.ExecuteTemplate(wr, templateName, r)
+	err := r.engine.ExecuteTemplate(r.engine.Output, templateName, data)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error on executeTemplate", "r", r)
 	}
 	return err
-}
-
-func (r RenderableObject) renderString() (string, error) {
-	klog.V(5).InfoS("called renderString", "r", r)
-	var buffer bytes.Buffer
-	err := r.render(&buffer)
-	return buffer.String(), err
-}
-
-func (r RenderableObject) renderTemplate(templateName string, data interface{}) (string, error) {
-	var buffer bytes.Buffer
-	klog.V(5).InfoS("called renderTemplate, calling ExecuteTemplate",
-		"r", r, "templateName", templateName, "data", data)
-	err := r.engine.ExecuteTemplate(&buffer, templateName, data)
-	if err != nil {
-		klog.V(3).ErrorS(err, "error executing template",
-			"r", r, "templateName", templateName)
-	}
-	return buffer.String(), err
 }

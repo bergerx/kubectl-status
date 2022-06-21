@@ -1,0 +1,100 @@
+
+Printed all existing resource statuses, starting to watch. Switching to shallow mode during watch!
+
+
+Deployment/httpbin-deployment -n deployment-healthy, created Xs ago, gen:1
+  InProgress: replicas: 0/3
+    Reconciling: LessReplicas, replicas: 0/3
+  desired:3, ready:0, updated:0, available:0
+  Ongoing Rollout: Waiting for deployment spec update to be observed...
+  Outage: Deployment has no Ready replicas.
+  Known/recorded manage events:
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+
+Deployment/httpbin-deployment -n deployment-healthy, created Xs ago, gen:1
+  InProgress: replicas: 0/3
+    Reconciling: LessReplicas, replicas: 0/3
+  desired:3, ready:0, updated:0, available:0
+  Progressing NewReplicaSetCreated, Created new replica set "httpbin-deployment-8dc9b5885" for Xs
+  Ongoing Rollout: Waiting for deployment spec update to be observed...
+  Outage: Deployment has no Ready replicas.
+  Known/recorded manage events:
+    Xs ago Updated by kube-controller-manager (metadata, status)
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+
+Deployment/httpbin-deployment -n deployment-healthy, created Xs ago, gen:1
+  InProgress: replicas: 0/3
+    Reconciling: LessReplicas, replicas: 0/3
+  desired:3, ready:0, updated:0, available:0, unavailable:3
+  Progressing NewReplicaSetCreated, Created new replica set "httpbin-deployment-8dc9b5885" for Xs
+  Available MinimumReplicasUnavailable, Deployment does not have minimum availability. for Xs
+  Ongoing Rollout: Waiting for deployment "httpbin-deployment" rollout to finish: 0 out of 3 new replicas have been updated...
+  Outage: Deployment has no Ready replicas.
+  Known/recorded manage events:
+    Xs ago Updated by kube-controller-manager (metadata, status)
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+
+Deployment/httpbin-deployment -n deployment-healthy, created Xs ago, gen:1
+  InProgress: Available: 0/3
+    Reconciling: LessAvailable, Available: 0/3
+  desired:3, existing:3, ready:0, updated:3, available:0, unavailable:3
+  Available MinimumReplicasUnavailable, Deployment does not have minimum availability. for Xs
+  Progressing ReplicaSetUpdated, ReplicaSet "httpbin-deployment-8dc9b5885" is progressing. for Xs
+  Ongoing Rollout: Waiting for deployment "httpbin-deployment" rollout to finish: 0 of 3 updated replicas are available...
+  Outage: Deployment has no Ready replicas.
+  Known/recorded manage events:
+    Xs ago Updated by kube-controller-manager (metadata, status)
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+
+Deployment/httpbin-deployment -n deployment-healthy, created Xs ago, gen:1
+  InProgress: Available: 1/3
+    Reconciling: LessAvailable, Available: 1/3
+  desired:3, existing:3, ready:1, updated:3, available:1, unavailable:2
+  Available MinimumReplicasUnavailable, Deployment does not have minimum availability. for Xs
+  Progressing ReplicaSetUpdated, ReplicaSet "httpbin-deployment-8dc9b5885" is progressing. for Xs, last update was Xs ago
+  Ongoing Rollout: Waiting for deployment "httpbin-deployment" rollout to finish: 1 of 3 updated replicas are available...
+  Known/recorded manage events:
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+    Xs ago Updated by kube-controller-manager (metadata, status)
+
+Deployment/httpbin-deployment -n deployment-healthy, created Xs ago, gen:1
+  InProgress: Available: 2/3
+    Reconciling: LessAvailable, Available: 2/3
+  desired:3, existing:3, ready:2, updated:3, available:2, unavailable:1
+  Available MinimumReplicasUnavailable, Deployment does not have minimum availability. for Xs
+  Progressing ReplicaSetUpdated, ReplicaSet "httpbin-deployment-8dc9b5885" is progressing. for Xs, last update was Xs ago
+  Ongoing Rollout: Waiting for deployment "httpbin-deployment" rollout to finish: 2 of 3 updated replicas are available...
+  Known/recorded manage events:
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+    Xs ago Updated by kube-controller-manager (metadata, status)
+
+Deployment/httpbin-deployment -n deployment-healthy, created Xs ago, gen:1
+  Current: Deployment is available. Replicas: 3
+  desired:3, existing:3, ready:3, updated:3, available:3
+  Available MinimumReplicasAvailable, Deployment has minimum availability. for Xs
+  Progressing NewReplicaSetAvailable, ReplicaSet "httpbin-deployment-8dc9b5885" has successfully progressed. for Xs, last update was Xs ago
+  Known/recorded manage events:
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+    Xs ago Updated by kube-controller-manager (metadata, status)
+
+Deployment/httpbin-deployment -n deployment-healthy, created Xs ago, gen:1
+  Current: Deployment is available. Replicas: 3
+  desired:3, existing:3, ready:3, updated:3, available:3
+  Available MinimumReplicasAvailable, Deployment has minimum availability. for Xs
+  Progressing NewReplicaSetAvailable, ReplicaSet "httpbin-deployment-8dc9b5885" has successfully progressed. for Xs, last update was Xs ago
+  Rollouts: Use the `--include-rollout-diffs` flag to see the diff between each rollout!
+    Xs ago managed by ReplicaSet/httpbin-deployment-8dc9b5885
+  Known/recorded manage events:
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+    Xs ago Updated by kube-controller-manager (metadata, status)
+  Events:
+    ScalingReplicaSet Xs ago from deployment-controller: Scaled up replica set httpbin-deployment-8dc9b5885 to 3
+
+Deployment/httpbin-deployment -n deployment-healthy, created Xs ago, gen:1
+  Current: Deployment is available. Replicas: 3
+  desired:3, existing:3, ready:3, updated:3, available:3
+  Available MinimumReplicasAvailable, Deployment has minimum availability. for Xs
+  Progressing NewReplicaSetAvailable, ReplicaSet "httpbin-deployment-8dc9b5885" has successfully progressed. for Xs, last update was Xs ago
+  Known/recorded manage events:
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+    Xs ago Updated by kube-controller-manager (metadata, status)

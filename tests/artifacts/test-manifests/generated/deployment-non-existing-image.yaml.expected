@@ -1,0 +1,75 @@
+
+Printed all existing resource statuses, starting to watch. Switching to shallow mode during watch!
+
+
+Deployment/non-existing-image -n deployment-non-existing-image, created Xs ago, gen:1
+  InProgress: replicas: 0/1
+    Reconciling: LessReplicas, replicas: 0/1
+  desired:1, ready:0, updated:0, available:0
+  Ongoing Rollout: Waiting for deployment spec update to be observed...
+  Outage: Deployment has no Ready replicas.
+  Known/recorded manage events:
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+
+Deployment/non-existing-image -n deployment-non-existing-image, created Xs ago, gen:1
+  InProgress: replicas: 0/1
+    Reconciling: LessReplicas, replicas: 0/1
+  desired:1, ready:0, updated:0, available:0
+  Progressing NewReplicaSetCreated, Created new replica set "non-existing-image-5786f7d4cb" for Xs
+  Ongoing Rollout: Waiting for deployment spec update to be observed...
+  Outage: Deployment has no Ready replicas.
+  Known/recorded manage events:
+    Xs ago Updated by kube-controller-manager (metadata, status)
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+
+Deployment/non-existing-image -n deployment-non-existing-image, created Xs ago, gen:1
+  InProgress: replicas: 0/1
+    Reconciling: LessReplicas, replicas: 0/1
+  desired:1, ready:0, updated:0, available:0, unavailable:1
+  Progressing NewReplicaSetCreated, Created new replica set "non-existing-image-5786f7d4cb" for Xs
+  Available MinimumReplicasUnavailable, Deployment does not have minimum availability. for Xs
+  Ongoing Rollout: Waiting for deployment "non-existing-image" rollout to finish: 0 out of 1 new replicas have been updated...
+  Outage: Deployment has no Ready replicas.
+  Known/recorded manage events:
+    Xs ago Updated by kube-controller-manager (metadata, status)
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+
+Deployment/non-existing-image -n deployment-non-existing-image, created Xs ago, gen:1
+  InProgress: Available: 0/1
+    Reconciling: LessAvailable, Available: 0/1
+  desired:1, existing:1, ready:0, updated:1, available:0, unavailable:1
+  Available MinimumReplicasUnavailable, Deployment does not have minimum availability. for Xs
+  Progressing ReplicaSetUpdated, ReplicaSet "non-existing-image-5786f7d4cb" is progressing. for Xs
+  Ongoing Rollout: Waiting for deployment "non-existing-image" rollout to finish: 0 of 1 updated replicas are available...
+  Outage: Deployment has no Ready replicas.
+  Known/recorded manage events:
+    Xs ago Updated by kube-controller-manager (metadata, status)
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+
+Deployment/non-existing-image -n deployment-non-existing-image, created Xs ago, gen:1
+  InProgress: Available: 0/1
+    Reconciling: LessAvailable, Available: 0/1
+  desired:1, existing:1, ready:0, updated:1, available:0, unavailable:1
+  Available MinimumReplicasUnavailable, Deployment does not have minimum availability. for Xs
+  Progressing ReplicaSetUpdated, ReplicaSet "non-existing-image-5786f7d4cb" is progressing. for Xs
+  Ongoing Rollout: Waiting for deployment "non-existing-image" rollout to finish: 0 of 1 updated replicas are available...
+  Outage: Deployment has no Ready replicas.
+  Rollouts: Use the `--include-rollout-diffs` flag to see the diff between each rollout!
+    Xs ago managed by ReplicaSet/non-existing-image-5786f7d4cb
+  Known/recorded manage events:
+    Xs ago Updated by kube-controller-manager (metadata, status)
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)
+  Events:
+    ScalingReplicaSet Xs ago from deployment-controller: Scaled up replica set non-existing-image-5786f7d4cb to 1
+
+Deployment/non-existing-image -n deployment-non-existing-image, created Xs ago, gen:1
+  InProgress: Available: 0/1
+    Reconciling: LessAvailable, Available: 0/1
+  desired:1, existing:1, ready:0, updated:1, available:0, unavailable:1
+  Available MinimumReplicasUnavailable, Deployment does not have minimum availability. for Xs
+  Progressing ReplicaSetUpdated, ReplicaSet "non-existing-image-5786f7d4cb" is progressing. for Xs
+  Ongoing Rollout: Waiting for deployment "non-existing-image" rollout to finish: 0 of 1 updated replicas are available...
+  Outage: Deployment has no Ready replicas.
+  Known/recorded manage events:
+    Xs ago Updated by kube-controller-manager (metadata, status)
+    Xs ago Updated by kubectl-client-side-apply (metadata, spec)

@@ -3,7 +3,7 @@
     {{- template "pod_status_summary_line" . }}
     {{- template "kstatus_summary" . }}
     {{- template "application_details" . }}
-    {{- .Include "pod_conditions_summary" . | nindent 2 }}
+    {{- $_ := .Include 2 "pod_conditions_summary" . }}
     {{- if not .Metadata.ownerReferences }}
         {{- $container := index .Spec.containers 0 }}{{/* not ideal but will likely work in most cases if not all */}}
         {{- "Standalone POD" | red | bold | nindent 2 }}{{ if $container.stdin }}, interactive{{ end }}{{ if $container.tty }} with attached TTY{{ end }}.
@@ -29,7 +29,7 @@
     {{- with .Status.initContainerStatuses }}
         {{- "InitContainers:" | nindent 2 }}
         {{- range $containerStatus := . }}
-            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus) | nindent 4 }}
+            {{- $_ := $.Include 4 "container_status_summary" (dict "containerStatus" $containerStatus) }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -44,9 +44,9 @@
                 {{- $containerMetrics := $podMetrics.Object.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
                 {{- $containerSpec := $.Spec.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
                 {{- $containerStatusSummaryDict := dict "containerStatus" $containerStatus "containerMetrics" $containerMetrics "containerSpec" $containerSpec }}
-                {{- $.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
+                {{- $_ := $.Include 4 "container_status_summary" $containerStatusSummaryDict }}
             {{- else }}
-                {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus) | nindent 4 }}
+                {{- $_ := $.Include 4 "container_status_summary" (dict "containerStatus" $containerStatus) }}
             {{- end }}
         {{- end }}
     {{- end }}
@@ -85,7 +85,7 @@
                 {{- with $volumeStats }}, {{ template "pod_volume_stats" . }}{{ end }}
                 {{- $pvc := $.KubeGetFirst $.Namespace "PersistentVolumeClaim" .claimName}}
                 {{- with $pvc }}
-                    {{- $.Include "PersistentVolumeClaim" . | nindent 4 }}
+                    {{- $_ := $.Include 4 "PersistentVolumeClaim" . }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -107,7 +107,7 @@
             {{- if eq $index 0 }}
                 {{- "Services matching this pod:" | nindent 2 }}
             {{- end }}
-            {{- $.Include "Service" $svc | nindent 4 }}
+            {{- $_ := $.Include 4 "Service" $svc }}
         {{- end}}
     {{- end}}
 {{- end }}
@@ -144,7 +144,7 @@
     {{- range .Status.conditions }}
         {{- /* show details for only unhealthy conditions */ -}}
         {{- if (not (isStatusConditionHealthy .)) }}
-            {{- $.Include "condition_summary" . | nindent 2}}
+            {{- $_ := $.Include 2 "condition_summary" . }}
         {{- end }}
     {{- end }}
 {{- end -}}

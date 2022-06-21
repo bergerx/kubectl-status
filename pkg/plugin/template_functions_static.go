@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	_ "unsafe" // required for using go:linkname in the file
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/dustin/go-humanize"
@@ -16,6 +17,9 @@ import (
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
 )
+
+//go:linkname signame runtime.signame
+func signame(sig uint32) string
 
 var durationRound = (sprig.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
 
@@ -320,7 +324,11 @@ func colorKeyword(phase string) string {
 }
 
 func colorAgo(kubeDate string) string {
-	t, _ := time.ParseInLocation("2006-01-02T15:04:05Z", kubeDate, time.UTC)
+	t, err := time.ParseInLocation("2006-01-02T15:04:05Z", kubeDate, time.UTC)
+	if err != nil {
+		klog.V(3).InfoS("colorAgo failed to parse date", "time", t)
+		return "!{ago}"
+	}
 	duration := time.Since(t).Round(time.Second)
 	return colorDuration(duration)
 }
@@ -344,13 +352,14 @@ func colorDuration(duration time.Duration) string {
 	return str
 }
 
-func (r RenderableObject) Include(templateName string, data interface{}) (string, error) {
-	klog.V(5).InfoS("Include", "r", r, "templateName", templateName, "data", data)
-	return r.renderTemplate(templateName, data)
+// Include executes a given template with a provided indent, a newline will be added to the beginning.
+// Since it directly writes to the engine's output, the return has to be captured like `$_ := $.Include ...` when using in templates.
+func (r RenderableObject) Include(indent int, templateName string, data interface{}) error {
+	klog.V(5).InfoS("Include", "r", r, "indent", indent, "templateName", templateName, "data", data)
+	return r.newIndentedRenderableObject(indent, r.Object).renderTemplate(templateName, data)
 }
 
-func (r RenderableObject) IncludeRenderableObject(obj RenderableObject) (output string) {
-	klog.V(5).InfoS("called IncludeRenderableObject", "r", r, "obj", obj)
-	renderString, _ := obj.renderString()
-	return renderString
+func (r RenderableObject) IncludeRenderableObject(indent int, obj RenderableObject) error {
+	klog.V(5).InfoS("called IncludeRenderableObject", "r", r, "indent", indent, "obj", obj)
+	return r.newIndentedRenderableObject(indent, obj.Object).render()
 }

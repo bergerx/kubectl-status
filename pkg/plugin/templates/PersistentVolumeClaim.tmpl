@@ -18,7 +18,6 @@
     {{- template "owners" . }}
     {{- with $volumeName := .Spec.volumeName }}
         {{- "Binds:" | nindent 2 }}
-        {{- $pv := $.KubeGetFirst "" "PersistentVolume" $volumeName }}
-        {{- $.Include "PersistentVolume" $pv | nindent 4 -}}
+        {{- $_ := $.IncludeRenderableObject 4 ($.KubeGetFirst "" "PersistentVolume" $volumeName) -}}
     {{- end }}
 {{- end -}}

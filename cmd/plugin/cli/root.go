@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -59,8 +60,8 @@ not all resources are fully supported.`
 )
 
 func InitAndExecute() {
-	if err := RootCmd().Execute(); err != nil {
-		fmt.Println(err)
+	if err := newCmdStatus().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -68,7 +69,7 @@ func InitAndExecute() {
 // This variable is populated by goreleaser
 var version string
 
-func RootCmd() *cobra.Command {
+func newCmdStatus() *cobra.Command {
 	options := plugin.NewOptions()
 	cmd := &cobra.Command{
 		Use:     "kubectl-status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
@@ -81,7 +82,7 @@ func RootCmd() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			klog.V(5).InfoS("running the cobra.Command ...")
 			cmdutil.CheckErr(validate(options))
-			cmdutil.CheckErr(plugin.Run(options, args))
+			cmdutil.CheckErr(plugin.Run(context.TODO(), options, args, os.Stdout))
 		},
 		Version: versionString(),
 	}
@@ -98,7 +99,6 @@ func initKlog(flags *pflag.FlagSet) {
 	// for the logs.
 	fs := flag.NewFlagSet("", flag.PanicOnError)
 	klog.InitFlags(fs)
-	defer klog.Flush()
 	flags.AddGoFlagSet(fs)
 }
 

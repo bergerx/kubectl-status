@@ -152,7 +152,7 @@
         {{- with .KubeGetOwners }}
             {{- "Owners:" | nindent 2 }}
             {{- range . }}{{ if .Object }}
-                {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- $_ := $.IncludeRenderableObject 4 . }}
             {{- end }}{{ end }}
         {{- end }}
     {{- end }}

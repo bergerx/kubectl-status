@@ -8,6 +8,7 @@ import (
 )
 
 func TestRenderableObjectStatusConditions(t *testing.T) {
+	t.Parallel()
 	type fields struct {
 		Unstructured unstructured.Unstructured
 		engine       *renderEngine

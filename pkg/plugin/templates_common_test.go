@@ -1,26 +1,28 @@
 package plugin
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
 
 func checkTemplate(t *testing.T, templateName string, obj map[string]interface{}, shouldContain string, useRenderable bool) {
 	tmpl, _ := getTemplate()
-	e, _ := newRenderEngine(*NewOptions())
-	e.Template = *tmpl
-	r := newRenderableObject(obj, *e)
+	var buffer bytes.Buffer
+	e, _ := newRenderEngine(*NewOptions(), &buffer, 0, tmpl)
+	r := newRenderableObject(obj, e)
 	var objToPassTemplate interface{}
 	if useRenderable {
 		objToPassTemplate = r
 	} else {
 		objToPassTemplate = obj
 	}
-	got, err := r.renderTemplate(templateName, objToPassTemplate)
+	err := r.Include(0, templateName, objToPassTemplate)
 	if err != nil {
 		t.Errorf("renderTemplate() error = %v", err)
 		return
 	}
+	got := buffer.String()
 	if !strings.Contains(got, shouldContain) {
 		t.Errorf("template 'suspended' got = %v, shouldContain = %v", got, shouldContain)
 		return
@@ -28,6 +30,7 @@ func checkTemplate(t *testing.T, templateName string, obj map[string]interface{}
 }
 
 func TestObservedGenerationSummaryTemplate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		obj  map[string]interface{}
@@ -76,6 +79,7 @@ func TestObservedGenerationSummaryTemplate(t *testing.T) {
 	}
 }
 func TestSuspendTemplate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		obj  map[string]interface{}
@@ -112,6 +116,7 @@ func TestSuspendTemplate(t *testing.T) {
 	}
 }
 func TestOwnersTemplate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		obj  map[string]interface{}

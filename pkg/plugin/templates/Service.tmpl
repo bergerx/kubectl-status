@@ -47,9 +47,9 @@
     {{- if and .RenderOptions.IncludesEnabled .RenderOptions.IncludeMatchingIngresses }}
         {{- range $index, $ing := .KubeGetIngressesMatchingService .Namespace .Name }}
             {{- if eq $index 0 }}
-                {{- "Ingresses matching this Service:" | nindent 2}}
+                {{- "Ingresses matching this Service:" | nindent 2 }}
             {{- end }}
-            {{- $.Include "Ingress" $ing | nindent 4 }}
+            {{- $_ := $.IncludeRenderableObject 4 $ing }}
         {{- end }}
     {{- end }}
 {{- end }}

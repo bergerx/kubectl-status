@@ -1,0 +1,196 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  annotations:
+    meta.helm.sh/release-name: stable-prometheus-operator
+    meta.helm.sh/release-namespace: monitoring
+    prometheus-operator-input-hash: "16460924395038982263"
+  creationTimestamp: "2020-05-06T08:37:03Z"
+  generation: 4
+  labels:
+    app: prometheus-operator-prometheus
+    app.kubernetes.io/managed-by: Helm
+    chart: prometheus-operator-9.2.2
+    heritage: Helm
+    release: stable-prometheus-operator
+  name: prometheus-stable-prometheus-operator-prometheus
+  namespace: monitoring
+  ownerReferences:
+  - apiVersion: monitoring.coreos.com/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Prometheus
+    name: stable-prometheus-operator-prometheus
+    uid: dadc7c96-e725-419f-99e7-3616810674b6
+  resourceVersion: "42193242"
+  selfLink: /apis/apps/v1/namespaces/monitoring/statefulsets/prometheus-stable-prometheus-operator-prometheus
+  uid: d6fb40ab-4bea-4888-ae61-323a114af0b7
+spec:
+  podManagementPolicy: Parallel
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: prometheus
+      prometheus: stable-prometheus-operator-prometheus
+  serviceName: prometheus-operated
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: prometheus
+        prometheus: stable-prometheus-operator-prometheus
+    spec:
+      containers:
+      - args:
+        - --web.console.templates=/etc/prometheus/consoles
+        - --web.console.libraries=/etc/prometheus/console_libraries
+        - --storage.tsdb.retention.size=90GiB
+        - --config.file=/etc/prometheus/config_out/prometheus.env.yaml
+        - --storage.tsdb.path=/prometheus
+        - --storage.tsdb.retention.time=15d
+        - --web.enable-lifecycle
+        - --storage.tsdb.no-lockfile
+        - --web.external-url=http://prometheus.plm-atlas.msai.devops.ptc.io/
+        - --web.route-prefix=/
+        image: quay.io/prometheus/prometheus:v2.18.2
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /-/healthy
+            port: web
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        name: prometheus
+        ports:
+        - containerPort: 9090
+          name: web
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 120
+          httpGet:
+            path: /-/ready
+            port: web
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /etc/prometheus/config_out
+          name: config-out
+          readOnly: true
+        - mountPath: /etc/prometheus/certs
+          name: tls-assets
+          readOnly: true
+        - mountPath: /prometheus
+          name: prometheus-stable-prometheus-operator-prometheus-db
+          subPath: prometheus-db
+        - mountPath: /etc/prometheus/rules/prometheus-stable-prometheus-operator-prometheus-rulefiles-0
+          name: prometheus-stable-prometheus-operator-prometheus-rulefiles-0
+      - args:
+        - --log-format=logfmt
+        - --reload-url=http://127.0.0.1:9090/-/reload
+        - --config-file=/etc/prometheus/config/prometheus.yaml.gz
+        - --config-envsubst-file=/etc/prometheus/config_out/prometheus.env.yaml
+        command:
+        - /bin/prometheus-config-reloader
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        image: quay.io/coreos/prometheus-config-reloader:v0.38.1
+        imagePullPolicy: IfNotPresent
+        name: prometheus-config-reloader
+        resources:
+          limits:
+            cpu: 100m
+            memory: 25Mi
+          requests:
+            cpu: 100m
+            memory: 25Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /etc/prometheus/config
+          name: config
+        - mountPath: /etc/prometheus/config_out
+          name: config-out
+      - args:
+        - --webhook-url=http://127.0.0.1:9090/-/reload
+        - --volume-dir=/etc/prometheus/rules/prometheus-stable-prometheus-operator-prometheus-rulefiles-0
+        image: docker.io/jimmidyson/configmap-reload:v0.3.0
+        imagePullPolicy: IfNotPresent
+        name: rules-configmap-reloader
+        resources:
+          limits:
+            cpu: 100m
+            memory: 25Mi
+          requests:
+            cpu: 100m
+            memory: 25Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /etc/prometheus/rules/prometheus-stable-prometheus-operator-prometheus-rulefiles-0
+          name: prometheus-stable-prometheus-operator-prometheus-rulefiles-0
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 2000
+        runAsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccount: stable-prometheus-operator-prometheus
+      serviceAccountName: stable-prometheus-operator-prometheus
+      terminationGracePeriodSeconds: 600
+      volumes:
+      - name: config
+        secret:
+          defaultMode: 420
+          secretName: prometheus-stable-prometheus-operator-prometheus
+      - name: tls-assets
+        secret:
+          defaultMode: 420
+          secretName: prometheus-stable-prometheus-operator-prometheus-tls-assets
+      - emptyDir: {}
+        name: config-out
+      - configMap:
+          defaultMode: 420
+          name: prometheus-stable-prometheus-operator-prometheus-rulefiles-0
+        name: prometheus-stable-prometheus-operator-prometheus-rulefiles-0
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      creationTimestamp: null
+      name: prometheus-stable-prometheus-operator-prometheus-db
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 100Gi
+      storageClassName: default
+      volumeMode: Filesystem
+    status:
+      phase: Pending
+status:
+  collisionCount: 0
+  currentReplicas: 1
+  currentRevision: prometheus-stable-prometheus-operator-prometheus-7bc5957854
+  observedGeneration: 4
+  readyReplicas: 1
+  replicas: 1
+  updateRevision: prometheus-stable-prometheus-operator-prometheus-7bc5957854
+  updatedReplicas: 1

@@ -43,6 +43,7 @@ var (
 )
 
 func TestGetMatchingItemInMapList(t *testing.T) {
+	t.Parallel()
 	type args struct {
 		searchFor map[string]interface{}
 		mapList   []interface{}

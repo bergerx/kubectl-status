@@ -1,0 +1,23 @@
+# wait-for: condition=Available=True
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: non-existing-image
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: non-existing-image
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        run: non-existing-image
+    spec:
+      containers:
+      - image: this-image-doesnt-exist
+        name: non-existing-image

@@ -423,6 +423,7 @@ func removeFieldsThatCreateDiffNoise(obj *unstructured.Unstructured) {
 }
 
 // RolloutStatus returns a map[string]interface{} with 3 keys: done: bool, message, error: string
+// TODO: write one test that verifies this
 func (r RenderableObject) RolloutStatus(obj RenderableObject) map[string]interface{} {
 	klog.V(5).InfoS("called RolloutStatus", "r", r, "obj", obj)
 	groupKind := obj.GetObjectKind().GroupVersionKind().GroupKind()
