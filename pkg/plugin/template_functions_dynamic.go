@@ -79,7 +79,8 @@ func (r RenderableObject) KubeGetFirst(namespace string, args ...string) Rendera
 }
 
 // KubeGetByLabelsMap returns results similar to this:
-//     > kubectl get -n {namespace} {resourceType} -l {labels_key=label_val,...}
+//
+//	> kubectl get -n {namespace} {resourceType} -l {labels_key=label_val,...}
 func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, labels map[string]interface{}) (out []RenderableObject) {
 	if !r.RenderOptions().IncludesEnabled() {
 		return
@@ -273,7 +274,9 @@ func (r RenderableObject) KubeGetNodeStatsSummary(nodeName string) map[string]in
 }
 
 // kubeGetNodeStatsSummary returns this structure
-//    > kubectl get --raw /api/v1/nodes/{nodeName}/proxy/stats/summary
+//
+//	> kubectl get --raw /api/v1/nodes/{nodeName}/proxy/stats/summary
+//
 // The endpoint that this function uses will be disabled soon: https://github.com/kubernetes/kubernetes/issues/68522
 func (r RenderableObject) kubeGetNodeStatsSummary(nodeName string) (map[string]interface{}, error) {
 	clientSet, err := r.engine.kubernetesClientSet()

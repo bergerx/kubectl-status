@@ -198,10 +198,6 @@ Enhancement suggestions are tracked as [GitHub issues](https://github.com/berger
      the structure of the information to be included. If you do so, reference it here in the description. -->
 ### Your First Code Contribution
 
-This project compiles the [template files](pkg/plugin/templates/) into the generated binary using
-[rakyll/statik](https://github.com/rakyll/statik) which is triggered by `go generate`. So you need to install `statik`
-first.
-
 Then use `make` to get the compiled binary:
 
 ```bash
