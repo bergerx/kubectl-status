@@ -23,7 +23,7 @@ func (r RenderOptions) IncludesEnabled() bool {
 func (r *RenderOptions) AddFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&r.Local, "local", false,
 		"Run the template against the provided yaml manifest. Need to be used with a --filename parameter. No request to apiserver is done.")
-	flags.BoolVar(&r.IncludeOwners, "include-owners", true,
+	flags.BoolVar(&r.IncludeOwners, "include-owners", false,
 		"Follow the ownerReferences in the objects and render them as well.")
 	flags.BoolVar(&r.IncludeEvents, "include-events", true,
 		"Include events in the output.")
@@ -39,5 +39,4 @@ func (r *RenderOptions) AddFlags(flags *pflag.FlagSet) {
 		"Render only the immediate object and disable all other --include-* flags. This will override any other flags.")
 	flags.BoolVarP(&r.Watch, "watch", "w", false,
 		"After listing/getting the requested object, watch for changes.")
-
 }

@@ -3,6 +3,8 @@ package plugin
 import (
 	"embed"
 	"fmt"
+	"text/template"
+
 	"github.com/Masterminds/sprig/v3"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -10,7 +12,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	"text/template"
 )
 
 //go:embed templates
