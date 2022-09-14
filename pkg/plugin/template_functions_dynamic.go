@@ -250,8 +250,11 @@ func doesServiceMatchLabels(svc corev1.Service, labels map[string]string) bool {
 	return isSubset(svc.Spec.Selector, labels)
 }
 
-// Checks if a is subset of b
+// Checks if a is subset of b, returns false if a is empty.
 func isSubset(a, b map[string]string) bool {
+	if len(a) == 0 {
+		return false
+	}
 	for k, v := range a {
 		if v != b[k] {
 			return false
