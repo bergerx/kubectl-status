@@ -4,7 +4,7 @@
     {{- template "kstatus_summary" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
-    {{- $injectedStatus := .Status }}
+    {{- $injectedStatus := .Status | default dict }}
     {{- $_ := set $injectedStatus "replicas" ( $injectedStatus.replicas | default 0 ) }}
     {{- $_ := set $injectedStatus "readyReplicas" ( $injectedStatus.readyReplicas | default 0) }}
     {{- $_ := set $injectedStatus "availableReplicas" ( $injectedStatus.availableReplicas | default 0 ) }}
@@ -49,7 +49,7 @@
                 {{- $sectionHeader = true }}
             {{- end }}
     {{ with .Metadata.creationTimestamp }}{{ . | colorAgo }} ago{{ end }} managed by {{ .Kind | bold }}/{{ .Name }}
-            {{- if and $previousReplicaSet $.RenderOptions.IncludeRolloutDiffs }}
+            {{- if and $previousReplicaSet ($.Config.GetBool "include-rollout-diffs") }}
                 {{- with $.KubeGetUnifiedDiffString "ReplicaSet" $.Namespace $previousReplicaSet.Name .Name }}
                     {{- "Diff" | bold | nindent 6 }}:
                     {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 6 }}

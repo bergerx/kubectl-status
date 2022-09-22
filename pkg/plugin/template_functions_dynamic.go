@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/spf13/viper"
 	"strings"
 	"time"
 
@@ -26,11 +27,11 @@ import (
 )
 
 func (r RenderableObject) KubeGet(namespace string, args ...string) (out []RenderableObject) {
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("processing KubeGetFirst", "r", r, "namespace", namespace, "args", args)
-	resourceInfos, err := r.engine.getResourceQueryResults(namespace, args).Infos()
+	resourceInfos, err := r.engine.getResourceQueryInfos(namespace, args)
 	if err != nil {
 		klog.V(3).ErrorS(err, "ignoring resource error", "r", r, "namespace", namespace, "args", args)
 	}
@@ -56,14 +57,14 @@ func (r RenderableObject) getCreationTimestampSortedRenderableObjects(resourceIn
 // KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
 func (r RenderableObject) KubeGetFirst(namespace string, args ...string) RenderableObject {
 	nr := r.newRenderableObject(nil)
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return nr
 	}
 	klog.V(5).InfoS("called template method KubeGetFirst",
 		"r", r, "namespace", namespace, "args", args)
-	resourceInfos, err := r.engine.getResourceQueryResults(namespace, args).Infos()
+	resourceInfos, err := r.engine.getResourceQueryInfos(namespace, args)
 	if err != nil {
-		klog.V(3).ErrorS(err, "getResourceQueryResults failed",
+		klog.V(3).ErrorS(err, "getResourceQueryInfos failed",
 			"r", r, "namespace", namespace, "args", args)
 		return nr
 	}
@@ -82,7 +83,7 @@ func (r RenderableObject) KubeGetFirst(namespace string, args ...string) Rendera
 //
 //	> kubectl get -n {namespace} {resourceType} -l {labels_key=label_val,...}
 func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, labels map[string]interface{}) (out []RenderableObject) {
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called template method KubeGetByLabelsMap",
@@ -108,11 +109,11 @@ func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, lab
 
 func (r RenderableObject) KubeGetEvents() RenderableObject {
 	nr := r.newRenderableObject(nil)
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return nr
 	}
 	klog.V(5).InfoS("called KubeGetEvents", "r", r)
-	clientSet, _ := r.engine.kubernetesClientSet()
+	clientSet, _ := r.engine.f.KubernetesClientSet()
 	events, err := clientSet.CoreV1().Events(r.GetNamespace()).Search(scheme.Scheme, &r)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error getting events", "r", r)
@@ -127,12 +128,12 @@ func (r RenderableObject) KubeGetEvents() RenderableObject {
 // It returns a RenderableObject list for all resources which have provided kind or resource type with the current
 // object listed in the ownerReferences.
 func (r RenderableObject) KubeGetResourcesOwnedOf(resourceOrKind string) (out []RenderableObject) {
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called template method KubeGetResourcesOwnedOf", "r", r)
 	restMapper, _ := r.engine.mappingFor(resourceOrKind)
-	dynamicInterface, _ := r.engine.dynamicInterface()
+	dynamicInterface, _ := r.engine.f.DynamicClient()
 	controllerRevisions, _ := dynamicInterface.
 		Resource(restMapper.Resource).
 		Namespace(r.GetNamespace()).
@@ -156,7 +157,7 @@ func doesOwnerMatch(owner, owned unstructured.Unstructured) bool {
 
 // KubeGetOwners returns the list of objects which are listed in the Owner references of an object.
 func (r RenderableObject) KubeGetOwners() (out []RenderableObject) {
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("KubeGetOwners called KubeGetOwners", "r", r)
@@ -184,12 +185,12 @@ func (r RenderableObject) KubeGetOwners() (out []RenderableObject) {
 }
 
 func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName string) (out []RenderableObject) {
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetIngressesMatchingService",
 		"r", r, "namespace", namespace, "svcName", svcName)
-	clientSet, _ := r.engine.kubernetesClientSet()
+	clientSet, _ := r.engine.f.KubernetesClientSet()
 	// The old v1beta1 Ingress which will no longer served as of v1.22. Not implementing it.
 	ingresses, err := clientSet.NetworkingV1().Ingresses(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -218,7 +219,7 @@ func doesIngressUseService(ing netv1.Ingress, svcName string) bool {
 }
 
 func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels map[string]interface{}) (out []RenderableObject) {
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetServicesMatchingLabels", "r", r, "namespace", namespace, "labels", labels)
@@ -227,7 +228,7 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 		castedLabels[k] = v.(string)
 	}
 	klog.V(5).InfoS("casted labels values into string", "r", r, "castedLabels", castedLabels)
-	clientSet, _ := r.engine.kubernetesClientSet()
+	clientSet, _ := r.engine.f.KubernetesClientSet()
 	svcs, err := clientSet.CoreV1().Services(r.Namespace()).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing services", "r", r, "namespace", namespace)
@@ -264,7 +265,7 @@ func isSubset(a, b map[string]string) bool {
 }
 
 func (r RenderableObject) KubeGetNodeStatsSummary(nodeName string) map[string]interface{} {
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return nil
 	}
 	klog.V(5).InfoS("called KubeGetNodeStatsSummary", "r", r, "node", nodeName)
@@ -282,7 +283,7 @@ func (r RenderableObject) KubeGetNodeStatsSummary(nodeName string) map[string]in
 //
 // The endpoint that this function uses will be disabled soon: https://github.com/kubernetes/kubernetes/issues/68522
 func (r RenderableObject) kubeGetNodeStatsSummary(nodeName string) (map[string]interface{}, error) {
-	clientSet, err := r.engine.kubernetesClientSet()
+	clientSet, err := r.engine.f.KubernetesClientSet()
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +303,7 @@ func (r RenderableObject) kubeGetNodeStatsSummary(nodeName string) (map[string]i
 
 // KubeGetNonTerminatedPodsOnNode returns details of all pods which are not in terminal status
 func (r RenderableObject) KubeGetNonTerminatedPodsOnNode(nodeName string) (podList []RenderableObject) {
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetNonTerminatedPodsOnNode", "r", r, "node", nodeName)
@@ -315,7 +316,7 @@ func (r RenderableObject) KubeGetNonTerminatedPodsOnNode(nodeName string) (podLi
 }
 
 func (r RenderableObject) kubeGetNonTerminatedPodsOnTheNode(nodeName string) (podList []RenderableObject, err error) {
-	clientSet, _ := r.engine.kubernetesClientSet()
+	clientSet, _ := r.engine.f.KubernetesClientSet()
 	fieldSelector, err := fields.ParseSelector("spec.nodeName=" + nodeName +
 		",status.phase!=" + string(corev1.PodSucceeded) +
 		",status.phase!=" + string(corev1.PodFailed))
@@ -344,7 +345,7 @@ func (r RenderableObject) kubeGetNonTerminatedPodsOnTheNode(nodeName string) (po
 // known to be creating noise in diff, see the removeFieldsThatCreateDiffNoise function to see which fields are being
 // dropped.
 func (r RenderableObject) KubeGetUnifiedDiffString(resourceOrKind, namespace, nameA, nameB string) string {
-	if !r.RenderOptions().IncludesEnabled() {
+	if viper.GetBool("shallow") {
 		return ""
 	}
 	klog.V(5).InfoS("called KubeGetUnifiedDiffString",
@@ -364,7 +365,7 @@ func (r RenderableObject) kubeGetUnifiedDiffString(resourceOrKind, namespace, na
 		return "", err
 	}
 	gvr := controllerRevisionMapping.Resource
-	dynamicClient, err := r.engine.dynamicInterface()
+	dynamicClient, err := r.engine.f.DynamicClient()
 	if err != nil {
 		klog.V(3).ErrorS(err, "failed to get dynamic client")
 		return "", err
@@ -417,6 +418,7 @@ func removeFieldsThatCreateDiffNoise(obj *unstructured.Unstructured) {
 	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "deployment.kubernetes.io/revision")        // Deployment
 	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "deprecated.daemonset.template.generation") // DaemonSet
 	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "kubectl.kubernetes.io/last-applied-configuration")
+	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "kapp.k14s.io/original")
 	// https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#pod-template-hash-label
 	unstructured.RemoveNestedField(obj.Object, "metadata", "labels", "pod-template-hash")                     // Deployment
 	unstructured.RemoveNestedField(obj.Object, "spec", "selector", "matchLabels", "pod-template-hash")        // Deployment

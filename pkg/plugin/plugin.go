@@ -1,8 +1,13 @@
 package plugin
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"github.com/spf13/viper"
+	"io"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"os"
 	_ "unsafe" // required for using go:linkname in the file
 
@@ -20,28 +25,39 @@ import (
 //go:linkname signame runtime.signame
 func signame(sig uint32) string
 
-func Run(o *Options, args []string) error {
-	engine, err := newRenderEngine(*o)
+func Run(f util.Factory, args []string) error {
+	klog.V(5).InfoS("All config settings", "settings", viper.AllSettings())
+	engine, err := newRenderEngine(f)
 	if err != nil {
 		klog.V(2).ErrorS(err, "Error creating engine")
 		return err
 	}
 	klog.V(5).InfoS("Created engine", "engine", engine)
-	if o.RenderOptions.Local {
-		filenames := o.ResourceBuilderFlags.FileNameFlags.Filenames
-		err := runLocal(filenames, engine)
+	if viper.GetBool("local") {
+		err := runLocal(engine)
 		return err
 	}
 	return runRemote(args, engine)
 }
 
 func runRemote(args []string, engine *renderEngine) error {
-	results, resourceInfos, err := engine.getQueriedResources(args)
+	results := engine.newBuilder().
+		FilenameParam(false, &resource.FilenameOptions{
+			Filenames: viper.GetStringSlice("filename"),
+			Recursive: viper.GetBool("recursive"),
+		}).
+		LabelSelectorParam(viper.GetString("selector")).
+		FieldSelectorParam(viper.GetString("field-selector")).
+		ResourceTypeOrNameArgs(true, args...).
+		ContinueOnError().
+		Do()
+	resourceInfos, err := results.Infos() // []*resource.Info
 	if err != nil {
 		klog.V(1).ErrorS(err, "Error querying resources")
 		return err
 	}
-	if !engine.RenderOptions.Watch && len(resourceInfos) == 0 {
+	isWatch := viper.GetBool("watch")
+	if !isWatch && len(resourceInfos) == 0 {
 		return fmt.Errorf("no resources found")
 	}
 	resourceCount := len(resourceInfos)
@@ -52,7 +68,7 @@ func runRemote(args []string, engine *renderEngine) error {
 		obj := resourceInfo.Object
 		processObj(obj, engine)
 	}
-	if engine.RenderOptions.Watch {
+	if viper.GetBool("watch") {
 		return runWatch(results, engine)
 	}
 	return nil
@@ -60,7 +76,7 @@ func runRemote(args []string, engine *renderEngine) error {
 
 func runWatch(results *resource.Result, engine *renderEngine) error {
 	color.HiYellow("\nPrinted all existing resource statuses, starting to watch. Switching to shallow mode during watch!\n\n")
-	engine.RenderOptions.Shallow = true
+	viper.Set("shallow", true)
 	klog.V(5).InfoS("Will run watch")
 	obj, err := results.Object()
 	if err != nil {
@@ -110,26 +126,53 @@ func processObj(obj runtime.Object, engine *renderEngine) {
 	fmt.Printf("\n")
 }
 
-func runLocal(filenames *[]string, engine *renderEngine) error {
-	for _, filename := range *filenames {
+func runLocal(engine *renderEngine) error {
+	for _, filename := range viper.GetStringSlice("filename") {
 		klog.V(5).InfoS("Processing local file", "filename", filename)
-		out, err := kyamlUnmarshalFile(filename)
+		f, err := os.Open(filename)
 		if err != nil {
-			klog.V(0).ErrorS(err, "Error unmarshalling the file", "filename", filename)
+			klog.V(0).ErrorS(err, "Failed to open file", "filename", filename)
+			return err
 		}
-		r := newRenderableObject(out, *engine)
-		r.engine.RenderOptions.Shallow = true
-		output, err := r.renderString()
-		fmt.Println(output)
-		if err != nil {
-			klog.V(0).ErrorS(err, "Error processing file", "filename", filename)
+		yr := yaml.NewYAMLReader(bufio.NewReader(f))
+		eof := false
+		for !eof {
+			b, err := yr.Read()
+			if err == io.EOF {
+				klog.V(10).InfoS("Reached end of the file", "filename", filename)
+				eof = true
+			} else if err != nil {
+				klog.V(3).ErrorS(err, "Error reading file", "filename", filename)
+				continue
+			}
+			if len(b) == 0 {
+				continue
+			}
+			klog.V(10).InfoS("Parsing document in the file", "document", b)
+			var out map[string]interface{}
+			err = kyaml.Unmarshal(b, &out)
+			if err != nil {
+				klog.V(3).ErrorS(err, "Error parsing document in the file", "filename", filename)
+				continue
+			}
+			if items, ok := out["items"]; ok {
+				for _, obj := range items.([]interface{}) {
+					renderObj(engine, obj.(map[string]interface{}))
+				}
+			} else {
+				renderObj(engine, out)
+			}
 		}
 	}
 	return nil
 }
 
-func kyamlUnmarshalFile(manifestFilename string) (out map[string]interface{}, err error) {
-	manifestFile, _ := os.ReadFile(manifestFilename)
-	err = kyaml.Unmarshal(manifestFile, &out)
-	return
+func renderObj(engine *renderEngine, out map[string]interface{}) {
+	r := newRenderableObject(out, *engine)
+	output, err := r.renderString()
+	fmt.Println(output)
+	if err != nil {
+		klog.V(0).ErrorS(err, "Error rendering resource")
+	}
+	fmt.Println("")
 }

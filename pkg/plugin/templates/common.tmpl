@@ -21,10 +21,12 @@
 
 {{- define "recent_updates" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- with .Metadata.managedFields | default list | sortMapListByKeysValue "time" }}
-        {{- "Known/recorded manage events:" | nindent 2 }}
-        {{- range . }}
-            {{- .time | colorAgo | nindent 4 }} ago {{ .operation | bold }}d by {{ .manager | bold }} ({{ .fieldsV1 | default dict | keys | sortAlpha | join ", " | replace "f:" "" }})
+    {{- if .Config.GetBool "include-managed-fields" }}
+        {{- with .Metadata.managedFields | default list | sortMapListByKeysValue "time" }}
+            {{- "Known/recorded manage events:" | nindent 2 }}
+            {{- range . }}
+                {{- .time | colorAgo | nindent 4 }} ago {{ .operation | bold }}d by {{ .manager | bold }} ({{ .fieldsV1 | default dict | keys | sortAlpha | join ", " | replace "f:" "" }})
+            {{- end }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -126,7 +128,7 @@
 
 {{- define "events" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if and .RenderOptions.IncludesEnabled .RenderOptions.IncludeEvents }}
+    {{- if .Config.GetBool "include-events" }}
         {{- with .KubeGetEvents }}{{ if .Object }}{{ if .Object.items }}
             {{- "Events:" | nindent 2 }}
             {{- range .Object.items }}
@@ -148,7 +150,7 @@
 
 {{- define "owners" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject */ -}}
-    {{- if and .RenderOptions.IncludesEnabled .RenderOptions.IncludeOwners }}
+    {{- if .Config.GetBool "include-owners" }}
         {{- with .KubeGetOwners }}
             {{- "Owners:" | nindent 2 }}
             {{- range . }}{{ if .Object }}
@@ -160,7 +162,7 @@
 
 {{- define "application_details" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if .RenderOptions.IncludeApplicationDetails }}
+    {{- if .Config.GetBool "include-application-details" }}
         {{- $labels := .Labels }}
         {{- $annotations := .Annotations }}
         {{- $clusterService := get $labels "kubernetes.io/cluster-service" }}
@@ -192,7 +194,7 @@
 
 {{- define "rollout_diffs_flag_help" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- with not .RenderOptions.IncludeRolloutDiffs }}
+    {{- with not (.Config.GetBool "include-rollout-diffs") }}
       {{- " Use the `--include-rollout-diffs` flag to see the diff between each rollout!" | blue }}
     {{- end }}
 {{- end }}

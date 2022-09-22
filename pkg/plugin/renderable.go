@@ -3,8 +3,8 @@ package plugin
 import (
 	"bytes"
 	"fmt"
+	"github.com/spf13/viper"
 	"io"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
@@ -14,6 +14,7 @@ func newRenderableObject(obj map[string]interface{}, engine renderEngine) Render
 	r := RenderableObject{
 		Unstructured: unstructured.Unstructured{Object: obj},
 		engine:       &engine,
+		Config:       viper.GetViper(),
 	}
 	return r
 }
@@ -24,6 +25,7 @@ func newRenderableObject(obj map[string]interface{}, engine renderEngine) Render
 type RenderableObject struct {
 	unstructured.Unstructured
 	engine *renderEngine
+	Config *viper.Viper
 }
 
 // KStatus return a Result object of kstatus for the object.
@@ -103,10 +105,6 @@ func (r RenderableObject) StatusConditions() (conditions []interface{}) {
 		conditions = x.([]interface{})
 	}
 	return
-}
-
-func (r RenderableObject) RenderOptions() *RenderOptions {
-	return r.engine.RenderOptions
 }
 
 func (r RenderableObject) render(wr io.Writer) error {

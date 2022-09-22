@@ -17,8 +17,12 @@
     {{- template "events" . }}
     {{- template "owners" . }}
     {{- with $volumeName := .Spec.volumeName }}
-        {{- "Binds:" | nindent 2 }}
-        {{- $pv := $.KubeGetFirst "" "PersistentVolume" $volumeName }}
-        {{- $.Include "PersistentVolume" $pv | nindent 4 -}}
+        {{- if $.Config.GetBool "include-volumes" }}
+            {{- "Binds:" | nindent 2 }}
+            {{- $pv := $.KubeGetFirst "" "PersistentVolume" $volumeName }}
+            {{- $.Include "PersistentVolume" $pv | nindent 4 -}}
+        {{- else }}
+            {{- "Binds:" | nindent 2 }} PersistentVolume/{{ $volumeName }}
+        {{- end }}
     {{- end }}
 {{- end -}}

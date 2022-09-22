@@ -44,7 +44,7 @@
 
 {{- define "matching_ingresses" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if and .RenderOptions.IncludesEnabled .RenderOptions.IncludeMatchingIngresses }}
+    {{- if .Config.GetBool "include-matching-ingresses" }}
         {{- range $index, $ing := .KubeGetIngressesMatchingService .Namespace .Name }}
             {{- if eq $index 0 }}
                 {{- "Ingresses matching this Service:" | nindent 2}}

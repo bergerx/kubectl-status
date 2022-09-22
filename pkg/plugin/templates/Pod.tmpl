@@ -54,7 +54,7 @@
 
 {{- define "pod_volumes" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if .RenderOptions.IncludesEnabled }}
+    {{- if .Config.GetBool "include-volumes" }}
         {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
         {{- $podStatsSummary := $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
         {{- $ephemeralStorage := index $podStatsSummary "ephemeral-storage" }}
@@ -102,7 +102,7 @@
 
 {{- define "matching_services" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if and .RenderOptions.IncludesEnabled .RenderOptions.IncludeMatchingServices }}
+    {{- if .Config.GetBool "include-matching-services" }}
         {{- range $index, $svc := .KubeGetServicesMatchingLabels .Namespace .Labels }}
             {{- if eq $index 0 }}
                 {{- "Services matching this pod:" | nindent 2 }}

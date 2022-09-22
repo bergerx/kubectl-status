@@ -1,13 +1,15 @@
 package plugin
 
 import (
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"strings"
 	"testing"
 )
 
 func checkTemplate(t *testing.T, templateName string, obj map[string]interface{}, shouldContain string, useRenderable bool) {
 	tmpl, _ := getTemplate()
-	e, _ := newRenderEngine(*NewOptions())
+	e, _ := newRenderEngine(util.NewFactory(genericclioptions.NewTestConfigFlags()))
 	e.Template = *tmpl
 	r := newRenderableObject(obj, *e)
 	var objToPassTemplate interface{}
