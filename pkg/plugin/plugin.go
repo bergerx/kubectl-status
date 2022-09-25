@@ -33,6 +33,11 @@ func errorPrintf(format string, a ...interface{}) {
 
 func Run(f util.Factory, args []string) error {
 	klog.V(5).InfoS("All config settings", "settings", viper.AllSettings())
+	if viper.Get("color") == "always" {
+		color.NoColor = false
+	} else if viper.Get("color") == "never" {
+		color.NoColor = true
+	}
 	engine, err := newRenderEngine(f)
 	if err != nil {
 		klog.V(2).ErrorS(err, "Error creating engine")

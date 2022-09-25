@@ -164,6 +164,8 @@ func addRenderFlags(flags *pflag.FlagSet) {
 		"After listing/getting the requested object, watch for changes.")
 	flags.Bool("help-all", false,
 		"Show all available flags.")
+	flags.String("color", "auto",
+		"One of 'auto', 'never' or 'always'.")
 }
 
 // versionString returns the version prefixed by 'v'
