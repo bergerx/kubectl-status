@@ -26,6 +26,11 @@ import (
 //go:linkname signame runtime.signame
 func signame(sig uint32) string
 
+func errorPrintf(format string, a ...interface{}) {
+	color.New(color.BgRed, color.FgHiWhite).Printf(format, a...)
+	fmt.Println()
+}
+
 func Run(f util.Factory, args []string) error {
 	klog.V(5).InfoS("All config settings", "settings", viper.AllSettings())
 	engine, err := newRenderEngine(f)
@@ -114,14 +119,14 @@ func processObj(obj runtime.Object, engine *renderEngine) {
 	fmt.Printf("\n")
 	out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
-		klog.V(0).ErrorS(err, "Failed to decode a resource", "obj", obj)
+		errorPrintf("Failed to decode obj=%s: %s", obj, err)
 		return
 	}
 	r := newRenderableObject(out, *engine)
 	err = r.render(os.Stdout)
 	if err != nil {
 		fmt.Printf("\n")
-		klog.V(0).ErrorS(err, "Failed to render a resource", "obj", obj)
+		errorPrintf("Failed to render: %s", err)
 		return
 	}
 	fmt.Printf("\n")
@@ -155,16 +160,16 @@ func runLocalForFile(engine *renderEngine, filename string) {
 	klog.V(5).InfoS("Processing local file", "filename", filename)
 	fi, err := os.Stat(filename)
 	if err != nil {
-		klog.V(0).ErrorS(err, "Failed to stat file", "filename", filename)
+		fmt.Println(err)
 		return
 	}
 	if fi.IsDir() {
-		klog.V(0).InfoS("A folder provided without --recursive flag", "filename", filename)
+		fmt.Println("A folder provided for --filename without --recursive flag:", filename)
 		return
 	}
 	f, err := os.Open(filename)
 	if err != nil {
-		klog.V(0).ErrorS(err, "Failed to open file", "filename", filename)
+		fmt.Println(err)
 		return
 	}
 	yr := yaml.NewYAMLReader(bufio.NewReader(f))
@@ -190,20 +195,23 @@ func runLocalForFile(engine *renderEngine, filename string) {
 		}
 		if items, ok := out["items"]; ok {
 			for _, obj := range items.([]interface{}) {
-				renderObj(engine, obj.(map[string]interface{}))
+				renderLocalObj(engine, filename, obj.(map[string]interface{}))
 			}
 		} else {
-			renderObj(engine, out)
+			renderLocalObj(engine, filename, out)
 		}
 	}
 }
 
-func renderObj(engine *renderEngine, out map[string]interface{}) {
+func renderLocalObj(engine *renderEngine, filename string, out map[string]interface{}) {
 	r := newRenderableObject(out, *engine)
 	output, err := r.renderString()
+	if viper.GetBool("recursive") {
+		color.White("file: %s\n", filename)
+	}
 	fmt.Println(output)
 	if err != nil {
-		klog.V(0).ErrorS(err, "Error rendering resource")
+		errorPrintf("Error rendering resource: %s", err)
 	}
 	fmt.Println("")
 }
