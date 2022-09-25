@@ -25,7 +25,9 @@
         {{- with .Metadata.managedFields | default list | sortMapListByKeysValue "time" }}
             {{- "Known/recorded manage events:" | nindent 2 }}
             {{- range . }}
-                {{- .time | colorAgo | nindent 4 }} ago {{ .operation | bold }}d by {{ .manager | bold }} ({{ .fieldsV1 | default dict | keys | sortAlpha | join ", " | replace "f:" "" }})
+                {{- ""  | nindent 4 }}
+                {{- with .time }}{{ . | colorAgo }} ago {{ end }}
+                {{- .operation | bold }}d by {{ .manager | bold }} ({{ .fieldsV1 | default dict | keys | sortAlpha | join ", " | replace "f:" "" }})
             {{- end }}
         {{- end }}
     {{- end }}

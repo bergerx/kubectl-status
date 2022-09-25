@@ -181,8 +181,14 @@ func sortMapListByKeysValue(key string, mapList []interface{}) (result []interfa
 		result = append(result, mapList[i])
 	}
 	sort.Slice(result, func(i, j int) bool {
-		typedMapListItemI := result[i].(map[string]interface{})[key].(string)
-		typedMapListItemJ := result[j].(map[string]interface{})[key].(string)
+		typedMapListItemI, ok := result[i].(map[string]interface{})[key].(string)
+		if !ok {
+			typedMapListItemI = ""
+		}
+		typedMapListItemJ, ok := result[j].(map[string]interface{})[key].(string)
+		if !ok {
+			typedMapListItemJ = ""
+		}
 		return typedMapListItemI < typedMapListItemJ
 	})
 	return
