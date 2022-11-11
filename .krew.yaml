@@ -18,9 +18,31 @@ spec:
     bin: "status"
   - selector:
       matchLabels:
+        os: linux
+        arch: arm64
+    {{addURIAndSha "https://github.com/bergerx/kubectl-status/releases/download/{{ .TagName }}/status_linux_arm64.tar.gz" .TagName }}
+    files:
+    - from: "./status"
+      to: "."
+    - from: LICENSE
+      to: "."
+    bin: "status"
+  - selector:
+      matchLabels:
         os: darwin
         arch: amd64
     {{addURIAndSha "https://github.com/bergerx/kubectl-status/releases/download/{{ .TagName }}/status_darwin_amd64.tar.gz" .TagName }}
+    files:
+    - from: "./status"
+      to: "."
+    - from: LICENSE
+      to: "."
+    bin: "status"
+  - selector:
+      matchLabels:
+        os: darwin
+        arch: arm64
+    {{addURIAndSha "https://github.com/bergerx/kubectl-status/releases/download/{{ .TagName }}/status_darwin_arm64.tar.gz" .TagName }}
     files:
     - from: "./status"
       to: "."
