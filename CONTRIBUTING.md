@@ -18,14 +18,21 @@ community looks forward to your contributions. 🎉
 - [Code of Conduct](#code-of-conduct)
 - [I Have a Question](#i-have-a-question)
 - [I Want To Contribute](#i-want-to-contribute)
-- [Reporting Bugs](#reporting-bugs)
-- [Suggesting Enhancements](#suggesting-enhancements)
-- [General Guidelines](#general-guidelines)
-- [Your First Code Contribution](#your-first-code-contribution)
-- [Improving The Documentation](#improving-the-documentation)
+  - [Legal Notice](#legal-notice)
+  - [Reporting Bugs](#reporting-bugs)
+    - [Before Submitting a Bug Report](#before-submitting-a-bug-report)
+    - [How Do I Submit a Good Bug Report?](#how-do-i-submit-a-good-bug-report-)
+  - [Suggesting Enhancements](#suggesting-enhancements)
+    - [Before Submitting an Enhancement](#before-submitting-an-enhancement)
+    - [How Do I Submit a Good Enhancement Suggestion?](#how-do-i-submit-a-good-enhancement-suggestion-)
+  - [General Guidelines](#general-guidelines)
+    - [Output Contents Guidelines](#output-contents-guidelines)
+    - [Color Coding Guidelines](#color-coding-guidelines)
+  - [Your First Code Contribution](#your-first-code-contribution)
+  - [Improving The Documentation](#improving-the-documentation)
 - [Styleguides](#styleguides)
-- [Commit Messages](#commit-messages)
-- [Join The Project Team](#join-the-project-team)
+  - [Commit Messages](#commit-messages)
+- [Releasing a new version](#releasing-a-new-version)
 
 ## Code of Conduct
 
@@ -35,8 +42,8 @@ participating, you are expected to uphold this code. Please report unacceptable 
 
 ## I Have a Question
 
-> If you want to ask a question, we assume that you have read the available
-> [Documentation](https://github.com/bergerx/kubectl-status/blob/master/README.md).
+> If you want to ask a question, we assume that you have read the
+> [README.md](https://github.com/bergerx/kubectl-status/blob/master/README.md) and [CONTRIBUTING.md](https://github.com/bergerx/kubectl-status/blob/master/CONTRIBUTING.md) (this file).
 
 Before you ask a question, it is best to search for existing [Issues](https://github.com/bergerx/kubectl-status/issues)
 that might help you. In case you have found a suitable issue and still need clarification, you can write your question
@@ -46,7 +53,6 @@ If you then still feel the need to ask a question and need clarification, we rec
 
 - Open an [Issue](https://github.com/bergerx/kubectl-status/issues/new).
 - Provide as much context as you can about what you're running into.
-- Provide project and platform versions (nodejs, npm, etc), depending on what seems relevant.
 
 We will then take care of the issue as soon as possible.
 
@@ -82,9 +88,7 @@ following steps in advance to help us fix any potential bug as fast as possible.
   discussed the issue.
 - Familiarize with the [general guidelines](#general-guidelines).
 - Collect information about the bug.
-- OS, Platform and Version (Windows, Linux, macOS, x86, ARM)
-- Version of the interpreter, compiler, SDK, runtime environment, package manager, depending on what seems relevant.
-- Can you reliably reproduce the issue? And can you also reproduce it with older versions?
+- Can you reliably reproduce the issue? And, can you also reproduce it with older versions?
 
 #### How Do I Submit a Good Bug Report?
 
@@ -97,8 +101,13 @@ We use GitHub issues to track bugs and errors. If you run into an issue with the
 - Open an [Issue](https://github.com/bergerx/kubectl-status/issues/new). (Since we can't be sure at this point whether
   it is a bug or not, we ask you not to talk about a bug yet and not to label the issue.)
 - Explain the behavior you would expect and the actual behavior.
-- Try to include the output with the `-v 5` flag, also try to include the un-truncated response yamls for individual
-  resources as they greatly help us to understand the issue.
+- Include these versions:
+    - `kubectl status --version`
+    - `kubectl version -o yaml`
+    - `kubectl krew version` (only if you installed using krew)
+- Try to include the output with the `-v 5` flag, also try to include the un-truncated response yamls
+  (`kubectl get -o yaml ...`) for individual resources as they greatly help us to understand the issue.
+  Please dont forget to mask any sensitive values.
 - Please provide as much context as possible and describe the *reproduction steps* that someone else can follow to
   recreate the issue on their own. This usually includes your code. For good bug reports you should isolate the problem
   and create a reduced test case.
@@ -219,7 +228,7 @@ kubectl-status follows the below guidelines to have a consistent user experience
 
 ### Improving The Documentation
 
-We don't yet have a copmrehensive documentation, we maintain just a few Markdown files in the repo. We aim to keep the
+We don't yet have a comprehensive documentation, we maintain just a few Markdown files in the repo. We aim to keep the
 examples in the [README.md](README.md#demo) up-to-date as we add new features, but this process is not automated.
 
 ## Styleguides
@@ -230,7 +239,9 @@ We don't yet have a convention for commit messages.
 
 ## Releasing a new version
 
-Pushing a git tag will cause GitLab's goreleaser action to build and publish a new release to krew index.
+Pushing a git tag will trigger
+[goreleaser GitHub action](https://github.com/bergerx/kubectl-status/actions/workflows/release.yml)
+to build and publish a new release to krew index.
 
 ```bash
 git tag vX.X.X
