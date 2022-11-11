@@ -419,6 +419,7 @@ func removeFieldsThatCreateDiffNoise(obj *unstructured.Unstructured) {
 	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "deprecated.daemonset.template.generation") // DaemonSet
 	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "kubectl.kubernetes.io/last-applied-configuration")
 	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "kapp.k14s.io/original")
+	unstructured.RemoveNestedField(obj.Object, "metadata", "selfLink")
 	// https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#pod-template-hash-label
 	unstructured.RemoveNestedField(obj.Object, "metadata", "labels", "pod-template-hash")                     // Deployment
 	unstructured.RemoveNestedField(obj.Object, "spec", "selector", "matchLabels", "pod-template-hash")        // Deployment
