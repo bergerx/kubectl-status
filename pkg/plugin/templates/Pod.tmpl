@@ -103,7 +103,7 @@
 {{- define "matching_services" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- if .Config.GetBool "include-matching-services" }}
-        {{- range $index, $svc := .KubeGetServicesMatchingLabels .Namespace .Labels }}
+        {{- range $index, $svc := .KubeGetServicesMatchingPod .Namespace .Name }}
             {{- if eq $index 0 }}
                 {{- "Services matching this pod:" | nindent 2 }}
             {{- end }}

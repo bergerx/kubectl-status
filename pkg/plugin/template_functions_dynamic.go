@@ -243,6 +243,40 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 	}
 	return out
 }
+func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) (out []RenderableObject) {
+	out = make([]RenderableObject, 0)
+	if viper.GetBool("shallow") {
+		return
+	}
+	klog.V(5).InfoS("called KubeGetServicesMatchingPod", "r", r, "namespace", namespace, "podName", podName)
+	clientSet, _ := r.engine.f.KubernetesClientSet()
+	endpoints, err := clientSet.CoreV1().Endpoints(r.Namespace()).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		klog.V(3).ErrorS(err, "error listing endpoints", "r", r, "namespace", namespace)
+		return
+	}
+	for _, ep := range endpoints.Items {
+		matched := false
+		for _, subset := range ep.Subsets {
+			for _, address := range subset.Addresses {
+				if address.TargetRef != nil && address.TargetRef.Kind == "Pod" && address.TargetRef.Name == podName {
+					matched = true
+				}
+			}
+		}
+		if matched {
+			svc, err := clientSet.CoreV1().Services(r.Namespace()).Get(context.TODO(), ep.Name, metav1.GetOptions{})
+			if err != nil {
+				klog.V(3).ErrorS(err, "error getting matching service", "r", r, "namespace", namespace, "name", ep.Name)
+				continue
+			}
+			svc.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Service"))
+			svcUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&svc)
+			out = append(out, r.newRenderableObject(svcUnstructured))
+		}
+	}
+	return out
+}
 
 func doesServiceMatchLabels(svc corev1.Service, labels map[string]string) bool {
 	if svc.Spec.Type == "ExternalName" {
