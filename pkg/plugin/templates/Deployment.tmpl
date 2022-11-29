@@ -1,6 +1,6 @@
 {{- define "Deployment" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "status_summary_line" . }}
+    {{- template "status_summary_line" . }}{{- with index .Annotations "deployment.kubernetes.io/revision" }} rev:{{.}}{{ end }}
     {{- template "kstatus_summary" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
@@ -38,6 +38,7 @@
 
 {{- define "recent_deployment_rollouts" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- $deploymentRevision := index .Annotations "deployment.kubernetes.io/revision" }}
     {{- $sectionHeader := false }}
     {{- $previousReplicaSet := "" }}
     {{- range .KubeGet .Namespace "ReplicaSets" }}
@@ -48,7 +49,18 @@
                 {{- template "rollout_diffs_flag_help" $ }}
                 {{- $sectionHeader = true }}
             {{- end }}
-    {{ with .Metadata.creationTimestamp }}{{ . | colorAgo }} ago{{ end }} managed by {{ .Kind | bold }}/{{ .Name }}
+            {{- with .Metadata.creationTimestamp }}{{ . | colorAgo | nindent 4 }} ago{{ end }}, managed by {{ .Kind | bold }}/{{ .Name }}
+            {{- $replicationSetRevision := index .Annotations "deployment.kubernetes.io/revision" }}
+            {{- $activeReplicaSet := eq $deploymentRevision $replicationSetRevision }}
+            {{- if .Status.replicas }}, has {{ .Status.replicas }} replicas
+                {{- if not $activeReplicaSet }}, {{ "abandoning" | red }}{{ end }}
+            {{- else }}
+                {{- if $activeReplicaSet }}, {{ "current revision but doesn't yet have any replicas" | red }}{{ end }}
+            {{- end }}
+            {{- with index .Annotations "deployment.kubernetes.io/revision-history" }}
+                {{- "" | nindent 6 }} Used at revisions: {{ . }},{{ $replicationSetRevision}}
+                {{- if $activeReplicaSet }} ({{ "current revision" | green }}) {{ end }}
+            {{- end }}
             {{- if and $previousReplicaSet ($.Config.GetBool "include-rollout-diffs") }}
                 {{- with $.KubeGetUnifiedDiffString "ReplicaSet" $.Namespace $previousReplicaSet.Name .Name }}
                     {{- "Diff" | bold | nindent 6 }}:

@@ -447,10 +447,11 @@ func removeFieldsThatCreateDiffNoise(obj *unstructured.Unstructured) {
 	obj.SetUID("")
 	obj.SetCreationTimestamp(metav1.Time{})
 	obj.SetGeneration(0)
-	unstructured.RemoveNestedField(obj.Object, "spec", "replicas")                                                    // Deployment, Replicaset
-	unstructured.RemoveNestedField(obj.Object, "revision")                                                            // ControllerRevision
-	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "deployment.kubernetes.io/revision")        // Deployment
-	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "deprecated.daemonset.template.generation") // DaemonSet
+	unstructured.RemoveNestedField(obj.Object, "spec", "replicas")                                                     // Deployment, Replicaset
+	unstructured.RemoveNestedField(obj.Object, "revision")                                                             // ControllerRevision
+	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "deployment.kubernetes.io/revision")         // Deployment
+	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "deployment.kubernetes.io/revision-history") // ReplicaSet
+	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "deprecated.daemonset.template.generation")  // DaemonSet
 	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "kubectl.kubernetes.io/last-applied-configuration")
 	unstructured.RemoveNestedField(obj.Object, "metadata", "annotations", "kapp.k14s.io/original")
 	unstructured.RemoveNestedField(obj.Object, "metadata", "selfLink")
