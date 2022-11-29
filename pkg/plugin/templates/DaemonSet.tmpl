@@ -36,7 +36,7 @@
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- $sectionHeader := false }}
     {{- $previousRevision := "" }}
-    {{- range .KubeGetByLabelsMap .Namespace "controllerrevisions" .Spec.selector.matchLabels }}
+    {{- range .KubeGetByLabelsMap .Namespace "controllerrevisions" .Metadata.labels }}
         {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
         {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
             {{- if not $sectionHeader }}

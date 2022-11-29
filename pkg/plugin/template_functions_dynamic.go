@@ -81,7 +81,7 @@ func (r RenderableObject) KubeGetFirst(namespace string, args ...string) Rendera
 
 // KubeGetByLabelsMap returns results similar to this:
 //
-//	> kubectl get -n {namespace} {resourceType} -l {labels_key=label_val,...}
+//	> kubectl get -n {namespace} {resourceType} -l {label_key=label_val,...}
 func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, labels map[string]interface{}) (out []RenderableObject) {
 	if viper.GetBool("shallow") {
 		return
