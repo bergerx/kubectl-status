@@ -36,18 +36,29 @@
 
 {{- define "pod_containers" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- $defaultLogsContainer := index .Annotations "kubectl.kubernetes.io/default-logs-container" }}
+    {{- $defaultContainer := index .Annotations "kubectl.kubernetes.io/default-container" }}
     {{- with .Status.containerStatuses }}
         {{- "Containers:" | nindent 2 }}
         {{- $podMetrics := $.KubeGetFirst $.Namespace "PodMetrics" $.Name }}
+        {{- $containerStatusSummaryDict := dict }}
         {{- range $containerStatus := . }}
             {{- if ($podMetrics.Object | default dict).containers }}
                 {{- $containerMetrics := $podMetrics.Object.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
                 {{- $containerSpec := $.Spec.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
-                {{- $containerStatusSummaryDict := dict "containerStatus" $containerStatus "containerMetrics" $containerMetrics "containerSpec" $containerSpec }}
-                {{- $.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
+                {{- $containerStatusSummaryDict = dict "containerStatus" $containerStatus
+                                                       "containerMetrics" $containerMetrics
+                                                       "containerSpec" $containerSpec
+                                                       "defaultContainer" (eq $containerStatus.name $defaultContainer)
+                                                       "defaultLogsContainer" (eq $containerStatus.name $defaultLogsContainer)
+                }}
             {{- else }}
-                {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus) | nindent 4 }}
+                {{- $containerStatusSummaryDict = dict "containerStatus" $containerStatus
+                                                       "defaultContainer" (eq $containerStatus.name $defaultContainer)
+                                                       "defaultLogsContainer" (eq $containerStatus.name $defaultLogsContainer)
+                }}
             {{- end }}
+            {{- $.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -182,10 +193,13 @@
            * containerStatus (required): Pod.status.containerStatuses[name=container]
            * containerMetrics (optional): PodMetrics.containers[name=container]
            * containerSpec (optional): Pod.spec.containers[name=container]
+           * defaultContainer (optional): Boolean
+           * defaultLogsContainer (optional): Boolean
         */ -}}
     {{- .containerStatus.name | bold }} ({{ .containerStatus.image | markYellow "latest" }}) {{ template "container_state_summary" .containerStatus.state }}
     {{- if .containerStatus.state.running }}{{ if .containerStatus.ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
     {{- if gt (.containerStatus.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.containerStatus.restartCount | int) | yellow | bold }}{{ end }}
+    {{- if or .defaultContainer .defaultLogsContainer }} (default kubectl container){{ end }}
     {{- if .containerMetrics }}{{ if .containerMetrics.usage.cpu }}{{ "usage" | nindent 2 }} {{ template "container_usage" . }}{{ end }}{{ end }}
     {{- with .containerStatus.lastState }}
         {{- "previously:" | yellow | nindent 2 }} {{ template "container_state_summary" . }}
