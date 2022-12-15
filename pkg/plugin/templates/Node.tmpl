@@ -12,7 +12,7 @@
         {{- with index .Labels "node.kubernetes.io/windows-build" }}, windows-build:{{ . }}{{ end }}
         {{- with index .Labels "kubernetes.io/role" }}, role:{{ . }}{{ end }}
     {{- end }}
-    {{- "images" | bold | nindent 2 }} {{ .Status.images | len }}
+    {{- with .Status.images }}{{ "images" | bold | nindent 2 }} {{ . | len }}{{ end }}
     {{- if .Status.volumesInUse }} {{ "volumes" | bold }} inuse={{ .Status.volumesInUse | len }}
         {{- with index .Status.allocatable "attachable-volumes-azure-disk" }}/{{ . }}{{ end }}, attached={{ .Status.volumesAttached | default list | len }}
     {{- end }}
@@ -139,14 +139,20 @@
             {{- if ge $podsTotalMemLimits (.Status.allocatable.memory | quantityToFloat64) }}
                 {{- "Memory overcommitted" | red | bold | nindent 4 }}: Application may be OOMKilled. Expect BestEffort and then Burstable pods to have OOMKill due to overcommitted memory on the node.
             {{- end }}
-            {{- "ephemeral-storage" | bold | nindent 2 }}: {{index .Status.allocatable "ephemeral-storage" | quantityToFloat64 | humanizeSI "B" }}
+            {{- with index .Status.allocatable "ephemeral-storage" }}{{ "ephemeral-storage" | bold | nindent 2 }}: {{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
         {{- end }}
     {{- end }}
 {{- end }}
 
 {{- define "node_capacity" }}
-    {{- "allocatable" | nindent 2 }}: pods:{{ .Status.allocatable.pods }}, cpu:{{ .Status.allocatable.cpu | quantityToFloat64 | printf "%g" }}, mem:{{ .Status.allocatable.memory | quantityToFloat64 | humanizeSI "B" }}, ephemeral-storage:{{index .Status.allocatable "ephemeral-storage" | quantityToFloat64 | humanizeSI "B" }}
-    {{- "capacity" | nindent 2 }}: pods:{{ .Status.capacity.pods }}, cpu:{{ .Status.capacity.cpu | quantityToFloat64 | printf "%g" }}, mem:{{ .Status.capacity.memory | quantityToFloat64 | humanizeSI "B" }}, ephemeral-storage:{{index .Status.capacity "ephemeral-storage" | quantityToFloat64 | humanizeSI "B" }}
+    {{- "allocatable" | nindent 2 }}: pods:{{ .Status.allocatable.pods -}}
+    , cpu:{{ .Status.allocatable.cpu | quantityToFloat64 | printf "%g" -}}
+    , mem:{{ .Status.allocatable.memory | quantityToFloat64 | humanizeSI "B" }}
+    {{- with index .Status.allocatable "ephemeral-storage" }}, ephemeral-storage:{{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
+    {{- "capacity" | nindent 2 }}: pods:{{ .Status.capacity.pods -}}
+    , cpu:{{ .Status.capacity.cpu | quantityToFloat64 | printf "%g" -}}
+    , mem:{{ .Status.capacity.memory | quantityToFloat64 | humanizeSI "B" -}}
+    {{- with index .Status.capacity "ephemeral-storage" }}, ephemeral-storage:{{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
 {{- end -}}
 
 {{- define "node_stats_summary_fs" }}
@@ -158,7 +164,7 @@
     {{- /* Expects one of:
            * kubelet-api/stats/summary -> node
            * kubelet-api/stats/summary -> node.systemContainers */ -}}
-    {{- with .cpu.usageNanoCores }}cpu {{ . | float64 | divFloat64 1000000000 | printf "%.2g" }}core/sec, {{ end }}
+    {{- with .cpu }}{{ with .usageNanoCores }}cpu {{ . | float64 | divFloat64 1000000000 | printf "%.2g" }}core/sec, {{ end }}{{ end }}
     {{- with .memory -}}
         mem {{ .usageBytes | float64 | humanizeSI "B" -}}
         , workingSet {{ .workingSetBytes | float64 | humanizeSI "B" -}}
