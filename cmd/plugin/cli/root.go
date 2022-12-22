@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	cc "github.com/ivanpirog/coloredcobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"os"
 	"strings"
@@ -98,6 +99,16 @@ func RootCmd() *cobra.Command {
 		},
 		Version: versionString(),
 	}
+	cc.Init(&cc.Config{
+		RootCmd:         cmd,
+		Headings:        cc.HiCyan + cc.Bold + cc.Underline,
+		Commands:        cc.HiYellow + cc.Bold,
+		Example:         cc.Italic,
+		ExecName:        cc.Bold,
+		Flags:           cc.Bold,
+		NoExtraNewlines: true,
+		NoBottomNewline: true,
+	})
 	flags := cmd.Flags()
 	initKlog(flags)
 	configFlags.AddFlags(flags)
