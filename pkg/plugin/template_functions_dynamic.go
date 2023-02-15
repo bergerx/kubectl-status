@@ -209,6 +209,9 @@ func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName str
 
 func doesIngressUseService(ing netv1.Ingress, svcName string) bool {
 	for _, rule := range ing.Spec.Rules {
+		if rule.HTTP == nil {
+			continue
+		}
 		for _, path := range rule.HTTP.Paths {
 			if path.Backend.Service.Name == svcName {
 				return true
