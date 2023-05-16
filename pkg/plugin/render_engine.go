@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/spf13/viper"
 	"k8s.io/kubectl/pkg/cmd/util"
+	"os"
+	"path/filepath"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
@@ -54,6 +56,17 @@ func parseTemplates(tmpl *template.Template) (*template.Template, error) {
 	if err != nil {
 		klog.V(3).ErrorS(err, "Error parsing some templates")
 		return nil, err
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		klog.V(3).ErrorS(err, "error getting user home dir, ignoring")
+	}
+	templatesDir := filepath.Join(homeDir, ".kubectl-status", "templates")
+	parsedTemplatesWithLocalTemplates, err := parsedTemplates.ParseGlob(filepath.Join(templatesDir, "*.tmpl"))
+	if err != nil {
+		klog.V(1).ErrorS(err, "Error parsing user provided templates, ignoring user provided templates")
+	} else {
+		parsedTemplates = parsedTemplatesWithLocalTemplates
 	}
 	klog.V(5).InfoS("Finished parsing all embedded template fs files.")
 	return parsedTemplates, nil

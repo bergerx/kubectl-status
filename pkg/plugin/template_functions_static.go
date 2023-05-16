@@ -177,9 +177,7 @@ func hasMapListAMatchingItem(searchFor map[string]interface{}, typedMapListItem 
 // mapList parameter should actually be a "[]map[string]interface{}" but due to unstructured json serialisation
 // we need to use "[]interface{}" and cast it inside.
 func sortMapListByKeysValue(key string, mapList []interface{}) (result []interface{}) {
-	for i := range mapList {
-		result = append(result, mapList[i])
-	}
+	result = append(result, mapList...)
 	sort.Slice(result, func(i, j int) bool {
 		typedMapListItemI, ok := result[i].(map[string]interface{})[key].(string)
 		if !ok {
