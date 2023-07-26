@@ -18,7 +18,7 @@ require (
 	k8s.io/client-go v0.27.4
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/kubectl v0.27.4
-	sigs.k8s.io/cli-utils v0.34.0
+	sigs.k8s.io/cli-utils v0.35.0
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -86,7 +86,7 @@ require (
 	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/term v0.6.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
-	golang.org/x/time v0.1.0 // indirect
+	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
