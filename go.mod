@@ -19,7 +19,7 @@ require (
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/kubectl v0.28.2
 	sigs.k8s.io/cli-utils v0.35.0
-	sigs.k8s.io/yaml v1.3.0
+	sigs.k8s.io/yaml v1.4.0
 )
 
 require (
