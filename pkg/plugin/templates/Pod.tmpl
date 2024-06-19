@@ -224,14 +224,17 @@
             {{- $ranfor := $finished.Sub $started -}}
             Started {{ .startedAt | colorAgo }} ago and {{ if .reason }}{{ .reason | colorKeyword }}{{ else }}terminated{{ end }} after {{ $ranfor | colorDuration }}
             {{- if .exitCode }} with {{ "exit code" | redIf (ne (.exitCode | toString) "0") }} {{ template "exit_code_summary" . }}{{ end }}
-        {{- else }}
-            {{ template "exit_code_summary" . }}
+        {{- else -}}
+            {{ "Terminated" | red }}
+            {{- with .reason }} as {{ . | bold }}{{end}}
+            {{- with .message }} with {{ . | quote }}{{end}}
+            {{- " " }}{{ template "exit_code_summary" . }}
         {{- end }}
     {{- end }}
 {{- end -}}
 
 {{- define "exit_code_summary" }}
-    {{- .exitCode | toString | redBoldIf (ne (.exitCode | toString) "0" ) }}
+    {{- "exit with" }} {{ .exitCode | toString | redBoldIf (ne (.exitCode | toString) "0" ) }}
     {{- with .signal }} (signal: {{ . }}){{ end }}
-    {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | signalName }}) {{ end }}
+    {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | signalName }}){{ end }}
 {{- end -}}
