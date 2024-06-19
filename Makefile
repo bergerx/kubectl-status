@@ -1,8 +1,6 @@
 
 export GO111MODULE=on
 
-PATH=/usr/bin:$$PATH
-
 .DEFAULT_GOAL := bin
 
 .PHONY: test
