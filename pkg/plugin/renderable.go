@@ -3,9 +3,12 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-	"github.com/spf13/viper"
 	"io"
+
+	"github.com/fatih/color"
+	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
@@ -111,7 +114,7 @@ func (r RenderableObject) render(wr io.Writer) error {
 	klog.V(5).InfoS("called render, calling findTemplateName", "r", r)
 	templateName := findTemplateName(r.engine.Template, r.Kind())
 	klog.V(5).InfoS("calling executeTemplate on renderable", "r", r, "templateName", templateName)
-	err := r.engine.ExecuteTemplate(wr, templateName, r)
+	err := r.executeTemplate(wr, templateName, r)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error on executeTemplate", "r", r)
 	}
@@ -129,10 +132,33 @@ func (r RenderableObject) renderTemplate(templateName string, data interface{}) 
 	var buffer bytes.Buffer
 	klog.V(5).InfoS("called renderTemplate, calling ExecuteTemplate",
 		"r", r, "templateName", templateName, "data", data)
-	err := r.engine.ExecuteTemplate(&buffer, templateName, data)
+	err := r.executeTemplate(&buffer, templateName, data)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error executing template",
 			"r", r, "templateName", templateName)
 	}
 	return buffer.String(), err
 }
+
+func (r RenderableObject) executeTemplate(wr io.Writer, name string, data any) error {
+	target, ok := data.(RenderableObject)
+	if ok && renderedUIDs.checkAdd(target.GetUID()) {
+		klog.V(3).InfoS("skipping template as its already rendered",
+			"r", r, "templateName", name)
+		color.New(color.FgWhite).Fprintf(wr, "%s is already printed", target.String())
+		return nil
+	}
+	return r.engine.ExecuteTemplate(wr, name, data)
+}
+
+type uidSet map[types.UID]struct{}
+
+func (s uidSet) checkAdd(uid types.UID) bool {
+	_, exists := s[uid]
+	if !exists {
+		s[uid] = struct{}{}
+	}
+	return exists
+}
+
+var renderedUIDs = make(uidSet)
