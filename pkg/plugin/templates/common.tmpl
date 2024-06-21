@@ -134,17 +134,7 @@
         {{- with .KubeGetEvents }}{{ if .Object }}{{ if .Object.items }}
             {{- "Events:" | nindent 2 }}
             {{- range .Object.items }}
-                {{- "" | nindent 4 }}
-                {{- if eq .type "Warning" }}{{ .reason | red | bold }} {{ else }}{{ .reason }} {{ end }}
-                {{- with .lastTimestamp }}{{ . | colorAgo }} ago {{ end }}
-                {{- if gt (.count | int) 1 -}}
-                    {{- if .firstTimestamp -}}
-                        (x{{ .count }} over {{ .firstTimestamp | colorAgo }}) {{ "" }}
-                    {{- else -}}
-                        (x{{ .count }}) {{ "" }}
-                    {{- end -}}
-                {{- end -}}
-                from {{ list .reportingComponent .reportingInstance .source.component .source.host .source.fieldPath | compact | join "," | bold }}: {{ .message }}
+                {{- $.Include "event" . | nindent 4 }}
             {{- end }}
         {{- end }}{{ end }}{{ end }}
     {{- end }}

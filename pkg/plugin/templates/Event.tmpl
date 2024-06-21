@@ -1,0 +1,24 @@
+{{- define "Event" }}
+  {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+  {{- template "status_summary_line" . }}
+  {{ template "event" .Unstructured.Object }}
+{{- end }}
+
+{{- define "event" }}
+    {{- list .reportingInstance .source.host .reportingComponent .source.component .source.fieldPath | compact | uniq | join "," | bold }}
+    {{- if eq .type "Warning" }} {{ .reason | red | bold }}{{ else }} {{ .reason | bold }}{{ end -}}
+    {{- with .action}} {{ . }}{{end}}
+    {{- with .involvedObject }} involving {{ "" }}
+        {{- with .kind }}{{. | bold }}/{{ end }}
+        {{- with .name }}{{ . }}{{ end }}
+        {{- with .fieldPath }}[{{ . }}]{{ end }}
+        {{- with .namespace }} (in {{ . }}){{ end }}
+    {{- end }}
+    {{- with .lastTimestamp }} {{ . | colorAgo }} ago{{ end }}
+    {{- if gt (.count | int) 1 -}}
+        {{- if .firstTimestamp }} (x{{ .count }} over {{ .firstTimestamp | colorAgo }})
+        {{- else }} (x{{ .count }})
+        {{- end -}}
+    {{- end -}}
+    {{- " " }}{{ .message }}
+{{- end -}}

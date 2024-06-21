@@ -55,8 +55,8 @@
 
 {{- define "node_lease" }}
     {{- if .Config.GetBool "include-node-lease" }}
-        {{- with .KubeGetFirst "kube-node-lease" "Lease" .Name }}{{/*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject */}}
-            {{- "Lease" | bold | nindent 2 }} for {{ .Spec.leaseDurationSeconds }}s, renew in {{ .Spec.renewTime | ago }}
+        {{- with .KubeGetFirst "kube-node-lease" "Lease" .Name }}
+            {{- $.Include "Lease" . | nindent 2 }}
         {{- end }}
     {{- end }}
 {{- end -}}
