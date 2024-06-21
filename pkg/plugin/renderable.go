@@ -145,7 +145,7 @@ func (r RenderableObject) executeTemplate(wr io.Writer, name string, data any) e
 	if ok && target.Kind() == name && renderedUIDs.checkAdd(target.GetUID()) {
 		klog.V(3).InfoS("skip rendering of the RenderableObject as its already rendered",
 			"r", r, "templateName", name)
-		color.New(color.FgWhite).Fprintf(wr, "%s is already printed", target.String())
+		_, _ = color.New(color.FgWhite).Fprintf(wr, "%s is already printed", target.String())
 		return nil
 	}
 	return r.engine.ExecuteTemplate(wr, name, data)

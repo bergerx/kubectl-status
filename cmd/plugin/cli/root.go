@@ -3,17 +3,16 @@ package cli
 import (
 	"flag"
 	"fmt"
-	cc "github.com/ivanpirog/coloredcobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"os"
 	"strings"
 
+	cc "github.com/ivanpirog/coloredcobra"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog/v2"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/bergerx/kubectl-status/pkg/plugin"
 )
@@ -89,7 +88,7 @@ func RootCmd() *cobra.Command {
 		Long:    longCmdMessage,
 		Example: examplesMessage,
 		PreRun: func(cmd *cobra.Command, args []string) {
-			viper.BindPFlags(cmd.Flags())
+			_ = viper.BindPFlags(cmd.Flags())
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			klog.V(5).InfoS("running the cobra.Command ...")

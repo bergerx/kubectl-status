@@ -4,21 +4,21 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/spf13/viper"
 	"io"
-	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/kubectl/pkg/cmd/util"
 	"os"
 	"path/filepath"
 	_ "unsafe" // required for using go:linkname in the file
 
 	"github.com/fatih/color"
+	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/cli-runtime/pkg/resource"
 	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/klog/v2"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/interrupt"
 	kyaml "sigs.k8s.io/yaml"
 )
@@ -27,7 +27,7 @@ import (
 func signame(sig uint32) string
 
 func errorPrintf(format string, a ...interface{}) {
-	color.New(color.BgRed, color.FgHiWhite).Printf(format, a...)
+	_, _ = color.New(color.BgRed, color.FgHiWhite).Printf(format, a...)
 	fmt.Println()
 }
 
@@ -108,7 +108,7 @@ func runWatch(results *resource.Result, engine *renderEngine) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	intr := interrupt.New(nil, cancel)
-	intr.Run(func() error {
+	_ = intr.Run(func() error {
 		_, err := watchtools.UntilWithoutRetry(ctx, w, func(e watch.Event) (bool, error) {
 			klog.V(5).InfoS("Processing watch event", "e", e)
 			processObj(e.Object, engine)
@@ -143,7 +143,7 @@ func runLocal(engine *renderEngine) {
 		klog.V(5).InfoS("Processing local file", "filename", filename)
 		if viper.GetBool("recursive") {
 			klog.V(5).InfoS("Processing recursive", "filename", filename)
-			filepath.Walk(filename, func(path string, info os.FileInfo, err error) error {
+			_ = filepath.Walk(filename, func(path string, info os.FileInfo, err error) error {
 				klog.V(5).InfoS("Processing local file", "path", path)
 				if err != nil {
 					klog.V(10).ErrorS(err, "filepath walk error", "path", path, "info", info)

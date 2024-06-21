@@ -6,11 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/spf13/viper"
 	"strings"
 	"time"
 
 	"github.com/pmezard/go-difflib/difflib"
+	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -288,7 +288,7 @@ func doesServiceMatchLabels(svc corev1.Service, labels map[string]string) bool {
 	return isSubset(svc.Spec.Selector, labels)
 }
 
-// Checks if a is subset of b, returns false if a is empty.
+// Checks if "a" is subset of "b", returns false if "a" is empty.
 func isSubset(a, b map[string]string) bool {
 	if len(a) == 0 {
 		return false

@@ -1,10 +1,11 @@
 package plugin
 
 import (
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/kubectl/pkg/cmd/util"
 	"strings"
 	"testing"
+
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 )
 
 func checkTemplate(t *testing.T, templateName string, obj map[string]interface{}, shouldContain string, useRenderable bool) {

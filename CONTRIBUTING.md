@@ -80,11 +80,11 @@ following steps in advance to help us fix any potential bug as fast as possible.
     - `-v 10` same with previous but doesn't truncate responses
 - Determine if your bug is really a bug and not a missing component in your cluster (e.g. when metrics-server is not
   deployed, the node and pod outputs won't have usage details). If you are looking for support, you might want to
-  check [this section](#i-have-a-question)).
+  check [this section](#i-have-a-question).
 - To see if other users have experienced (and potentially already solved) the same issue you are having, check if there
   is not already a bug report existing for your bug or error in
   the [bug tracker](https://github.com/bergerx/kubectl-status/issues?q=label%3Abug).
-- Also make sure to search the internet (including Stack Overflow) to see if users outside of the GitHub community have
+- Also make sure to search the internet (including Stack Overflow) to see if users outside the GitHub community have
   discussed the issue.
 - Familiarize with the [general guidelines](#general-guidelines).
 - Collect information about the bug.
@@ -107,7 +107,7 @@ We use GitHub issues to track bugs and errors. If you run into an issue with the
     - `kubectl krew version` (only if you installed using krew)
 - Try to include the output with the `-v 5` flag, also try to include the un-truncated response yamls
   (`kubectl get -o yaml ...`) for individual resources as they greatly help us to understand the issue.
-  Please dont forget to mask any sensitive values.
+  Please don't forget to mask any sensitive values.
 - Please provide as much context as possible and describe the *reproduction steps* that someone else can follow to
   recreate the issue on their own. This usually includes your code. For good bug reports you should isolate the problem
   and create a reduced test case.

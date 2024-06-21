@@ -3,17 +3,17 @@ package plugin
 import (
 	"embed"
 	"fmt"
-	"github.com/spf13/viper"
-	"k8s.io/kubectl/pkg/cmd/util"
 	"os"
 	"path/filepath"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
+	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/klog/v2"
+	"k8s.io/kubectl/pkg/cmd/util"
 )
 
 //go:embed templates
