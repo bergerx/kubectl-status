@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
+	"k8s.io/kubectl/pkg/cmd/events"
 	"k8s.io/kubectl/pkg/cmd/get"
 	"k8s.io/kubectl/pkg/polymorphichelpers"
 )
@@ -40,18 +42,22 @@ func (r RenderableObject) KubeGet(namespace string, args ...string) (out []Rende
 
 func (r RenderableObject) getCreationTimestampSortedRenderableObjects(resourceInfos []*resource.Info) []RenderableObject {
 	var out []RenderableObject
-	runtimeObjList := make([]runtime.Object, len(resourceInfos))
-	for i := range resourceInfos {
-		runtimeObjList[i] = resourceInfos[i].Object
-	}
-	_ = get.NewRuntimeSorter(runtimeObjList, ".metadata.creationTimestamp").Sort()
-	for _, obj := range runtimeObjList {
+	for _, obj := range sortedResourceInfosToRuntimeObjects(resourceInfos) {
 		unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 		nr := r.newRenderableObject(unstructuredObj)
 		klog.V(5).InfoS("KubeGet matched object", "object", nr)
 		out = append(out, nr)
 	}
 	return out
+}
+
+func sortedResourceInfosToRuntimeObjects(resourceInfos []*resource.Info) []runtime.Object {
+	runtimeObjList := make([]runtime.Object, len(resourceInfos))
+	for i := range resourceInfos {
+		runtimeObjList[i] = resourceInfos[i].Object
+	}
+	_ = get.NewRuntimeSorter(runtimeObjList, ".metadata.creationTimestamp").Sort()
+	return runtimeObjList
 }
 
 // KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
@@ -114,12 +120,13 @@ func (r RenderableObject) KubeGetEvents() RenderableObject {
 	}
 	klog.V(5).InfoS("called KubeGetEvents", "r", r)
 	clientSet, _ := r.engine.f.KubernetesClientSet()
-	events, err := clientSet.CoreV1().Events(r.GetNamespace()).Search(scheme.Scheme, &r)
+	eventList, err := clientSet.CoreV1().Events(r.GetNamespace()).Search(scheme.Scheme, &r)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error getting events", "r", r)
 		return nr
 	}
-	unstructuredEvents, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&events)
+	sort.Sort(events.SortableEvents(eventList.Items))
+	unstructuredEvents, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&eventList)
 	nr.Object = unstructuredEvents
 	return nr
 }
@@ -172,14 +179,21 @@ func (r RenderableObject) KubeGetOwners() (out []RenderableObject) {
 		if err != nil {
 			klog.V(3).InfoS("KubeGetOwners failed parsing apiVersion", "apiVersion", owner.APIVersion)
 			kindVersionGroup = owner.Kind
+			out = append(out, r.KubeGetFirst(r.Namespace(), kindVersionGroup, owner.Name))
 		} else if gv.Group == "" && gv.Version != "v1" {
 			kindVersionGroup = fmt.Sprintf("%s.%s", owner.Kind, gv.Version)
 			klog.V(5).InfoS("KubeGetOwners", "kindVersionGroup", kindVersionGroup, "gv", gv)
+			ownerWithVersion := r.KubeGetFirst(r.Namespace(), kindVersionGroup, owner.Name)
+			if ownerWithVersion.Object == nil {
+				// its likely the ownerReference.apiVersion field doesn't have the group prefix, so we'll try without the version
+				ownerWithVersion = r.KubeGetFirst(r.Namespace(), owner.Kind, owner.Name)
+			}
+			out = append(out, ownerWithVersion)
 		} else {
 			kindVersionGroup = fmt.Sprintf("%s.%s.%s", owner.Kind, gv.Version, gv.Group)
 			klog.V(5).InfoS("KubeGetOwners", "kindVersionGroup", kindVersionGroup)
+			out = append(out, r.KubeGetFirst(r.Namespace(), kindVersionGroup, owner.Name))
 		}
-		out = append(out, r.KubeGetFirst(r.Namespace(), kindVersionGroup, owner.Name))
 	}
 	return out
 }

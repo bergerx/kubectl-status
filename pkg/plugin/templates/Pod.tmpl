@@ -236,5 +236,5 @@
 {{- define "exit_code_summary" }}
     {{- "exit with" }} {{ .exitCode | toString | redBoldIf (ne (.exitCode | toString) "0" ) }}
     {{- with .signal }} (signal: {{ . }}){{ end }}
-    {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | signalName }}){{ end }}
+    {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | int64 | signalName }}){{ end }}
 {{- end -}}

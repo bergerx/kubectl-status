@@ -9,15 +9,15 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/Masterminds/sprig/v3"
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
+	"github.com/go-sprout/sprout"
 	"github.com/spf13/cast"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
 )
 
-var durationRound = (sprig.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
+var durationRound = (sprout.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
 
 func funcMap() template.FuncMap {
 	return template.FuncMap{
