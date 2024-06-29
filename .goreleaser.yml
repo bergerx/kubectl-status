@@ -18,9 +18,9 @@ builds:
     env:
       - CGO_ENABLED=0
       - GO111MODULE=on
-    main: cmd/plugin/main.go
+    main: cmd/main.go
     ldflags: -s -w
-      -X github.com/bergerx/kubectl-status/cmd/plugin/cli.version={{ trimprefix .Summary "v" }}
+      -X main.version={{ .Summary }}
 archives:
   - id: status
     builds:

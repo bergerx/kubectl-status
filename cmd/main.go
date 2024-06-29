@@ -1,4 +1,4 @@
-package cli
+package main
 
 import (
 	"flag"
@@ -11,11 +11,22 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	_ "k8s.io/client-go/plugin/pkg/client/auth" // Initialize all known client auth plugins.
 	"k8s.io/klog/v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/bergerx/kubectl-status/pkg/plugin"
 )
+
+func main() {
+	// Kubernetes uses UTC times, status shows times only in "... ago" format, so
+	// setting the TZ to UTC is safe.
+	_ = os.Setenv("TZ", "UTC")
+	if err := RootCmd().Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
 
 var (
 	longCmdMessage = `Display status for one or many resources
@@ -59,13 +70,6 @@ not all resources are fully supported.`
 `
 )
 
-func InitAndExecute() {
-	if err := RootCmd().Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-}
-
 // This variable is populated by goreleaser
 var version string
 
@@ -96,7 +100,7 @@ func RootCmd() *cobra.Command {
 			cmdutil.CheckErr(validate())
 			cmdutil.CheckErr(plugin.Run(f, args))
 		},
-		Version: versionString(),
+		Version: version,
 	}
 	cc.Init(&cc.Config{
 		RootCmd:         cmd,
@@ -176,16 +180,6 @@ func addRenderFlags(flags *pflag.FlagSet) {
 		"Show all available flags.")
 	flags.String("color", "auto",
 		"One of 'auto', 'never' or 'always'.")
-}
-
-// versionString returns the version prefixed by 'v'
-// or an empty string if no version has been populated by goreleaser.
-// In this case, the --version flag will not be added by cobra.
-func versionString() string {
-	if len(version) == 0 {
-		return ""
-	}
-	return "v" + version
 }
 
 func isBoolConfigExplicitlySetToTrue(key string) bool {
