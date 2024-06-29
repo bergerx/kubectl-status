@@ -88,6 +88,7 @@ func runRemote(args []string, engine *renderEngine) error {
 func runWatch(results *resource.Result, engine *renderEngine) error {
 	color.HiYellow("\nPrinted all existing resource statuses, starting to watch. Switching to shallow mode during watch!\n\n")
 	viper.Set("shallow", true)
+	viper.Set("watching", true)
 	klog.V(5).InfoS("Will run watch")
 	obj, err := results.Object()
 	if err != nil {
