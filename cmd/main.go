@@ -74,7 +74,7 @@ not all resources are fully supported.`
 var version string
 
 func RootCmd() *cobra.Command {
-	configFlags := genericclioptions.NewConfigFlags(false).
+	configFlags := genericclioptions.NewConfigFlags(true).
 		WithDeprecatedPasswordFlag().
 		WithDiscoveryBurst(300).
 		WithDiscoveryQPS(50.0)
@@ -192,9 +192,6 @@ func complete(f cmdutil.Factory) error {
 	if err != nil {
 		return err
 	}
-	if viper.GetBool("local") {
-		viper.Set("shallow", true)
-	}
 	if viper.GetBool("shallow") {
 		allowExplicitIncludesOnly()
 	}
@@ -243,9 +240,6 @@ func enableAllIncludes() {
 
 func validate() error {
 	klog.V(5).InfoS("Validating cli options...")
-	if viper.GetBool("local") && viper.GetBool("deep") {
-		return fmt.Errorf("--local and --deep are mutually exclusive")
-	}
 	if viper.GetBool("shallow") && viper.GetBool("deep") {
 		return fmt.Errorf("--shallow and --deep are mutually exclusive")
 	}

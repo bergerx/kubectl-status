@@ -137,7 +137,7 @@ func (e renderEngine) newBuilder() *resource.Builder {
 		AllNamespaces(viper.GetBool("all-namepaces")).
 		ContinueOnError().
 		Unstructured().
-		Latest().
+		LocalParam(viper.GetBool("local")).
 		Flatten()
 }
 

@@ -32,7 +32,7 @@ func (r RenderableObject) KubeGet(namespace string, args ...string) (out []Rende
 	if viper.GetBool("shallow") {
 		return
 	}
-	klog.V(5).InfoS("processing KubeGetFirst", "r", r, "namespace", namespace, "args", args)
+	klog.V(5).InfoS("processing KubeGet", "r", r, "namespace", namespace, "args", args)
 	resourceInfos, err := r.engine.getResourceQueryInfos(namespace, args)
 	if err != nil {
 		klog.V(3).ErrorS(err, "ignoring resource error", "r", r, "namespace", namespace, "args", args)
