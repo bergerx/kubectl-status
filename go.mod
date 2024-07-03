@@ -1,6 +1,7 @@
 module github.com/bergerx/kubectl-status
 
-go 1.22.0
+go 1.22.4
+
 require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.17.0
@@ -18,7 +19,6 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubectl v0.30.2
 	sigs.k8s.io/cli-utils v0.37.1
-	sigs.k8s.io/yaml v1.4.0
 )
 
 require (
@@ -105,4 +105,5 @@ require (
 	sigs.k8s.io/kustomize/api v0.15.0 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.17.1 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
+	sigs.k8s.io/yaml v1.4.0 // indirect
 )
