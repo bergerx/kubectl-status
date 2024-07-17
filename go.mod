@@ -12,10 +12,10 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
-	k8s.io/api v0.30.2
-	k8s.io/apimachinery v0.30.2
+	k8s.io/api v0.30.3
+	k8s.io/apimachinery v0.30.3
 	k8s.io/cli-runtime v0.30.2
-	k8s.io/client-go v0.30.2
+	k8s.io/client-go v0.30.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubectl v0.30.2
 	sigs.k8s.io/cli-utils v0.37.1
