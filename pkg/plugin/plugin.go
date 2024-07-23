@@ -43,17 +43,7 @@ func Run(f util.Factory, args []string) error {
 }
 
 func run(args []string, engine *renderEngine) error {
-	builder := engine.newBuilder().
-		FilenameParam(false, &resource.FilenameOptions{
-			Filenames: viper.GetStringSlice("filename"),
-			Recursive: viper.GetBool("recursive"),
-		}).
-		LabelSelectorParam(viper.GetString("selector")).
-		FieldSelectorParam(viper.GetString("field-selector"))
-	if !viper.GetBool("local") {
-		builder = builder.ResourceTypeOrNameArgs(true, args...)
-	}
-	results := builder.Do()
+	results := engine.repo.CLIQueryResults(args)
 	count := 0
 	err := results.Visit(func(resourceInfo *resource.Info, err error) error {
 		count += 1

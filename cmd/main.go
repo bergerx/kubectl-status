@@ -74,18 +74,6 @@ not all resources are fully supported.`
 var version string
 
 func RootCmd() *cobra.Command {
-	configFlags := genericclioptions.NewConfigFlags(true).
-		WithDeprecatedPasswordFlag().
-		WithDiscoveryBurst(300).
-		WithDiscoveryQPS(50.0)
-	resourceBuilderFlags := genericclioptions.NewResourceBuilderFlags().
-		WithAll(false).
-		WithAllNamespaces(false).
-		WithFile(false).
-		WithLabelSelector("").
-		WithFieldSelector("").
-		WithLatest()
-	f := cmdutil.NewFactory(configFlags)
 	cmd := &cobra.Command{
 		Use:     "kubectl-status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
 		Short:   "Display status for one or many resources",
@@ -94,14 +82,47 @@ func RootCmd() *cobra.Command {
 		PreRun: func(cmd *cobra.Command, args []string) {
 			_ = viper.BindPFlags(cmd.Flags())
 		},
-		Run: func(cmd *cobra.Command, args []string) {
-			klog.V(5).InfoS("running the cobra.Command ...")
-			cmdutil.CheckErr(complete(f))
-			cmdutil.CheckErr(validate())
-			cmdutil.CheckErr(plugin.Run(f, args))
-		},
 		Version: version,
 	}
+	initColorCobra(cmd)
+	configFlags := initFlags(cmd)
+	cobra.OnInitialize(viper.AutomaticEnv)
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	f := cmdutil.NewFactory(configFlags)
+	cmd.Run = func(cmd *cobra.Command, args []string) {
+		klog.V(5).InfoS("running the cobra.Command ...")
+		cmdutil.CheckErr(complete(f))
+		cmdutil.CheckErr(validate())
+		cmdutil.CheckErr(plugin.Run(f, args))
+	}
+	return cmd
+}
+
+func initFlags(cmd *cobra.Command) *genericclioptions.ConfigFlags {
+	flags := cmd.Flags()
+	initKlog(flags)
+	// copied from kubectl.pkg.cmd as is
+	configFlags := genericclioptions.NewConfigFlags(true).
+		WithDeprecatedPasswordFlag().
+		WithDiscoveryBurst(300).
+		WithDiscoveryQPS(50.0)
+	configFlags.AddFlags(flags)
+	resourceBuilderFlags := genericclioptions.NewResourceBuilderFlags().
+		WithAll(false).
+		WithAllNamespaces(false).
+		WithFile(false).
+		WithLabelSelector("").
+		WithFieldSelector("").
+		WithLatest()
+	resourceBuilderFlags.AddFlags(flags)
+	addRenderFlags(flags)
+	if ok, _ := flags.GetBool("help-all"); !ok {
+		hideNoisyFlags(flags)
+	}
+	return configFlags
+}
+
+func initColorCobra(cmd *cobra.Command) {
 	cc.Init(&cc.Config{
 		RootCmd:         cmd,
 		Headings:        cc.HiCyan + cc.Bold + cc.Underline,
@@ -112,17 +133,6 @@ func RootCmd() *cobra.Command {
 		NoExtraNewlines: true,
 		NoBottomNewline: true,
 	})
-	flags := cmd.Flags()
-	initKlog(flags)
-	configFlags.AddFlags(flags)
-	resourceBuilderFlags.AddFlags(flags)
-	addRenderFlags(flags)
-	if ok, _ := flags.GetBool("help-all"); !ok {
-		hideNoisyFlags(flags)
-	}
-	cobra.OnInitialize(viper.AutomaticEnv)
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	return cmd
 }
 
 func hideNoisyFlags(flags *pflag.FlagSet) {

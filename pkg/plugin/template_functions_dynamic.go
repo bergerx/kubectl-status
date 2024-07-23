@@ -99,12 +99,7 @@ func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, lab
 		labelPairs = append(labelPairs, fmt.Sprintf("%s=%s", k, v))
 	}
 	selector := strings.Join(labelPairs, ",")
-	resourceResult := r.engine.newBuilder().
-		NamespaceParam(namespace).
-		ResourceTypeOrNameArgs(true, resourceType).
-		LabelSelectorParam(selector).
-		Do()
-	resourceInfos, err := resourceResult.Infos()
+	resourceInfos, err := r.engine.repo.ResourceInfos(namespace, []string{resourceType}, selector)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error querying labels",
 			"r", r, "namespace", namespace, "labels", labels)
@@ -119,7 +114,7 @@ func (r RenderableObject) KubeGetEvents() RenderableObject {
 		return nr
 	}
 	klog.V(5).InfoS("called KubeGetEvents", "r", r)
-	clientSet, _ := r.engine.f.KubernetesClientSet()
+	clientSet, _ := r.engine.repo.KubernetesClientSet()
 	eventList, err := clientSet.CoreV1().Events(r.GetNamespace()).Search(scheme.Scheme, &r)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error getting events", "r", r)
@@ -140,7 +135,7 @@ func (r RenderableObject) KubeGetResourcesOwnedOf(resourceOrKind string) (out []
 	}
 	klog.V(5).InfoS("called template method KubeGetResourcesOwnedOf", "r", r)
 	restMapper, _ := r.engine.mappingFor(resourceOrKind)
-	dynamicInterface, _ := r.engine.f.DynamicClient()
+	dynamicInterface, _ := r.engine.repo.DynamicClient()
 	controllerRevisions, _ := dynamicInterface.
 		Resource(restMapper.Resource).
 		Namespace(r.GetNamespace()).
@@ -204,7 +199,7 @@ func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName str
 	}
 	klog.V(5).InfoS("called KubeGetIngressesMatchingService",
 		"r", r, "namespace", namespace, "svcName", svcName)
-	clientSet, _ := r.engine.f.KubernetesClientSet()
+	clientSet, _ := r.engine.repo.KubernetesClientSet()
 	// The old v1beta1 Ingress which will no longer served as of v1.22. Not implementing it.
 	ingresses, err := clientSet.NetworkingV1().Ingresses(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -245,7 +240,7 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 		castedLabels[k] = v.(string)
 	}
 	klog.V(5).InfoS("casted labels values into string", "r", r, "castedLabels", castedLabels)
-	clientSet, _ := r.engine.f.KubernetesClientSet()
+	clientSet, _ := r.engine.repo.KubernetesClientSet()
 	svcs, err := clientSet.CoreV1().Services(r.Namespace()).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing services", "r", r, "namespace", namespace)
@@ -266,7 +261,7 @@ func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) 
 		return
 	}
 	klog.V(5).InfoS("called KubeGetServicesMatchingPod", "r", r, "namespace", namespace, "podName", podName)
-	clientSet, _ := r.engine.f.KubernetesClientSet()
+	clientSet, _ := r.engine.repo.KubernetesClientSet()
 	endpoints, err := clientSet.CoreV1().Endpoints(r.Namespace()).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing endpoints", "r", r, "namespace", namespace)
@@ -334,7 +329,7 @@ func (r RenderableObject) KubeGetNodeStatsSummary(nodeName string) map[string]in
 //
 // The endpoint that this function uses will be disabled soon: https://github.com/kubernetes/kubernetes/issues/68522
 func (r RenderableObject) kubeGetNodeStatsSummary(nodeName string) (map[string]interface{}, error) {
-	clientSet, err := r.engine.f.KubernetesClientSet()
+	clientSet, err := r.engine.repo.KubernetesClientSet()
 	if err != nil {
 		return nil, err
 	}
@@ -367,7 +362,7 @@ func (r RenderableObject) KubeGetNonTerminatedPodsOnNode(nodeName string) (podLi
 }
 
 func (r RenderableObject) kubeGetNonTerminatedPodsOnTheNode(nodeName string) (podList []RenderableObject, err error) {
-	clientSet, _ := r.engine.f.KubernetesClientSet()
+	clientSet, _ := r.engine.repo.KubernetesClientSet()
 	fieldSelector, err := fields.ParseSelector("spec.nodeName=" + nodeName +
 		",status.phase!=" + string(corev1.PodSucceeded) +
 		",status.phase!=" + string(corev1.PodFailed))
@@ -416,7 +411,7 @@ func (r RenderableObject) kubeGetUnifiedDiffString(resourceOrKind, namespace, na
 		return "", err
 	}
 	gvr := controllerRevisionMapping.Resource
-	dynamicClient, err := r.engine.f.DynamicClient()
+	dynamicClient, err := r.engine.repo.DynamicClient()
 	if err != nil {
 		klog.V(3).ErrorS(err, "failed to get dynamic client")
 		return "", err

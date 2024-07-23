@@ -8,12 +8,13 @@ import (
 	"text/template"
 
 	"github.com/go-sprout/sprout"
-	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
+
+	"github.com/bergerx/kubectl-status/pkg/input"
 )
 
 //go:embed templates
@@ -22,19 +23,20 @@ var templatesFS embed.FS
 // renderEngine provides methods to build kubernetes api queries from provided cli options.
 // Also holds the parsed templates.
 type renderEngine struct {
-	f util.Factory
+	repo input.ResourceRepo
 	template.Template
 }
 
 func newRenderEngine(f util.Factory) (*renderEngine, error) {
 	klog.V(5).InfoS("Creating new render engine instance...", "f", f)
 	tmpl, err := getTemplate()
+	repo := input.NewResourceRepo(f)
 	if err != nil {
 		klog.V(3).ErrorS(err, "Error parsing templates")
 		return nil, err
 	}
 	return &renderEngine{
-		f,
+		repo,
 		*tmpl,
 	}, nil
 }
@@ -84,7 +86,7 @@ func findTemplateName(tmpl template.Template, kind string) string {
 func (e *renderEngine) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, error) {
 	fullySpecifiedGVR, groupResource := schema.ParseResourceArg(resourceOrKindArg)
 	gvk := schema.GroupVersionKind{}
-	restMapper, err := e.f.ToRESTMapper()
+	restMapper, err := e.repo.ToRESTMapper()
 	if err != nil {
 		return nil, err
 	}
@@ -127,25 +129,7 @@ func (e *renderEngine) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, 
 	return mapping, nil
 }
 
-// newBuilder returns an unstructured resource builder which uses the namespace from the cli parameters.
-// This can be used to run further queries for related resources.
-// The resulting builder will have the namespace used in the resource builder flags.
-func (e renderEngine) newBuilder() *resource.Builder {
-	return e.f.NewBuilder().
-		NamespaceParam(viper.GetString("namespace")).
-		DefaultNamespace().
-		AllNamespaces(viper.GetBool("all-namepaces")).
-		ContinueOnError().
-		Unstructured().
-		LocalParam(viper.GetBool("local")).
-		Flatten()
-}
-
 func (e renderEngine) getResourceQueryInfos(namespace string, args []string) ([]*resource.Info, error) {
 	klog.V(5).InfoS("getResourceQueryInfos", "namespace", namespace, "args", args)
-	return e.newBuilder().
-		NamespaceParam(namespace).
-		ResourceTypeOrNameArgs(true, args...).
-		Do().   // resource.Result
-		Infos() // []*resource.Info
+	return e.repo.ResourceInfos(namespace, args, "")
 }
