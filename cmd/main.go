@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Initialize all known client auth plugins.
 	"k8s.io/klog/v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -23,7 +25,6 @@ func main() {
 	// setting the TZ to UTC is safe.
 	_ = os.Setenv("TZ", "UTC")
 	if err := RootCmd().Execute(); err != nil {
-		fmt.Println(err)
 		os.Exit(1)
 	}
 }
@@ -82,18 +83,25 @@ func RootCmd() *cobra.Command {
 		PreRun: func(cmd *cobra.Command, args []string) {
 			_ = viper.BindPFlags(cmd.Flags())
 		},
-		Version: version,
+		SilenceUsage: true,
+		Version:      version,
 	}
 	initColorCobra(cmd)
 	configFlags := initFlags(cmd)
 	cobra.OnInitialize(viper.AutomaticEnv)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	f := cmdutil.NewFactory(configFlags)
-	cmd.Run = func(cmd *cobra.Command, args []string) {
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		klog.V(5).InfoS("running the cobra.Command ...")
+		var err error
+		cmdutil.BehaviorOnFatal(func(msg string, i int) {
+			err = errors.New(msg)
+		})
 		cmdutil.CheckErr(complete(f))
 		cmdutil.CheckErr(validate())
-		cmdutil.CheckErr(plugin.Run(f, args))
+		ioStreams := genericiooptions.IOStreams{In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), ErrOut: cmd.ErrOrStderr()}
+		cmdutil.CheckErr(plugin.Run(f, ioStreams, args))
+		return err
 	}
 	return cmd
 }

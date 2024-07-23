@@ -3,7 +3,7 @@ package plugin
 import (
 	"context"
 	"fmt"
-	"os"
+	"io"
 	_ "unsafe" // required for using go:linkname in the file
 
 	"github.com/fatih/color"
@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/cli-runtime/pkg/resource"
 	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/klog/v2"
@@ -21,31 +22,27 @@ import (
 //go:linkname signame runtime.signame
 func signame(sig uint32) string
 
-func errorPrintf(format string, a ...interface{}) {
+func errorPrintf(wr io.Writer, format string, a ...interface{}) {
 	_, _ = color.New(color.BgRed, color.FgHiWhite).Printf(format, a...)
-	fmt.Println()
+	_, _ = fmt.Fprintln(wr)
 }
 
-func Run(f util.Factory, args []string) error {
+func Run(f util.Factory, streams genericiooptions.IOStreams, args []string) error {
 	klog.V(5).InfoS("All config settings", "settings", viper.AllSettings())
 	if viper.Get("color") == "always" {
 		color.NoColor = false
 	} else if viper.Get("color") == "never" {
 		color.NoColor = true
 	}
-	engine, err := newRenderEngine(f)
+	engine, err := newRenderEngine(f, streams)
 	if err != nil {
 		klog.V(2).ErrorS(err, "Error creating engine")
 		return err
 	}
 	klog.V(5).InfoS("Created engine", "engine", engine)
-	return run(args, engine)
-}
-
-func run(args []string, engine *renderEngine) error {
 	results := engine.repo.CLIQueryResults(args)
 	count := 0
-	err := results.Visit(func(resourceInfo *resource.Info, err error) error {
+	err = results.Visit(func(resourceInfo *resource.Info, err error) error {
 		count += 1
 		klog.V(5).InfoS("Processing resource", "item", count, "resource", resourceInfo)
 		processObj(resourceInfo.Object, engine)
@@ -103,18 +100,19 @@ func runWatch(results *resource.Result, engine *renderEngine) error {
 }
 
 func processObj(obj runtime.Object, engine *renderEngine) {
-	fmt.Printf("\n")
+	streams := engine.ioStreams
+	_, _ = fmt.Fprintf(streams.Out, "\n")
 	out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
-		errorPrintf("Failed to decode obj=%s: %s", obj, err)
+		errorPrintf(streams.ErrOut, "Failed to decode obj=%s: %s", obj, err)
 		return
 	}
 	r := newRenderableObject(out, *engine)
-	err = r.render(os.Stdout)
+	err = r.render(streams.Out)
 	if err != nil {
-		fmt.Printf("\n")
-		errorPrintf("Failed to render: %s", err)
+		_, _ = fmt.Fprintf(streams.ErrOut, "\n")
+		errorPrintf(streams.ErrOut, "Failed to render: %s", err)
 		return
 	}
-	fmt.Printf("\n")
+	_, _ = fmt.Fprintf(streams.Out, "\n")
 }

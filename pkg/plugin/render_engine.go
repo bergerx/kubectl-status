@@ -10,6 +10,7 @@ import (
 	"github.com/go-sprout/sprout"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
@@ -23,11 +24,12 @@ var templatesFS embed.FS
 // renderEngine provides methods to build kubernetes api queries from provided cli options.
 // Also holds the parsed templates.
 type renderEngine struct {
-	repo input.ResourceRepo
+	ioStreams genericiooptions.IOStreams
+	repo      input.ResourceRepo
 	template.Template
 }
 
-func newRenderEngine(f util.Factory) (*renderEngine, error) {
+func newRenderEngine(f util.Factory, streams genericiooptions.IOStreams) (*renderEngine, error) {
 	klog.V(5).InfoS("Creating new render engine instance...", "f", f)
 	tmpl, err := getTemplate()
 	repo := input.NewResourceRepo(f)
@@ -36,6 +38,7 @@ func newRenderEngine(f util.Factory) (*renderEngine, error) {
 		return nil, err
 	}
 	return &renderEngine{
+		streams,
 		repo,
 		*tmpl,
 	}, nil
