@@ -1,0 +1,269 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubeadm.kubernetes.io/etcd.advertise-client-urls: https://192.168.49.2:2379
+    kubernetes.io/config.hash: 9aac5b5c8815def09a2ef9e37b89da55
+    kubernetes.io/config.mirror: 9aac5b5c8815def09a2ef9e37b89da55
+    kubernetes.io/config.seen: "2024-06-21T01:18:58.244650871Z"
+    kubernetes.io/config.source: file
+  creationTimestamp: "2024-06-21T01:19:02Z"
+  labels:
+    component: etcd
+    tier: control-plane
+  name: etcd-minikube
+  namespace: kube-system
+  ownerReferences:
+  - apiVersion: v1
+    controller: true
+    kind: Node
+    name: minikube
+    uid: 2246adfa-b867-40d3-b2c8-f385a7195ff2
+  resourceVersion: "1330613"
+  uid: f5238614-6615-4a39-a85c-c490ac89e2c4
+spec:
+  containers:
+  - command:
+    - etcd
+    - --advertise-client-urls=https://192.168.49.2:2379
+    - --cert-file=/var/lib/minikube/certs/etcd/server.crt
+    - --client-cert-auth=true
+    - --data-dir=/var/lib/minikube/etcd
+    - --experimental-initial-corrupt-check=true
+    - --experimental-watch-progress-notify-interval=5s
+    - --initial-advertise-peer-urls=https://192.168.49.2:2380
+    - --initial-cluster=minikube=https://192.168.49.2:2380
+    - --key-file=/var/lib/minikube/certs/etcd/server.key
+    - --listen-client-urls=https://127.0.0.1:2379,https://192.168.49.2:2379
+    - --listen-metrics-urls=http://127.0.0.1:2381
+    - --listen-peer-urls=https://192.168.49.2:2380
+    - --name=minikube
+    - --peer-cert-file=/var/lib/minikube/certs/etcd/peer.crt
+    - --peer-client-cert-auth=true
+    - --peer-key-file=/var/lib/minikube/certs/etcd/peer.key
+    - --peer-trusted-ca-file=/var/lib/minikube/certs/etcd/ca.crt
+    - --proxy-refresh-interval=70000
+    - --snapshot-count=10000
+    - --trusted-ca-file=/var/lib/minikube/certs/etcd/ca.crt
+    image: registry.k8s.io/etcd:3.5.9-0
+    imagePullPolicy: IfNotPresent
+    livenessProbe:
+      failureThreshold: 8
+      httpGet:
+        host: 127.0.0.1
+        path: /health?exclude=NOSPACE&serializable=true
+        port: 2381
+        scheme: HTTP
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 15
+    name: etcd
+    resources:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    startupProbe:
+      failureThreshold: 24
+      httpGet:
+        host: 127.0.0.1
+        path: /health?serializable=false
+        port: 2381
+        scheme: HTTP
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 15
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/lib/minikube/etcd
+      name: etcd-data
+    - mountPath: /var/lib/minikube/certs/etcd
+      name: etcd-certs
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  hostNetwork: true
+  nodeName: minikube
+  preemptionPolicy: PreemptLowerPriority
+  priority: 2000001000
+  priorityClassName: system-node-critical
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    operator: Exists
+  volumes:
+  - hostPath:
+      path: /var/lib/minikube/certs/etcd
+      type: DirectoryOrCreate
+    name: etcd-certs
+  - hostPath:
+      path: /var/lib/minikube/etcd
+      type: DirectoryOrCreate
+    name: etcd-data
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2024-07-25T19:51:42Z"
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2024-07-25T19:51:57Z"
+    status: "True"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2024-07-25T19:51:57Z"
+    status: "True"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2024-07-25T19:51:42Z"
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - containerID: docker://82173a3ba4ce33f3a24ae4298c45db8085abee9cf187e9ea06594f831c1aff5b
+    image: registry.k8s.io/etcd:3.5.9-0
+    imageID: docker-pullable://registry.k8s.io/etcd@sha256:e013d0d5e4e25d00c61a7ff839927a1f36479678f11e49502b53a5e0b14f10c3
+    lastState:
+      terminated:
+        containerID: docker://24eebb928394e87098244241162bbb8a4c522226e7f4f80169248ed0ac109994
+        exitCode: 0
+        finishedAt: "2024-07-25T11:03:35Z"
+        reason: Completed
+        startedAt: "2024-07-19T01:06:57Z"
+    name: etcd
+    ready: true
+    restartCount: 9
+    started: true
+    state:
+      running:
+        startedAt: "2024-07-25T19:51:42Z"
+  hostIP: 192.168.49.2
+  phase: Running
+  podIP: 192.168.49.2
+  podIPs:
+  - ip: 192.168.49.2
+  qosClass: Burstable
+  startTime: "2024-07-25T19:51:42Z"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Pod","metadata":{"annotations":{},"labels":{"addonmanager.kubernetes.io/mode":"Reconcile","integration-test":"storage-provisioner"},"name":"storage-provisioner","namespace":"kube-system"},"spec":{"containers":[{"command":["/storage-provisioner"],"image":"gcr.io/k8s-minikube/storage-provisioner:v5","imagePullPolicy":"IfNotPresent","name":"storage-provisioner","volumeMounts":[{"mountPath":"/tmp","name":"tmp"}]}],"hostNetwork":true,"serviceAccountName":"storage-provisioner","volumes":[{"hostPath":{"path":"/tmp","type":"Directory"},"name":"tmp"}]}}
+  creationTimestamp: "2024-06-21T01:19:03Z"
+  labels:
+    addonmanager.kubernetes.io/mode: Reconcile
+    integration-test: storage-provisioner
+  name: storage-provisioner
+  namespace: kube-system
+  resourceVersion: "1330645"
+  uid: 94a132fc-e5f1-483a-aa6c-4463ca3c9ffd
+spec:
+  containers:
+  - command:
+    - /storage-provisioner
+    image: gcr.io/k8s-minikube/storage-provisioner:v5
+    imagePullPolicy: IfNotPresent
+    name: storage-provisioner
+    resources: {}
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /tmp
+      name: tmp
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-hmnhs
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  hostNetwork: true
+  nodeName: minikube
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: storage-provisioner
+  serviceAccountName: storage-provisioner
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - hostPath:
+      path: /tmp
+      type: Directory
+    name: tmp
+  - name: kube-api-access-hmnhs
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2024-06-21T01:19:14Z"
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2024-07-25T19:52:38Z"
+    status: "True"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2024-07-25T19:52:38Z"
+    status: "True"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2024-06-21T01:19:14Z"
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - containerID: docker://8295718c64945ab1cd33fefa3fd99146bd1e23b687943332e8ca8784f1fb36c9
+    image: gcr.io/k8s-minikube/storage-provisioner:v5
+    imageID: docker-pullable://gcr.io/k8s-minikube/storage-provisioner@sha256:18eb69d1418e854ad5a19e399310e52808a8321e4c441c1dddad8977a0d7a944
+    lastState:
+      terminated:
+        containerID: docker://ec3880c0f4f1f9d100f930c26ee5f764e37ad54574bc1788f998b8774c13367a
+        exitCode: 1
+        finishedAt: "2024-07-25T19:52:16Z"
+        reason: Error
+        startedAt: "2024-07-25T19:51:46Z"
+    name: storage-provisioner
+    ready: true
+    restartCount: 16
+    started: true
+    state:
+      running:
+        startedAt: "2024-07-25T19:52:38Z"
+  hostIP: 192.168.49.2
+  phase: Running
+  podIP: 192.168.49.2
+  podIPs:
+  - ip: 192.168.49.2
+  qosClass: BestEffort
+  startTime: "2024-06-21T01:19:14Z"

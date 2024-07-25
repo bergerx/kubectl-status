@@ -17,7 +17,19 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var durationRound = (sprout.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
+var durationRound = DefaultDurationRound()
+
+func DefaultDurationRound() func(duration interface{}) string {
+	return (sprout.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
+}
+
+// SetDurationRound is a helper method for tests
+func SetDurationRound(f func(duration interface{}) string) (revertFunc func()) {
+	durationRound = f
+	return func() {
+		durationRound = DefaultDurationRound()
+	}
+}
 
 func funcMap() template.FuncMap {
 	return template.FuncMap{

@@ -1,0 +1,99 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: "2024-07-25T19:51:55Z"
+  generation: 2
+  name: databaseconnections.example.com
+  resourceVersion: "1330873"
+  uid: fdad7e62-bef1-44ba-9a45-fc2030028fc6
+spec:
+  conversion:
+    strategy: None
+  group: example.com
+  names:
+    kind: DatabaseConnection
+    listKind: DatabaseConnectionList
+    plural: databaseconnections
+    shortNames:
+    - dbconn
+    singular: databaseconnection
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              defaultSchema:
+                type: string
+              engine:
+                enum:
+                - mysql
+                - postgresql
+                type: string
+              rootPassword:
+                type: string
+              rootUser:
+                type: string
+            type: object
+          status:
+            properties:
+              conditions:
+                items:
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transitioned from one status
+                        to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: Human-readable message indicating details about
+                          the last transition.
+                      type: string
+                    observedGeneration:
+                      description: Last generation that the condition was updated.
+                      type: integer
+                    reason:
+                      description: Unique, one-word, CamelCase reason for the condition's
+                        last transition.
+                      type: string
+                    status:
+                      description: Status   of the condition, one of True, False,
+                        Unknown.
+                      type: string
+                    type:
+                      description: Type of the condition.
+                      type: string
+                  type: object
+                type: array
+              observedGeneration:
+                description: Most recent generation observed by the controller.
+                type: integer
+            type: object
+        type: object
+status:
+  acceptedNames:
+    kind: DatabaseConnection
+    listKind: DatabaseConnectionList
+    plural: databaseconnections
+    shortNames:
+    - dbconn
+    singular: databaseconnection
+  conditions:
+  - lastTransitionTime: "2024-07-25T19:51:55Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2024-07-25T19:51:55Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1alpha1
