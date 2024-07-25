@@ -5,8 +5,12 @@ export GO111MODULE=on
 
 .PHONY: test
 test: vet staticcheck
-	go test ./... -coverprofile cover.out
-	# go tool cover -html=cover.out -o cover.html
+	go test ./...
+
+.PHONY: test-e2e
+test-e2e: vet staticcheck
+	# using count to prevent caching
+	RUN_E2E_TESTS=true go test -v ./... -count=1 -run 'TestE2E*'
 
 .PHONY: bin
 bin: fmt vet staticcheck

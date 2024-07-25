@@ -233,4 +233,3 @@ events:
       component: kubelet
       host: minikube
     type: Normal
-  
