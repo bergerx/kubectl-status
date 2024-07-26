@@ -19,3 +19,6 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - run: make test
+      - name: Start minikube
+        uses: medyagh/setup-minikube@latest
+      - run: ASSUME_MINIKUBE_IS_CONFIGURED=true make test-e2e
