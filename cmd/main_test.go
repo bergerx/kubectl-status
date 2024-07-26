@@ -180,7 +180,7 @@ func executeCMD(args []string) (string, string, error) {
 }
 
 func startMinikube(t *testing.T, clusterName string) (deleteMinikube func()) {
-	t.Log("Creating temp folder...")
+	t.Log("Creating temp folder for minikube.kubeconfig...")
 	dir, err := os.MkdirTemp("", clusterName)
 	assert.NoError(t, err)
 	kubeconfig := path.Join(dir, "minikube.kubeconfig")
@@ -194,9 +194,9 @@ func startMinikube(t *testing.T, clusterName string) (deleteMinikube func()) {
 		if err := cmd.Run(); err != nil {
 			t.Log("Error deleting Minikube cluster:", err)
 		}
-		t.Log("Deleting temp folder...")
+		t.Log("Deleting temp folder of minikube.kubeconfig...")
 		if err := os.RemoveAll(dir); err != nil {
-			t.Log("Error deleting temp folder:", err)
+			t.Log("Error deleting temp folder of minikube.kubeconfig:", err)
 		}
 	}
 }
