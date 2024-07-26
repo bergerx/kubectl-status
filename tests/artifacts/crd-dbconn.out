@@ -1,0 +1,5 @@
+
+CustomResourceDefinition/databaseconnections.example.com, created 1m ago, gen:2
+  Current: CRD is established
+  NamesAccepted NoConflicts, no conflicts found for 1m
+  Established InitialNamesAccepted, the initial names have been accepted for 1m

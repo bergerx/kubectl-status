@@ -1,0 +1,6 @@
+
+Ingress/web -n test1, created 1m ago, gen:1
+  Current: Resource is current
+  Service port doesnt exist: Service/web:80 referenced in ingress, but Service doesn't have that port defined.
+  Service port doesnt exist: Service/not-web:80 referenced in ingress, but Service doesn't have that port defined.
+  Service port doesnt exist: Service/web:81 referenced in ingress, but Service doesn't have that port defined.

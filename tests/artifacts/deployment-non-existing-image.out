@@ -1,0 +1,9 @@
+
+Deployment/missing-image -n test1, created 1m ago, gen:1 rev:1
+  InProgress: Available: 0/1
+    Reconciling: LessAvailable, Available: 0/1
+  desired:1, existing:1, ready:0, updated:1, available:0, unavailable:1
+  Available MinimumReplicasUnavailable, Deployment does not have minimum availability. for 1m
+  Progressing ReplicaSetUpdated, ReplicaSet "missing-image-755c8c54f7" is progressing. for 1m
+  Ongoing Rollout: Waiting for deployment "missing-image" rollout to finish: 0 of 1 updated replicas are available...
+  Outage: Deployment has no Ready replicas.

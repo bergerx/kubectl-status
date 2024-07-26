@@ -1,0 +1,9 @@
+
+Deployment/httpbin-deployment -n test1, created 1m ago, gen:1 rev:1
+  InProgress: Replicas: 0/3
+    Reconciling: LessReplicas, Replicas: 0/3
+  desired:3, ready:0, updated:0, available:0, unavailable:3
+  Progressing NewReplicaSetCreated, Created new replica set "httpbin-deployment-79f6dfbb9" for 1m
+  Available MinimumReplicasUnavailable, Deployment does not have minimum availability. for 1m
+  Ongoing Rollout: Waiting for deployment "httpbin-deployment" rollout to finish: 0 out of 3 new replicas have been updated...
+  Outage: Deployment has no Ready replicas.

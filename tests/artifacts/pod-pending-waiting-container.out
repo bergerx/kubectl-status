@@ -1,0 +1,9 @@
+
+Pod/hello-1584492840-kqf62 -n default, created 1m ago by Job/hello-1584492840 Pending BestEffort
+  InProgress: Pod is in the Pending phase
+    Reconciling: PodPending, Pod is in the Pending phase
+  PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
+    Ready ContainersNotReady, containers with unready status: [hello] for 1m
+    ContainersReady ContainersNotReady, containers with unready status: [hello] for 1m
+  Containers:
+    hello (busybox) Waiting ContainerCreating

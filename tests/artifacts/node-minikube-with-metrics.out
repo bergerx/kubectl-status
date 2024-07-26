@@ -1,0 +1,12 @@
+
+Node/minikube, created 1m ago
+  linux Buildroot 2019.02.9 (amd64), kernel 4.19.94, kubelet v1.17.3, kube-proxy v1.17.3
+  images 13
+  Current: Resource is Ready
+  MemoryPressure KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m
+  DiskPressure KubeletHasNoDiskPressure, kubelet has no disk pressure for 1m
+  PIDPressure KubeletHasSufficientPID, kubelet has sufficient PID available for 1m
+  Ready KubeletReady, kubelet is posting ready status for 1m
+  addresses: InternalIP=192.168.99.105 Hostname=minikube
+  allocatable: pods:110, cpu:2, mem:1.9GB, ephemeral-storage:16.3GB
+  capacity: pods:110, cpu:2, mem:2GB, ephemeral-storage:18.2GB

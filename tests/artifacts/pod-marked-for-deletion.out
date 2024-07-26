@@ -1,0 +1,7 @@
+
+Pod/web-0 -n test1, created 1m ago by StatefulSet/web Running BestEffort
+  Terminating: Resource scheduled for deletion
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Containers:
+    nginx (k8s.gcr.io/nginx-slim:0.8) Running for 1m and Ready, restarted 2 times
+      previously: Started 1m ago and Completed after 1m

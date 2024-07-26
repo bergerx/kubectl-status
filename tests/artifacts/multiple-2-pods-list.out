@@ -1,0 +1,15 @@
+
+Pod/etcd-minikube -n kube-system, created 1m ago by Node/minikube, started after 0s Running Burstable
+  Current: Pod is Ready
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Containers:
+    etcd (registry.k8s.io/etcd:3.5.9-0) Running for 1m and Ready, restarted 9 times
+      previously: Started 1m ago and Completed after 1m
+
+Pod/storage-provisioner -n kube-system, created 1m ago, started after 0s Running BestEffort
+  Current: Pod is Ready
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Standalone POD.
+  Containers:
+    storage-provisioner (gcr.io/k8s-minikube/storage-provisioner:v5) Running for 1m and Ready, restarted 16 times
+      previously: Started 1m ago and Error after 1m with exit code exit with 1

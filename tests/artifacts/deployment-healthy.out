@@ -1,0 +1,6 @@
+
+Deployment/httpbin-deployment -n test1, created 1m ago, gen:1 rev:1
+  Current: Deployment is available. Replicas: 3
+  desired:3, existing:3, ready:3, updated:3, available:3
+  Available MinimumReplicasAvailable, Deployment has minimum availability. for 1m
+  Progressing NewReplicaSetAvailable, ReplicaSet "httpbin-deployment-79f6dfbb9" has successfully progressed. for 1m

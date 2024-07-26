@@ -1,0 +1,9 @@
+
+Pod/missing-image-755c8c54f7-26v4c -n test1, created 1m ago by ReplicaSet/missing-image-755c8c54f7 Pending BestEffort
+  InProgress: Pod is in the Pending phase
+    Reconciling: PodPending, Pod is in the Pending phase
+  PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
+    Ready ContainersNotReady, containers with unready status: [missing-image] for 1m
+    ContainersReady ContainersNotReady, containers with unready status: [missing-image] for 1m
+  Containers:
+    missing-image (this-image-doesnt-exist) Waiting ImagePullBackOff: Back-off pulling image "this-image-doesnt-exist"

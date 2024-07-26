@@ -1,0 +1,6 @@
+
+Pod/web-0 -n test1, created 1m ago by StatefulSet/web Pending BestEffort
+  Failed: Pod could not be scheduled
+    Stalled: PodUnschedulable, Pod could not be scheduled
+  Not PodScheduled -> Not Initialized -> Not ContainersReady -> Not Ready
+    PodScheduled Unschedulable, error while running "VolumeBinding" filter plugin for pod "web-0": pod has unbound immediate PersistentVolumeClaims for 1m

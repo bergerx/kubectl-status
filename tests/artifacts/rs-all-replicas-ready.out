@@ -1,0 +1,3 @@
+
+ReplicaSet/httpbin-deployment-79f6dfbb9 -n test1, created 1m ago by Deployment/httpbin-deployment, gen:1
+  Current: ReplicaSet is available. Replicas: 3

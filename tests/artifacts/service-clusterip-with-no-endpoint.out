@@ -1,0 +1,4 @@
+
+Service/test -n test1, created 1m ago
+  Current: Service is ready
+  Missing Endpoint: Service has no matching endpoint.

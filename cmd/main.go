@@ -99,6 +99,9 @@ func RootCmd() *cobra.Command {
 		})
 		cmdutil.CheckErr(complete(f))
 		cmdutil.CheckErr(validate())
+		if b, _ := cmd.Flags().GetBool("time-hack-ago"); b {
+			plugin.SetDurationRound(func(_ interface{}) string { return "1m" })
+		}
 		ioStreams := genericiooptions.IOStreams{In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), ErrOut: cmd.ErrOrStderr()}
 		cmdutil.CheckErr(plugin.Run(f, ioStreams, args))
 		return err
@@ -148,7 +151,7 @@ func hideNoisyFlags(flags *pflag.FlagSet) {
 		"certificate-authority", "client-certificate", "client-key", "cluster", "context", "insecure-skip-tls-verify",
 		"kubeconfig", "log_backtrace_at", "log_dir", "log_file", "log_file_max_size", "logtostderr", "one_output",
 		"password", "request-timeout", "server", "skip_headers", "skip_log_headers", "stderrthreshold",
-		"tls-server-name", "token", "user", "username", "vmodule"}
+		"tls-server-name", "token", "user", "username", "vmodule", "time-hack-ago"}
 	for _, flagName := range flagsToHide {
 		flags.Lookup(flagName).Hidden = true
 	}
@@ -198,6 +201,8 @@ func addRenderFlags(flags *pflag.FlagSet) {
 		"Show all available flags.")
 	flags.String("color", "auto",
 		"One of 'auto', 'never' or 'always'.")
+	flags.Bool("time-hack-ago", false,
+		"always report 1m for any time duration")
 }
 
 func isBoolConfigExplicitlySetToTrue(key string) bool {

@@ -1,0 +1,8 @@
+
+StatefulSet/web -n test1, created 1m ago, gen:1
+  InProgress: Replicas: 0/3
+    Reconciling: LessReplicas, Replicas: 0/3
+  desired:3, ready:0, current:0
+  Outage: StatefulSet has no Ready replicas.
+  Ongoing rollout: Waiting for statefulset spec update to be observed...
+  Stuck Rollout?: Still replacing the first Pod, may indicate a stuck rollout.

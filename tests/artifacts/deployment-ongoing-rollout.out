@@ -1,0 +1,8 @@
+
+Deployment/httpbin-deployment -n test1, created 1m ago, gen:2 rev:2
+  InProgress: Updated: 1/3
+    Reconciling: LessUpdated, Updated: 1/3
+  desired:3, existing:4, ready:3, updated:1, available:3, unavailable:1
+  Available MinimumReplicasAvailable, Deployment has minimum availability. for 1m
+  Progressing ReplicaSetUpdated, ReplicaSet "httpbin-deployment-d9b875c5b" is progressing. for 1m
+  Ongoing Rollout: Waiting for deployment "httpbin-deployment" rollout to finish: 1 out of 3 new replicas have been updated...

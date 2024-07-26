@@ -1,0 +1,6 @@
+
+Pod/test-7d7bf58f7d-pvk2s -n test1, created 1m ago by ReplicaSet/test-7d7bf58f7d Running Burstable
+  Current: Pod is Ready
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Containers:
+    test (k8s.gcr.io/pause:3.1) Running for 1m and Ready

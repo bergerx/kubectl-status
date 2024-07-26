@@ -1,0 +1,151 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: "2023-06-01T18:00:19Z"
+  generateName: prometheus-operator-5c5784bc5f-
+  labels:
+    app: kube-prometheus-stack-operator
+    app.kubernetes.io/instance: prometheus
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    app.kubernetes.io/version: 39.13.3
+    chart: kube-prometheus-stack-39.13.3
+    heritage: Helm
+    kapp.k14s.io/app: "1678977570261484075"
+    kapp.k14s.io/association: v1.f13edd101e6616b842558d095e5e2694
+    pod-template-hash: 5c5784bc5f
+    release: prometheus
+  name: prometheus-operator-5c5784bc5f-4h65z
+  namespace: prometheus
+  ownerReferences:
+  - apiVersion: apps/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ReplicaSet
+    name: prometheus-operator-5c5784bc5f
+    uid: 5c5b29b3-a779-41fc-a9b0-a49e3609701c
+  resourceVersion: "305310117"
+  uid: e4fd3bc9-cd2f-4f5b-b33b-fc52a78ecf92
+spec:
+  containers:
+  - args:
+    - --kubelet-service=kube-system/prometheus-kubelet
+    - --localhost=127.0.0.1
+    - --prometheus-config-reloader=quay.io/prometheus-operator/prometheus-config-reloader:v0.58.0
+    - --config-reloader-cpu-request=200m
+    - --config-reloader-cpu-limit=200m
+    - --config-reloader-memory-request=50Mi
+    - --config-reloader-memory-limit=50Mi
+    - --thanos-default-base-image=quay.io/thanos/thanos:v0.27.0
+    image: quay.io/prometheus-operator/prometheus-operator:v0.58.0
+    imagePullPolicy: IfNotPresent
+    name: kube-prometheus-stack
+    ports:
+    - containerPort: 8080
+      name: http
+      protocol: TCP
+    resources: {}
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-787tt
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: tkc-workers-mlg7b-567667688c-69ncv
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext:
+    fsGroup: 65534
+    runAsGroup: 65534
+    runAsNonRoot: true
+    runAsUser: 65534
+  serviceAccount: prometheus-op-sa
+  serviceAccountName: prometheus-op-sa
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: kube-api-access-787tt
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2023-06-01T18:00:19Z"
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2023-11-01T19:21:01Z"
+    reason: PodFailed
+    status: "False"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2023-11-01T19:21:01Z"
+    reason: PodFailed
+    status: "False"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2023-06-01T18:00:19Z"
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - image: quay.io/prometheus-operator/prometheus-operator:v0.58.0
+    imageID: ""
+    lastState:
+      terminated:
+        exitCode: 137
+        finishedAt: null
+        message: The container could not be located when the pod was deleted.  The
+          container used to be Running
+        reason: ContainerStatusUnknown
+        startedAt: null
+    name: kube-prometheus-stack
+    ready: false
+    restartCount: 1
+    started: false
+    state:
+      terminated:
+        exitCode: 137
+        finishedAt: null
+        message: The container could not be located when the pod was terminated
+        reason: ContainerStatusUnknown
+        startedAt: null
+  hostIP: 100.72.96.202
+  message: 'The node was low on resource: ephemeral-storage. Container kube-prometheus-stack
+    was using 19212Ki, which exceeds its request of 0.'
+  phase: Failed
+  podIP: 192.168.15.5
+  podIPs:
+  - ip: 192.168.15.5
+  qosClass: BestEffort
+  reason: Evicted
+  startTime: "2023-06-01T18:00:19Z"

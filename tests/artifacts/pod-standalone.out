@@ -1,0 +1,7 @@
+
+Pod/test-pod -n test1, created 1m ago Running BestEffort
+  Current: Pod is Ready
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Standalone POD.
+  Containers:
+    test-pod (k8s.gcr.io/pause:3.1) Running for 1m and Ready

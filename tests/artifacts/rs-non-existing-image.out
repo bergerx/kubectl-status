@@ -1,0 +1,5 @@
+
+ReplicaSet/missing-image-755c8c54f7 -n test1, created 1m ago by Deployment/missing-image, gen:1
+  InProgress: Available: 0/1
+    Reconciling: LessAvailable, Available: 0/1
+  Outage: ReplicaSet has no Ready replicas.

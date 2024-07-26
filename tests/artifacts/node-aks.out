@@ -1,0 +1,13 @@
+
+Node/aks-cpuworkers-41776494-vmss00006u, created 1m ago
+  linux Ubuntu 16.04.6 LTS (amd64), kernel 4.15.0-1066-azure, kubelet v1.15.7, kube-proxy v1.15.7
+  cloudprovider eastus0 Standard_D8s_v3, agentpool:cpuworkers, role:agent
+  images 50 volumes inuse=1/16, attached=1
+  Current: Resource is Ready
+  MemoryPressure KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m
+  DiskPressure KubeletHasNoDiskPressure, kubelet has no disk pressure for 1m
+  PIDPressure KubeletHasSufficientPID, kubelet has sufficient PID available for 1m
+  Ready KubeletReady, kubelet is posting ready status. AppArmor enabled for 1m
+  addresses: Hostname=aks-cpuworkers-41776494-vmss00006u InternalIP=10.250.4.65
+  allocatable: pods:30, cpu:7.82, mem:29.1GB, ephemeral-storage:59.7GB
+  capacity: pods:30, cpu:8, mem:33.7GB, ephemeral-storage:66.4GB

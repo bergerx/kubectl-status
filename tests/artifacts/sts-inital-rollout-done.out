@@ -1,0 +1,4 @@
+
+StatefulSet/web -n test1, created 1m ago, gen:1
+  Current: Partition rollout complete. updated: 3
+  desired:3, existing:3, ready:3, current:3, updated:3

@@ -1,0 +1,8 @@
+
+Pod/hello-1584492660-d2c6p -n default, created 1m ago by Job/hello-1584492660 Succeeded BestEffort
+  Terminating: Resource scheduled for deletion
+  PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
+    Ready PodCompleted for 1m
+    ContainersReady PodCompleted for 1m
+  Containers:
+    hello (busybox:latest) Started 1m ago and Completed after 1m
