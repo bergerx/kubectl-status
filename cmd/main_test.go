@@ -107,11 +107,13 @@ $`,
 	}
 }
 
-func TestE2EWithVanillaMinikube(t *testing.T) {
+func TestE2EAgainstVanillaMinikube(t *testing.T) {
 	if os.Getenv("RUN_E2E_TESTS") != "true" {
 		t.Skip("Skipping e2e test")
 	}
-	defer startMinikube(t, "kubectl-status-e2e")()
+	if os.Getenv("ASSUME_MINIKUBE_IS_CONFIGURED") != "true" {
+		defer startMinikube(t, "kubectl-status-e2e")()
+	}
 	defer plugin.SetDurationRound(func(_ interface{}) string { return "1m" })()
 	klog.InitFlags(nil)
 	t.Log("starting tests...")
