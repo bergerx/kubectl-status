@@ -1,0 +1,26 @@
+apiVersion: example.com/v1alpha1
+kind: DatabaseConnection
+metadata:
+  creationTimestamp: "2024-07-25T19:58:20Z"
+  deletionTimestamp: "2024-07-25T19:59:20Z"
+  generation: 2
+  name: mymysql
+  namespace: default
+  finalizers:
+    - dbconn-operator1
+    - dbconn-operator2
+  resourceVersion: "1330976"
+  uid: be814fad-43ba-4d86-bc5a-f4fb471af6ae
+spec:
+  defaultSchema: myapp
+  engine: mysql
+  rootPassword: password123
+  rootUser: admin
+status:
+  observedGeneration: 1
+  conditions:
+  - lastTransitionTime: "2024-07-25T15:27:00Z"
+    message: Database connection successfully established.
+    reason: ConnectionEstablished
+    status: "True"
+    type: Ready

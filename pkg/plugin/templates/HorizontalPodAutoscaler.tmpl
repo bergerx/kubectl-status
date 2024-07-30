@@ -2,6 +2,7 @@
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "status_summary_line" . }} last scale was {{ .Status.lastScaleTime | colorAgo }} ago
     {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
     {{- "current" | bold | nindent 2 }} replicas:{{ .Status.currentReplicas }}/({{ .Spec.minReplicas | default "1" }}-{{ .Spec.maxReplicas }})
     {{- if .Status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .Status.currentCPUUtilizationPercentage | toString | redIf (ge .Status.currentCPUUtilizationPercentage .Spec.targetCPUUtilizationPercentage) }}%/{{ .Spec.targetCPUUtilizationPercentage }}%{{ end }}
     {{- if (ne .Status.currentReplicas .Status.desiredReplicas) }}, {{ "desired" | red | bold}}: {{ .Status.currentReplicas }} --> {{ .Status.desiredReplicas }}{{ end }}

@@ -28,7 +28,7 @@ type cmdTest struct {
 
 func (c cmdTest) assert(t *testing.T) {
 	t.Helper()
-	stdout, stderr, err := executeCMD(c.args)
+	stdout, stderr, err := executeCMD(t, c.args)
 	switch {
 	case c.stdoutRegex == "" && c.stdoutEqual == "":
 		assert.Empty(t, stdout)
@@ -133,7 +133,7 @@ func TestE2EAgainstVanillaMinikube(t *testing.T) {
 			stdoutRegex: `^\nPod/[a-z0-9-]+ -n kube-system`,
 		},
 		{
-			name:        "node query should return return at least a node",
+			name:        "node query should return at least a node",
 			args:        []string{"node"},
 			stdoutRegex: `^\nNode/`,
 		},
@@ -170,23 +170,26 @@ func TestAllArtifacts(t *testing.T) {
 	}
 }
 
-func executeCMD(args []string) (string, string, error) {
+func executeCMD(t *testing.T, args []string) (string, string, error) {
+	t.Helper()
 	cmd := RootCmd()
 	stdout := &bytes.Buffer{}
 	cmd.SetOut(stdout)
 	stderr := &bytes.Buffer{}
 	cmd.SetErr(stderr)
 	cmd.SetArgs(args)
+	t.Logf("running command with: %s", strings.Join(args, " "))
 	err := cmd.Execute()
 	return stdout.String(), stderr.String(), err
 }
 
 func startMinikube(t *testing.T, clusterName string) (deleteMinikube func()) {
+	t.Helper()
 	t.Log("Creating temp folder for minikube.kubeconfig...")
 	dir, err := os.MkdirTemp("", clusterName)
 	assert.NoError(t, err)
 	kubeconfig := path.Join(dir, "minikube.kubeconfig")
-	_ = os.Setenv("KUBECONFIG", kubeconfig)
+	t.Setenv("KUBECONFIG", kubeconfig)
 	t.Log("Starting Minikube cluster...")
 	startMinikube := exec.Command("minikube", "start", "-p", clusterName)
 	assert.NoError(t, startMinikube.Run())

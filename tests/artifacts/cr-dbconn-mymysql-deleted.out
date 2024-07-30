@@ -1,0 +1,7 @@
+
+DatabaseConnection/mymysql -n default, created 1m ago, gen:2
+  Terminating: Resource scheduled for deletion
+    Finalizers: dbconn-operator1, dbconn-operator2
+  Observed generation(1) doesn't match generation(2)
+    This usually means related controller has not yet reconciled this resource!
+  Ready ConnectionEstablished, Database connection successfully established. for 1m

@@ -11,6 +11,7 @@
         {{- end }}
     {{- end }}
     {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
     {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}

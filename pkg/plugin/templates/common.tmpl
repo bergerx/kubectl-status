@@ -2,6 +2,7 @@
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "status_summary_line" . }}
     {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
     {{- template "replicas_status" . }}
@@ -91,6 +92,13 @@
             {{- with .Message }}, {{ . | redIf $notHealthy }}{{ end }}
         {{- end }}
     {{- end }}
+{{- end -}}
+
+{{- define "finalizer_details_on_termination"}}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if and .Metadata.deletionTimestamp .Metadata.finalizers }}
+        {{- "Finalizers" | red | nindent 4 }}: {{ .Metadata.finalizers | join ", " }}
+    {{- end}}
 {{- end -}}
 
 {{- define "observed_generation_summary" }}

@@ -48,7 +48,6 @@ func (r RenderableObject) String() string {
 	kindAndName := fmt.Sprintf("%s/%s", r.Kind(), r.Name())
 	if namespace := r.Namespace(); namespace != "" {
 		kindAndName = fmt.Sprintf("%s[%s]", kindAndName, namespace)
-
 	}
 	return kindAndName
 }

@@ -4,6 +4,7 @@
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
     {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
     {{- template "conditions_summary" . }}
     {{- range $resource, $valueList := .Status.lockedResourceStatuses }}
         {{- $resource | nindent 2 }}: {{ range $status := $valueList }}{{ template "condition_summary" . }}{{- end }}

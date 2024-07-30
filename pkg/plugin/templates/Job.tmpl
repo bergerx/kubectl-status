@@ -12,6 +12,7 @@
         {{- template "job_parallel" . }}
     {{- end }}
     {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
     {{- template "conditions_summary" . }}
     {{- template "application_details" . }}
     {{- template "recent_updates" . }}

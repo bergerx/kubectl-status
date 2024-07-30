@@ -17,6 +17,7 @@
         {{- with index .Status.allocatable "attachable-volumes-azure-disk" }}/{{ . }}{{ end }}, attached={{ .Status.volumesAttached | default list | len }}
     {{- end }}
     {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
     {{- template "conditions_summary" . }}
     {{- template "taints" . }}
     {{- template "node_addresses" . }}
