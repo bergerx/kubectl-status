@@ -13,7 +13,7 @@ func checkTemplate(t *testing.T, templateName string, obj map[string]interface{}
 	tmpl, _ := getTemplate()
 	e, _ := newRenderEngine(util.NewFactory(genericclioptions.NewTestConfigFlags()), genericiooptions.NewTestIOStreamsDiscard())
 	e.Template = *tmpl
-	r := newRenderableObject(obj, *e)
+	r := newRenderableObject(obj, e)
 	var objToPassTemplate interface{}
 	if useRenderable {
 		objToPassTemplate = r

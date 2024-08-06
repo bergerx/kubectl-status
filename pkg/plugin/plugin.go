@@ -107,7 +107,7 @@ func processObj(obj runtime.Object, engine *renderEngine) {
 		errorPrintf(streams.ErrOut, "Failed to decode obj=%s: %s", obj, err)
 		return
 	}
-	r := newRenderableObject(out, *engine)
+	r := newRenderableObject(out, engine)
 	err = r.render(streams.Out)
 	if err != nil {
 		_, _ = fmt.Fprintf(streams.ErrOut, "\n")

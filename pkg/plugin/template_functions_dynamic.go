@@ -44,7 +44,7 @@ func (r RenderableObject) getCreationTimestampSortedRenderableObjects(resourceIn
 	var out []RenderableObject
 	for _, obj := range sortedResourceInfosToRuntimeObjects(resourceInfos) {
 		unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
-		nr := r.newRenderableObject(unstructuredObj)
+		nr := r.engine.newRenderableObject(unstructuredObj)
 		klog.V(5).InfoS("KubeGet matched object", "object", nr)
 		out = append(out, nr)
 	}
@@ -62,16 +62,21 @@ func sortedResourceInfosToRuntimeObjects(resourceInfos []*resource.Info) []runti
 
 // KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
 func (r RenderableObject) KubeGetFirst(namespace string, args ...string) RenderableObject {
-	nr := r.newRenderableObject(nil)
+	return r.engine.KubeGetFirst(namespace, args...)
+}
+
+// KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
+func (e *renderEngine) KubeGetFirst(namespace string, args ...string) RenderableObject {
+	nr := e.newRenderableObject(nil)
 	if viper.GetBool("shallow") {
 		return nr
 	}
 	klog.V(5).InfoS("called template method KubeGetFirst",
-		"r", r, "namespace", namespace, "args", args)
-	resourceInfos, err := r.engine.getResourceQueryInfos(namespace, args)
+		"namespace", namespace, "args", args)
+	resourceInfos, err := e.getResourceQueryInfos(namespace, args)
 	if err != nil {
 		klog.V(3).ErrorS(err, "getResourceQueryInfos failed",
-			"r", r, "namespace", namespace, "args", args)
+			"namespace", namespace, "args", args)
 		return nr
 	}
 	if len(resourceInfos) >= 1 {
@@ -80,7 +85,7 @@ func (r RenderableObject) KubeGetFirst(namespace string, args ...string) Rendera
 		nr.Object = unstructuredObj
 	} else {
 		klog.V(3).InfoS("KubeGetFirst returning empty",
-			"r", r, "namespace", namespace, "args", args)
+			"namespace", namespace, "args", args)
 	}
 	return nr
 }
@@ -109,7 +114,7 @@ func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, lab
 }
 
 func (r RenderableObject) KubeGetEvents() RenderableObject {
-	nr := r.newRenderableObject(nil)
+	nr := r.engine.newRenderableObject(nil)
 	if viper.GetBool("shallow") {
 		return nr
 	}
@@ -142,7 +147,7 @@ func (r RenderableObject) KubeGetResourcesOwnedOf(resourceOrKind string) (out []
 		List(context.TODO(), metav1.ListOptions{})
 	for _, controllerRevision := range controllerRevisions.Items {
 		if doesOwnerMatch(r.Unstructured, controllerRevision) {
-			out = append(out, r.newRenderableObject(controllerRevision.Object))
+			out = append(out, r.engine.newRenderableObject(controllerRevision.Object))
 		}
 	}
 	return
@@ -210,7 +215,7 @@ func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName str
 		if doesIngressUseService(ing, svcName) {
 			ing.SetGroupVersionKind(netv1.SchemeGroupVersion.WithKind("Ingress"))
 			ingUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&ing)
-			out = append(out, r.newRenderableObject(ingUnstructured))
+			out = append(out, r.engine.newRenderableObject(ingUnstructured))
 		}
 	}
 	return
@@ -250,7 +255,7 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 		if doesServiceMatchLabels(svc, castedLabels) {
 			svc.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Service"))
 			svcUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&svc)
-			out = append(out, r.newRenderableObject(svcUnstructured))
+			out = append(out, r.engine.newRenderableObject(svcUnstructured))
 		}
 	}
 	return out
@@ -284,7 +289,7 @@ func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) 
 			}
 			svc.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Service"))
 			svcUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&svc)
-			out = append(out, r.newRenderableObject(svcUnstructured))
+			out = append(out, r.engine.newRenderableObject(svcUnstructured))
 		}
 	}
 	return out
@@ -381,7 +386,7 @@ func (r RenderableObject) kubeGetNonTerminatedPodsOnTheNode(nodeName string) (po
 	}
 	for _, pod := range nodeNonTerminatedPodsList.Items {
 		unstructuredPod, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&pod)
-		nr := r.newRenderableObject(unstructuredPod)
+		nr := r.engine.newRenderableObject(unstructuredPod)
 		podList = append(podList, nr)
 	}
 	return podList, nil
