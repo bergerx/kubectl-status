@@ -51,7 +51,7 @@ func (c cmdTest) assert(t *testing.T) {
 }
 
 func TestRootCmdWithoutACluster(t *testing.T) {
-	_ = os.Setenv("KUBECONFIG", "/dev/null")
+	t.Setenv("KUBECONFIG", "/dev/null")
 	defer plugin.SetDurationRound(func(_ interface{}) string { return "1m" })()
 	tests := []cmdTest{
 		{
@@ -152,7 +152,7 @@ func TestE2EAgainstVanillaMinikube(t *testing.T) {
 
 func TestAllArtifacts(t *testing.T) {
 	defer plugin.SetDurationRound(func(_ interface{}) string { return "1m" })()
-	_ = os.Setenv("KUBECONFIG", "/dev/null")
+	t.Setenv("KUBECONFIG", "/dev/null")
 	viper.Set("test", true)
 	artifacts, err := filepath.Glob("../tests/artifacts/*.yaml")
 	assert.NoError(t, err)
@@ -162,7 +162,7 @@ func TestAllArtifacts(t *testing.T) {
 			out, err := os.ReadFile(outFile)
 			assert.NoError(t, err)
 			test := cmdTest{
-				args:        []string{"-f", artifact, "--local", "--shallow"},
+				args:        []string{"-f", artifact, "--local", "--shallow", "--v", "255"},
 				stdoutEqual: string(out),
 			}
 			test.assert(t) // to update the out files check /tests/artifacts/README.md
