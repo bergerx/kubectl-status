@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
-	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
 
@@ -130,9 +129,4 @@ func (e *renderEngine) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, 
 	}
 
 	return mapping, nil
-}
-
-func (e renderEngine) getResourceQueryInfos(namespace string, args []string) ([]*resource.Info, error) {
-	klog.V(5).InfoS("getResourceQueryInfos", "namespace", namespace, "args", args)
-	return e.repo.ResourceInfos(namespace, args, "")
 }

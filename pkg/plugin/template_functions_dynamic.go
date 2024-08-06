@@ -19,13 +19,13 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/events"
-	"k8s.io/kubectl/pkg/cmd/get"
 	"k8s.io/kubectl/pkg/polymorphichelpers"
+
+	"github.com/bergerx/kubectl-status/pkg/input"
 )
 
 func (r RenderableObject) KubeGet(namespace string, args ...string) (out []RenderableObject) {
@@ -33,31 +33,22 @@ func (r RenderableObject) KubeGet(namespace string, args ...string) (out []Rende
 		return
 	}
 	klog.V(5).InfoS("processing KubeGet", "r", r, "namespace", namespace, "args", args)
-	resourceInfos, err := r.engine.getResourceQueryInfos(namespace, args)
+	objects, err := r.engine.repo.Objects(namespace, args, "")
 	if err != nil {
 		klog.V(3).ErrorS(err, "ignoring resource error", "r", r, "namespace", namespace, "args", args)
 	}
-	return r.getCreationTimestampSortedRenderableObjects(resourceInfos)
+	return r.getCreationTimestampSortedRenderableObjects(objects)
 }
 
-func (r RenderableObject) getCreationTimestampSortedRenderableObjects(resourceInfos []*resource.Info) []RenderableObject {
+func (r RenderableObject) getCreationTimestampSortedRenderableObjects(objects input.Objects) []RenderableObject {
 	var out []RenderableObject
-	for _, obj := range sortedResourceInfosToRuntimeObjects(resourceInfos) {
+	for _, obj := range objects {
 		unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 		nr := r.engine.newRenderableObject(unstructuredObj)
 		klog.V(5).InfoS("KubeGet matched object", "object", nr)
 		out = append(out, nr)
 	}
 	return out
-}
-
-func sortedResourceInfosToRuntimeObjects(resourceInfos []*resource.Info) []runtime.Object {
-	runtimeObjList := make([]runtime.Object, len(resourceInfos))
-	for i := range resourceInfos {
-		runtimeObjList[i] = resourceInfos[i].Object
-	}
-	_ = get.NewRuntimeSorter(runtimeObjList, ".metadata.creationTimestamp").Sort()
-	return runtimeObjList
 }
 
 // KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
@@ -73,16 +64,15 @@ func (e *renderEngine) KubeGetFirst(namespace string, args ...string) Renderable
 	}
 	klog.V(5).InfoS("called template method KubeGetFirst",
 		"namespace", namespace, "args", args)
-	resourceInfos, err := e.getResourceQueryInfos(namespace, args)
+	objects, err := e.repo.Objects(namespace, args, "")
 	if err != nil {
 		klog.V(3).ErrorS(err, "getResourceQueryInfos failed",
 			"namespace", namespace, "args", args)
 		return nr
 	}
-	if len(resourceInfos) >= 1 {
-		first := resourceInfos[0]
-		unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(first.Object)
-		nr.Object = unstructuredObj
+	if len(objects) >= 1 {
+		first := objects[0]
+		nr.Object = first
 	} else {
 		klog.V(3).InfoS("KubeGetFirst returning empty",
 			"namespace", namespace, "args", args)
@@ -104,13 +94,13 @@ func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, lab
 		labelPairs = append(labelPairs, fmt.Sprintf("%s=%s", k, v))
 	}
 	selector := strings.Join(labelPairs, ",")
-	resourceInfos, err := r.engine.repo.ResourceInfos(namespace, []string{resourceType}, selector)
+	unstructuredObjects, err := r.engine.repo.Objects(namespace, []string{resourceType}, selector)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error querying labels",
 			"r", r, "namespace", namespace, "labels", labels)
 		return
 	}
-	return r.getCreationTimestampSortedRenderableObjects(resourceInfos)
+	return r.getCreationTimestampSortedRenderableObjects(unstructuredObjects)
 }
 
 func (r RenderableObject) KubeGetEvents() RenderableObject {
