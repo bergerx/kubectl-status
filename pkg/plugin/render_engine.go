@@ -2,14 +2,11 @@ package plugin
 
 import (
 	"embed"
-	"fmt"
 	"os"
 	"path/filepath"
 	"text/template"
 
 	"github.com/go-sprout/sprout"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
@@ -82,51 +79,4 @@ func findTemplateName(tmpl template.Template, kind string) string {
 		return "DefaultResource"
 	}
 	return kind
-}
-
-// This is a modified copy of resource.Builder's mappingFor method.
-func (e *renderEngine) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, error) {
-	fullySpecifiedGVR, groupResource := schema.ParseResourceArg(resourceOrKindArg)
-	gvk := schema.GroupVersionKind{}
-	restMapper, err := e.repo.ToRESTMapper()
-	if err != nil {
-		return nil, err
-	}
-
-	if fullySpecifiedGVR != nil {
-		gvk, _ = restMapper.KindFor(*fullySpecifiedGVR)
-	}
-	if gvk.Empty() {
-		gvk, _ = restMapper.KindFor(groupResource.WithVersion(""))
-	}
-	if !gvk.Empty() {
-		return restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	}
-
-	fullySpecifiedGVK, groupKind := schema.ParseKindArg(resourceOrKindArg)
-	if fullySpecifiedGVK == nil {
-		gvk := groupKind.WithVersion("")
-		fullySpecifiedGVK = &gvk
-	}
-
-	if !fullySpecifiedGVK.Empty() {
-		if mapping, err := restMapper.RESTMapping(fullySpecifiedGVK.GroupKind(), fullySpecifiedGVK.Version); err == nil {
-			return mapping, nil
-		}
-	}
-
-	mapping, err := restMapper.RESTMapping(groupKind, gvk.Version)
-	if err != nil {
-		// if we error out here, it is because we could not match a resource or a kind
-		// for the given argument. To maintain consistency with previous behavior,
-		// announce that a resource type could not be found.
-		// if the error is _not_ a *meta.NoKindMatchError, then we had trouble doing discovery,
-		// so we should return the original error since it may help a user diagnose what is actually wrong
-		if meta.IsNoMatchError(err) {
-			return nil, fmt.Errorf("the server doesn't have a resource type %q", groupResource.Resource)
-		}
-		return nil, err
-	}
-
-	return mapping, nil
 }

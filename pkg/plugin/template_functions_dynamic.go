@@ -129,7 +129,7 @@ func (r RenderableObject) KubeGetResourcesOwnedOf(resourceOrKind string) (out []
 		return
 	}
 	klog.V(5).InfoS("called template method KubeGetResourcesOwnedOf", "r", r)
-	restMapper, _ := r.engine.mappingFor(resourceOrKind)
+	restMapper, _ := r.engine.repo.MappingFor(resourceOrKind)
 	dynamicInterface, _ := r.engine.repo.DynamicClient()
 	controllerRevisions, _ := dynamicInterface.
 		Resource(restMapper.Resource).
@@ -400,7 +400,7 @@ func (r RenderableObject) KubeGetUnifiedDiffString(resourceOrKind, namespace, na
 }
 
 func (r RenderableObject) kubeGetUnifiedDiffString(resourceOrKind, namespace, nameA, nameB string) (string, error) {
-	controllerRevisionMapping, err := r.engine.mappingFor(resourceOrKind)
+	controllerRevisionMapping, err := r.engine.repo.MappingFor(resourceOrKind)
 	if err != nil {
 		klog.V(3).ErrorS(err, "failed to get mapping", "resourceOrKind", resourceOrKind)
 		return "", err
