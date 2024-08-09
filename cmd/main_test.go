@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"path"
@@ -11,6 +12,10 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
 	"github.com/bergerx/kubectl-status/pkg/plugin"
@@ -204,4 +209,73 @@ func startMinikube(t *testing.T, clusterName string) (deleteMinikube func()) {
 			t.Log("Error deleting temp folder of minikube.kubeconfig:", err)
 		}
 	}
+}
+
+func TestE2EDynamicManifests(t *testing.T) {
+	if os.Getenv("RUN_E2E_TESTS") != "true" {
+		t.Skip("Skipping e2e test")
+	}
+	if os.Getenv("ASSUME_MINIKUBE_IS_CONFIGURED") != "true" {
+		defer startMinikube(t, "kubectl-status-e2e")()
+	}
+	defer plugin.SetDurationRound(func(_ interface{}) string { return "1m" })()
+	viper.Set("test", true)
+	kubeconfigPath := os.Getenv("KUBECONFIG")
+	if kubeconfigPath == "" {
+		homeDir := os.Getenv("HOME")
+		kubeconfigPath = filepath.Join(homeDir, ".kube", "config")
+	}
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("owners should be included with deep", func(t *testing.T) {
+		owner := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "owner",
+				Namespace: "default",
+			},
+		}
+		owner, err := clientset.CoreV1().Secrets("default").Create(context.TODO(), owner, metav1.CreateOptions{})
+		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), owner.Name, metav1.DeleteOptions{})
+		assert.NoError(t, err)
+		// Create the owned secret with owner reference
+		owned := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "owned",
+				Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "v1",
+						Kind:       "Secret",
+						Name:       "owner",
+						UID:        owner.UID,
+					},
+				},
+			},
+		}
+		_, err = clientset.CoreV1().Secrets("default").Create(context.TODO(), owned, metav1.CreateOptions{})
+		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), owned.Name, metav1.DeleteOptions{})
+		assert.NoError(t, err)
+
+		test := cmdTest{
+			args: []string{"secret/owned", "--deep", "--v", "255"},
+			stdoutRegex: `(?ms)
+Secret\/owned -n default, created 1m ago by Secret/owner
+  Current: Resource is always ready
+  Known\/recorded manage events:
+    1m ago Updated by [^ ]+ \(metadata, type\)
+  Owners:
+    Secret\/owner -n default, created 1m ago
+      Current: Resource is always ready
+      Known\/recorded manage events:
+        1m ago Updated by [^ ]+ \(type\)
+`,
+		}
+		test.assert(t) // to update the out files check /tests/artifacts/README.md
+	})
 }

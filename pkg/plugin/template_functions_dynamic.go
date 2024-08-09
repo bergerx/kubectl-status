@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/events"
@@ -129,23 +128,21 @@ func (r RenderableObject) KubeGetResourcesOwnedOf(resourceOrKind string) (out []
 		return
 	}
 	klog.V(5).InfoS("called template method KubeGetResourcesOwnedOf", "r", r)
-	restMapper, _ := r.engine.repo.MappingFor(resourceOrKind)
-	dynamicInterface, _ := r.engine.repo.DynamicClient()
-	controllerRevisions, _ := dynamicInterface.
-		Resource(restMapper.Resource).
-		Namespace(r.GetNamespace()).
-		List(context.TODO(), metav1.ListOptions{})
-	for _, controllerRevision := range controllerRevisions.Items {
-		if doesOwnerMatch(r.Unstructured, controllerRevision) {
-			out = append(out, r.engine.newRenderableObject(controllerRevision.Object))
+	objects, err := r.engine.repo.Objects(r.GetNamespace(), []string{resourceOrKind}, "")
+	if err != nil {
+		klog.V(2).InfoS("failed to get objects", "r", r, "resourceOrKind", resourceOrKind)
+	}
+	for _, object := range objects {
+		if doesOwnerMatch(r.Unstructured.Object, object) {
+			out = append(out, r.engine.newRenderableObject(object))
 		}
 	}
 	return
 }
 
-func doesOwnerMatch(owner, owned unstructured.Unstructured) bool {
-	for _, ownerReference := range owner.GetOwnerReferences() {
-		if ownerReference.UID == owned.GetUID() {
+func doesOwnerMatch(owner, owned input.Object) bool {
+	for _, ownerReference := range owner.Unstructured().GetOwnerReferences() {
+		if ownerReference.UID == owned.Unstructured().GetUID() {
 			return true
 		}
 	}
@@ -400,22 +397,16 @@ func (r RenderableObject) KubeGetUnifiedDiffString(resourceOrKind, namespace, na
 }
 
 func (r RenderableObject) kubeGetUnifiedDiffString(resourceOrKind, namespace, nameA, nameB string) (string, error) {
-	controllerRevisionMapping, err := r.engine.repo.MappingFor(resourceOrKind)
+	gvr, err := r.engine.repo.GVRFor(resourceOrKind)
 	if err != nil {
 		klog.V(3).ErrorS(err, "failed to get mapping", "resourceOrKind", resourceOrKind)
 		return "", err
 	}
-	gvr := controllerRevisionMapping.Resource
-	dynamicClient, err := r.engine.repo.DynamicClient()
-	if err != nil {
-		klog.V(3).ErrorS(err, "failed to get dynamic client")
-		return "", err
-	}
-	aKind, aBytes, aTime, err := getObjectDetailsForDiff(dynamicClient, gvr, namespace, nameA)
+	aKind, aBytes, aTime, err := r.getObjectDetailsForDiff(gvr, namespace, nameA)
 	if err != nil {
 		return "", err
 	}
-	bKind, bBytes, bTime, err := getObjectDetailsForDiff(dynamicClient, gvr, namespace, nameB)
+	bKind, bBytes, bTime, err := r.getObjectDetailsForDiff(gvr, namespace, nameB)
 	if err != nil {
 		return "", err
 	}
@@ -431,12 +422,13 @@ func (r RenderableObject) kubeGetUnifiedDiffString(resourceOrKind, namespace, na
 	return difflib.GetUnifiedDiffString(diff)
 }
 
-func getObjectDetailsForDiff(dynamicClient dynamic.Interface, gvr schema.GroupVersionResource, namespace string, name string) (string, []byte, time.Time, error) {
-	obj, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+func (r RenderableObject) getObjectDetailsForDiff(gvr schema.GroupVersionResource, namespace string, name string) (string, []byte, time.Time, error) {
+	object, err := r.engine.repo.DynamicObject(gvr, namespace, name)
 	if err != nil {
-		klog.V(3).ErrorS(err, "failed to query object")
+		klog.V(2).ErrorS(err, "failed to query object", "gvr", gvr, "namespace", namespace, "name", name)
 		return "", nil, time.Time{}, err
 	}
+	obj := object.Unstructured()
 	creationTime := obj.GetCreationTimestamp().Time
 	removeFieldsThatCreateDiffNoise(obj)
 	objBytes, err := json.MarshalIndent(obj, "", "  ")

@@ -1,11 +1,14 @@
 package input
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/resource"
@@ -15,7 +18,8 @@ import (
 )
 
 type ResourceRepo struct {
-	f util.Factory
+	f      util.Factory
+	client dynamic.Interface
 }
 
 type Object map[string]interface{}
@@ -26,6 +30,10 @@ func (u Object) creationTimestamp() string {
 		return ""
 	}
 	return m["creationTimestamp"]
+}
+
+func (u Object) Unstructured() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: u}
 }
 
 type Objects []Object
@@ -100,7 +108,7 @@ func (r *ResourceRepo) Objects(namespace string, args []string, labelSelector st
 	return unstructuredObjects, err
 }
 
-func (r *ResourceRepo) ToRESTMapper() (meta.RESTMapper, error) {
+func (r *ResourceRepo) toRESTMapper() (meta.RESTMapper, error) {
 	return r.f.ToRESTMapper()
 }
 
@@ -108,15 +116,66 @@ func (r *ResourceRepo) KubernetesClientSet() (*kubernetes.Clientset, error) {
 	return r.f.KubernetesClientSet()
 }
 
-func (r *ResourceRepo) DynamicClient() (dynamic.Interface, error) {
-	return r.f.DynamicClient()
+func (r *ResourceRepo) dynamicClient() (dynamic.Interface, error) {
+	if r.client == nil {
+		var err error
+		r.client, err = r.f.DynamicClient()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return r.client, nil
+}
+
+func (r *ResourceRepo) DynamicObject(gvr schema.GroupVersionResource, namespace string, name string) (Object, error) {
+	dynamicClient, err := r.dynamicClient()
+	if err != nil {
+		return nil, err
+	}
+	u, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	object, err := runtime.DefaultUnstructuredConverter.ToUnstructured(u.Object)
+	if err != nil {
+		return nil, err
+	}
+	return object, nil
+}
+
+func (r *ResourceRepo) DynamicObjects(gvr schema.GroupVersionResource, namespace string) (Objects, error) {
+	dynamicClient, err := r.dynamicClient()
+	if err != nil {
+		return nil, err
+	}
+	unstructuredList, err := dynamicClient.Resource(gvr).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	var objects Objects
+	for _, unstructuredObj := range unstructuredList.Items {
+		unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(unstructuredObj.Object)
+		if err != nil {
+			return nil, err
+		}
+		objects = append(objects, unstructuredObj)
+	}
+	return objects, nil
+}
+
+func (r *ResourceRepo) GVRFor(resourceOrKindArg string) (schema.GroupVersionResource, error) {
+	mapping, err := r.mappingFor(resourceOrKindArg)
+	if err != nil {
+		return schema.GroupVersionResource{}, err
+	}
+	return mapping.Resource, nil
 }
 
 // This is a modified copy of resource.Builder's mappingFor method.
-func (r *ResourceRepo) MappingFor(resourceOrKindArg string) (*meta.RESTMapping, error) {
+func (r *ResourceRepo) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, error) {
 	fullySpecifiedGVR, groupResource := schema.ParseResourceArg(resourceOrKindArg)
 	gvk := schema.GroupVersionKind{}
-	restMapper, err := r.ToRESTMapper()
+	restMapper, err := r.toRESTMapper()
 	if err != nil {
 		return nil, err
 	}
