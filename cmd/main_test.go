@@ -33,6 +33,7 @@ type cmdTest struct {
 
 func (c cmdTest) assert(t *testing.T) {
 	t.Helper()
+	t.Logf("running cmdTest assert: %s", c)
 	stdout, stderr, err := executeCMD(t, c.args)
 	switch {
 	case c.stdoutRegex == "" && c.stdoutEqual == "":
@@ -117,7 +118,7 @@ func TestE2EAgainstVanillaMinikube(t *testing.T) {
 		t.Skip("Skipping e2e test")
 	}
 	if os.Getenv("ASSUME_MINIKUBE_IS_CONFIGURED") != "true" {
-		defer startMinikube(t, "kubectl-status-e2e")()
+		defer startMinikube(t)()
 	}
 	defer plugin.SetDurationRound(func(_ interface{}) string { return "1m" })()
 	klog.InitFlags(nil)
@@ -188,23 +189,24 @@ func executeCMD(t *testing.T, args []string) (string, string, error) {
 	return stdout.String(), stderr.String(), err
 }
 
-func startMinikube(t *testing.T, clusterName string) (deleteMinikube func()) {
+func startMinikube(t *testing.T) (deleteMinikube func()) {
 	t.Helper()
-	t.Log("Creating temp folder for minikube.kubeconfig...")
+	clusterName := t.Name()
+	t.Logf("Creating temp folder for minikube.kubeconfig for minikube %s ...", clusterName)
 	dir, err := os.MkdirTemp("", clusterName)
 	assert.NoError(t, err)
 	kubeconfig := path.Join(dir, "minikube.kubeconfig")
 	t.Setenv("KUBECONFIG", kubeconfig)
-	t.Log("Starting Minikube cluster...")
+	t.Logf("Starting Minikube cluster %s with %s ...", clusterName, kubeconfig)
 	startMinikube := exec.Command("minikube", "start", "-p", clusterName)
 	assert.NoError(t, startMinikube.Run())
 	return func() {
 		cmd := exec.Command("minikube", "delete", "-p", clusterName)
-		t.Log("Deleting Minikube cluster...")
+		t.Logf("Deleting Minikube cluster %s...", clusterName)
 		if err := cmd.Run(); err != nil {
 			t.Log("Error deleting Minikube cluster:", err)
 		}
-		t.Log("Deleting temp folder of minikube.kubeconfig...")
+		t.Logf("Deleting temp folder for minikube %s: %s ...", clusterName, dir)
 		if err := os.RemoveAll(dir); err != nil {
 			t.Log("Error deleting temp folder of minikube.kubeconfig:", err)
 		}
@@ -216,7 +218,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		t.Skip("Skipping e2e test")
 	}
 	if os.Getenv("ASSUME_MINIKUBE_IS_CONFIGURED") != "true" {
-		defer startMinikube(t, "kubectl-status-e2e")()
+		defer startMinikube(t)()
 	}
 	defer plugin.SetDurationRound(func(_ interface{}) string { return "1m" })()
 	viper.Set("test", true)
@@ -241,31 +243,34 @@ func TestE2EDynamicManifests(t *testing.T) {
 			},
 		}
 		owner, err := clientset.CoreV1().Secrets("default").Create(context.TODO(), owner, metav1.CreateOptions{})
-		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), owner.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), "owner", metav1.DeleteOptions{})
 		assert.NoError(t, err)
-		// Create the owned secret with owner reference
-		owned := &corev1.Secret{
+		uid := owner.GetUID()
+		t.Logf("owner secret is created, uid is %s", uid)
+		// Create the child secret with owner reference
+		child := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "owned",
+				Name:      "child",
 				Namespace: "default",
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion: "v1",
 						Kind:       "Secret",
 						Name:       "owner",
-						UID:        owner.UID,
+						UID:        uid,
 					},
 				},
 			},
 		}
-		_, err = clientset.CoreV1().Secrets("default").Create(context.TODO(), owned, metav1.CreateOptions{})
-		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), owned.Name, metav1.DeleteOptions{})
+		_, err = clientset.CoreV1().Secrets("default").Create(context.TODO(), child, metav1.CreateOptions{})
+		t.Log("child secret is created")
+		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), "child", metav1.DeleteOptions{})
 		assert.NoError(t, err)
 
 		test := cmdTest{
-			args: []string{"secret/owned", "--deep", "--v", "255"},
+			args: []string{"secret/child", "--deep", "--v", "7"},
 			stdoutRegex: `(?ms)
-Secret\/owned -n default, created 1m ago by Secret/owner
+Secret\/child -n default, created 1m ago by Secret/owner
   Current: Resource is always ready
   Known\/recorded manage events:
     1m ago Updated by [^ ]+ \(metadata, type\)
