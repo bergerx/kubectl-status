@@ -19,13 +19,12 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/cli-runtime/pkg/resource"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/events"
-	"k8s.io/kubectl/pkg/cmd/get"
 	"k8s.io/kubectl/pkg/polymorphichelpers"
+
+	"github.com/bergerx/kubectl-status/pkg/input"
 )
 
 func (r RenderableObject) KubeGet(namespace string, args ...string) (out []RenderableObject) {
@@ -33,54 +32,49 @@ func (r RenderableObject) KubeGet(namespace string, args ...string) (out []Rende
 		return
 	}
 	klog.V(5).InfoS("processing KubeGet", "r", r, "namespace", namespace, "args", args)
-	resourceInfos, err := r.engine.getResourceQueryInfos(namespace, args)
+	objects, err := r.engine.repo.Objects(namespace, args, "")
 	if err != nil {
 		klog.V(3).ErrorS(err, "ignoring resource error", "r", r, "namespace", namespace, "args", args)
 	}
-	return r.getCreationTimestampSortedRenderableObjects(resourceInfos)
+	return r.getCreationTimestampSortedRenderableObjects(objects)
 }
 
-func (r RenderableObject) getCreationTimestampSortedRenderableObjects(resourceInfos []*resource.Info) []RenderableObject {
+func (r RenderableObject) getCreationTimestampSortedRenderableObjects(objects input.Objects) []RenderableObject {
 	var out []RenderableObject
-	for _, obj := range sortedResourceInfosToRuntimeObjects(resourceInfos) {
+	for _, obj := range objects {
 		unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
-		nr := r.newRenderableObject(unstructuredObj)
+		nr := r.engine.newRenderableObject(unstructuredObj)
 		klog.V(5).InfoS("KubeGet matched object", "object", nr)
 		out = append(out, nr)
 	}
 	return out
 }
 
-func sortedResourceInfosToRuntimeObjects(resourceInfos []*resource.Info) []runtime.Object {
-	runtimeObjList := make([]runtime.Object, len(resourceInfos))
-	for i := range resourceInfos {
-		runtimeObjList[i] = resourceInfos[i].Object
-	}
-	_ = get.NewRuntimeSorter(runtimeObjList, ".metadata.creationTimestamp").Sort()
-	return runtimeObjList
+// KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
+func (r RenderableObject) KubeGetFirst(namespace string, args ...string) RenderableObject {
+	return r.engine.KubeGetFirst(namespace, args...)
 }
 
 // KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
-func (r RenderableObject) KubeGetFirst(namespace string, args ...string) RenderableObject {
-	nr := r.newRenderableObject(nil)
+func (e *renderEngine) KubeGetFirst(namespace string, args ...string) RenderableObject {
+	nr := e.newRenderableObject(nil)
 	if viper.GetBool("shallow") {
 		return nr
 	}
 	klog.V(5).InfoS("called template method KubeGetFirst",
-		"r", r, "namespace", namespace, "args", args)
-	resourceInfos, err := r.engine.getResourceQueryInfos(namespace, args)
+		"namespace", namespace, "args", args)
+	objects, err := e.repo.Objects(namespace, args, "")
 	if err != nil {
 		klog.V(3).ErrorS(err, "getResourceQueryInfos failed",
-			"r", r, "namespace", namespace, "args", args)
+			"namespace", namespace, "args", args)
 		return nr
 	}
-	if len(resourceInfos) >= 1 {
-		first := resourceInfos[0]
-		unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(first.Object)
-		nr.Object = unstructuredObj
+	if len(objects) >= 1 {
+		first := objects[0]
+		nr.Object = first
 	} else {
 		klog.V(3).InfoS("KubeGetFirst returning empty",
-			"r", r, "namespace", namespace, "args", args)
+			"namespace", namespace, "args", args)
 	}
 	return nr
 }
@@ -99,17 +93,17 @@ func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, lab
 		labelPairs = append(labelPairs, fmt.Sprintf("%s=%s", k, v))
 	}
 	selector := strings.Join(labelPairs, ",")
-	resourceInfos, err := r.engine.repo.ResourceInfos(namespace, []string{resourceType}, selector)
+	unstructuredObjects, err := r.engine.repo.Objects(namespace, []string{resourceType}, selector)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error querying labels",
 			"r", r, "namespace", namespace, "labels", labels)
 		return
 	}
-	return r.getCreationTimestampSortedRenderableObjects(resourceInfos)
+	return r.getCreationTimestampSortedRenderableObjects(unstructuredObjects)
 }
 
 func (r RenderableObject) KubeGetEvents() RenderableObject {
-	nr := r.newRenderableObject(nil)
+	nr := r.engine.newRenderableObject(nil)
 	if viper.GetBool("shallow") {
 		return nr
 	}
@@ -134,23 +128,21 @@ func (r RenderableObject) KubeGetResourcesOwnedOf(resourceOrKind string) (out []
 		return
 	}
 	klog.V(5).InfoS("called template method KubeGetResourcesOwnedOf", "r", r)
-	restMapper, _ := r.engine.mappingFor(resourceOrKind)
-	dynamicInterface, _ := r.engine.repo.DynamicClient()
-	controllerRevisions, _ := dynamicInterface.
-		Resource(restMapper.Resource).
-		Namespace(r.GetNamespace()).
-		List(context.TODO(), metav1.ListOptions{})
-	for _, controllerRevision := range controllerRevisions.Items {
-		if doesOwnerMatch(r.Unstructured, controllerRevision) {
-			out = append(out, r.newRenderableObject(controllerRevision.Object))
+	objects, err := r.engine.repo.Objects(r.GetNamespace(), []string{resourceOrKind}, "")
+	if err != nil {
+		klog.V(2).InfoS("failed to get objects", "r", r, "resourceOrKind", resourceOrKind)
+	}
+	for _, object := range objects {
+		if doesOwnerMatch(r.Unstructured.Object, object) {
+			out = append(out, r.engine.newRenderableObject(object))
 		}
 	}
 	return
 }
 
-func doesOwnerMatch(owner, owned unstructured.Unstructured) bool {
-	for _, ownerReference := range owner.GetOwnerReferences() {
-		if ownerReference.UID == owned.GetUID() {
+func doesOwnerMatch(owner, owned input.Object) bool {
+	for _, ownerReference := range owner.Unstructured().GetOwnerReferences() {
+		if ownerReference.UID == owned.Unstructured().GetUID() {
 			return true
 		}
 	}
@@ -210,7 +202,7 @@ func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName str
 		if doesIngressUseService(ing, svcName) {
 			ing.SetGroupVersionKind(netv1.SchemeGroupVersion.WithKind("Ingress"))
 			ingUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&ing)
-			out = append(out, r.newRenderableObject(ingUnstructured))
+			out = append(out, r.engine.newRenderableObject(ingUnstructured))
 		}
 	}
 	return
@@ -250,7 +242,7 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 		if doesServiceMatchLabels(svc, castedLabels) {
 			svc.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Service"))
 			svcUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&svc)
-			out = append(out, r.newRenderableObject(svcUnstructured))
+			out = append(out, r.engine.newRenderableObject(svcUnstructured))
 		}
 	}
 	return out
@@ -284,7 +276,7 @@ func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) 
 			}
 			svc.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Service"))
 			svcUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&svc)
-			out = append(out, r.newRenderableObject(svcUnstructured))
+			out = append(out, r.engine.newRenderableObject(svcUnstructured))
 		}
 	}
 	return out
@@ -381,7 +373,7 @@ func (r RenderableObject) kubeGetNonTerminatedPodsOnTheNode(nodeName string) (po
 	}
 	for _, pod := range nodeNonTerminatedPodsList.Items {
 		unstructuredPod, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&pod)
-		nr := r.newRenderableObject(unstructuredPod)
+		nr := r.engine.newRenderableObject(unstructuredPod)
 		podList = append(podList, nr)
 	}
 	return podList, nil
@@ -405,22 +397,16 @@ func (r RenderableObject) KubeGetUnifiedDiffString(resourceOrKind, namespace, na
 }
 
 func (r RenderableObject) kubeGetUnifiedDiffString(resourceOrKind, namespace, nameA, nameB string) (string, error) {
-	controllerRevisionMapping, err := r.engine.mappingFor(resourceOrKind)
+	gvr, err := r.engine.repo.GVRFor(resourceOrKind)
 	if err != nil {
 		klog.V(3).ErrorS(err, "failed to get mapping", "resourceOrKind", resourceOrKind)
 		return "", err
 	}
-	gvr := controllerRevisionMapping.Resource
-	dynamicClient, err := r.engine.repo.DynamicClient()
-	if err != nil {
-		klog.V(3).ErrorS(err, "failed to get dynamic client")
-		return "", err
-	}
-	aKind, aBytes, aTime, err := getObjectDetailsForDiff(dynamicClient, gvr, namespace, nameA)
+	aKind, aBytes, aTime, err := r.getObjectDetailsForDiff(gvr, namespace, nameA)
 	if err != nil {
 		return "", err
 	}
-	bKind, bBytes, bTime, err := getObjectDetailsForDiff(dynamicClient, gvr, namespace, nameB)
+	bKind, bBytes, bTime, err := r.getObjectDetailsForDiff(gvr, namespace, nameB)
 	if err != nil {
 		return "", err
 	}
@@ -436,12 +422,13 @@ func (r RenderableObject) kubeGetUnifiedDiffString(resourceOrKind, namespace, na
 	return difflib.GetUnifiedDiffString(diff)
 }
 
-func getObjectDetailsForDiff(dynamicClient dynamic.Interface, gvr schema.GroupVersionResource, namespace string, name string) (string, []byte, time.Time, error) {
-	obj, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+func (r RenderableObject) getObjectDetailsForDiff(gvr schema.GroupVersionResource, namespace string, name string) (string, []byte, time.Time, error) {
+	object, err := r.engine.repo.DynamicObject(gvr, namespace, name)
 	if err != nil {
-		klog.V(3).ErrorS(err, "failed to query object")
+		klog.V(2).ErrorS(err, "failed to query object", "gvr", gvr, "namespace", namespace, "name", name)
 		return "", nil, time.Time{}, err
 	}
+	obj := object.Unstructured()
 	creationTime := obj.GetCreationTimestamp().Time
 	removeFieldsThatCreateDiffNoise(obj)
 	objBytes, err := json.MarshalIndent(obj, "", "  ")

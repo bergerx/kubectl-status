@@ -13,10 +13,10 @@ import (
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
-func newRenderableObject(obj map[string]interface{}, engine renderEngine) RenderableObject {
+func newRenderableObject(obj map[string]interface{}, engine *renderEngine) RenderableObject {
 	r := RenderableObject{
 		Unstructured: unstructured.Unstructured{Object: obj},
-		engine:       &engine,
+		engine:       engine,
 		Config:       viper.GetViper(),
 	}
 	return r
@@ -40,8 +40,8 @@ func (r RenderableObject) KStatus() *kstatus.Result {
 	return result
 }
 
-func (r RenderableObject) newRenderableObject(obj map[string]interface{}) RenderableObject {
-	return newRenderableObject(obj, *r.engine)
+func (e *renderEngine) newRenderableObject(obj map[string]interface{}) RenderableObject {
+	return newRenderableObject(obj, e)
 }
 
 func (r RenderableObject) String() string {
