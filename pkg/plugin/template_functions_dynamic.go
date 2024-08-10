@@ -3,7 +3,6 @@
 package plugin
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
@@ -225,8 +223,7 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 		castedLabels[k] = v.(string)
 	}
 	klog.V(5).InfoS("casted labels values into string", "r", r, "castedLabels", castedLabels)
-	clientSet, _ := r.engine.repo.KubernetesClientSet()
-	svcs, err := clientSet.CoreV1().Services(r.Namespace()).List(context.TODO(), metav1.ListOptions{})
+	svcs, err := r.engine.repo.Services(r.Namespace())
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing services", "r", r, "namespace", namespace)
 		return out
@@ -246,8 +243,7 @@ func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) 
 		return
 	}
 	klog.V(5).InfoS("called KubeGetServicesMatchingPod", "r", r, "namespace", namespace, "podName", podName)
-	clientSet, _ := r.engine.repo.KubernetesClientSet()
-	endpoints, err := clientSet.CoreV1().Endpoints(r.Namespace()).List(context.TODO(), metav1.ListOptions{})
+	endpoints, err := r.engine.repo.Endpoints(r.Namespace())
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing endpoints", "r", r, "namespace", namespace)
 		return
@@ -262,7 +258,7 @@ func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) 
 			}
 		}
 		if matched {
-			svc, err := clientSet.CoreV1().Services(r.Namespace()).Get(context.TODO(), ep.Name, metav1.GetOptions{})
+			svc, err := r.engine.repo.Service(r.Namespace(), ep.Name)
 			if err != nil {
 				klog.V(3).ErrorS(err, "error getting matching service", "r", r, "namespace", namespace, "name", ep.Name)
 				continue
@@ -300,36 +296,12 @@ func (r RenderableObject) KubeGetNodeStatsSummary(nodeName string) map[string]in
 		return nil
 	}
 	klog.V(5).InfoS("called KubeGetNodeStatsSummary", "r", r, "node", nodeName)
-	nodeStatsSummary, err := r.kubeGetNodeStatsSummary(nodeName)
+	nodeStatsSummary, err := r.engine.repo.KubeGetNodeStatsSummary(nodeName)
 	if err != nil {
 		klog.V(3).ErrorS(err, "failed to get node stats summary", "r", r, "node", nodeName)
 		return nil
 	}
 	return nodeStatsSummary
-}
-
-// kubeGetNodeStatsSummary returns this structure
-//
-//	> kubectl get --raw /api/v1/nodes/{nodeName}/proxy/stats/summary
-//
-// The endpoint that this function uses will be disabled soon: https://github.com/kubernetes/kubernetes/issues/68522
-func (r RenderableObject) kubeGetNodeStatsSummary(nodeName string) (map[string]interface{}, error) {
-	clientSet, err := r.engine.repo.KubernetesClientSet()
-	if err != nil {
-		return nil, err
-	}
-	getBytes, err := clientSet.CoreV1().RESTClient().Get().
-		Resource("nodes").
-		SubResource("proxy").
-		Name(nodeName).
-		Suffix("stats/summary").
-		DoRaw(context.TODO())
-	if err != nil {
-		return nil, err
-	}
-	nodeStatsSummary := make(map[string]interface{})
-	err = json.Unmarshal(getBytes, &nodeStatsSummary)
-	return nodeStatsSummary, err
 }
 
 // KubeGetNonTerminatedPodsOnNode returns details of all pods which are not in terminal status
@@ -347,26 +319,14 @@ func (r RenderableObject) KubeGetNonTerminatedPodsOnNode(nodeName string) (podLi
 }
 
 func (r RenderableObject) kubeGetNonTerminatedPodsOnTheNode(nodeName string) (podList []RenderableObject, err error) {
-	clientSet, _ := r.engine.repo.KubernetesClientSet()
-	fieldSelector, err := fields.ParseSelector("spec.nodeName=" + nodeName +
-		",status.phase!=" + string(corev1.PodSucceeded) +
-		",status.phase!=" + string(corev1.PodFailed))
-	if err != nil {
-		klog.V(3).ErrorS(err, "Failed creating fieldSelector for non-terminated Pods on Node",
-			"r", r, "nodeName", nodeName)
-		return
-	}
-	nodeNonTerminatedPodsList, err := clientSet.CoreV1().
-		Pods(""). // Search in all namespaces
-		List(context.TODO(), metav1.ListOptions{FieldSelector: fieldSelector.String()})
+	pods, err := r.engine.repo.NonTerminatedPodsOnTheNode(nodeName)
 	if err != nil {
 		klog.V(3).ErrorS(err, "Failed getting non-terminated Pods for Node",
 			"r", r, "nodeName", nodeName)
 		return
 	}
-	for _, pod := range nodeNonTerminatedPodsList.Items {
-		unstructuredPod, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&pod)
-		nr := r.engine.newRenderableObject(unstructuredPod)
+	for _, pod := range pods {
+		nr := r.engine.newRenderableObject(pod)
 		podList = append(podList, nr)
 	}
 	return podList, nil

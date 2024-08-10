@@ -11,8 +11,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -22,11 +24,7 @@ import (
 	"k8s.io/kubectl/pkg/cmd/util"
 )
 
-type ResourceRepo struct {
-	f      util.Factory
-	client dynamic.Interface
-}
-
+// Object is the JSON compatible map[string]interface{} mostly used through unstructured.Unstructured.
 type Object map[string]interface{}
 
 func (u Object) creationTimestamp() string {
@@ -59,6 +57,13 @@ func NewResourceRepo(factory util.Factory) ResourceRepo {
 	return ResourceRepo{
 		f: factory,
 	}
+}
+
+type ResourceRepo struct {
+	f util.Factory
+
+	client    dynamic.Interface
+	clientSet *kubernetes.Clientset
 }
 
 func (r *ResourceRepo) newBaseBuilder() *resource.Builder {
@@ -114,7 +119,11 @@ func (r *ResourceRepo) Objects(namespace string, args []string, labelSelector st
 }
 
 func (r *ResourceRepo) ObjectEvents(u *unstructured.Unstructured) (*corev1.EventList, error) {
-	clientSet, _ := r.KubernetesClientSet()
+	clientSet, err := r.kubernetesClientSet()
+	if err != nil {
+		klog.V(3).ErrorS(err, "error getting events", "r", r)
+		return nil, err
+	}
 	eventList, err := clientSet.CoreV1().Events(u.GetNamespace()).Search(scheme.Scheme, u)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error getting events", "r", r)
@@ -124,8 +133,15 @@ func (r *ResourceRepo) ObjectEvents(u *unstructured.Unstructured) (*corev1.Event
 	return eventList, nil
 }
 
-func (r *ResourceRepo) KubernetesClientSet() (*kubernetes.Clientset, error) {
-	return r.f.KubernetesClientSet()
+func (r *ResourceRepo) kubernetesClientSet() (*kubernetes.Clientset, error) {
+	if r.clientSet == nil {
+		var err error
+		r.clientSet, err = r.f.KubernetesClientSet()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return r.clientSet, nil
 }
 
 func (r *ResourceRepo) dynamicClient() (dynamic.Interface, error) {
@@ -231,6 +247,81 @@ func (r *ResourceRepo) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, 
 }
 
 func (r *ResourceRepo) Ingresses(namespace string) (*netv1.IngressList, error) {
-	clientSet, _ := r.KubernetesClientSet()
+	clientSet, err := r.kubernetesClientSet()
+	if err != nil {
+		return nil, err
+	}
 	return clientSet.NetworkingV1().Ingresses(namespace).List(context.TODO(), metav1.ListOptions{})
+}
+
+func (r *ResourceRepo) Services(namespace string) (*corev1.ServiceList, error) {
+	clientSet, err := r.kubernetesClientSet()
+	if err != nil {
+		return nil, err
+	}
+	return clientSet.CoreV1().Services(namespace).List(context.TODO(), metav1.ListOptions{})
+}
+
+func (r *ResourceRepo) Service(namespace, name string) (*corev1.Service, error) {
+	clientSet, err := r.kubernetesClientSet()
+	if err != nil {
+		return nil, err
+	}
+	return clientSet.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+}
+
+func (r *ResourceRepo) Endpoints(namespace string) (*corev1.EndpointsList, error) {
+	clientSet, err := r.kubernetesClientSet()
+	if err != nil {
+		return nil, err
+	}
+	return clientSet.CoreV1().Endpoints(namespace).List(context.TODO(), metav1.ListOptions{})
+}
+
+// KubeGetNodeStatsSummary returns this structure
+// > kubectl get --raw /api/v1/nodes/{nodeName}/proxy/stats/summary
+// The endpoint that this function uses will be disabled soon: https://github.com/kubernetes/kubernetes/issues/68522
+func (r *ResourceRepo) KubeGetNodeStatsSummary(nodeName string) (Object, error) {
+	clientSet, err := r.kubernetesClientSet()
+	if err != nil {
+		return nil, err
+	}
+	getBytes, err := clientSet.CoreV1().RESTClient().Get().
+		Resource("nodes").
+		SubResource("proxy").
+		Name(nodeName).
+		Suffix("stats/summary").
+		DoRaw(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	nodeStatsSummary := make(Object)
+	err = json.Unmarshal(getBytes, &nodeStatsSummary)
+	return nodeStatsSummary, err
+}
+
+func (r *ResourceRepo) NonTerminatedPodsOnTheNode(nodeName string) (Objects, error) {
+	clientSet, _ := r.kubernetesClientSet()
+	fieldSelector, err := fields.ParseSelector("spec.nodeName=" + nodeName +
+		",status.phase!=" + string(corev1.PodSucceeded) +
+		",status.phase!=" + string(corev1.PodFailed))
+	if err != nil {
+		klog.V(3).ErrorS(err, "Failed creating fieldSelector for non-terminated Pods on Node",
+			"r", r, "nodeName", nodeName)
+		return nil, err
+	}
+	nodeNonTerminatedPodsList, err := clientSet.CoreV1().
+		Pods(""). // Search in all namespaces
+		List(context.TODO(), metav1.ListOptions{FieldSelector: fieldSelector.String()})
+	if err != nil {
+		klog.V(3).ErrorS(err, "Failed getting non-terminated Pods for Node",
+			"r", r, "nodeName", nodeName)
+		return nil, err
+	}
+	pods := Objects{}
+	for _, pod := range nodeNonTerminatedPodsList.Items {
+		unstructuredPod, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&pod)
+		pods = append(pods, unstructuredPod)
+	}
+	return pods, nil
 }
