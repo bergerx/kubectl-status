@@ -17,6 +17,8 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/interrupt"
+
+	"github.com/bergerx/kubectl-status/pkg/input"
 )
 
 //go:linkname signame runtime.signame
@@ -34,18 +36,19 @@ func Run(f util.Factory, streams genericiooptions.IOStreams, args []string) erro
 	} else if viper.Get("color") == "never" {
 		color.NoColor = true
 	}
-	engine, err := newRenderEngine(f, streams)
+	repo := input.NewResourceRepo(f)
+	engine, err := newRenderEngine(streams)
 	if err != nil {
 		klog.V(2).ErrorS(err, "Error creating engine")
 		return err
 	}
 	klog.V(5).InfoS("Created engine", "engine", engine)
-	results := engine.repo.CLIQueryResults(args)
+	results := repo.CLIQueryResults(args)
 	count := 0
 	err = results.Visit(func(resourceInfo *resource.Info, err error) error {
 		count += 1
 		klog.V(5).InfoS("Processing resource", "item", count, "resource", resourceInfo)
-		processObj(resourceInfo.Object, engine)
+		processObj(resourceInfo.Object, engine, repo)
 		return err
 	})
 	klog.V(5).InfoS("Processed matching resources", "count", count)
@@ -58,12 +61,12 @@ func Run(f util.Factory, streams genericiooptions.IOStreams, args []string) erro
 		return fmt.Errorf("no resources found")
 	}
 	if viper.GetBool("watch") {
-		return runWatch(results, engine)
+		return runWatch(results, engine, repo)
 	}
 	return nil
 }
 
-func runWatch(results *resource.Result, engine *renderEngine) error {
+func runWatch(results *resource.Result, engine *renderEngine, repo *input.ResourceRepo) error {
 	color.HiYellow("\nPrinted all existing resource statuses, starting to watch. Switching to shallow mode during watch!\n\n")
 	viper.Set("shallow", true)
 	viper.Set("watching", true)
@@ -90,7 +93,7 @@ func runWatch(results *resource.Result, engine *renderEngine) error {
 	_ = intr.Run(func() error {
 		_, err := watchtools.UntilWithoutRetry(ctx, w, func(e watch.Event) (bool, error) {
 			klog.V(5).InfoS("Processing watch event", "e", e)
-			processObj(e.Object, engine)
+			processObj(e.Object, engine, repo)
 			return false, nil
 		})
 		klog.V(1).ErrorS(err, "Watch failed", "obj", obj)
@@ -99,7 +102,7 @@ func runWatch(results *resource.Result, engine *renderEngine) error {
 	return nil
 }
 
-func processObj(obj runtime.Object, engine *renderEngine) {
+func processObj(obj runtime.Object, engine *renderEngine, repo *input.ResourceRepo) {
 	streams := engine.ioStreams
 	_, _ = fmt.Fprintf(streams.Out, "\n")
 	out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
@@ -107,7 +110,7 @@ func processObj(obj runtime.Object, engine *renderEngine) {
 		errorPrintf(streams.ErrOut, "Failed to decode obj=%s: %s", obj, err)
 		return
 	}
-	r := newRenderableObject(out, engine)
+	r := newRenderableObject(out, engine, repo)
 	err = r.render(streams.Out)
 	if err != nil {
 		_, _ = fmt.Fprintf(streams.ErrOut, "\n")

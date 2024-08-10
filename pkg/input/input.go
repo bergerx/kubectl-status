@@ -54,8 +54,8 @@ func (u Objects) Swap(i, j int) {
 	u[i], u[j] = u[j], u[i]
 }
 
-func NewResourceRepo(factory util.Factory) ResourceRepo {
-	return ResourceRepo{
+func NewResourceRepo(factory util.Factory) *ResourceRepo {
+	return &ResourceRepo{
 		f: factory,
 	}
 }

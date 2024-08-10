@@ -7,13 +7,16 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/kubectl/pkg/cmd/util"
+
+	"github.com/bergerx/kubectl-status/pkg/input"
 )
 
 func checkTemplate(t *testing.T, templateName string, obj map[string]interface{}, shouldContain string, useRenderable bool) {
 	tmpl, _ := getTemplate()
-	e, _ := newRenderEngine(util.NewFactory(genericclioptions.NewTestConfigFlags()), genericiooptions.NewTestIOStreamsDiscard())
+	repo := input.NewResourceRepo(util.NewFactory(genericclioptions.NewTestConfigFlags()))
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard())
 	e.Template = *tmpl
-	r := newRenderableObject(obj, e)
+	r := newRenderableObject(obj, e, repo)
 	var objToPassTemplate interface{}
 	if useRenderable {
 		objToPassTemplate = r

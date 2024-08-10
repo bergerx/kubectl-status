@@ -11,12 +11,15 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
+
+	"github.com/bergerx/kubectl-status/pkg/input"
 )
 
-func newRenderableObject(obj map[string]interface{}, engine *renderEngine) RenderableObject {
+func newRenderableObject(obj map[string]interface{}, engine *renderEngine, repo *input.ResourceRepo) RenderableObject {
 	r := RenderableObject{
 		Unstructured: unstructured.Unstructured{Object: obj},
 		engine:       engine,
+		repo:         repo,
 		Config:       viper.GetViper(),
 	}
 	return r
@@ -28,6 +31,7 @@ func newRenderableObject(obj map[string]interface{}, engine *renderEngine) Rende
 type RenderableObject struct {
 	unstructured.Unstructured
 	engine *renderEngine
+	repo   *input.ResourceRepo
 	Config *viper.Viper
 }
 
@@ -40,8 +44,8 @@ func (r RenderableObject) KStatus() *kstatus.Result {
 	return result
 }
 
-func (e *renderEngine) newRenderableObject(obj map[string]interface{}) RenderableObject {
-	return newRenderableObject(obj, e)
+func (r RenderableObject) newRenderableObject(obj map[string]interface{}) RenderableObject {
+	return newRenderableObject(obj, r.engine, r.repo)
 }
 
 func (r RenderableObject) String() string {

@@ -9,9 +9,6 @@ import (
 	"github.com/go-sprout/sprout"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/klog/v2"
-	"k8s.io/kubectl/pkg/cmd/util"
-
-	"github.com/bergerx/kubectl-status/pkg/input"
 )
 
 //go:embed templates
@@ -21,21 +18,18 @@ var templatesFS embed.FS
 // Also holds the parsed templates.
 type renderEngine struct {
 	ioStreams genericiooptions.IOStreams
-	repo      input.ResourceRepo
 	template.Template
 }
 
-func newRenderEngine(f util.Factory, streams genericiooptions.IOStreams) (*renderEngine, error) {
-	klog.V(5).InfoS("Creating new render engine instance...", "f", f)
+func newRenderEngine(streams genericiooptions.IOStreams) (*renderEngine, error) {
+	klog.V(5).InfoS("Creating new render engine instance...")
 	tmpl, err := getTemplate()
-	repo := input.NewResourceRepo(f)
 	if err != nil {
 		klog.V(3).ErrorS(err, "Error parsing templates")
 		return nil, err
 	}
 	return &renderEngine{
 		streams,
-		repo,
 		*tmpl,
 	}, nil
 }

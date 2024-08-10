@@ -27,7 +27,7 @@ func (r RenderableObject) KubeGet(namespace string, args ...string) (out []Rende
 		return
 	}
 	klog.V(5).InfoS("processing KubeGet", "r", r, "namespace", namespace, "args", args)
-	objects, err := r.engine.repo.Objects(namespace, args, "")
+	objects, err := r.repo.Objects(namespace, args, "")
 	if err != nil {
 		klog.V(3).ErrorS(err, "ignoring resource error", "r", r, "namespace", namespace, "args", args)
 	}
@@ -36,7 +36,7 @@ func (r RenderableObject) KubeGet(namespace string, args ...string) (out []Rende
 
 func (r RenderableObject) objectsToRenderableObjects(objects input.Objects) (out []RenderableObject) {
 	for _, obj := range objects {
-		nr := r.engine.newRenderableObject(obj)
+		nr := r.newRenderableObject(obj)
 		out = append(out, nr)
 	}
 	return out
@@ -44,14 +44,14 @@ func (r RenderableObject) objectsToRenderableObjects(objects input.Objects) (out
 
 // KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
 func (r RenderableObject) KubeGetFirst(namespace string, args ...string) RenderableObject {
-	nr := r.engine.newRenderableObject(nil)
+	nr := r.newRenderableObject(nil)
 	if viper.GetBool("shallow") {
 		return nr
 	}
 	klog.V(5).InfoS("called template method KubeGetFirst",
 		"namespace", namespace, "args", args)
 	var err error
-	nr.Object, err = r.engine.repo.FirstObject(namespace, args, "")
+	nr.Object, err = r.repo.FirstObject(namespace, args, "")
 	if err != nil {
 		klog.V(3).ErrorS(err, "KubeGetFirst failed",
 			"namespace", namespace, "args", args)
@@ -73,7 +73,7 @@ func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, lab
 		labelPairs = append(labelPairs, fmt.Sprintf("%s=%s", k, v))
 	}
 	selector := strings.Join(labelPairs, ",")
-	unstructuredObjects, err := r.engine.repo.Objects(namespace, []string{resourceType}, selector)
+	unstructuredObjects, err := r.repo.Objects(namespace, []string{resourceType}, selector)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error querying labels",
 			"r", r, "namespace", namespace, "labels", labels)
@@ -83,12 +83,12 @@ func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, lab
 }
 
 func (r RenderableObject) KubeGetEvents() RenderableObject {
-	nr := r.engine.newRenderableObject(nil)
+	nr := r.newRenderableObject(nil)
 	if viper.GetBool("shallow") {
 		return nr
 	}
 	klog.V(5).InfoS("called KubeGetEvents", "r", r)
-	eventList, err := r.engine.repo.ObjectEvents(&r.Unstructured)
+	eventList, err := r.repo.ObjectEvents(&r.Unstructured)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error getting events", "r", r)
 		return nr
@@ -104,7 +104,7 @@ func (r RenderableObject) KubeGetOwners() (out []RenderableObject) {
 		return
 	}
 	klog.V(5).InfoS("KubeGetOwners called KubeGetOwners", "r", r)
-	owners, err := r.engine.repo.Owners(r.Object)
+	owners, err := r.repo.Owners(r.Object)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error getting owners", "r", r)
 	}
@@ -117,7 +117,7 @@ func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName str
 	}
 	klog.V(5).InfoS("called KubeGetIngressesMatchingService",
 		"r", r, "namespace", namespace, "svcName", svcName)
-	ingresses, err := r.engine.repo.Ingresses(namespace)
+	ingresses, err := r.repo.Ingresses(namespace)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing ingresses", "r", r, "namespace", namespace)
 		return
@@ -126,7 +126,7 @@ func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName str
 		if doesIngressUseService(ing, svcName) {
 			ing.SetGroupVersionKind(netv1.SchemeGroupVersion.WithKind("Ingress"))
 			ingUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&ing)
-			out = append(out, r.engine.newRenderableObject(ingUnstructured))
+			out = append(out, r.newRenderableObject(ingUnstructured))
 		}
 	}
 	return
@@ -156,7 +156,7 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 		castedLabels[k] = v.(string)
 	}
 	klog.V(5).InfoS("casted labels values into string", "r", r, "castedLabels", castedLabels)
-	svcs, err := r.engine.repo.Services(r.Namespace())
+	svcs, err := r.repo.Services(r.Namespace())
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing services", "r", r, "namespace", namespace)
 		return out
@@ -165,7 +165,7 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 		if doesServiceMatchLabels(svc, castedLabels) {
 			svc.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Service"))
 			svcUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&svc)
-			out = append(out, r.engine.newRenderableObject(svcUnstructured))
+			out = append(out, r.newRenderableObject(svcUnstructured))
 		}
 	}
 	return out
@@ -177,7 +177,7 @@ func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) 
 		return
 	}
 	klog.V(5).InfoS("called KubeGetServicesMatchingPod", "r", r, "namespace", namespace, "podName", podName)
-	endpoints, err := r.engine.repo.Endpoints(r.Namespace())
+	endpoints, err := r.repo.Endpoints(r.Namespace())
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing endpoints", "r", r, "namespace", namespace)
 		return
@@ -192,14 +192,14 @@ func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) 
 			}
 		}
 		if matched {
-			svc, err := r.engine.repo.Service(r.Namespace(), ep.Name)
+			svc, err := r.repo.Service(r.Namespace(), ep.Name)
 			if err != nil {
 				klog.V(3).ErrorS(err, "error getting matching service", "r", r, "namespace", namespace, "name", ep.Name)
 				continue
 			}
 			svc.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Service"))
 			svcUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&svc)
-			out = append(out, r.engine.newRenderableObject(svcUnstructured))
+			out = append(out, r.newRenderableObject(svcUnstructured))
 		}
 	}
 	return out
@@ -230,7 +230,7 @@ func (r RenderableObject) KubeGetNodeStatsSummary(nodeName string) map[string]in
 		return nil
 	}
 	klog.V(5).InfoS("called KubeGetNodeStatsSummary", "r", r, "node", nodeName)
-	nodeStatsSummary, err := r.engine.repo.KubeGetNodeStatsSummary(nodeName)
+	nodeStatsSummary, err := r.repo.KubeGetNodeStatsSummary(nodeName)
 	if err != nil {
 		klog.V(3).ErrorS(err, "failed to get node stats summary", "r", r, "node", nodeName)
 		return nil
@@ -244,7 +244,7 @@ func (r RenderableObject) KubeGetNonTerminatedPodsOnNode(nodeName string) (podLi
 		return
 	}
 	klog.V(5).InfoS("called KubeGetNonTerminatedPodsOnNode", "r", r, "node", nodeName)
-	pods, err := r.engine.repo.NonTerminatedPodsOnTheNode(nodeName)
+	pods, err := r.repo.NonTerminatedPodsOnTheNode(nodeName)
 	if err != nil {
 		klog.V(3).ErrorS(err, "Failed getting non-terminated Pods for Node",
 			"r", r, "nodeName", nodeName)
@@ -271,7 +271,7 @@ func (r RenderableObject) KubeGetUnifiedDiffString(resourceOrKind, namespace, na
 }
 
 func (r RenderableObject) kubeGetUnifiedDiffString(resourceOrKind, namespace, nameA, nameB string) (string, error) {
-	gvr, err := r.engine.repo.GVRFor(resourceOrKind)
+	gvr, err := r.repo.GVRFor(resourceOrKind)
 	if err != nil {
 		klog.V(3).ErrorS(err, "failed to get mapping", "resourceOrKind", resourceOrKind)
 		return "", err
@@ -297,7 +297,7 @@ func (r RenderableObject) kubeGetUnifiedDiffString(resourceOrKind, namespace, na
 }
 
 func (r RenderableObject) getObjectDetailsForDiff(gvr schema.GroupVersionResource, namespace string, name string) (string, []byte, time.Time, error) {
-	object, err := r.engine.repo.DynamicObject(gvr, namespace, name)
+	object, err := r.repo.DynamicObject(gvr, namespace, name)
 	if err != nil {
 		klog.V(2).ErrorS(err, "failed to query object", "gvr", gvr, "namespace", namespace, "name", name)
 		return "", nil, time.Time{}, err
