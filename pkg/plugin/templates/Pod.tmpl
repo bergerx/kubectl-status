@@ -107,9 +107,9 @@
 {{- define "pod_volume_stats" }}
     {{- /* pod_volume_stats returns a single liner representing all the known volume details */ -}}
     {{- $bytesUsagePercentOfCapacity := percent (.usedBytes | float64) (.capacityBytes | float64) }}
-    {{- .usedBytes | humanizeSI "B" }}/{{ .capacityBytes | humanizeSI "B" }}({{- $bytesUsagePercentOfCapacity | colorPercent "%.0f%%" }}) used, {{ .availableBytes | humanizeSI "B" }} free, {{""}}
+    {{- .usedBytes | float64 | humanizeSI "B" }}/{{ .capacityBytes | float64 | humanizeSI "B" }}({{- $bytesUsagePercentOfCapacity | colorPercent "%.0f%%" }}) used, {{ .availableBytes | float64 | humanizeSI "B" }} free, {{""}}
     {{- $inodesUsagePercentOfCapacity := percent (.inodesUsed | float64) (.inodes | float64) }}
-    {{- .inodesUsed | humanizeSI "" }}/{{ .inodes | humanizeSI "" }}({{- $inodesUsagePercentOfCapacity | colorPercent "%.0f%%" }}) inodes used, {{ .inodesFree | humanizeSI "" }} free.
+    {{- .inodesUsed | float64 | humanizeSI "" }}/{{ .inodes | float64 | humanizeSI "" }}({{- $inodesUsagePercentOfCapacity | colorPercent "%.0f%%" }}) inodes used, {{ .inodesFree | float64 | humanizeSI "" }} free.
 {{- end }}
 
 {{- define "matching_services" }}
