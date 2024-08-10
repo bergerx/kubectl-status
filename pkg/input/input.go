@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
@@ -116,6 +117,70 @@ func (r *ResourceRepo) Objects(namespace string, args []string, labelSelector st
 	}
 	sort.Sort(unstructuredObjects)
 	return unstructuredObjects, err
+}
+
+func (r *ResourceRepo) Owners(obj Object) (out Objects, err error) {
+	uobj := obj.Unstructured()
+	namespace := uobj.GetNamespace()
+	owners := uobj.GetOwnerReferences()
+	if len(owners) == 0 {
+		klog.V(4).InfoS("KubeGetOwners Object has no owners", "r", r)
+		return nil, fmt.Errorf("Object has no owners: %s", obj)
+	}
+	for _, owner := range owners {
+		gv, err := schema.ParseGroupVersion(owner.APIVersion)
+		var kindVersionGroup string
+		if err != nil {
+			klog.V(3).InfoS("repo.Owners failed parsing apiVersion", "apiVersion", owner.APIVersion)
+			kindVersionGroup = owner.Kind
+			object, err := r.FirstObject(namespace, []string{kindVersionGroup}, owner.Name)
+			if err != nil {
+				klog.V(3).InfoS("repo.Owners failed to get owner using Kind", "apiVersion", owner.APIVersion)
+				continue
+			}
+			out = append(out, object)
+			continue
+		}
+		if gv.Group == "" && gv.Version != "v1" {
+			kindVersionGroup = fmt.Sprintf("%s.%s", owner.Kind, gv.Version)
+			klog.V(5).InfoS("repo.Owners", "kindVersionGroup", kindVersionGroup, "gv", gv)
+			ownerWithVersion, err := r.FirstObject(namespace, []string{kindVersionGroup, owner.Name}, "")
+			if err != nil {
+				klog.V(3).InfoS("repo.Owners failed to get owner using kind+version", "apiVersion", owner.APIVersion)
+				continue
+			}
+			if ownerWithVersion == nil {
+				// it's likely the ownerReference.apiVersion field doesn't have the group prefix, so we'll try without the version
+				ownerWithVersion, err = r.FirstObject(namespace, []string{owner.Kind, owner.Name}, "")
+				if err != nil {
+					klog.V(3).InfoS("repo.Owners failed to get owner using kind+version", "apiVersion", owner.APIVersion)
+					continue
+				}
+			}
+			out = append(out, ownerWithVersion)
+			continue
+		}
+		kindVersionGroup = fmt.Sprintf("%s.%s.%s", owner.Kind, gv.Version, gv.Group)
+		klog.V(5).InfoS("repo.Owners", "kindVersionGroup", kindVersionGroup)
+		object, err := r.FirstObject(namespace, []string{kindVersionGroup, owner.Name}, "")
+		if err != nil {
+			klog.V(3).InfoS("repo.Owners failed to get owner using kind+version+group", "apiVersion", owner.APIVersion)
+			continue
+		}
+		out = append(out, object)
+	}
+	return out, nil
+}
+
+func (r *ResourceRepo) FirstObject(namespace string, args []string, labelSelector string) (Object, error) {
+	objects, err := r.Objects(namespace, args, labelSelector)
+	if err != nil {
+		return nil, err
+	}
+	if len(objects) == 0 {
+		return nil, fmt.Errorf("no objects found in namespace %s for '%s'", namespace, strings.Join(args, " "))
+	}
+	return objects[0], err
 }
 
 func (r *ResourceRepo) ObjectEvents(u *unstructured.Unstructured) (*corev1.EventList, error) {

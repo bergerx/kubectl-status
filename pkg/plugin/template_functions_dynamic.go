@@ -31,15 +31,12 @@ func (r RenderableObject) KubeGet(namespace string, args ...string) (out []Rende
 	if err != nil {
 		klog.V(3).ErrorS(err, "ignoring resource error", "r", r, "namespace", namespace, "args", args)
 	}
-	return r.getCreationTimestampSortedRenderableObjects(objects)
+	return r.objectsToRenderableObjects(objects)
 }
 
-func (r RenderableObject) getCreationTimestampSortedRenderableObjects(objects input.Objects) []RenderableObject {
-	var out []RenderableObject
+func (r RenderableObject) objectsToRenderableObjects(objects input.Objects) (out []RenderableObject) {
 	for _, obj := range objects {
-		unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
-		nr := r.engine.newRenderableObject(unstructuredObj)
-		klog.V(5).InfoS("KubeGet matched object", "object", nr)
+		nr := r.engine.newRenderableObject(obj)
 		out = append(out, nr)
 	}
 	return out
@@ -47,28 +44,16 @@ func (r RenderableObject) getCreationTimestampSortedRenderableObjects(objects in
 
 // KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
 func (r RenderableObject) KubeGetFirst(namespace string, args ...string) RenderableObject {
-	return r.engine.KubeGetFirst(namespace, args...)
-}
-
-// KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
-func (e *renderEngine) KubeGetFirst(namespace string, args ...string) RenderableObject {
-	nr := e.newRenderableObject(nil)
+	nr := r.engine.newRenderableObject(nil)
 	if viper.GetBool("shallow") {
 		return nr
 	}
 	klog.V(5).InfoS("called template method KubeGetFirst",
 		"namespace", namespace, "args", args)
-	objects, err := e.repo.Objects(namespace, args, "")
+	var err error
+	nr.Object, err = r.engine.repo.FirstObject(namespace, args, "")
 	if err != nil {
-		klog.V(3).ErrorS(err, "getResourceQueryInfos failed",
-			"namespace", namespace, "args", args)
-		return nr
-	}
-	if len(objects) >= 1 {
-		first := objects[0]
-		nr.Object = first
-	} else {
-		klog.V(3).InfoS("KubeGetFirst returning empty",
+		klog.V(3).ErrorS(err, "KubeGetFirst failed",
 			"namespace", namespace, "args", args)
 	}
 	return nr
@@ -94,7 +79,7 @@ func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, lab
 			"r", r, "namespace", namespace, "labels", labels)
 		return
 	}
-	return r.getCreationTimestampSortedRenderableObjects(unstructuredObjects)
+	return r.objectsToRenderableObjects(unstructuredObjects)
 }
 
 func (r RenderableObject) KubeGetEvents() RenderableObject {
@@ -109,37 +94,8 @@ func (r RenderableObject) KubeGetEvents() RenderableObject {
 		return nr
 	}
 	unstructuredEvents, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&eventList)
-	nr.Object = unstructuredEvents
+	nr.Object = unstructuredEvents // TODO: convert input.Events to return Objects
 	return nr
-}
-
-// KubeGetResourcesOwnedOf is meant to be called from templates.
-// It returns a RenderableObject list for all resources which have provided kind or resource type with the current
-// object listed in the ownerReferences.
-func (r RenderableObject) KubeGetResourcesOwnedOf(resourceOrKind string) (out []RenderableObject) {
-	if viper.GetBool("shallow") {
-		return
-	}
-	klog.V(5).InfoS("called template method KubeGetResourcesOwnedOf", "r", r)
-	objects, err := r.engine.repo.Objects(r.GetNamespace(), []string{resourceOrKind}, "")
-	if err != nil {
-		klog.V(2).InfoS("failed to get objects", "r", r, "resourceOrKind", resourceOrKind)
-	}
-	for _, object := range objects {
-		if doesOwnerMatch(r.Unstructured.Object, object) {
-			out = append(out, r.engine.newRenderableObject(object))
-		}
-	}
-	return
-}
-
-func doesOwnerMatch(owner, owned input.Object) bool {
-	for _, ownerReference := range owner.Unstructured().GetOwnerReferences() {
-		if ownerReference.UID == owned.Unstructured().GetUID() {
-			return true
-		}
-	}
-	return false
 }
 
 // KubeGetOwners returns the list of objects which are listed in the Owner references of an object.
@@ -148,34 +104,11 @@ func (r RenderableObject) KubeGetOwners() (out []RenderableObject) {
 		return
 	}
 	klog.V(5).InfoS("KubeGetOwners called KubeGetOwners", "r", r)
-	owners := r.GetOwnerReferences()
-	if len(owners) == 0 {
-		klog.V(4).InfoS("KubeGetOwners Object has no owners", "r", r)
-		return
+	owners, err := r.engine.repo.Owners(r.Object)
+	if err != nil {
+		klog.V(3).ErrorS(err, "error getting owners", "r", r)
 	}
-	for _, owner := range owners {
-		gv, err := schema.ParseGroupVersion(owner.APIVersion)
-		var kindVersionGroup string
-		if err != nil {
-			klog.V(3).InfoS("KubeGetOwners failed parsing apiVersion", "apiVersion", owner.APIVersion)
-			kindVersionGroup = owner.Kind
-			out = append(out, r.KubeGetFirst(r.Namespace(), kindVersionGroup, owner.Name))
-		} else if gv.Group == "" && gv.Version != "v1" {
-			kindVersionGroup = fmt.Sprintf("%s.%s", owner.Kind, gv.Version)
-			klog.V(5).InfoS("KubeGetOwners", "kindVersionGroup", kindVersionGroup, "gv", gv)
-			ownerWithVersion := r.KubeGetFirst(r.Namespace(), kindVersionGroup, owner.Name)
-			if ownerWithVersion.Object == nil {
-				// its likely the ownerReference.apiVersion field doesn't have the group prefix, so we'll try without the version
-				ownerWithVersion = r.KubeGetFirst(r.Namespace(), owner.Kind, owner.Name)
-			}
-			out = append(out, ownerWithVersion)
-		} else {
-			kindVersionGroup = fmt.Sprintf("%s.%s.%s", owner.Kind, gv.Version, gv.Group)
-			klog.V(5).InfoS("KubeGetOwners", "kindVersionGroup", kindVersionGroup)
-			out = append(out, r.KubeGetFirst(r.Namespace(), kindVersionGroup, owner.Name))
-		}
-	}
-	return out
+	return r.objectsToRenderableObjects(owners)
 }
 
 func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName string) (out []RenderableObject) {
@@ -237,6 +170,7 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 	}
 	return out
 }
+
 func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) (out []RenderableObject) {
 	out = make([]RenderableObject, 0)
 	if viper.GetBool("shallow") {
@@ -310,26 +244,13 @@ func (r RenderableObject) KubeGetNonTerminatedPodsOnNode(nodeName string) (podLi
 		return
 	}
 	klog.V(5).InfoS("called KubeGetNonTerminatedPodsOnNode", "r", r, "node", nodeName)
-	podList, err := r.kubeGetNonTerminatedPodsOnTheNode(nodeName)
-	if err != nil {
-		klog.V(3).ErrorS(err, "kubeGetNonTerminatedPodsOnTheNode failed",
-			"r", r, "nodeName", nodeName)
-	}
-	return
-}
-
-func (r RenderableObject) kubeGetNonTerminatedPodsOnTheNode(nodeName string) (podList []RenderableObject, err error) {
 	pods, err := r.engine.repo.NonTerminatedPodsOnTheNode(nodeName)
 	if err != nil {
 		klog.V(3).ErrorS(err, "Failed getting non-terminated Pods for Node",
 			"r", r, "nodeName", nodeName)
 		return
 	}
-	for _, pod := range pods {
-		nr := r.engine.newRenderableObject(pod)
-		podList = append(podList, nr)
-	}
-	return podList, nil
+	return r.objectsToRenderableObjects(pods)
 }
 
 // KubeGetUnifiedDiffString generates a unified diff between given 2 resources and ignores several keys which are
