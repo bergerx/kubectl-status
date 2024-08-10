@@ -13,6 +13,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/go-sprout/sprout"
 	"github.com/spf13/cast"
+	"github.com/spf13/viper"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
 )
@@ -60,7 +61,15 @@ func funcMap() template.FuncMap {
 		"addFloat64":               addFloat64,
 		"subFloat64":               subFloat64,
 		"divFloat64":               divFloat64,
+		"ip":                       ip,
 	}
+}
+
+func ip(ip string) string {
+	if viper.GetBool("test-hack") {
+		return "1.1.1.1"
+	}
+	return ip
 }
 
 func addFloat64(i ...interface{}) float64 {

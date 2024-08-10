@@ -141,7 +141,7 @@ func (r RenderableObject) renderTemplate(templateName string, data interface{}) 
 
 func (r RenderableObject) executeTemplate(wr io.Writer, name string, data any) error {
 	target, ok := data.(RenderableObject)
-	if ok && target.Kind() == name && renderedUIDs.checkAdd(target.GetUID()) && !viper.GetBool("watching") && !viper.GetBool("test") {
+	if ok && target.Kind() == name && renderedUIDs.checkAdd(target.GetUID()) && !viper.GetBool("watching") && !viper.GetBool("test-hack") {
 		klog.V(3).InfoS("skip rendering of the RenderableObject as its already rendered",
 			"r", r, "templateName", name)
 		_, _ = color.New(color.FgWhite).Fprintf(wr, "%s is already printed", target.String())

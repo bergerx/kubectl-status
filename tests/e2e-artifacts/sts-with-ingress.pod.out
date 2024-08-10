@@ -1,0 +1,22 @@
+
+Pod/sts-with-ingress-0 -n default, created 1m ago by StatefulSet/sts-with-ingress Running BestEffort
+  Current: Pod is Ready
+  Managed by sts-with-ingress application
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Containers:
+    sts-with-ingress (registry.k8s.io/pause:3.9) Running for 1m and Ready
+  Known/recorded manage events:
+    1m ago Updated by kube-controller-manager (metadata, spec)
+    1m ago Updated by kubelet (status)
+  Services matching this pod:
+    Service/sts-with-ingress -n default, created 1m ago, last endpoint change was 1m ago
+      Current: Service is ready
+      Ready: Pod/sts-with-ingress-0 -n default on Node/minikube, 1.1.1.1:80/TCP
+      Known/recorded manage events:
+        1m ago Updated by kubectl-client-side-apply (metadata, spec)
+      Ingresses matching this Service:
+        Ingress/sts-with-ingress -n default, created 1m ago, gen:1
+          Current: Resource is current
+          Service/sts-with-ingress:80 has 1 endpoints.
+          Known/recorded manage events:
+            1m ago Updated by kubectl-client-side-apply (metadata, spec)

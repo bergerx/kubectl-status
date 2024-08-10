@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -19,9 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-	"k8s.io/kubectl/pkg/cmd/events"
 	"k8s.io/kubectl/pkg/polymorphichelpers"
 
 	"github.com/bergerx/kubectl-status/pkg/input"
@@ -108,13 +105,11 @@ func (r RenderableObject) KubeGetEvents() RenderableObject {
 		return nr
 	}
 	klog.V(5).InfoS("called KubeGetEvents", "r", r)
-	clientSet, _ := r.engine.repo.KubernetesClientSet()
-	eventList, err := clientSet.CoreV1().Events(r.GetNamespace()).Search(scheme.Scheme, &r)
+	eventList, err := r.engine.repo.ObjectEvents(&r.Unstructured)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error getting events", "r", r)
 		return nr
 	}
-	sort.Sort(events.SortableEvents(eventList.Items))
 	unstructuredEvents, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&eventList)
 	nr.Object = unstructuredEvents
 	return nr
@@ -191,9 +186,7 @@ func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName str
 	}
 	klog.V(5).InfoS("called KubeGetIngressesMatchingService",
 		"r", r, "namespace", namespace, "svcName", svcName)
-	clientSet, _ := r.engine.repo.KubernetesClientSet()
-	// The old v1beta1 Ingress which will no longer served as of v1.22. Not implementing it.
-	ingresses, err := clientSet.NetworkingV1().Ingresses(namespace).List(context.TODO(), metav1.ListOptions{})
+	ingresses, err := r.engine.repo.Ingresses(namespace)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing ingresses", "r", r, "namespace", namespace)
 		return

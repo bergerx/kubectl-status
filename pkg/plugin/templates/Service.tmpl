@@ -60,7 +60,7 @@
            * address: either Endpoints.subsets.addresses[N] or Endpoints.subsets.notReadyAddresses
            * ports: Endpoints.subsets.ports
         */ -}}
-    {{- $ip := .address.ip }}
+    {{- $ip := .address.ip | ip }}
     {{- $hasTargetRef := not (not .address.targetRef) }}
     {{- if .address.targetRef }}
         {{- .address.targetRef.kind | bold }}/{{ .address.targetRef.name }}

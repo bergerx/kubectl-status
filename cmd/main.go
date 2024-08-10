@@ -81,14 +81,17 @@ func RootCmd() *cobra.Command {
 		Long:    longCmdMessage,
 		Example: examplesMessage,
 		PreRun: func(cmd *cobra.Command, args []string) {
-			_ = viper.BindPFlags(cmd.Flags())
+			viper.AutomaticEnv()
+			err := viper.BindPFlags(cmd.Flags())
+			if err != nil {
+				cmd.PrintErr("error binding flags", err)
+			}
 		},
 		SilenceUsage: true,
 		Version:      version,
 	}
 	initColorCobra(cmd)
 	configFlags := initFlags(cmd)
-	cobra.OnInitialize(viper.AutomaticEnv)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	f := cmdutil.NewFactory(configFlags)
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
@@ -99,7 +102,8 @@ func RootCmd() *cobra.Command {
 		})
 		cmdutil.CheckErr(complete(f))
 		cmdutil.CheckErr(validate())
-		if b, _ := cmd.Flags().GetBool("time-hack-ago"); b {
+		if b, _ := cmd.Flags().GetBool("test-hack"); b {
+			viper.Set("test-hack", true)
 			plugin.SetDurationRound(func(_ interface{}) string { return "1m" })
 		}
 		ioStreams := genericiooptions.IOStreams{In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), ErrOut: cmd.ErrOrStderr()}
@@ -151,7 +155,7 @@ func hideNoisyFlags(flags *pflag.FlagSet) {
 		"certificate-authority", "client-certificate", "client-key", "cluster", "context", "insecure-skip-tls-verify",
 		"kubeconfig", "log_backtrace_at", "log_dir", "log_file", "log_file_max_size", "logtostderr", "one_output",
 		"password", "request-timeout", "server", "skip_headers", "skip_log_headers", "stderrthreshold",
-		"tls-server-name", "token", "user", "username", "vmodule", "time-hack-ago"}
+		"tls-server-name", "token", "user", "username", "vmodule", "test-hack"}
 	for _, flagName := range flagsToHide {
 		flags.Lookup(flagName).Hidden = true
 	}
@@ -201,8 +205,8 @@ func addRenderFlags(flags *pflag.FlagSet) {
 		"Show all available flags.")
 	flags.String("color", "auto",
 		"One of 'auto', 'never' or 'always'.")
-	flags.Bool("time-hack-ago", false,
-		"always report 1m for any time duration")
+	flags.Bool("test-hack", false,
+		"helper flag for tests, e.g. always report 1m for any time duration, 1.1.1.1 for IPs, etc.")
 }
 
 func isBoolConfigExplicitlySetToTrue(key string) bool {

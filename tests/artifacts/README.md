@@ -11,7 +11,7 @@ cd ../..
 for yaml in ./tests/artifacts/*.yaml; do
   out=$(echo ${yaml} | sed 's/.yaml/.out/')
   echo "${yaml} --> ${out}"
-  go run ./cmd --time-hack-ago -f ${yaml} --local --shallow > ${out}
+  go run ./cmd --test-hack -f ${yaml} --local --shallow > ${out}
 done
 ```
 
@@ -25,7 +25,7 @@ file=""  # filename for the new artifact file to be stored, e.g. node-and-servic
 
 cd ../..
 kubectl get -o yaml ${cmd} > tests/artifacts/${file}.yaml
-go run ./cmd --time-hack-ago ${cmd} --shallow > tests/artifacts/${file}.out
+go run ./cmd --test-hack ${cmd} --shallow > tests/artifacts/${file}.out
 make test
 git add tests/artifacts/${file}.yaml tests/artifacts/${file}.out
 ```

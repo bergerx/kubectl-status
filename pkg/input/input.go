@@ -6,6 +6,8 @@ import (
 	"sort"
 
 	"github.com/spf13/viper"
+	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -14,6 +16,9 @@ import (
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
+	"k8s.io/kubectl/pkg/cmd/events"
 	"k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -108,8 +113,15 @@ func (r *ResourceRepo) Objects(namespace string, args []string, labelSelector st
 	return unstructuredObjects, err
 }
 
-func (r *ResourceRepo) toRESTMapper() (meta.RESTMapper, error) {
-	return r.f.ToRESTMapper()
+func (r *ResourceRepo) ObjectEvents(u *unstructured.Unstructured) (*corev1.EventList, error) {
+	clientSet, _ := r.KubernetesClientSet()
+	eventList, err := clientSet.CoreV1().Events(u.GetNamespace()).Search(scheme.Scheme, u)
+	if err != nil {
+		klog.V(3).ErrorS(err, "error getting events", "r", r)
+		return nil, err
+	}
+	sort.Sort(events.SortableEvents(eventList.Items))
+	return eventList, nil
 }
 
 func (r *ResourceRepo) KubernetesClientSet() (*kubernetes.Clientset, error) {
@@ -175,7 +187,7 @@ func (r *ResourceRepo) GVRFor(resourceOrKindArg string) (schema.GroupVersionReso
 func (r *ResourceRepo) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, error) {
 	fullySpecifiedGVR, groupResource := schema.ParseResourceArg(resourceOrKindArg)
 	gvk := schema.GroupVersionKind{}
-	restMapper, err := r.toRESTMapper()
+	restMapper, err := r.f.ToRESTMapper()
 	if err != nil {
 		return nil, err
 	}
@@ -216,4 +228,9 @@ func (r *ResourceRepo) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, 
 	}
 
 	return mapping, nil
+}
+
+func (r *ResourceRepo) Ingresses(namespace string) (*netv1.IngressList, error) {
+	clientSet, _ := r.KubernetesClientSet()
+	return clientSet.NetworkingV1().Ingresses(namespace).List(context.TODO(), metav1.ListOptions{})
 }
