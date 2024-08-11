@@ -54,17 +54,26 @@ func (u Objects) Swap(i, j int) {
 	u[i], u[j] = u[j], u[i]
 }
 
-func NewResourceRepo(factory util.Factory) *ResourceRepo {
-	return &ResourceRepo{
-		f: factory,
+func NewResourceRepo(factory util.Factory) (*ResourceRepo, error) {
+	dynamicClient, err := factory.DynamicClient()
+	if err != nil {
+		return nil, err
 	}
+	kubernetesClientSet, err := factory.KubernetesClientSet()
+	if err != nil {
+		return nil, err
+	}
+	return &ResourceRepo{
+		f:                   factory,
+		dynamicClient:       dynamicClient,
+		kubernetesClientSet: kubernetesClientSet,
+	}, nil
 }
 
 type ResourceRepo struct {
-	f util.Factory
-
-	client    dynamic.Interface
-	clientSet *kubernetes.Clientset
+	f                   util.Factory
+	dynamicClient       dynamic.Interface
+	kubernetesClientSet *kubernetes.Clientset
 }
 
 func (r *ResourceRepo) newBaseBuilder() *resource.Builder {
@@ -184,12 +193,7 @@ func (r *ResourceRepo) FirstObject(namespace string, args []string, labelSelecto
 }
 
 func (r *ResourceRepo) ObjectEvents(u *unstructured.Unstructured) (*corev1.EventList, error) {
-	clientSet, err := r.kubernetesClientSet()
-	if err != nil {
-		klog.V(3).ErrorS(err, "error getting events", "r", r)
-		return nil, err
-	}
-	eventList, err := clientSet.CoreV1().Events(u.GetNamespace()).Search(scheme.Scheme, u)
+	eventList, err := r.kubernetesClientSet.CoreV1().Events(u.GetNamespace()).Search(scheme.Scheme, u)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error getting events", "r", r)
 		return nil, err
@@ -198,34 +202,8 @@ func (r *ResourceRepo) ObjectEvents(u *unstructured.Unstructured) (*corev1.Event
 	return eventList, nil
 }
 
-func (r *ResourceRepo) kubernetesClientSet() (*kubernetes.Clientset, error) {
-	if r.clientSet == nil {
-		var err error
-		r.clientSet, err = r.f.KubernetesClientSet()
-		if err != nil {
-			return nil, err
-		}
-	}
-	return r.clientSet, nil
-}
-
-func (r *ResourceRepo) dynamicClient() (dynamic.Interface, error) {
-	if r.client == nil {
-		var err error
-		r.client, err = r.f.DynamicClient()
-		if err != nil {
-			return nil, err
-		}
-	}
-	return r.client, nil
-}
-
 func (r *ResourceRepo) DynamicObject(gvr schema.GroupVersionResource, namespace string, name string) (Object, error) {
-	dynamicClient, err := r.dynamicClient()
-	if err != nil {
-		return nil, err
-	}
-	u, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	u, err := r.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -237,11 +215,7 @@ func (r *ResourceRepo) DynamicObject(gvr schema.GroupVersionResource, namespace 
 }
 
 func (r *ResourceRepo) DynamicObjects(gvr schema.GroupVersionResource, namespace string) (Objects, error) {
-	dynamicClient, err := r.dynamicClient()
-	if err != nil {
-		return nil, err
-	}
-	unstructuredList, err := dynamicClient.Resource(gvr).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+	unstructuredList, err := r.dynamicClient.Resource(gvr).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -312,46 +286,26 @@ func (r *ResourceRepo) mappingFor(resourceOrKindArg string) (*meta.RESTMapping, 
 }
 
 func (r *ResourceRepo) Ingresses(namespace string) (*netv1.IngressList, error) {
-	clientSet, err := r.kubernetesClientSet()
-	if err != nil {
-		return nil, err
-	}
-	return clientSet.NetworkingV1().Ingresses(namespace).List(context.TODO(), metav1.ListOptions{})
+	return r.kubernetesClientSet.NetworkingV1().Ingresses(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 func (r *ResourceRepo) Services(namespace string) (*corev1.ServiceList, error) {
-	clientSet, err := r.kubernetesClientSet()
-	if err != nil {
-		return nil, err
-	}
-	return clientSet.CoreV1().Services(namespace).List(context.TODO(), metav1.ListOptions{})
+	return r.kubernetesClientSet.CoreV1().Services(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 func (r *ResourceRepo) Service(namespace, name string) (*corev1.Service, error) {
-	clientSet, err := r.kubernetesClientSet()
-	if err != nil {
-		return nil, err
-	}
-	return clientSet.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	return r.kubernetesClientSet.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 func (r *ResourceRepo) Endpoints(namespace string) (*corev1.EndpointsList, error) {
-	clientSet, err := r.kubernetesClientSet()
-	if err != nil {
-		return nil, err
-	}
-	return clientSet.CoreV1().Endpoints(namespace).List(context.TODO(), metav1.ListOptions{})
+	return r.kubernetesClientSet.CoreV1().Endpoints(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // KubeGetNodeStatsSummary returns this structure
 // > kubectl get --raw /api/v1/nodes/{nodeName}/proxy/stats/summary
 // The endpoint that this function uses will be disabled soon: https://github.com/kubernetes/kubernetes/issues/68522
 func (r *ResourceRepo) KubeGetNodeStatsSummary(nodeName string) (Object, error) {
-	clientSet, err := r.kubernetesClientSet()
-	if err != nil {
-		return nil, err
-	}
-	getBytes, err := clientSet.CoreV1().RESTClient().Get().
+	getBytes, err := r.kubernetesClientSet.CoreV1().RESTClient().Get().
 		Resource("nodes").
 		SubResource("proxy").
 		Name(nodeName).
@@ -366,7 +320,6 @@ func (r *ResourceRepo) KubeGetNodeStatsSummary(nodeName string) (Object, error) 
 }
 
 func (r *ResourceRepo) NonTerminatedPodsOnTheNode(nodeName string) (Objects, error) {
-	clientSet, _ := r.kubernetesClientSet()
 	fieldSelector, err := fields.ParseSelector("spec.nodeName=" + nodeName +
 		",status.phase!=" + string(corev1.PodSucceeded) +
 		",status.phase!=" + string(corev1.PodFailed))
@@ -375,7 +328,7 @@ func (r *ResourceRepo) NonTerminatedPodsOnTheNode(nodeName string) (Objects, err
 			"r", r, "nodeName", nodeName)
 		return nil, err
 	}
-	nodeNonTerminatedPodsList, err := clientSet.CoreV1().
+	nodeNonTerminatedPodsList, err := r.kubernetesClientSet.CoreV1().
 		Pods(""). // Search in all namespaces
 		List(context.TODO(), metav1.ListOptions{FieldSelector: fieldSelector.String()})
 	if err != nil {

@@ -36,7 +36,11 @@ func Run(f util.Factory, streams genericiooptions.IOStreams, args []string) erro
 	} else if viper.Get("color") == "never" {
 		color.NoColor = true
 	}
-	repo := input.NewResourceRepo(f)
+	repo, err := input.NewResourceRepo(f)
+	if err != nil {
+		klog.V(2).ErrorS(err, "Error creating repo")
+		return err
+	}
 	engine, err := newRenderEngine(streams)
 	if err != nil {
 		klog.V(2).ErrorS(err, "Error creating engine")

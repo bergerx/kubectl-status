@@ -4,16 +4,21 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
-	"k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/client-go/rest/fake"
+	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 
 	"github.com/bergerx/kubectl-status/pkg/input"
 )
 
 func checkTemplate(t *testing.T, templateName string, obj map[string]interface{}, shouldContain string, useRenderable bool) {
+	t.Helper()
 	tmpl, _ := getTemplate()
-	repo := input.NewResourceRepo(util.NewFactory(genericclioptions.NewTestConfigFlags()))
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	t.Cleanup(func() { f.Cleanup() })
+	repo, _ := input.NewResourceRepo(f)
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard())
 	e.Template = *tmpl
 	r := newRenderableObject(obj, e, repo)
@@ -118,6 +123,7 @@ func TestSuspendTemplate(t *testing.T) {
 		})
 	}
 }
+
 func TestOwnersTemplate(t *testing.T) {
 	tests := []struct {
 		name string
