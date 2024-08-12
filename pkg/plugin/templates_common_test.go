@@ -87,6 +87,7 @@ func TestObservedGenerationSummaryTemplate(t *testing.T) {
 		})
 	}
 }
+
 func TestSuspendTemplate(t *testing.T) {
 	tests := []struct {
 		name string

@@ -38,6 +38,7 @@ type cmdTest struct {
 func nodeNameModifier(stdout string) string {
 	return string(regexp.MustCompile(`Node/[a-z0-9-]+`).ReplaceAll([]byte(stdout), []byte(`Node/minikube`)))
 }
+
 func (c cmdTest) assert(t *testing.T, stdoutModifier func(string) string) {
 	t.Helper()
 	t.Logf("running cmdTest assert: %s", c)
@@ -188,7 +189,6 @@ func viperTestHack(t *testing.T) {
 	t.Cleanup(func() {
 		viper.Reset()
 	})
-
 }
 
 func TestAllArtifactsLocal(t *testing.T) {
@@ -246,6 +246,7 @@ func startMinikube(t *testing.T) {
 		}
 	})
 }
+
 func e2eMinikubeTest(t *testing.T) {
 	t.Helper()
 	if os.Getenv("RUN_E2E_TESTS") != "true" {

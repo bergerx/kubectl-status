@@ -151,11 +151,13 @@ func initColorCobra(cmd *cobra.Command) {
 }
 
 func hideNoisyFlags(flags *pflag.FlagSet) {
-	flagsToHide := []string{"add_dir_header", "as-uid", "alsologtostderr", "as", "as-group", "cache-dir",
+	flagsToHide := []string{
+		"add_dir_header", "as-uid", "alsologtostderr", "as", "as-group", "cache-dir",
 		"certificate-authority", "client-certificate", "client-key", "cluster", "context", "insecure-skip-tls-verify",
 		"kubeconfig", "log_backtrace_at", "log_dir", "log_file", "log_file_max_size", "logtostderr", "one_output",
 		"password", "request-timeout", "server", "skip_headers", "skip_log_headers", "stderrthreshold",
-		"tls-server-name", "token", "user", "username", "vmodule", "test-hack"}
+		"tls-server-name", "token", "user", "username", "vmodule", "test-hack",
+	}
 	for _, flagName := range flagsToHide {
 		flags.Lookup(flagName).Hidden = true
 	}
