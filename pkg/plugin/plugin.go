@@ -21,9 +21,6 @@ import (
 	"github.com/bergerx/kubectl-status/pkg/input"
 )
 
-//go:linkname signame runtime.signame
-func signame(sig uint32) string
-
 func errorPrintf(wr io.Writer, format string, a ...interface{}) {
 	_, _ = color.New(color.BgRed, color.FgHiWhite).Printf(format, a...)
 	_, _ = fmt.Fprintln(wr)

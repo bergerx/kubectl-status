@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 	"text/template"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/go-sprout/sprout"
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
+	"golang.org/x/sys/unix"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
 )
@@ -281,7 +283,7 @@ func isStatusConditionHealthy(condition map[string]interface{}) bool {
 }
 
 func signalName(signal int64) string {
-	return signame(uint32(signal))
+	return unix.SignalName(syscall.Signal(signal))
 }
 
 func redIf(cond interface{}, str string) string {

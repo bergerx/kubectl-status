@@ -5,5 +5,5 @@ Pod/prometheus-operator-5c5784bc5f-4h65z -n prometheus, created 1m ago by Replic
     Ready PodFailed for 1m
     ContainersReady PodFailed for 1m
   Containers:
-    kube-prometheus-stack (quay.io/prometheus-operator/prometheus-operator:v0.58.0) Terminated as ContainerStatusUnknown with "The container could not be located when the pod was terminated" exit with 137 (SIGKILL: kill), restarted 1 times
-      previously: Terminated as ContainerStatusUnknown with "The container could not be located when the pod was deleted.  The container used to be Running" exit with 137 (SIGKILL: kill)
+    kube-prometheus-stack (quay.io/prometheus-operator/prometheus-operator:v0.58.0) Terminated as ContainerStatusUnknown with "The container could not be located when the pod was terminated" exit with 137 (SIGKILL), restarted 1 times
+      previously: Terminated as ContainerStatusUnknown with "The container could not be located when the pod was deleted.  The container used to be Running" exit with 137 (SIGKILL)

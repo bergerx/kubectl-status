@@ -28,7 +28,7 @@ vet:
 
 .PHONY: staticcheck
 staticcheck:
-	go run honnef.co/go/tools/cmd/staticcheck@v0.4.7 ./...
+	go run honnef.co/go/tools/cmd/staticcheck@v0.5.1 ./...
 
 .PHONY: clean
 clean:
