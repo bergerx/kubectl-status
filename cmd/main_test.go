@@ -89,7 +89,7 @@ func TestRootCmdWithoutACluster(t *testing.T) {
 		{
 			name:        "pods against a non-configured client should print an error",
 			args:        []string{"pods"},
-			stderrRegex: `The connection to the server localhost:8080 was refused`,
+			stderrRegex: `the server rejected our request for an unknown reason`,
 		},
 		{
 			name:        "missing file should fail",
@@ -99,7 +99,7 @@ func TestRootCmdWithoutACluster(t *testing.T) {
 		{
 			name:        "file without local should fail",
 			args:        []string{"-f", "../tests/artifacts/deployment-healthy.yaml"},
-			stderrRegex: `dial tcp \[::1\]:8080: connect: connection refused\n$`,
+			stderrRegex: `the server rejected our request for an unknown reason\n$`,
 		},
 		{
 			name:        "file with local should succeed",
