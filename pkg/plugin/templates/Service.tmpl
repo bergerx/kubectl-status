@@ -9,7 +9,7 @@
     {{- $endpoint := .KubeGetFirst .Namespace "Endpoints" .Name }}
     {{- if $endpoint.Object }}
         {{- if hasKey $endpoint.Annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
-            , last endpoint change was {{ index $endpoint.Annotations "endpoints.kubernetes.io/last-change-trigger-time"  | colorAgo }} ago
+            , last endpoint change was {{ index $endpoint.Annotations "endpoints.kubernetes.io/last-change-trigger-time"  | colorAgo }}{{ agoSuffix }}
         {{- end}}
     {{- end}}
     {{- template "kstatus_summary" . }}

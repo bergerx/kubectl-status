@@ -50,7 +50,7 @@
                 {{- template "rollout_diffs_flag_help" $ }}
                 {{- $sectionHeader = true }}
             {{- end }}
-            {{- with .Metadata.creationTimestamp }}{{ . | colorAgo | nindent 4 }} ago{{ end }}, managed by {{ .Kind | bold }}/{{ .Name }}
+            {{- with .Metadata.creationTimestamp }}{{ . | colorAgo | nindent 4 }}{{ agoSuffix }}{{ end }}, managed by {{ .Kind | bold }}/{{ .Name }}
             {{- $replicationSetRevision := index .Annotations "deployment.kubernetes.io/revision" }}
             {{- $activeReplicaSet := eq $deploymentRevision $replicationSetRevision }}
             {{- if .Status.replicas }}, has {{ .Status.replicas }} replicas

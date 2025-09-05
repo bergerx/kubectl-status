@@ -216,14 +216,14 @@
         {{- "Waiting" | red | bold }} {{ .reason | red | bold }}{{ with .message }}: {{ . | red | bold }}{{ end }}
     {{- end }}
     {{- with .running }}
-        {{- "Running" | green }} for {{ .startedAt | colorAgo }}
+        {{- "Running" | green }} {{ forOrSince }} {{ .startedAt | colorAgo }}
     {{- end }}
     {{- with .terminated }}
         {{- if .startedAt }}
             {{- $started := .startedAt | toDate "2006-01-02T15:04:05Z" -}}
             {{- $finished := .finishedAt | toDate "2006-01-02T15:04:05Z" -}}
             {{- $ranfor := $finished.Sub $started -}}
-            Started {{ .startedAt | colorAgo }} ago and {{ if .reason }}{{ .reason | colorKeyword }}{{ else }}terminated{{ end }} after {{ $ranfor | colorDuration }}
+            Started {{ .startedAt | colorAgo }}{{ agoSuffix }} and {{ if .reason }}{{ .reason | colorKeyword }}{{ else }}terminated{{ end }} after {{ $ranfor | colorDuration }}
             {{- if .exitCode }} with {{ "exit code" | redIf (ne (.exitCode | toString) "0") }} {{ template "exit_code_summary" . }}{{ end }}
         {{- else -}}
             {{ "Terminated" | red }}

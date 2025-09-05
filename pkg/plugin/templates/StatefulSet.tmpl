@@ -61,7 +61,7 @@
                 {{- $sectionHeader = true }}
             {{- end }}
             {{- "" | nindent 4 }}
-            {{- with .Metadata.creationTimestamp }}{{ . | colorAgo }} ago{{ end }} used {{ .Kind | bold }}/{{ .Name }}.
+            {{- with .Metadata.creationTimestamp }}{{ . | colorAgo }}{{ agoSuffix }}{{ end }} used {{ .Kind | bold }}/{{ .Name }}.
             {{- if and $previousRevision ($.Config.GetBool "include-rollout-diffs") }}
                 {{- with $.KubeGetUnifiedDiffString "ControllerRevision" $.Namespace $previousRevision.Name .Name }}
                     {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 6 }}

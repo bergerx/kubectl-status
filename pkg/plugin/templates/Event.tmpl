@@ -14,7 +14,7 @@
         {{- with .fieldPath }}[{{ . }}]{{ end }}
         {{- with .namespace }} (in {{ . }}){{ end }}
     {{- end }}
-    {{- with .lastTimestamp }} {{ . | colorAgo }} ago{{ end }}
+    {{- with .lastTimestamp }} {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if gt (.count | int) 1 -}}
         {{- if .firstTimestamp }} (x{{ .count }} over {{ .firstTimestamp | colorAgo }})
         {{- else }} (x{{ .count }})

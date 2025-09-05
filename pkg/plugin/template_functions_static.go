@@ -64,6 +64,9 @@ func funcMap() template.FuncMap {
 		"subFloat64":               subFloat64,
 		"divFloat64":               divFloat64,
 		"ip":                       ip,
+		"agoSuffix":                agoSuffix,
+		"forOrSince":               forOrSince,
+		"relativeTime":             relativeTime,
 	}
 }
 
@@ -348,6 +351,9 @@ func colorKeyword(phase string) string {
 
 func colorAgo(kubeDate string) string {
 	t, _ := time.ParseInLocation("2006-01-02T15:04:05Z", kubeDate, time.UTC)
+	if viper.GetBool("absolute-time") {
+		return t.Format("2006-01-02T15:04:05Z")
+	}
 	duration := time.Since(t).Round(time.Second)
 	return colorDuration(duration)
 }
@@ -369,6 +375,29 @@ func colorDuration(duration time.Duration) string {
 		return color.MagentaString(str)
 	}
 	return str
+}
+
+func agoSuffix() string {
+	if viper.GetBool("absolute-time") {
+		return ""
+	}
+	return " ago"
+}
+
+func forOrSince() string {
+	if viper.GetBool("absolute-time") {
+		return "since"
+	}
+	return "for"
+}
+
+func relativeTime(kubeDate string) string {
+	if viper.GetBool("absolute-time") {
+		return ""
+	}
+	t, _ := time.ParseInLocation("2006-01-02T15:04:05Z", kubeDate, time.UTC)
+	duration := time.Since(t).Round(time.Second)
+	return fmt.Sprintf(" (%s ago)", colorDuration(duration))
 }
 
 func (r RenderableObject) Include(templateName string, data interface{}) (string, error) {

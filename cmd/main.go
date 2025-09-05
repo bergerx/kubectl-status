@@ -207,6 +207,8 @@ func addRenderFlags(flags *pflag.FlagSet) {
 		"Show all available flags.")
 	flags.String("color", "auto",
 		"One of 'auto', 'never' or 'always'.")
+	flags.Bool("absolute-time", false,
+		"Show absolute timestamps instead of relative durations.")
 	flags.Bool("test-hack", false,
 		"helper flag for tests, e.g. always report 1m for any time duration, 1.1.1.1 for IPs, etc.")
 }
