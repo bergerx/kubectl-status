@@ -1,7 +1,7 @@
 {{- define "CronJob" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "status_summary_line" . }}
-    {{- if .Status.lastScheduleTime }}, last ran at {{ .Status.lastScheduleTime }} ({{ .Status.lastScheduleTime | colorAgo }} ago)
+    {{- if .Status.lastScheduleTime }}, last ran at {{ .Status.lastScheduleTime }}{{ relativeTime .Status.lastScheduleTime }}
     {{- else }}
         {{- "Not yet scheduled" | yellow | bold | nindent 2 }}
     {{- end }}

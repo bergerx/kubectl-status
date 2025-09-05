@@ -4,8 +4,8 @@
     {{- template "application_details" . }}
     {{- template "owners" . }}
     {{- "Lease" | bold | nindent 2 }}
-    {{- with .Spec.acquireTime }} acquired {{ . | colorAgo }} ago{{ end }}
-    {{- with .Spec.renewTime }} renewed {{ . | colorAgo }} ago{{ end }}
+    {{- with .Spec.acquireTime }} acquired {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with .Spec.renewTime }} renewed {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with .Spec.leaseDurationSeconds }} being hold for {{ . | duration }}{{ end }}
     {{- with .Spec.holderIdentity }} by {{ . | bold }}{{ end }}
     {{- with .Spec.leaseTransitions }}{{ if gt . 0 }}{{ printf "Transitioned %d times" . | yellow | nindent 4 }}{{ end }}{{ end }}

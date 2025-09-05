@@ -27,7 +27,7 @@
             {{- "Known/recorded manage events:" | nindent 2 }}
             {{- range . }}
                 {{- ""  | nindent 4 }}
-                {{- with .time }}{{ . | colorAgo }} ago {{ end }}
+                {{- with .time }}{{ . | colorAgo }}{{ agoSuffix }} {{ end }}
                 {{- .operation | bold }}d by {{ .manager | bold }} ({{ .fieldsV1 | default dict | keys | sortAlpha | join ", " | replace "f:" "" }})
             {{- end }}
         {{- end }}
@@ -58,7 +58,7 @@
         {{- .Kind | cyan | bold }}/{{ .Name | cyan }}
     {{- end }}
     {{- with .Namespace }} -n {{ . }}{{ end }}
-    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }} ago{{ end }}
+    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if .Metadata.ownerReferences }} by {{ range $index, $ownerReference := .Metadata.ownerReferences }}
         {{- if $index }},{{ end }}{{ $ownerReference.kind | bold }}/{{ $ownerReference.name }}
     {{- end }}{{ end }}
@@ -123,15 +123,15 @@
     {{- .type | redIf $notHealthy | bold }}
     {{- with .reason }} {{ . | redBoldIf $notHealthy }}{{ end }}
     {{- with .message }}, {{ . | redIf $notHealthy }}{{ end }}
-    {{- with .lastTransitionTime }} for {{ . | colorAgo }}{{ end }}
+    {{- with .lastTransitionTime }} {{ forOrSince }} {{ . | colorAgo }}{{ end }}
     {{- if .lastUpdateTime }}
         {{- if ne (.lastUpdateTime | colorAgo) (.lastTransitionTime | colorAgo) -}}
-            , last update was {{ .lastUpdateTime | colorAgo }} ago
+            , last update was {{ .lastUpdateTime | colorAgo }}{{ agoSuffix }}
         {{- end }}
     {{- end }}
     {{- if .lastProbeTime}}
         {{- if ne (.lastProbeTime | colorAgo) (.lastTransitionTime | colorAgo) -}}
-            , last probe was {{ .lastProbeTime | colorAgo }} ago
+            , last probe was {{ .lastProbeTime | colorAgo }}{{ agoSuffix }}
         {{- end }}
     {{- end }}
 {{- end -}}

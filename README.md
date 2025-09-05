@@ -60,7 +60,8 @@ Example Service:
 * explicit messages for not-so-easy-to-understand status (e.g., ongoing rollout),
 * goes the extra mile for better expressing the status (e.g., show spec diff for ongoing rollouts),
 * compact, non-extensive output to keep it sharp,
-* no external dependencies, doesn't shell out, and so doesn't depend on client/workstation configuration
+* no external dependencies, doesn't shell out, and so doesn't depend on client/workstation configuration,
+* optionally show absolute timestamps with `--absolute-time` for building timelines
 
 ## Usage
 
