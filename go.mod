@@ -1,6 +1,6 @@
 module github.com/bergerx/kubectl-status
 
-go 1.22.4
+go 1.24.0
 
 require (
 	github.com/dustin/go-humanize v1.0.1
@@ -13,7 +13,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/sys v0.22.0
+	golang.org/x/sys v0.39.0
 	k8s.io/api v0.31.3
 	k8s.io/apimachinery v0.31.3
 	k8s.io/cli-runtime v0.31.3
