@@ -193,7 +193,7 @@ func (r *ResourceRepo) FirstObject(namespace string, args []string, labelSelecto
 }
 
 func (r *ResourceRepo) ObjectEvents(u *unstructured.Unstructured) (*corev1.EventList, error) {
-	eventList, err := r.kubernetesClientSet.CoreV1().Events(u.GetNamespace()).Search(scheme.Scheme, u)
+	eventList, err := r.kubernetesClientSet.CoreV1().Events(u.GetNamespace()).SearchWithContext(context.TODO(), scheme.Scheme, u)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error getting events", "r", r)
 		return nil, err
