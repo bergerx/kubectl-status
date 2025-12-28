@@ -30,7 +30,7 @@ vet:
 
 .PHONY: staticcheck
 staticcheck:
-	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+	go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
 
 #--------------------------
 # Test
@@ -50,9 +50,9 @@ test-e2e: vet staticcheck
 .PHONY: update-artifacts
 update-artifacts:
 	@for yaml in ./tests/artifacts/*.yaml; do \
-		out=$$(echo $${yaml} | sed 's/.yaml/.out/'); \
+		out="$$(echo $${yaml} | sed 's/.yaml/.out/')"; \
 		echo "$${yaml} --> $${out}"; \
-		go run ./cmd --test-hack -f $${yaml} --local --shallow > $${out}; \
+		go run ./cmd --test-hack -f "$${yaml}" --local --shallow > "$${out}"; \
 	done
 
 .PHONY: new-artifact
@@ -62,7 +62,7 @@ new-artifact:
 		echo "Example: make new-artifact CMD='-n default node,service' FILE='node-and-service'"; \
 		exit 1; \
 	fi
-	kubectl get -o yaml $(CMD) > tests/artifacts/$(FILE).yaml
-	go run ./cmd --test-hack $(CMD) --shallow > tests/artifacts/$(FILE).out
+	kubectl get -o yaml $(CMD) > "tests/artifacts/$(FILE).yaml"
+	go run ./cmd --test-hack $(CMD) --shallow > "tests/artifacts/$(FILE).out"
 	@echo "Created: tests/artifacts/$(FILE).yaml tests/artifacts/$(FILE).out"
 	@echo "Run 'make test' then 'git add' the new files"
