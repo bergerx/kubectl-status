@@ -100,7 +100,6 @@ func TestRootCmdWithoutACluster(t *testing.T) {
 			name:        "file without local should fail",
 			args:        []string{"-f", "../tests/artifacts/deployment-healthy.yaml"},
 			stderrRegex: `the server rejected our request for an unknown reason|connect: connection refused`,
-
 		},
 		{
 			name:        "file with local should succeed",

@@ -128,7 +128,7 @@ func colorBool(cond bool, str string) string {
 	if cond {
 		return color.GreenString(str)
 	} else {
-		return color.New(color.FgRed, color.Bold).Sprintf(str)
+		return color.New(color.FgRed, color.Bold).Sprintf("%s", str)
 	}
 }
 
@@ -298,7 +298,7 @@ func redIf(cond interface{}, str string) string {
 
 func redBoldIf(cond interface{}, str string) string {
 	if !reflect.ValueOf(cond).IsZero() {
-		return color.New(color.FgRed, color.Bold).Sprintf(str)
+		return color.New(color.FgRed, color.Bold).Sprintf("%s", str)
 	}
 	return str
 }
@@ -343,7 +343,7 @@ func colorKeyword(phase string) string {
 	case "Pending", "Released", "Burstable", "Active", "InProgress":
 		return color.YellowString(phase)
 	case "Failed", "Unknown", "Terminating", "Evicted", "BestEffort", "OOMKilled", "ContainerCannotRun", "Error", "NotFound":
-		return color.New(color.FgRed, color.Bold).Sprintf(phase)
+		return color.New(color.FgRed, color.Bold).Sprintf("%s", phase)
 	default:
 		return phase
 	}
