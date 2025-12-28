@@ -57,11 +57,15 @@ func parseTemplates(tmpl *template.Template) (*template.Template, error) {
 		klog.V(3).ErrorS(err, "error getting user home dir, ignoring")
 	}
 	templatesDir := filepath.Join(homeDir, ".kubectl-status", "templates")
-	parsedTemplatesWithLocalTemplates, err := parsedTemplates.ParseGlob(filepath.Join(templatesDir, "*.tmpl"))
-	if err != nil {
-		klog.V(1).ErrorS(err, "Error parsing user provided templates, ignoring user provided templates")
-	} else {
-		parsedTemplates = parsedTemplatesWithLocalTemplates
+	templatePattern := filepath.Join(templatesDir, "*.tmpl")
+	matches, _ := filepath.Glob(templatePattern)
+	if len(matches) > 0 {
+		parsedTemplatesWithLocalTemplates, err := parsedTemplates.ParseGlob(templatePattern)
+		if err != nil {
+			klog.V(1).ErrorS(err, "Error parsing user provided templates, ignoring user provided templates")
+		} else {
+			parsedTemplates = parsedTemplatesWithLocalTemplates
+		}
 	}
 	klog.V(5).InfoS("Finished parsing all embedded template fs files.")
 	return parsedTemplates, nil

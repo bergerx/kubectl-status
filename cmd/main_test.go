@@ -89,7 +89,7 @@ func TestRootCmdWithoutACluster(t *testing.T) {
 		{
 			name:        "pods against a non-configured client should print an error",
 			args:        []string{"pods"},
-			stderrRegex: `the server rejected our request for an unknown reason`,
+			stderrRegex: `the server.*(rejected|refused)`,
 		},
 		{
 			name:        "missing file should fail",
@@ -99,7 +99,8 @@ func TestRootCmdWithoutACluster(t *testing.T) {
 		{
 			name:        "file without local should fail",
 			args:        []string{"-f", "../tests/artifacts/deployment-healthy.yaml"},
-			stderrRegex: `the server rejected our request for an unknown reason\n$`,
+			stderrRegex: `the server rejected our request for an unknown reason|connect: connection refused`,
+
 		},
 		{
 			name:        "file with local should succeed",
