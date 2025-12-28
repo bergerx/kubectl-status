@@ -224,7 +224,30 @@ make
 bin/status --local -f test-pod.yaml
 ```
 
+Before submitting a PR, ensure tests pass:
+
+```bash
+make test
+```
+
 kubectl-status follows the below guidelines to have a consistent user experience across different resources.
+
+### Working with Test Artifacts
+
+Test artifacts in `tests/artifacts/` verify template output changes. When modifying templates:
+
+1. **Regenerate outputs** after template changes:
+   ```bash
+   make update-artifacts
+   ```
+
+2. **Add new test cases** when adding support for new resource types:
+   ```bash
+   make new-artifact CMD='-n default pod/my-pod' FILE='pod-example'
+   make test
+   ```
+
+3. **Include updated artifacts in PRs** - reviewers use `.out` file diffs to verify template changes.
 
 ### Improving The Documentation
 
