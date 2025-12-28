@@ -1,5 +1,5 @@
 
-Pod/sts-with-ingress-0 -n default, created 1m ago by StatefulSet/sts-with-ingress Running BestEffort
+Pod/sts-with-ingress-0 -n default, created 1m ago by StatefulSet/sts-with-ingress, gen:1 Running BestEffort
   Current: Pod is Ready
   Managed by sts-with-ingress application
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
