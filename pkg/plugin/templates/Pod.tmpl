@@ -30,7 +30,8 @@
     {{- with .Status.initContainerStatuses }}
         {{- "InitContainers:" | nindent 2 }}
         {{- range $containerStatus := . }}
-            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus) | nindent 4 }}
+            {{- $containerSpec := $.Spec.initContainers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
+            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec "includeVolumes" ($.Config.GetBool "include-volumes")) | nindent 4 }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -52,11 +53,15 @@
                                                        "containerSpec" $containerSpec
                                                        "defaultContainer" (eq $containerStatus.name $defaultContainer)
                                                        "defaultLogsContainer" (eq $containerStatus.name $defaultLogsContainer)
+                                                       "includeVolumes" ($.Config.GetBool "include-volumes")
                 }}
             {{- else }}
+                {{- $containerSpec := $.Spec.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
                 {{- $containerStatusSummaryDict = dict "containerStatus" $containerStatus
+                                                       "containerSpec" $containerSpec
                                                        "defaultContainer" (eq $containerStatus.name $defaultContainer)
                                                        "defaultLogsContainer" (eq $containerStatus.name $defaultLogsContainer)
+                                                       "includeVolumes" ($.Config.GetBool "include-volumes")
                 }}
             {{- end }}
             {{- $.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
@@ -67,37 +72,37 @@
 {{- define "pod_volumes" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- if .Config.GetBool "include-volumes" }}
+        {{- with .Spec.volumes }}
+            {{- "Volumes:" | nindent 2 }}
+            {{- range $volume := . }}
+                {{- $volume.name | bold | nindent 4 }}
+                {{- if hasKey $volume "emptyDir" }} (EmptyDir{{ with $volume.emptyDir.medium }}, medium: {{ . }}{{ end }})
+                {{- else if hasKey $volume "hostPath" }} (HostPath: {{ $volume.hostPath.path }}{{ with $volume.hostPath.type }}, type: {{ . }}{{ end }})
+                {{- else if hasKey $volume "configMap" }} (ConfigMap: {{ $volume.configMap.name }})
+                {{- else if hasKey $volume "secret" }} (Secret: {{ $volume.secret.secretName }})
+                {{- else if hasKey $volume "persistentVolumeClaim" }} (PVC: {{ $volume.persistentVolumeClaim.claimName }}{{ if $volume.persistentVolumeClaim.readOnly }}, readOnly{{ end }})
+                {{- else if hasKey $volume "downwardAPI" }} (DownwardAPI)
+                {{- else if hasKey $volume "projected" }} (Projected)
+                {{- else if hasKey $volume "csi" }} (CSI: {{ $volume.csi.driver }})
+                {{- else if hasKey $volume "nfs" }} (NFS: {{ $volume.nfs.server }}:{{ $volume.nfs.path }})
+                {{- end }}
+            {{- end }}
+        {{- end }}
         {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
         {{- $podStatsSummary := $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
         {{- $ephemeralStorage := index $podStatsSummary "ephemeral-storage" }}
         {{- if $ephemeralStorage }}
             {{- "Ephemeral storage" | bold | nindent 2 }} {{ template "pod_volume_stats" $ephemeralStorage }}
         {{- end }}
-        {{- $emptyDirsHeader := true }}
         {{- range $volume := .Spec.volumes }}
             {{- if hasKey $volume "emptyDir" }}
                 {{- with $volumeStats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $volume.name) }}
-                    {{- if $emptyDirsHeader }}{{ $emptyDirsHeader = false }}
-                        {{- "EmptyDirs:" | nindent 2 }}
-                    {{- end }}
-                    {{- $volume.name | bold | nindent 4 }}
-                    {{- with $volume.emptyDir.medium }} ({{ . | bold }}){{ end }}
-                    {{- " " }}{{ template "pod_volume_stats" $volumeStats }}
+                    {{- $volume.name | bold | nindent 4 }}: {{ template "pod_volume_stats" $volumeStats }}
                 {{- end }}
             {{- end }}
-        {{- end }}
-        {{- $pvcsHeader := true }}
-        {{- range $volume := .Spec.volumes }}
-            {{- with and $podStatsSummary.volume .persistentVolumeClaim }}
-                {{- if $pvcsHeader }}{{ $pvcsHeader = false }}
-                    {{- "PVCs:" | nindent 2 }}
-                {{- end }}
-                {{- "Volume" | bold | nindent 4 }}: {{ $volume.name }}
-                {{- $volumeStats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $volume.name) }}
-                {{- with $volumeStats }}, {{ template "pod_volume_stats" . }}{{ end }}
-                {{- $pvc := $.KubeGetFirst $.Namespace "PersistentVolumeClaim" .claimName}}
-                {{- with $pvc }}
-                    {{- $.Include "PersistentVolumeClaim" . | nindent 4 }}
+            {{- with $volume.persistentVolumeClaim }}
+                {{- with $volumeStats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $volume.name) }}
+                    {{- $volume.name | bold | nindent 4 }}: {{ template "pod_volume_stats" $volumeStats }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -204,6 +209,14 @@
     {{- if .containerMetrics }}{{ if .containerMetrics.usage.cpu }}{{ "usage" | nindent 2 }} {{ template "container_usage" . }}{{ end }}{{ end }}
     {{- with .containerStatus.lastState }}
         {{- "previously:" | yellow | nindent 2 }} {{ template "container_state_summary" . }}
+    {{- end }}
+    {{- if .includeVolumes }}
+        {{- with .containerSpec.volumeMounts }}
+            {{- "Volume Mounts:" | nindent 2 }}
+            {{- range . }}
+                {{- .mountPath | bold | nindent 4 }} from {{ .name }}{{ if .readOnly }} (ro){{ end }}{{ with .subPath }}, subPath: {{ . }}{{ end }}
+            {{- end }}
+        {{- end }}
     {{- end }}
 {{- end -}}
 
