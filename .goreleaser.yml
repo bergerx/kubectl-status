@@ -4,6 +4,7 @@ release:
   github:
     owner: bergerx
     name: kubectl-status
+  replace_existing_artifacts: true
 before:
   hooks:
     - go generate ./...
