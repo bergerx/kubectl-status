@@ -210,6 +210,48 @@ func TestAllArtifactsLocal(t *testing.T) {
 	}
 }
 
+func TestAllArtifactsLocalWithIncludeVolumes(t *testing.T) {
+	t.Setenv("KUBECONFIG", "/dev/null")
+	testHack(t)
+	viperTestHack(t)
+	artifacts := []string{
+		"../tests/artifacts/pod-standalone.yaml",
+		"../tests/artifacts/pod-missing-pvc.yaml",
+	}
+	for _, artifact := range artifacts {
+		artifact := artifact
+		name := strings.Replace(artifact, "../tests/", "", 1)
+		name = strings.Replace(name, ".yaml", "", 1)
+		t.Run(name, func(t *testing.T) {
+			test := cmdTest{
+				args:            []string{"-f", artifact, "--local", "--shallow", "--v", "255", "--include-volumes"},
+				stdoutEqualPath: name + ".include-volumes.out",
+			}
+			test.assert(t, nil)
+		})
+	}
+}
+
+func TestAllArtifactsLocalWithAbsoluteTime(t *testing.T) {
+	t.Setenv("KUBECONFIG", "/dev/null")
+	viperTestHack(t)
+	artifacts := []string{
+		"../tests/artifacts/pod-standalone.yaml",
+	}
+	for _, artifact := range artifacts {
+		artifact := artifact
+		name := strings.Replace(artifact, "../tests/", "", 1)
+		name = strings.Replace(name, ".yaml", "", 1)
+		t.Run(name, func(t *testing.T) {
+			test := cmdTest{
+				args:            []string{"-f", artifact, "--local", "--shallow", "--v", "255", "--absolute-time"},
+				stdoutEqualPath: name + ".absolute-time.out",
+			}
+			test.assert(t, nil)
+		})
+	}
+}
+
 func executeCMD(t *testing.T, args []string) (string, string, error) {
 	t.Helper()
 	cmd := RootCmd()

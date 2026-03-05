@@ -1,0 +1,7 @@
+
+Pod/test-pod -n test1, created 2020-03-18T02:05:46Z Running BestEffort
+  Current: Pod is Ready
+  PodScheduled -> Initialized -> ContainersReady -> Ready since 2020-03-18T02:05:47Z
+  Standalone POD.
+  Containers:
+    test-pod (k8s.gcr.io/pause:3.1) Running since 2020-03-18T02:05:47Z and Ready
