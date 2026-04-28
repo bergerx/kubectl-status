@@ -57,7 +57,7 @@
     {{- else }}
         {{- .Kind | cyan | bold }}/{{ .Name | cyan }}
     {{- end }}
-    {{- with .Namespace }} -n {{ . }}{{ end }}
+    {{- with .Namespace }} -n {{ if eq . "default" }}{{ . | red }}{{ else }}{{ . }}{{ end }}{{ end }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if .Metadata.ownerReferences }} by {{ range $index, $ownerReference := .Metadata.ownerReferences }}
         {{- if $index }},{{ end }}{{ $ownerReference.kind | bold }}/{{ $ownerReference.name }}
