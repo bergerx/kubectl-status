@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 )
 
@@ -65,6 +67,7 @@ func funcMap() template.FuncMap {
 		"agoSuffix":                agoSuffix,
 		"forOrSince":               forOrSince,
 		"relativeTime":             relativeTime,
+		"labelSelector":            labelSelector,
 	}
 }
 
@@ -283,7 +286,6 @@ func isStatusConditionHealthy(condition map[string]interface{}) bool {
 	}
 }
 
-
 func redIf(cond interface{}, str string) string {
 	if !reflect.ValueOf(cond).IsZero() {
 		return color.RedString(str)
@@ -404,4 +406,12 @@ func (r RenderableObject) IncludeRenderableObject(obj RenderableObject) (output 
 	klog.V(5).InfoS("called IncludeRenderableObject", "r", r, "obj", obj)
 	renderString, _ := obj.renderString()
 	return renderString
+}
+
+func labelSelector(s map[string]interface{}) string {
+	ls := &metav1.LabelSelector{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(s, ls); err != nil {
+		return fmt.Sprintf("%v", s)
+	}
+	return metav1.FormatLabelSelector(ls)
 }
