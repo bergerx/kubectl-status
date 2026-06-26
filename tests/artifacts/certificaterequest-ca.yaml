@@ -1,0 +1,59 @@
+apiVersion: cert-manager.io/v1
+kind: CertificateRequest
+metadata:
+  annotations:
+    cert-manager.io/certificate-name: kubectl-status-ca
+    cert-manager.io/certificate-revision: "1"
+    cert-manager.io/private-key-secret-name: kubectl-status-ca-2fjpp
+  creationTimestamp: "2026-06-26T23:53:04Z"
+  generation: 1
+  name: kubectl-status-ca-1
+  namespace: default
+  ownerReferences:
+  - apiVersion: cert-manager.io/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Certificate
+    name: kubectl-status-ca
+    uid: 24d484ec-dbdc-4032-82ee-c9091eb5d439
+  resourceVersion: "3809"
+  uid: e48e8958-1d52-4cb2-b7f7-1607b7ad0238
+spec:
+  duration: 87600h0m0s
+  extra:
+    authentication.kubernetes.io/credential-id:
+    - JTI=566fba6b-c6e5-4792-860e-b79aa9e3b864
+    authentication.kubernetes.io/node-name:
+    - minikube
+    authentication.kubernetes.io/node-uid:
+    - 44c9499b-7404-46a5-b1c9-430dffc572ff
+    authentication.kubernetes.io/pod-name:
+    - cert-manager-767885ff64-2fdwj
+    authentication.kubernetes.io/pod-uid:
+    - a40268a1-88c5-42f6-a602-8e14b67006dd
+  groups:
+  - system:serviceaccounts
+  - system:serviceaccounts:cert-manager
+  - system:authenticated
+  isCA: true
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: selfsigned-bootstrap
+  request: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURSBSRVFVRVNULS0tLS0KTUlINE1JR2ZBZ0VBTUJ3eEdqQVlCZ05WQkFNVEVXdDFZbVZqZEd3dGMzUmhkSFZ6TFdOaE1Ga3dFd1lIS29aSQp6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVBMmdpMEI4b3hmc0RBOGR3NERveElQZVQ5N2FFWUhHWGlSS3BmS0JECitrZWtpY1pTdlpFM2dMT25vQVZ0MUpENmN6cG9PSkxlZHo0dGlCd3l4cXkxN0tBaE1COEdDU3FHU0liM0RRRUoKRGpFU01CQXdEZ1lEVlIwUEFRSC9CQVFEQWdLa01Bb0dDQ3FHU000OUJBTUNBMGdBTUVVQ0lRRElTN3ZlM2JnSwp2NFVjLzNaVSthZEVoV3RZQTNwNExxQnI0WUpXZFNlcGxnSWdjVktaUllIUnRZRFYxb0ZzTDNqUXVWWjdrb2J5ClVGQ1haMDc2NlpFK2RZaz0KLS0tLS1FTkQgQ0VSVElGSUNBVEUgUkVRVUVTVC0tLS0tCg==
+  uid: f5a210f5-e368-4ba9-b21e-9500657aebab
+  username: system:serviceaccount:cert-manager:cert-manager
+status:
+  ca: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJlekNDQVNLZ0F3SUJBZ0lVYktiMHBtaE9yVTQ5bGxOcEpoMzNBU0k3ckVFd0NnWUlLb1pJemowRUF3SXcKSERFYU1CZ0dBMVVFQXhNUmEzVmlaV04wYkMxemRHRjBkWE10WTJFd0hoY05Nall3TmpJMk1qTTFNekEwV2hjTgpNell3TmpJek1qTTFNekEwV2pBY01Sb3dHQVlEVlFRREV4RnJkV0psWTNSc0xYTjBZWFIxY3kxallUQlpNQk1HCkJ5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEEwSUFCQU5vSXRBZktNWDdBd1BIY09BNk1TRDNrL2UyaEdCeGw0a1MKcVh5Z1EvcEhwSW5HVXIyUk40Q3pwNkFGYmRTUStuTTZhRGlTM25jK0xZZ2NNc2FzdGV5alFqQkFNQTRHQTFVZApEd0VCL3dRRUF3SUNwREFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlJib0xuWFQrQU9laE5TCjQ2VE4yQktaRDhaMW56QUtCZ2dxaGtqT1BRUURBZ05IQURCRUFpQUpINXVFWGtWZkkxRGp6MDdIOXRZekF1MlUKRFUvZjNjQzBYY2NPSWdNekx3SWdaay9zYzFvdjJGQTMwdzc3dE9pbjVQbGUybU9STTN5Y0o0OG5iWU9GUlUwPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+  certificate: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJlekNDQVNLZ0F3SUJBZ0lVYktiMHBtaE9yVTQ5bGxOcEpoMzNBU0k3ckVFd0NnWUlLb1pJemowRUF3SXcKSERFYU1CZ0dBMVVFQXhNUmEzVmlaV04wYkMxemRHRjBkWE10WTJFd0hoY05Nall3TmpJMk1qTTFNekEwV2hjTgpNell3TmpJek1qTTFNekEwV2pBY01Sb3dHQVlEVlFRREV4RnJkV0psWTNSc0xYTjBZWFIxY3kxallUQlpNQk1HCkJ5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEEwSUFCQU5vSXRBZktNWDdBd1BIY09BNk1TRDNrL2UyaEdCeGw0a1MKcVh5Z1EvcEhwSW5HVXIyUk40Q3pwNkFGYmRTUStuTTZhRGlTM25jK0xZZ2NNc2FzdGV5alFqQkFNQTRHQTFVZApEd0VCL3dRRUF3SUNwREFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlJib0xuWFQrQU9laE5TCjQ2VE4yQktaRDhaMW56QUtCZ2dxaGtqT1BRUURBZ05IQURCRUFpQUpINXVFWGtWZkkxRGp6MDdIOXRZekF1MlUKRFUvZjNjQzBYY2NPSWdNekx3SWdaay9zYzFvdjJGQTMwdzc3dE9pbjVQbGUybU9STTN5Y0o0OG5iWU9GUlUwPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+  conditions:
+  - lastTransitionTime: "2026-06-26T23:53:04Z"
+    message: Certificate request has been approved by cert-manager.io
+    reason: cert-manager.io
+    status: "True"
+    type: Approved
+  - lastTransitionTime: "2026-06-26T23:53:04Z"
+    message: Certificate fetched from issuer successfully
+    reason: Issued
+    status: "True"
+    type: Ready

@@ -1,0 +1,5 @@
+
+Issuer/kubectl-status-selfsigned-issuer -n default, created 1m ago, gen:1
+  Current: Resource is Ready
+  Backend: Self-Signed
+  Ready IsReady for 1m

@@ -1,0 +1,9 @@
+
+Certificate/kubectl-status-ca -n default, created 1m ago, gen:1
+  Current: Resource is Ready
+  Issued by Issuer/selfsigned-bootstrap for "kubectl-status-ca" · stored in secret/kubectl-status-ca-secret
+  Key: ECDSA-256
+  Role: Certificate Authority
+  Requested lifetime: 87600h, renew 720h before expiry
+  Issued 2026-06-26 (1m ago), expires 2036-06-23, auto-renews 2036-05-24 · rev 1
+  Ready Ready, Certificate is up to date and has not expired for 1m

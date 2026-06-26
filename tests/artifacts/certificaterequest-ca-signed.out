@@ -1,0 +1,10 @@
+
+CertificateRequest/kubectl-status-server-1 -n default, created 1m ago by Certificate/kubectl-status-server, gen:1
+  Current: Resource is Ready
+  Requested by system:serviceaccount:cert-manager:cert-manager for Certificate/kubectl-status-server (rev 1)
+    Via: Issuer/kubectl-status-ca-issuer (cert-manager.io)
+    Member of: system:serviceaccounts, system:serviceaccounts:cert-manager, system:authenticated
+  Usages: server auth, client auth
+  Requested duration: 8760h0m0s
+  Approved cert-manager.io, Certificate request has been approved by cert-manager.io for 1m
+  Ready Issued, Certificate fetched from issuer successfully for 1m

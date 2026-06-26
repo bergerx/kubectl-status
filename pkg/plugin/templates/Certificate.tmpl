@@ -1,0 +1,93 @@
+{{- define "Certificate" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: cert-manager.io/v1, Kind=Certificate */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- /* Issuance summary */ -}}
+    {{- $dnsFirst := "" }}
+    {{- with .Spec.dnsNames }}{{ $dnsFirst = index . 0 }}{{ end }}
+    {{- $primary := coalesce .Spec.commonName $dnsFirst .Spec.literalSubject }}
+    {{- with .Spec.issuerRef }}
+        {{- "Issued by" | nindent 2 }} {{ printf "%s/%s" (.kind | default "Issuer") .name | cyan | bold }}
+        {{- with $primary }} for {{ printf "%q" . | cyan }}{{ end }}
+        {{- with $.Spec.secretName }} · stored in {{ printf "secret/%s" . | cyan }}{{ end }}
+    {{- end }}
+    {{- /* Subject / identity details */ -}}
+    {{- with .Spec.literalSubject }}
+        {{- "Subject" | bold | nindent 4 }}: {{ . | cyan }}
+    {{- else }}
+        {{- with .Spec.subject }}
+            {{- with .organizations }}{{ "Org" | bold | nindent 4 }}: {{ join ", " . | cyan }}{{ end }}
+            {{- with .organizationalUnits }}{{ "OU" | bold | nindent 4 }}: {{ join ", " . | cyan }}{{ end }}
+            {{- with .countries }}{{ "Country" | bold | nindent 4 }}: {{ join ", " . | cyan }}{{ end }}
+            {{- with .provinces }}{{ "State" | bold | nindent 4 }}: {{ join ", " . | cyan }}{{ end }}
+            {{- with .localities }}{{ "City" | bold | nindent 4 }}: {{ join ", " . | cyan }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- /* SANs — all names the cert is valid for */ -}}
+    {{- $dns := .Spec.dnsNames | default list }}
+    {{- if gt (len $dns) 1 }}
+        {{- "Also valid for" | bold | nindent 4 }}: {{ slice $dns 1 | join ", " | cyan }}
+    {{- end }}
+    {{- with .Spec.ipAddresses }}
+        {{- "IPs" | bold | nindent 4 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- with .Spec.uris }}
+        {{- "URIs" | bold | nindent 4 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- with .Spec.emailAddresses }}
+        {{- "Emails" | bold | nindent 4 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- /* Key algorithm, usages, CA flag */ -}}
+    {{- with .Spec.privateKey }}
+        {{- "Key" | bold | nindent 2 }}: {{ .algorithm | default "RSA" | cyan }}
+        {{- with .size }}-{{ . | toString | cyan }}{{ end }}
+        {{- with .encoding }} ({{ . | cyan }}){{ end }}
+        {{- with .rotationPolicy }}, rotation: {{ . | redBoldIf (eq . "Never") }}{{ end }}
+    {{- end }}
+    {{- with .Spec.usages }}
+        {{- "Usages" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- if .Spec.isCA }}
+        {{- "Role" | bold | nindent 2 }}: {{ "Certificate Authority" | yellow | bold }}
+    {{- end }}
+    {{- /* Requested lifetime (only shown when explicitly configured) */ -}}
+    {{- if or .Spec.duration .Spec.renewBefore .Spec.renewBeforePercentage }}
+        {{- "Requested lifetime" | bold | nindent 2 }}:
+        {{- with .Spec.duration }} {{ . | cyan }}{{ end }}
+        {{- with .Spec.renewBefore }}, renew {{ . | cyan }} before expiry{{ end }}
+        {{- with .Spec.renewBeforePercentage }}, renew when {{ . | toString | cyan }}% remains{{ end }}
+    {{- end }}
+    {{- /* Keystores */ -}}
+    {{- with .Spec.keystores }}
+        {{- $stores := list }}
+        {{- if .jks }}{{ if .jks.create }}{{ $stores = append $stores "JKS" }}{{ end }}{{ end }}
+        {{- if .pkcs12 }}{{ if .pkcs12.create }}{{ $stores = append $stores (printf "PKCS12/%s" (.pkcs12.profile | default "LegacyRC2")) }}{{ end }}{{ end }}
+        {{- with $stores }}
+            {{- "Keystores" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.additionalOutputFormats }}
+        {{- $fmts := list }}{{ range . }}{{ $fmts = append $fmts .type }}{{ end }}
+        {{- "Extra output formats" | bold | nindent 2 }}: {{ join ", " $fmts | cyan }}
+    {{- end }}
+    {{- /* Issued validity window — strip time component for readability */ -}}
+    {{- if .Status.notBefore }}
+        {{- $issuedDate := (split "T" .Status.notBefore)._0 }}
+        {{- $expiresDate := (split "T" .Status.notAfter)._0 }}
+        {{- "Issued" | bold | nindent 2 }} {{ $issuedDate | cyan }} ({{ .Status.notBefore | colorAgo }}{{ agoSuffix }}), expires {{ $expiresDate | cyan }}
+        {{- with .Status.renewalTime }}, auto-renews {{ (split "T" .)._0 | cyan }}{{ end }}
+        {{- with .Status.revision }} · rev {{ . | toString | cyan }}{{ end }}
+    {{- end }}
+    {{- with .Status.failedIssuanceAttempts }}
+        {{- "Failed issuances" | red | bold | nindent 2 }}: {{ . | toString | cyan }}
+        {{- with $.Status.lastFailureTime }}, last attempt {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

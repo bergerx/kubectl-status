@@ -1,0 +1,61 @@
+apiVersion: cert-manager.io/v1
+kind: CertificateRequest
+metadata:
+  annotations:
+    cert-manager.io/certificate-name: kubectl-status-server
+    cert-manager.io/certificate-revision: "1"
+    cert-manager.io/private-key-secret-name: kubectl-status-server-zn2pb
+  creationTimestamp: "2026-06-26T23:53:04Z"
+  generation: 1
+  name: kubectl-status-server-1
+  namespace: default
+  ownerReferences:
+  - apiVersion: cert-manager.io/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Certificate
+    name: kubectl-status-server
+    uid: b27f06cd-140e-455e-ac2f-43eb94937455
+  resourceVersion: "3832"
+  uid: 27393595-cf5f-4a30-817d-3f483d1b2357
+spec:
+  duration: 8760h0m0s
+  extra:
+    authentication.kubernetes.io/credential-id:
+    - JTI=566fba6b-c6e5-4792-860e-b79aa9e3b864
+    authentication.kubernetes.io/node-name:
+    - minikube
+    authentication.kubernetes.io/node-uid:
+    - 44c9499b-7404-46a5-b1c9-430dffc572ff
+    authentication.kubernetes.io/pod-name:
+    - cert-manager-767885ff64-2fdwj
+    authentication.kubernetes.io/pod-uid:
+    - a40268a1-88c5-42f6-a602-8e14b67006dd
+  groups:
+  - system:serviceaccounts
+  - system:serviceaccounts:cert-manager
+  - system:authenticated
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: kubectl-status-ca-issuer
+  request: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURSBSRVFVRVNULS0tLS0KTUlJQzdEQ0NBZFFDQVFBd0lERWVNQndHQTFVRUF4TVZhM1ZpWldOMGJDMXpkR0YwZFhNdGMyVnlkbVZ5TUlJQgpJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBbHBGZkZsMzZhcmV2YWVHNmVOQXE4S0oyCmFibS9lU0RWKytjNGg1TVlCcXEvTlljSG42UlhIR2Z0dkp2N0I3TGpnZGtta0x2cmlzcyt4VHpldjFXak1NSFMKazAzdXFraVV3bEhxVVJHVHNOSWRzRERHYkpxZXJBTWVHaXNWbkVwRFp3QkJQckNudzRPTk4vNzcyZFd3K1RGRApNUnUwakpSeW45Q01zN2hrQlhwYnUyVGIySmptVDh0RnJWdTI1THdNa3AvbXJWYnA4UjNWY092a0JubG14cFdhCndPN1lxKzZ3OGdzSXV1aEU4UG9ZM1BQdEhvQnpjeVEzZlIwWXkyTENOK3gybEhPbllQV0lPVTVvL2hWTVNFbjYKUFdFdkg5YXhkbU82WjJaY1BmanluOGpaVlN6bHcvSWhZRW13dHhXek5FUzNBa1RHV0p4UExsdmNsaGowZXdJRApBUUFCb0lHR01JR0RCZ2txaGtpRzl3MEJDUTR4ZGpCME1GTUdBMVVkRVFSTU1FcUNHbXQxWW1WamRHd3RjM1JoCmRIVnpMbVY0WVcxd2JHVXVZMjl0Z2l4cmRXSmxZM1JzTFhOMFlYUjFjeTF6ZG1NdVpHVm1ZWFZzZEM1emRtTXUKWTJ4MWMzUmxjaTVzYjJOaGJEQWRCZ05WSFNVRUZqQVVCZ2dyQmdFRkJRY0RBUVlJS3dZQkJRVUhBd0l3RFFZSgpLb1pJaHZjTkFRRUxCUUFEZ2dFQkFDbjdEdnJLZDVQWUVXeFVHRFE1NFBIUVRZMFgwbTArenJ6WWtWNkkwUkJTCnRITW45MTRhREd2eWxxVmR2VXFuY2lBWVNOTERmZXJHZHNsdzRQeXgrdjRtRHRVRFJEcktGL0ZldS9xekszUVoKUjBWV3NxQWJ6RGlLTStEZUxwWngzb3JCbTRzRmhFV2tzY1hQaFBlaWRpZEhQZlZJY2wwbllLc0Z3R01rb3NLbApDUHUwbkhLd3JFNm16VWNueVE0aVFuVVE4bU5NMjF4TWwvZXhVY1RPVkZDK3JNRXptR2R0NFdkMm9iU1VEcmtaCm0yanQ2NVJrQk04blVBUURYODJMeFROVVRJT0R6a1A1dU5NWGpPaWtrT2Z4MktFbWVQWkJMUC9UMUxMSVY2TGsKS3ZRY3RZUkc4aldzdWd0YXg5RkFFQytZaFkrYWFUdjI4QUR4ZEgvZElIOD0KLS0tLS1FTkQgQ0VSVElGSUNBVEUgUkVRVUVTVC0tLS0tCg==
+  uid: f5a210f5-e368-4ba9-b21e-9500657aebab
+  usages:
+  - server auth
+  - client auth
+  username: system:serviceaccount:cert-manager:cert-manager
+status:
+  ca: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJlekNDQVNLZ0F3SUJBZ0lVYktiMHBtaE9yVTQ5bGxOcEpoMzNBU0k3ckVFd0NnWUlLb1pJemowRUF3SXcKSERFYU1CZ0dBMVVFQXhNUmEzVmlaV04wYkMxemRHRjBkWE10WTJFd0hoY05Nall3TmpJMk1qTTFNekEwV2hjTgpNell3TmpJek1qTTFNekEwV2pBY01Sb3dHQVlEVlFRREV4RnJkV0psWTNSc0xYTjBZWFIxY3kxallUQlpNQk1HCkJ5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEEwSUFCQU5vSXRBZktNWDdBd1BIY09BNk1TRDNrL2UyaEdCeGw0a1MKcVh5Z1EvcEhwSW5HVXIyUk40Q3pwNkFGYmRTUStuTTZhRGlTM25jK0xZZ2NNc2FzdGV5alFqQkFNQTRHQTFVZApEd0VCL3dRRUF3SUNwREFQQmdOVkhSTUJBZjhFQlRBREFRSC9NQjBHQTFVZERnUVdCQlJib0xuWFQrQU9laE5TCjQ2VE4yQktaRDhaMW56QUtCZ2dxaGtqT1BRUURBZ05IQURCRUFpQUpINXVFWGtWZkkxRGp6MDdIOXRZekF1MlUKRFUvZjNjQzBYY2NPSWdNekx3SWdaay9zYzFvdjJGQTMwdzc3dE9pbjVQbGUybU9STTN5Y0o0OG5iWU9GUlUwPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+  certificate: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUNyekNDQWxhZ0F3SUJBZ0lVR2F1Q3N5SER6b3ZMeTdsT3JTV29BVFRMTWQ4d0NnWUlLb1pJemowRUF3SXcKSERFYU1CZ0dBMVVFQXhNUmEzVmlaV04wYkMxemRHRjBkWE10WTJFd0hoY05Nall3TmpJMk1qTTFNekEwV2hjTgpNamN3TmpJMk1qTTFNekEwV2pBZ01SNHdIQVlEVlFRREV4VnJkV0psWTNSc0xYTjBZWFIxY3kxelpYSjJaWEl3CmdnRWlNQTBHQ1NxR1NJYjNEUUVCQVFVQUE0SUJEd0F3Z2dFS0FvSUJBUUNXa1Y4V1hmcHF0NjlwNGJwNDBDcncKb25acHViOTVJTlg3NXppSGt4Z0dxcjgxaHdlZnBGY2NaKzI4bS9zSHN1T0IyU2FRdSt1S3l6N0ZQTjYvVmFNdwp3ZEtUVGU2cVNKVENVZXBSRVpPdzBoMndNTVpzbXA2c0F4NGFLeFdjU2tObkFFRStzS2ZEZzQwMy92dloxYkQ1Ck1VTXhHN1NNbEhLZjBJeXp1R1FGZWx1N1pOdlltT1pQeTBXdFc3Ymt2QXlTbithdFZ1bnhIZFZ3NitRR2VXYkcKbFpyQTd0aXI3ckR5Q3dpNjZFVHcraGpjOCswZWdITnpKRGQ5SFJqTFlzSTM3SGFVYzZkZzlZZzVUbWorRlV4SQpTZm85WVM4ZjFyRjJZN3BuWmx3OStQS2Z5TmxWTE9YRDhpRmdTYkMzRmJNMFJMY0NSTVpZbkU4dVc5eVdHUFI3CkFnTUJBQUdqZ2FZd2dhTXdIUVlEVlIwbEJCWXdGQVlJS3dZQkJRVUhBd0VHQ0NzR0FRVUZCd01DTUF3R0ExVWQKRXdFQi93UUNNQUF3SHdZRFZSMGpCQmd3Rm9BVVc2QzUxMC9nRG5vVFV1T2t6ZGdTbVEvR2RaOHdVd1lEVlIwUgpCRXd3U29JYWEzVmlaV04wYkMxemRHRjBkWE11WlhoaGJYQnNaUzVqYjIyQ0xHdDFZbVZqZEd3dGMzUmhkSFZ6CkxYTjJZeTVrWldaaGRXeDBMbk4yWXk1amJIVnpkR1Z5TG14dlkyRnNNQW9HQ0NxR1NNNDlCQU1DQTBjQU1FUUMKSUNQTkdsRU04RTJCUUxYd2FzNThmaXJEV2RRbGZQdW5xOU9QN3hlR1dtdzlBaUFtUUc4elFjMDF1ZVg3K3BGcgpvSXpWSTRITkIvazQwRlovalBsMVR2bWRtUT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  conditions:
+  - lastTransitionTime: "2026-06-26T23:53:04Z"
+    message: Certificate request has been approved by cert-manager.io
+    reason: cert-manager.io
+    status: "True"
+    type: Approved
+  - lastTransitionTime: "2026-06-26T23:53:04Z"
+    message: Certificate fetched from issuer successfully
+    reason: Issued
+    status: "True"
+    type: Ready

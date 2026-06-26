@@ -1,0 +1,23 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"cert-manager.io/v1","kind":"Issuer","metadata":{"annotations":{},"name":"kubectl-status-ca-issuer","namespace":"default"},"spec":{"ca":{"secretName":"kubectl-status-ca-secret"}}}
+  creationTimestamp: "2026-06-26T23:53:04Z"
+  generation: 1
+  name: kubectl-status-ca-issuer
+  namespace: default
+  resourceVersion: "3815"
+  uid: 90530923-923a-4f56-87a5-15e6aa2f8c72
+spec:
+  ca:
+    secretName: kubectl-status-ca-secret
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-26T23:53:04Z"
+    message: Signing CA verified
+    observedGeneration: 1
+    reason: KeyPairVerified
+    status: "True"
+    type: Ready
