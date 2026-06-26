@@ -1,0 +1,27 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  creationTimestamp: "2026-06-26T23:32:57Z"
+  generation: 1
+  name: prometheus-pdb
+  namespace: default
+  resourceVersion: "2024"
+  uid: 738d553c-6204-4621-b763-f11f757bdb32
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-26T23:32:57Z"
+    message: ""
+    observedGeneration: 1
+    reason: InsufficientPods
+    status: "False"
+    type: DisruptionAllowed
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+  observedGeneration: 1
