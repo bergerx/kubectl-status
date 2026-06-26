@@ -10,7 +10,7 @@ export GO111MODULE=on
 bin: fmt vet staticcheck
 	mkdir -p bin
 	goreleaser build --single-target --skip=validate --clean
-	ln -Ffs ../dist/status_$$(go env GOOS)_$$(go env GOARCH)_v1/status bin/
+	ln -Ffs ../dist/status_$$(go env GOOS)_$$(go env GOARCH)_$$(go env GO$$(echo $$(go env GOARCH) | tr '[:lower:]' '[:upper:]'))/status bin/
 
 .PHONY: clean
 clean:
