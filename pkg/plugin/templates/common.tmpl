@@ -50,14 +50,18 @@
     {{- end }}
 {{- end -}}
 
+{{- define "resource_ref" }}
+    {{- .kind | cyan | bold }}/{{ .name | cyan }}
+    {{- with .namespace }} -n {{ if eq . "default" }}{{ . | red }}{{ else }}{{ . | cyan }}{{ end }}{{ end }}
+{{- end -}}
+
 {{- define "status_summary_line" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- if (.Object | default dict).inline }}
         {{- .Kind | bold }}/{{ .Name }}
     {{- else }}
-        {{- .Kind | cyan | bold }}/{{ .Name | cyan }}
+        {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
     {{- end }}
-    {{- with .Namespace }} -n {{ if eq . "default" }}{{ . | red }}{{ else }}{{ . }}{{ end }}{{ end }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if .Metadata.ownerReferences }} by {{ range $index, $ownerReference := .Metadata.ownerReferences }}
         {{- if $index }},{{ end }}{{ $ownerReference.kind | bold }}/{{ $ownerReference.name }}
