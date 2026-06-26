@@ -1,0 +1,7 @@
+
+CustomResourceDefinition/servicemonitors.monitoring.coreos.com, created 1m ago, gen:1
+  Current: CRD is established
+  monitoring.coreos.com, scope: Namespaced, short: smon, categories: prometheus-operator
+  Versions: v1 [storage]
+  NamesAccepted NoConflicts, no conflicts found for 1m
+  Established InitialNamesAccepted, the initial names have been accepted for 1m

@@ -1,0 +1,85 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+    operator.prometheus.io/version: 0.92.0
+  creationTimestamp: "2026-06-26T23:14:47Z"
+  generation: 1
+  name: prometheuses.monitoring.coreos.com
+  resourceVersion: "427"
+  uid: 855cfe3e-2d9a-48c5-8d58-fcfa7c89bd02
+spec:
+  conversion:
+    strategy: None
+  group: monitoring.coreos.com
+  names:
+    categories:
+      - prometheus-operator
+    kind: Prometheus
+    listKind: PrometheusList
+    plural: prometheuses
+    shortNames:
+      - prom
+    singular: prometheus
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - description: The version of Prometheus
+          jsonPath: .spec.version
+          name: Version
+          type: string
+        - description: The number of desired replicas
+          jsonPath: .spec.replicas
+          name: Desired
+          type: integer
+        - description: The number of ready replicas
+          jsonPath: .status.availableReplicas
+          name: Ready
+          type: integer
+        - jsonPath: .status.conditions[?(@.type == 'Reconciled')].status
+          name: Reconciled
+          type: string
+        - jsonPath: .status.conditions[?(@.type == 'Available')].status
+          name: Available
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+        - description: Whether the resource reconciliation is paused or not
+          jsonPath: .status.paused
+          name: Paused
+          priority: 1
+          type: boolean
+      name: v1
+      served: true
+      storage: true
+      subresources:
+        scale:
+          labelSelectorPath: .status.selector
+          specReplicasPath: .spec.shards
+          statusReplicasPath: .status.shards
+        status: {}
+status:
+  acceptedNames:
+    categories:
+      - prometheus-operator
+    kind: Prometheus
+    listKind: PrometheusList
+    plural: prometheuses
+    shortNames:
+      - prom
+    singular: prometheus
+  conditions:
+    - lastTransitionTime: "2026-06-26T23:14:47Z"
+      message: no conflicts found
+      reason: NoConflicts
+      status: "True"
+      type: NamesAccepted
+    - lastTransitionTime: "2026-06-26T23:14:47Z"
+      message: the initial names have been accepted
+      reason: InitialNamesAccepted
+      status: "True"
+      type: Established
+  storedVersions:
+    - v1
