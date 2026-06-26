@@ -1,0 +1,52 @@
+{{- define "BackendTLSPolicy" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: gateway.networking.k8s.io/v1alpha3, Kind=BackendTLSPolicy */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.targetRefs }}
+        {{- "Targets" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- $obj := $.KubeGetFirst $.Namespace .kind .name }}
+                {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
+            {{- else }}
+                {{- printf "%s/%s" .kind .name | cyan | nindent 4 }}
+                {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.validation }}
+        {{- "TLS" | bold | nindent 2 }}: SNI {{ .hostname | cyan }}
+        {{- with .wellKnownCACertificates }}, CA {{ . | cyan }}{{ end }}
+        {{- with .caCertificateRefs }}
+            {{- "CA certs" | bold | nindent 4 }}:
+            {{- range . }}
+                {{- printf "%s/%s" .kind .name | cyan | nindent 6 }}
+            {{- end }}
+        {{- end }}
+        {{- with .subjectAltNames }}
+            {{- "SANs" | bold | nindent 4 }}:
+            {{- range . }}
+                {{- (coalesce .hostname .uri) | cyan | nindent 6 }} ({{ .type }})
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Status.ancestors }}
+        {{- "Status" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- printf "%s/%s" (.ancestorRef.kind | default "Gateway") .ancestorRef.name | bold | nindent 4 }}
+            {{- with .ancestorRef.namespace }} -n {{ . }}{{ end }}
+            {{- with .controllerName }} ({{ . }}){{ end }}
+            {{- range .conditions }}
+                {{- $.Include "condition_summary" . | nindent 6 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

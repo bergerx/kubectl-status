@@ -1,0 +1,48 @@
+{{- define "ListenerSet" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: gateway.networking.k8s.io/v1alpha2, Kind=ListenerSet */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.parentRef }}
+        {{- "Gateway" | bold | nindent 2 }}:
+        {{- if $.Config.GetBool "deep" }}
+            {{- $ns := coalesce .namespace $.Namespace }}
+            {{- $obj := $.KubeGetFirst $ns "Gateway" .name }}
+            {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
+        {{- else }}
+            {{- printf "Gateway/%s" .name | cyan | nindent 4 }}
+            {{- with .namespace }} -n {{ . }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.listeners }}
+        {{- "Listeners" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- $specListener := . }}
+            {{- $statusListener := dict }}
+            {{- range $.Status.listeners }}
+                {{- if eq .name $specListener.name }}{{ $statusListener = . }}{{ end }}
+            {{- end }}
+            {{- .name | bold | nindent 4 }}: port={{ printf "%d" (.port | int) | cyan }}/{{ .protocol | cyan }}
+            {{- with .hostname }}, host={{ . | cyan }}{{ end }}
+            {{- with .allowedRoutes.namespaces.from }}, namespaces={{ . | cyan }}{{ end }}
+            {{- with $statusListener.supportedKinds }}, accepts={{ range $i, $k := . }}{{ if $i }}/{{ end }}{{ $k.kind | cyan }}{{ end }}{{ end }}
+            {{- if hasKey $statusListener "attachedRoutes" }}, routes={{ $statusListener.attachedRoutes | toString | cyan }}{{ end }}
+            {{- with .tls }}
+                {{- printf "TLS mode:%s" (.mode | default "Terminate") | nindent 6 }}
+                {{- with .certificateRefs }}
+                    {{- range . }}{{ printf ", cert:%s/%s" (.kind | default "Secret") .name | cyan }}{{ end }}
+                {{- end }}
+            {{- end }}
+            {{- range $statusListener.conditions }}
+                {{- $.Include "condition_summary" . | nindent 6 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

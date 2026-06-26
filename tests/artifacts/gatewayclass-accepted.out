@@ -1,0 +1,5 @@
+
+GatewayClass/eg, created 1m ago, gen:1
+  Current: Resource is current
+  Controller: gateway.envoyproxy.io/gatewayclass-controller
+  Accepted Accepted, Valid GatewayClass for 1m
