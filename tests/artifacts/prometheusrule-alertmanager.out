@@ -1,0 +1,5 @@
+
+PrometheusRule/kube-prometheus-stack-1782-alertmanager.rules -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Groups:
+    alertmanager.rules: 9 alerts · 6 critical · 3 warning

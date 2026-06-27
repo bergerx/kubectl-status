@@ -1,0 +1,5 @@
+
+PrometheusRule/kube-prometheus-stack-1782-k8s.rules.container-resource -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Groups:
+    k8s.rules.container_resource: 8 recordings

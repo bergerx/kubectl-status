@@ -1,0 +1,57 @@
+{{- define "PrometheusRule" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: monitoring.coreos.com/v1, Kind=PrometheusRule */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.groups }}
+        {{- "Groups" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- $alerts := 0 }}
+            {{- $recordings := 0 }}
+            {{- $sevCritical := 0 }}
+            {{- $sevWarning := 0 }}
+            {{- $sevInfo := 0 }}
+            {{- $sevNone := 0 }}
+            {{- $sevOther := 0 }}
+            {{- range .rules }}
+                {{- if .alert }}
+                    {{- $alerts = add1 $alerts }}
+                    {{- $sev := .labels.severity | default "" }}
+                    {{- if eq $sev "critical" }}{{ $sevCritical = add1 $sevCritical }}
+                    {{- else if eq $sev "warning" }}{{ $sevWarning = add1 $sevWarning }}
+                    {{- else if eq $sev "info" }}{{ $sevInfo = add1 $sevInfo }}
+                    {{- else if eq $sev "none" }}{{ $sevNone = add1 $sevNone }}
+                    {{- else }}{{ $sevOther = add1 $sevOther }}
+                    {{- end }}
+                {{- else if .record }}
+                    {{- $recordings = add1 $recordings }}
+                {{- end }}
+            {{- end }}
+            {{- .name | cyan | nindent 4 }}:
+            {{- if and $alerts $recordings }} {{ $alerts | toString | cyan }} alerts, {{ $recordings | toString | cyan }} recordings
+            {{- else if $alerts }} {{ $alerts | toString | cyan }} alerts
+            {{- else if $recordings }} {{ $recordings | toString | cyan }} recordings
+            {{- else }} (empty)
+            {{- end }}
+            {{- with .interval }}, every {{ . | cyan }}{{ end }}
+            {{- if $sevCritical }} · {{ printf "%d critical" $sevCritical | red | bold }}{{ end }}
+            {{- if $sevWarning }} · {{ printf "%d warning" $sevWarning | yellow }}{{ end }}
+            {{- if $sevInfo }} · {{ printf "%d info" $sevInfo | cyan }}{{ end }}
+            {{- if $sevNone }} · {{ $sevNone | toString }} none{{ end }}
+            {{- if $sevOther }} · {{ $sevOther | toString }} other{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Status.bindings }}
+        {{- "Bound to" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- printf "%s/%s" .resource .name | cyan | nindent 4 }} -n {{ .namespace | cyan }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}
