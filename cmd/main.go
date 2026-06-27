@@ -16,6 +16,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Initialize all known client auth plugins.
 	"k8s.io/klog/v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/kubectl/pkg/util/completion"
 
 	"github.com/bergerx/kubectl-status/pkg/plugin"
 )
@@ -94,6 +95,7 @@ func RootCmd() *cobra.Command {
 	configFlags := initFlags(cmd)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	f := cmdutil.NewFactory(configFlags)
+	cmd.ValidArgsFunction = completion.ResourceTypeAndNameCompletionFunc(f)
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		klog.V(5).InfoS("running the cobra.Command ...")
 		var err error
