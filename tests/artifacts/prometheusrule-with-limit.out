@@ -1,0 +1,5 @@
+
+PrometheusRule/my-app-alerts -n monitoring, created 1m ago, gen:1
+  Current: Resource is current
+  Groups:
+    my-app.alerts: 2 alerts, every 30s, limit=10 · 1 critical · 1 warning

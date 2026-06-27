@@ -37,17 +37,44 @@
             {{- else }} (empty)
             {{- end }}
             {{- with .interval }}, every {{ . | cyan }}{{ end }}
+            {{- with .limit }}, limit={{ . | toString | cyan }}{{ end }}
             {{- if $sevCritical }} · {{ printf "%d critical" $sevCritical | red | bold }}{{ end }}
             {{- if $sevWarning }} · {{ printf "%d warning" $sevWarning | yellow }}{{ end }}
             {{- if $sevInfo }} · {{ printf "%d info" $sevInfo | cyan }}{{ end }}
             {{- if $sevNone }} · {{ $sevNone | toString }} none{{ end }}
             {{- if $sevOther }} · {{ $sevOther | toString }} other{{ end }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- range .rules }}
+                    {{- if .alert }}
+                        {{- $sev := .labels.severity | default "" }}
+                        {{- if eq $sev "critical" }}{{ .alert | red | bold | nindent 6 }}
+                        {{- else if eq $sev "warning" }}{{ .alert | yellow | nindent 6 }}
+                        {{- else }}{{ .alert | bold | nindent 6 }}
+                        {{- end }}
+                        {{- with $sev }} [{{ . }}]{{ end }}
+                        {{- with .for }}, for={{ . | cyan }}{{ end }}
+                        {{- with .keep_firing_for }}, keep_firing={{ . | cyan }}{{ end }}
+                    {{- else if .record }}
+                        {{- "rec" | nindent 6 }}: {{ .record | cyan }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
         {{- end }}
     {{- end }}
     {{- with .Status.bindings }}
         {{- "Bound to" | bold | nindent 2 }}:
         {{- range . }}
-            {{- printf "%s/%s" .resource .name | cyan | nindent 4 }} -n {{ .namespace | cyan }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- $kind := "Prometheus" }}
+                {{- if eq .resource "prometheusagents" }}{{ $kind = "PrometheusAgent" }}
+                {{- else if eq .resource "thanosrulers" }}{{ $kind = "ThanosRuler" }}
+                {{- else if eq .resource "alertmanagers" }}{{ $kind = "Alertmanager" }}
+                {{- end }}
+                {{- $obj := $.KubeGetFirst .namespace $kind .name }}
+                {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
+            {{- else }}
+                {{- printf "%s/%s" .resource .name | cyan | nindent 4 }} -n {{ .namespace | cyan }}
+            {{- end }}
         {{- end }}
     {{- end }}
     {{- template "conditions_summary" . }}

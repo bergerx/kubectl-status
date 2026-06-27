@@ -1,0 +1,6 @@
+
+PrometheusRule/k8s.rules -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Groups:
+    recording.rules: 2 recordings
+    alerting.rules: 3 alerts, every 1m · 1 critical · 1 warning · 1 info
