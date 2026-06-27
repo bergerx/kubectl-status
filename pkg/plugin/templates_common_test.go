@@ -125,6 +125,86 @@ func TestSuspendTemplate(t *testing.T) {
 	}
 }
 
+func TestHorizontalPodAutoscalerTemplate(t *testing.T) {
+	tests := []struct {
+		name string
+		obj  map[string]interface{}
+		want string
+	}{
+		{
+			name: "no lastScaleTime should not crash (issue #548)",
+			obj: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name":              "my-hpa",
+					"creationTimestamp": "2024-01-01T00:00:00Z",
+				},
+				"spec": map[string]interface{}{
+					"maxReplicas": 10,
+					"scaleTargetRef": map[string]interface{}{
+						"kind": "Deployment",
+						"name": "my-app",
+					},
+				},
+				"status": map[string]interface{}{
+					"currentReplicas": 3,
+					"desiredReplicas": 3,
+				},
+			},
+			want: "Replicas",
+		},
+		{
+			name: "resource metric with utilization",
+			obj: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name":              "my-hpa",
+					"creationTimestamp": "2024-01-01T00:00:00Z",
+				},
+				"spec": map[string]interface{}{
+					"maxReplicas": 10,
+					"scaleTargetRef": map[string]interface{}{
+						"kind": "Deployment",
+						"name": "my-app",
+					},
+					"metrics": []interface{}{
+						map[string]interface{}{
+							"type": "Resource",
+							"resource": map[string]interface{}{
+								"name": "cpu",
+								"target": map[string]interface{}{
+									"type":               "Utilization",
+									"averageUtilization": 80,
+								},
+							},
+						},
+					},
+				},
+				"status": map[string]interface{}{
+					"currentReplicas": 3,
+					"desiredReplicas": 3,
+					"currentMetrics": []interface{}{
+						map[string]interface{}{
+							"type": "Resource",
+							"resource": map[string]interface{}{
+								"name": "cpu",
+								"current": map[string]interface{}{
+									"averageUtilization": 45,
+									"averageValue":       "450m",
+								},
+							},
+						},
+					},
+				},
+			},
+			want: "cpu",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checkTemplate(t, "HorizontalPodAutoscaler", tt.obj, tt.want, true)
+		})
+	}
+}
+
 func TestOwnersTemplate(t *testing.T) {
 	tests := []struct {
 		name string

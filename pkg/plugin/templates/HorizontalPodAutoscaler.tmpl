@@ -1,11 +1,86 @@
 {{- define "HorizontalPodAutoscaler" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "status_summary_line" . }} last scale was {{ .Status.lastScaleTime | colorAgo }}{{ agoSuffix }}
+    {{- /* GVK: autoscaling/v2, Kind=HorizontalPodAutoscaler */ -}}
+    {{- template "status_summary_line" . }}{{- with .Status.lastScaleTime }}, last scaled {{ . | colorAgo }}{{ agoSuffix }}{{- end }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
-    {{- "current" | bold | nindent 2 }} replicas:{{ .Status.currentReplicas }}/({{ .Spec.minReplicas | default "1" }}-{{ .Spec.maxReplicas }})
-    {{- if .Status.currentCPUUtilizationPercentage }} CPUUtilisation: {{ .Status.currentCPUUtilizationPercentage | toString | redIf (ge .Status.currentCPUUtilizationPercentage .Spec.targetCPUUtilizationPercentage) }}%/{{ .Spec.targetCPUUtilizationPercentage }}%{{ end }}
-    {{- if (ne .Status.currentReplicas .Status.desiredReplicas) }}, {{ "desired" | red | bold}}: {{ .Status.currentReplicas }} --> {{ .Status.desiredReplicas }}{{ end }}
+    {{- template "observed_generation_summary" . }}
+    {{- with .Spec.scaleTargetRef }}
+        {{- if $.Config.GetBool "deep" }}
+            {{- $obj := $.KubeGetFirst $.Namespace (.kind | default "Deployment") .name }}
+            {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 2 }}{{ end }}
+        {{- else }}
+            {{- "Scales" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Deployment") "name" .name "namespace" $.Namespace) }}
+        {{- end }}
+    {{- end }}
+    {{- $minReplicas := 1 }}{{- if hasKey .Spec "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | int }}{{- end }}
+    {{- $current := .Status.currentReplicas | default 0 | int }}
+    {{- $desired := .Status.desiredReplicas | default 0 | int }}
+    {{- "Replicas" | bold | nindent 2 }}: {{ printf "%d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas (.Spec.maxReplicas | int) }}
+    {{- if ne $current $desired }}, {{ "desired" | yellow | bold }}: {{ printf "%d" $desired | yellow }}{{ end }}
+    {{- with .Spec.metrics }}
+        {{- "Metrics" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- $spec := . }}
+            {{- $cur := dict }}
+            {{- range $.Status.currentMetrics }}
+                {{- if eq .type $spec.type }}
+                    {{- if eq .type "Resource" }}{{ if eq .resource.name $spec.resource.name }}{{ $cur = . }}{{ end }}{{ end }}
+                    {{- if eq .type "ContainerResource" }}{{ if and (eq .containerResource.name $spec.containerResource.name) (eq .containerResource.container $spec.containerResource.container) }}{{ $cur = . }}{{ end }}{{ end }}
+                    {{- if eq .type "Pods" }}{{ if eq .pods.metric.name $spec.pods.metric.name }}{{ $cur = . }}{{ end }}{{ end }}
+                    {{- if eq .type "Object" }}{{ if eq .object.metric.name $spec.object.metric.name }}{{ $cur = . }}{{ end }}{{ end }}
+                    {{- if eq .type "External" }}{{ if eq .external.metric.name $spec.external.metric.name }}{{ $cur = . }}{{ end }}{{ end }}
+                {{- end }}
+            {{- end }}
+            {{- if eq .type "Resource" }}
+                {{- $target := .resource.target }}
+                {{- .resource.name | nindent 4 }}:
+                {{- if eq $target.type "Utilization" }}
+                    {{- $targetUtil := $target.averageUtilization | int }}
+                    {{- if hasKey ($cur.resource.current | default dict) "averageUtilization" }}
+                        {{- $curUtil := $cur.resource.current.averageUtilization | int }}
+                        {{- $curUtil | toString | redIf (ge $curUtil $targetUtil) }}%/
+                    {{- end }}{{ $targetUtil | toString }}%
+                {{- else if eq $target.type "AverageValue" }}
+                    {{- with ($cur.resource.current | default dict).averageValue }}{{ . | cyan }}/{{ end }}{{ $target.averageValue | cyan }}
+                {{- else }}
+                    {{- with ($cur.resource.current | default dict).value }}{{ . | cyan }}/{{ end }}{{ $target.value | cyan }}
+                {{- end }}
+            {{- else if eq .type "ContainerResource" }}
+                {{- $target := .containerResource.target }}
+                {{- printf "%s[%s]" .containerResource.name .containerResource.container | nindent 4 }}:
+                {{- if eq $target.type "Utilization" }}
+                    {{- $targetUtil := $target.averageUtilization | int }}
+                    {{- if hasKey ($cur.containerResource.current | default dict) "averageUtilization" }}
+                        {{- $curUtil := $cur.containerResource.current.averageUtilization | int }}
+                        {{- $curUtil | toString | redIf (ge $curUtil $targetUtil) }}%/
+                    {{- end }}{{ $targetUtil | toString }}%
+                {{- else if eq $target.type "AverageValue" }}
+                    {{- with ($cur.containerResource.current | default dict).averageValue }}{{ . | cyan }}/{{ end }}{{ $target.averageValue | cyan }}
+                {{- else }}
+                    {{- with ($cur.containerResource.current | default dict).value }}{{ . | cyan }}/{{ end }}{{ $target.value | cyan }}
+                {{- end }}
+            {{- else if eq .type "Pods" }}
+                {{- .pods.metric.name | nindent 4 }}:
+                {{- with ($cur.pods.current | default dict).averageValue }}{{ . | cyan }}/{{ end }}{{ .pods.target.averageValue | cyan }} avg/pod
+            {{- else if eq .type "Object" }}
+                {{- printf "%s/%s %s" .object.describedObject.kind .object.describedObject.name .object.metric.name | nindent 4 }}:
+                {{- if eq (.object.target.type | default "Value") "AverageValue" }}
+                    {{- with ($cur.object.current | default dict).averageValue }}{{ . | cyan }}/{{ end }}{{ .object.target.averageValue | cyan }} avg
+                {{- else }}
+                    {{- with ($cur.object.current | default dict).value }}{{ . | cyan }}/{{ end }}{{ .object.target.value | cyan }}
+                {{- end }}
+            {{- else if eq .type "External" }}
+                {{- .external.metric.name | nindent 4 }}:
+                {{- if eq (.external.target.type | default "Value") "AverageValue" }}
+                    {{- with ($cur.external.current | default dict).averageValue }}{{ . | cyan }}/{{ end }}{{ .external.target.averageValue | cyan }} avg
+                {{- else }}
+                    {{- with ($cur.external.current | default dict).value }}{{ . | cyan }}/{{ end }}{{ .external.target.value | cyan }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
     {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
