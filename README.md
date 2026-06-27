@@ -86,6 +86,8 @@ kubectl status node -l node-role.kubernetes.io/master  # Show status of nodes ma
 
 Please see [CONTRIBUTING.md](./CONTRIBUTING.md) file for development related documents.
 
+The project includes a [Claude Code](https://claude.ai/code) skill (`/generate-template`) that can scaffold kubectl-status templates for any CRD in your current context. See [Claude Code Integration](./CONTRIBUTING.md#claude-code-integration) in CONTRIBUTING.md.
+
 ## License
 
 Apache 2.0. See [LICENSE](./LICENSE).
