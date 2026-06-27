@@ -22,7 +22,7 @@
             {{- $specRef := . }}
             {{- $statusEntry := dict }}
             {{- range $.Status.parents }}
-                {{- if and (eq .parentRef.name $specRef.name) (eq (.parentRef.sectionName | default "") ($specRef.sectionName | default "")) }}
+                {{- if and (eq .parentRef.name $specRef.name) (eq (.parentRef.sectionName | default "") ($specRef.sectionName | default "")) (eq (coalesce .parentRef.namespace $.Namespace) (coalesce $specRef.namespace $.Namespace)) (eq (.parentRef.kind | default "Gateway") ($specRef.kind | default "Gateway")) }}
                     {{- $statusEntry = . }}
                 {{- end }}
             {{- end }}
