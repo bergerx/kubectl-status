@@ -39,7 +39,7 @@
                 {{- $readyCount := 0 }}
                 {{- range $slices }}
                     {{- range (.Object.endpoints | default list) }}
-                        {{- if .conditions.ready }}{{- $readyCount = add1 $readyCount }}{{- end }}
+                        {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{- $readyCount = add1 $readyCount }}{{- end }}
                     {{- end }}
                 {{- end }}
                 {{- if gt $readyCount 0 }}

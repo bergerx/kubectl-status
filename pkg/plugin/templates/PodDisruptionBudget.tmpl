@@ -19,8 +19,8 @@
     {{- end }}
     {{- with .Spec.selector }}
         {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
-        {{- if not ($.Config.GetBool "shallow") }}
-            {{- $matchLabels := .matchLabels }}
+        {{- $matchLabels := .matchLabels }}
+        {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
             {{- if $.Config.GetBool "deep" }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}
