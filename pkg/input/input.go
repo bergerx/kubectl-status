@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -297,8 +298,8 @@ func (r *ResourceRepo) Service(namespace, name string) (*corev1.Service, error) 
 	return r.kubernetesClientSet.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
-func (r *ResourceRepo) Endpoints(namespace string) (*corev1.EndpointsList, error) {
-	return r.kubernetesClientSet.CoreV1().Endpoints(namespace).List(context.TODO(), metav1.ListOptions{})
+func (r *ResourceRepo) EndpointSlices(namespace string) (*discoveryv1.EndpointSliceList, error) {
+	return r.kubernetesClientSet.DiscoveryV1().EndpointSlices(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // KubeGetNodeStatsSummary returns this structure

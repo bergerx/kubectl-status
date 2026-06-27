@@ -1,5 +1,6 @@
 {{- define "Deployment" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: apps/v1, Kind=Deployment */ -}}
     {{- template "status_summary_line" . }}{{- with index .Annotations "deployment.kubernetes.io/revision" }} rev:{{.}}{{ end }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
@@ -12,6 +13,27 @@
     {{- $_ := set $injectedStatus "updatedReplicas" ( $injectedStatus.updatedReplicas | default 0 ) }}
     {{- $_ := set .Object "status" $injectedStatus }}
     {{- template "replicas_status" . }}
+    {{- with .Spec.strategy }}{{ if ne (.type | default "RollingUpdate") "RollingUpdate" }}
+        {{- "Strategy" | bold | nindent 2 }}: {{ .type | yellow }}
+    {{- end }}{{ end }}
+    {{- with .Spec.selector }}
+        {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
+        {{- $matchLabels := .matchLabels }}
+        {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- range $.KubeGetServicesMatchingLabels $.Namespace $matchLabels }}
+                    {{- $.Include "service_health_summary" . | nindent 4 }}
+                {{- end }}
+                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
+                    {{- $.Include "pod_health_summary" . | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
     {{- template "conditions_summary" . }}
     {{- template "suspended" . }}
     {{- $rolloutStatus := .RolloutStatus . }}
@@ -20,15 +42,18 @@
         {{- with $rolloutStatus.message }}: {{ . | yellow }}{{ end }}
         {{- with $rolloutStatus.error }}: Error: {{ . | red }}{{ end }}
     {{- end }}
-    {{- if not .Status.readyReplicas }}
-        {{- "Outage" | red | bold | nindent 2 }}: Deployment has no Ready replicas.
-    {{- else if ne .Status.replicas .Status.readyReplicas }}
-        {{- if $rolloutStatus.done }}
-            {{- "Not Ready Replicas" | yellow | bold | nindent 2 }}: {{ sub .Status.replicas .Status.readyReplicas }} replicas are not Ready.
-        {{- end }}
-    {{- else if .Status.unavailableReplicas }}
-        {{- if $rolloutStatus.done }}
-            {{- "Unavailable Replicas" | yellow | bold | nindent 2 }}: {{ .status.unavailableReplicas }} replicas are not Available.
+    {{- $replicas := 1 }}{{ if hasKey .Spec "replicas" }}{{ $replicas = .Spec.replicas | int }}{{ end }}
+    {{- if $replicas }}
+        {{- if not .Status.readyReplicas }}
+            {{- "Outage" | red | bold | nindent 2 }}: Deployment has no Ready replicas.
+        {{- else if ne .Status.replicas .Status.readyReplicas }}
+            {{- if $rolloutStatus.done }}
+                {{- "Not Ready Replicas" | yellow | bold | nindent 2 }}: {{ sub .Status.replicas .Status.readyReplicas }} replicas are not Ready.
+            {{- end }}
+        {{- else if .Status.unavailableReplicas }}
+            {{- if $rolloutStatus.done }}
+                {{- "Unavailable Replicas" | yellow | bold | nindent 2 }}: {{ .Status.unavailableReplicas }} replicas are not Available.
+            {{- end }}
         {{- end }}
     {{- end }}
     {{- template "recent_deployment_rollouts" . }}

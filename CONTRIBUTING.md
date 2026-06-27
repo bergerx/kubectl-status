@@ -28,6 +28,7 @@ community looks forward to your contributions. 🎉
   - [General Guidelines](#general-guidelines)
     - [Output Contents Guidelines](#output-contents-guidelines)
     - [Color Coding Guidelines](#color-coding-guidelines)
+  - [Claude Code Integration](#claude-code-integration)
   - [Your First Code Contribution](#your-first-code-contribution)
   - [Improving The Documentation](#improving-the-documentation)
 - [Styleguides](#styleguides)
@@ -231,6 +232,17 @@ make test
 ```
 
 kubectl-status follows the below guidelines to have a consistent user experience across different resources.
+
+### Claude Code Integration
+
+The project ships a [Claude Code](https://claude.ai/code) skill and project-level settings under `.claude/`.
+
+**`/generate-template`** — generates a kubectl-status Go template for any CRD present in your current kubectl context. Run it in Claude Code and provide the resource kind; the skill reads the CRD schema, samples live instances, and writes a ready-to-use template to `~/.kubectl-status/templates/<Kind>.tmpl` following all output and color-coding guidelines in this file.
+
+```bash
+# Inside Claude Code — example invocation:
+/generate-template HTTPRoute
+```
 
 ### Working with Test Artifacts
 

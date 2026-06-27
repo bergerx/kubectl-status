@@ -1,0 +1,7 @@
+
+CustomResourceDefinition/certificates.cert-manager.io, created 1m ago, gen:1
+  Current: CRD is established
+  cert-manager.io, scope: Namespaced, short: cert, certs, categories: cert-manager
+  Versions: v1 [storage]
+  NamesAccepted NoConflicts, no conflicts found for 1m
+  Established InitialNamesAccepted, the initial names have been accepted for 1m

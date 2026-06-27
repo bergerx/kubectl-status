@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  creationTimestamp: "2026-06-26T23:14:55Z"
+  generation: 1
+  name: k8s.rules
+  namespace: default
+spec:
+  groups:
+  - name: recording.rules
+    rules:
+    - expr: sum(rate(container_cpu_usage_seconds_total[5m]))
+      record: cluster:cpu:usage_rate5m
+    - expr: sum(container_memory_working_set_bytes)
+      record: cluster:memory:usage_bytes
+  - name: alerting.rules
+    interval: 1m
+    rules:
+    - alert: HighCPU
+      expr: cluster:cpu:usage_rate5m > 0.9
+      for: 10m
+      labels:
+        severity: warning
+    - alert: CriticalMemory
+      expr: cluster:memory:usage_bytes > 0.95
+      for: 5m
+      labels:
+        severity: critical
+    - alert: LowPriorityAlert
+      expr: some_metric > 1
+      labels:
+        severity: info

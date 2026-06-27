@@ -1,0 +1,99 @@
+{{- define "HTTPRoute" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: gateway.networking.k8s.io/v1, Kind=HTTPRoute */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.hostnames }}
+        {{- "Hostnames" | bold | nindent 2 }}:
+        {{- if eq (len .) 1 }}
+            {{- " " }}{{ index . 0 | cyan }}
+        {{- else }}
+            {{- range . }}
+                {{- . | cyan | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.parentRefs }}
+        {{- "Parents" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- $specRef := . }}
+            {{- $statusEntry := dict }}
+            {{- range $.Status.parents }}
+                {{- if and (eq .parentRef.name $specRef.name) (eq (.parentRef.sectionName | default "") ($specRef.sectionName | default "")) (eq (coalesce .parentRef.namespace $.Namespace) (coalesce $specRef.namespace $.Namespace)) (eq (.parentRef.kind | default "Gateway") ($specRef.kind | default "Gateway")) }}
+                    {{- $statusEntry = . }}
+                {{- end }}
+            {{- end }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- $ns := coalesce .namespace $.Namespace }}
+                {{- $obj := $.KubeGetFirst $ns (.kind | default "Gateway") .name }}
+                {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
+            {{- else }}
+                {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace) | nindent 4 }}
+                {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
+            {{- end }}
+            {{- with $statusEntry.controllerName }}
+                {{- "controller" | nindent 6 }}: {{ . | cyan }}
+            {{- end }}
+            {{- range $statusEntry.conditions }}
+                {{- $.Include "condition_summary" . | nindent 6 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.rules }}
+        {{- "Rules" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- with .matches }}
+                {{- range . }}
+                    {{- with .path }}
+                        {{- printf "%s %s" (.type | default "PathPrefix") .value | cyan | nindent 4 }}
+                    {{- end }}
+                    {{- with .headers }}
+                        {{- range . }}{{ printf "header:%s=%s" .name .value | nindent 6 }}{{ end }}
+                    {{- end }}
+                    {{- with .method }}{{ printf "method:%s" . | nindent 6 }}{{ end }}
+                {{- end }}
+            {{- end }}
+            {{- with .filters }}
+                {{- range . }}
+                    {{- if eq .type "RequestRedirect" }}
+                        {{- with .requestRedirect }}
+                            {{- "→ redirect" | yellow | nindent 4 }}
+                            {{- with .scheme }} {{ . | cyan }}{{ end }}
+                            {{- with .hostname }} to {{ . | cyan }}{{ end }}
+                            {{- with .statusCode }} ({{ . | toString | cyan }}){{ end }}
+                        {{- end }}
+                    {{- else if eq .type "URLRewrite" }}
+                        {{- with .urlRewrite }}
+                            {{- "→ rewrite" | nindent 4 }}
+                            {{- with .hostname }} hostname → {{ . | cyan }}{{ end }}
+                            {{- with .path }} path {{ .type }} → {{ .value | cyan }}{{ end }}
+                        {{- end }}
+                    {{- else }}
+                        {{- printf "filter:%s" .type | nindent 4 }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+            {{- with .backendRefs }}
+                {{- if $.Config.GetBool "deep" }}
+                    {{- range . }}
+                        {{- $ns := coalesce .namespace $.Namespace }}
+                        {{- $obj := $.KubeGetFirst $ns (.kind | default "Service") .name }}
+                        {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
+                    {{- end }}
+                {{- else }}
+                    {{- range . }}
+                        {{- "→" | nindent 4 }} {{ $.Include "resource_ref" (dict "kind" (.kind | default "Service") "name" .name "namespace" .namespace) }}
+                        {{- with .port }}:{{ . | toString | cyan }}{{ end }}
+                        {{- if and (hasKey . "weight") (ne (.weight | int) 1) }}, weight:{{ .weight | toString | cyan }}{{ end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

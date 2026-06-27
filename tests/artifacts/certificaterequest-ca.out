@@ -1,0 +1,10 @@
+
+CertificateRequest/kubectl-status-ca-1 -n default, created 1m ago by Certificate/kubectl-status-ca, gen:1
+  Current: Resource is Ready
+  Requested by system:serviceaccount:cert-manager:cert-manager for Certificate/kubectl-status-ca (rev 1)
+    Via: Issuer/selfsigned-bootstrap (cert-manager.io)
+    Member of: system:serviceaccounts, system:serviceaccounts:cert-manager, system:authenticated
+  Requesting: Certificate Authority cert
+  Requested duration: 87600h0m0s
+  Approved cert-manager.io, Certificate request has been approved by cert-manager.io for 1m
+  Ready Issued, Certificate fetched from issuer successfully for 1m

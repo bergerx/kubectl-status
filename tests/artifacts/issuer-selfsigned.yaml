@@ -1,0 +1,21 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"cert-manager.io/v1","kind":"Issuer","metadata":{"annotations":{},"name":"kubectl-status-selfsigned-issuer","namespace":"default"},"spec":{"selfSigned":{}}}
+  creationTimestamp: "2026-06-26T23:53:04Z"
+  generation: 1
+  name: kubectl-status-selfsigned-issuer
+  namespace: default
+  resourceVersion: "3793"
+  uid: 3a7502c7-7d80-48ec-8849-04c7debc6807
+spec:
+  selfSigned: {}
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-26T23:53:04Z"
+    observedGeneration: 1
+    reason: IsReady
+    status: "True"
+    type: Ready

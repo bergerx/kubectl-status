@@ -1,0 +1,29 @@
+{{- define "GatewayClass" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: gateway.networking.k8s.io/v1, Kind=GatewayClass */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- "Controller" | bold | nindent 2 }}: {{ .Spec.controllerName | cyan }}
+    {{- with .Spec.parametersRef }}
+        {{- if $.Config.GetBool "deep" }}
+            {{- $ns := coalesce .namespace $.Namespace }}
+            {{- $obj := $.KubeGetFirst $ns .kind .name }}
+            {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
+        {{- else }}
+            {{- "Parameters" | bold | nindent 2 }}: {{ printf "%s/%s" .kind .name | cyan }}
+            {{- with .namespace }} -n {{ . }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.description }}
+        {{- "Description" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- with .Status.supportedFeatures }}
+        {{- "Supported Features" | bold | nindent 2 }}: {{ range $i, $f := . }}{{ if $i }}, {{ end }}{{ $f.name | cyan }}{{ end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

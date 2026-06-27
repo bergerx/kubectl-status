@@ -1,0 +1,78 @@
+{{- define "PodDisruptionBudget" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- $budgetViolated := lt (.Status.currentHealthy | int) (.Status.desiredHealthy | int) }}
+    {{- $noDisruptions := and (hasKey .Status "disruptionsAllowed") (eq (.Status.disruptionsAllowed | int) 0) }}
+    {{- $budgetStatus := "Allowed" | green }}
+    {{- if $budgetViolated }}{{- $budgetStatus = "Violated" | red | bold }}
+    {{- else if $noDisruptions }}{{- $budgetStatus = "Constrained" | yellow }}
+    {{- end }}
+    {{- with .Spec.minAvailable }}
+        {{- "Budget" | bold | nindent 2 }}: min available={{ . | toString | cyan }}, {{ $budgetStatus }}
+    {{- end }}
+    {{- with .Spec.maxUnavailable }}
+        {{- "Budget" | bold | nindent 2 }}: max unavailable={{ . | toString | cyan }}, {{ $budgetStatus }}
+    {{- end }}
+    {{- with .Spec.selector }}
+        {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
+        {{- $matchLabels := .matchLabels }}
+        {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- $svcs := $.KubeGetServicesMatchingLabels $.Namespace $matchLabels }}
+                {{- $deploys := $.KubeGetByLabelsMap $.Namespace "deployments" $matchLabels }}
+                {{- $daemonsets := $.KubeGetByLabelsMap $.Namespace "daemonsets" $matchLabels }}
+                {{- $statefulsets := $.KubeGetByLabelsMap $.Namespace "statefulsets" $matchLabels }}
+                {{- range $svcs }}
+                    {{- $.Include "service_health_summary" . | nindent 4 }}
+                {{- end }}
+                {{- if or $deploys $daemonsets $statefulsets }}
+                    {{- range $deploys }}
+                        {{- $.Include "workload_health_summary" . | nindent 4 }}
+                    {{- end }}
+                    {{- range $daemonsets }}
+                        {{- $.Include "workload_health_summary" . | nindent 4 }}
+                    {{- end }}
+                    {{- range $statefulsets }}
+                        {{- $.Include "workload_health_summary" . | nindent 4 }}
+                    {{- end }}
+                {{- else }}
+                    {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
+                        {{- $.Include "pod_health_summary" . | nindent 4 }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- if hasKey .Status "currentHealthy" }}
+        {{- printf "healthy:%d/expected:%d" (.Status.currentHealthy | int) (.Status.expectedPods | int) | redBoldIf $budgetViolated | nindent 2 }}
+        {{- if hasKey .Status "disruptionsAllowed" }}
+            {{- printf ", disruptions allowed:%d" (.Status.disruptionsAllowed | int) | redBoldIf $noDisruptions }}
+        {{- end }}
+        {{- if $budgetViolated }}
+            {{- printf "budget violated: only %d of %d pods healthy, %d required" (.Status.currentHealthy | int) (.Status.expectedPods | int) (.Status.desiredHealthy | int) | red | nindent 4 }}
+        {{- else if $noDisruptions }}
+            {{- "no disruptions allowed — all pods must stay healthy to meet the budget" | yellow | nindent 4 }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.unhealthyPodEvictionPolicy }}{{ if eq . "AlwaysAllow" }}
+        {{- "Unhealthy pod eviction" | bold | nindent 2 }}: {{ . | yellow }}
+    {{- end }}{{ end }}
+    {{- with .Status.disruptedPods }}
+        {{- "Disrupted pods" | bold | yellow | nindent 2 }}:
+        {{- range $pod, $time := . }}
+            {{- $pod | cyan | nindent 4 }} (since {{ $time | colorAgo }}{{ agoSuffix }})
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

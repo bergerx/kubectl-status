@@ -72,28 +72,40 @@ func (r RenderableObject) Spec() (spec map[string]interface{}) {
 
 func (r RenderableObject) Status() (status map[string]interface{}) {
 	if x := r.Object["status"]; x != nil {
-		status = x.(map[string]interface{})
+		status, _ = x.(map[string]interface{})
+	}
+	if status == nil {
+		status = make(map[string]interface{})
 	}
 	return
 }
 
 func (r RenderableObject) Metadata() (metadata map[string]interface{}) {
 	if x := r.Object["metadata"]; x != nil {
-		metadata = x.(map[string]interface{})
+		metadata, _ = x.(map[string]interface{})
+	}
+	if metadata == nil {
+		metadata = make(map[string]interface{})
 	}
 	return
 }
 
 func (r RenderableObject) Annotations() (annotations map[string]interface{}) {
 	if x := r.Metadata()["annotations"]; x != nil {
-		annotations = x.(map[string]interface{})
+		annotations, _ = x.(map[string]interface{})
+	}
+	if annotations == nil {
+		annotations = make(map[string]interface{})
 	}
 	return
 }
 
 func (r RenderableObject) Labels() (labels map[string]interface{}) {
 	if x := r.Metadata()["labels"]; x != nil {
-		labels = x.(map[string]interface{})
+		labels, _ = x.(map[string]interface{})
+	}
+	if labels == nil {
+		labels = make(map[string]interface{})
 	}
 	return
 }

@@ -1,0 +1,8 @@
+
+PrometheusRule/platform-alerts -n monitoring, created 1m ago, gen:1
+  Current: Resource is current
+  Groups:
+    platform.alerts: 2 alerts · 1 critical · 1 warning
+  Bound to:
+    prometheuses/kube-prometheus -n monitoring
+    thanosrulers/thanos-ruler -n monitoring

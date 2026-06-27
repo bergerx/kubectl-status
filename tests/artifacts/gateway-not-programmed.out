@@ -1,0 +1,11 @@
+
+Gateway/eg -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Class: eg
+  Accepted Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
+  Programmed AddressNotAssigned, No addresses have been assigned to the Gateway for 1m
+  Listeners:
+    http: port=80/HTTP, namespaces=Same, accepts=HTTPRoute/GRPCRoute, routes=1
+      Programmed Programmed, Sending translated listener configuration to the data plane for 1m
+      Accepted Accepted, Listener has been successfully translated for 1m
+      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m

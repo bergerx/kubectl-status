@@ -1,0 +1,59 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  creationTimestamp: "2026-06-26T23:39:52Z"
+  generation: 1
+  name: eg
+  namespace: default
+  resourceVersion: "2879"
+  uid: a435653a-2de9-4020-a816-f4e16013a010
+spec:
+  gatewayClassName: eg
+  listeners:
+  - allowedRoutes:
+      namespaces:
+        from: Same
+    name: http
+    port: 80
+    protocol: HTTP
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-26T23:42:41Z"
+    message: The Gateway has been scheduled by Envoy Gateway
+    observedGeneration: 1
+    reason: Accepted
+    status: "True"
+    type: Accepted
+  - lastTransitionTime: "2026-06-26T23:42:41Z"
+    message: No addresses have been assigned to the Gateway
+    observedGeneration: 1
+    reason: AddressNotAssigned
+    status: "False"
+    type: Programmed
+  listeners:
+  - attachedRoutes: 1
+    conditions:
+    - lastTransitionTime: "2026-06-26T23:42:41Z"
+      message: Sending translated listener configuration to the data plane
+      observedGeneration: 1
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    - lastTransitionTime: "2026-06-26T23:42:41Z"
+      message: Listener has been successfully translated
+      observedGeneration: 1
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: "2026-06-26T23:42:41Z"
+      message: Listener references have been resolved
+      observedGeneration: 1
+      reason: ResolvedRefs
+      status: "True"
+      type: ResolvedRefs
+    name: http
+    supportedKinds:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+    - group: gateway.networking.k8s.io
+      kind: GRPCRoute

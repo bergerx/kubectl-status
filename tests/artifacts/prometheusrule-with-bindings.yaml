@@ -1,0 +1,31 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  creationTimestamp: "2026-06-26T23:14:55Z"
+  generation: 1
+  name: platform-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: platform.alerts
+    rules:
+    - alert: PlatformDegraded
+      expr: sum(up{job="platform"}) < 2
+      for: 5m
+      labels:
+        severity: critical
+    - alert: PlatformHighLatency
+      expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 1
+      for: 10m
+      labels:
+        severity: warning
+status:
+  bindings:
+  - group: monitoring.coreos.com
+    name: kube-prometheus
+    namespace: monitoring
+    resource: prometheuses
+  - group: monitoring.coreos.com
+    name: thanos-ruler
+    namespace: monitoring
+    resource: thanosrulers

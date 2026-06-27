@@ -1,0 +1,35 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"cert-manager.io/v1","kind":"Certificate","metadata":{"annotations":{},"name":"kubectl-status-selfsigned","namespace":"default"},"spec":{"commonName":"kubectl-status-selfsigned","dnsNames":["kubectl-status-selfsigned.example.com"],"duration":"8760h","issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":"kubectl-status-selfsigned-issuer"},"renewBefore":"720h","secretName":"kubectl-status-selfsigned-secret"}}
+  creationTimestamp: "2026-06-26T23:53:04Z"
+  generation: 1
+  name: kubectl-status-selfsigned
+  namespace: default
+  resourceVersion: "3864"
+  uid: 218929b7-f66c-4cc6-b4d2-1b10735c2b5c
+spec:
+  commonName: kubectl-status-selfsigned
+  dnsNames:
+  - kubectl-status-selfsigned.example.com
+  duration: 8760h
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: kubectl-status-selfsigned-issuer
+  renewBefore: 720h
+  secretName: kubectl-status-selfsigned-secret
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-26T23:53:06Z"
+    message: Certificate is up to date and has not expired
+    observedGeneration: 1
+    reason: Ready
+    status: "True"
+    type: Ready
+  notAfter: "2027-06-26T23:53:05Z"
+  notBefore: "2026-06-26T23:53:05Z"
+  renewalTime: "2027-05-27T23:53:05Z"
+  revision: 1

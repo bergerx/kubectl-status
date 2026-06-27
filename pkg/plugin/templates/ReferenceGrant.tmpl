@@ -1,0 +1,26 @@
+{{- define "ReferenceGrant" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: gateway.networking.k8s.io/v1beta1, Kind=ReferenceGrant */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.from }}
+        {{- "Allows" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- printf "%s/%s" .kind .namespace | cyan | nindent 4 }}
+            {{- with .group }}{{ if ne . "" }} ({{ . }}){{ end }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.to }}
+        {{- "To access" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- printf "%s" .kind | cyan | nindent 4 }}
+            {{- with .name }}/{{ . | cyan }}{{ end }}
+            {{- with .group }}{{ if ne . "" }} ({{ . }}){{ end }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

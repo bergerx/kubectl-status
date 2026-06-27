@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  creationTimestamp: "2026-06-26T23:14:55Z"
+  generation: 1
+  name: my-app-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: my-app.alerts
+    interval: 30s
+    limit: 10
+    rules:
+    - alert: MyAppHighErrorRate
+      expr: rate(http_errors_total[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+    - alert: MyAppDown
+      expr: up{job="my-app"} == 0
+      for: 1m
+      labels:
+        severity: critical

@@ -1,0 +1,55 @@
+{{- define "Gateway" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: gateway.networking.k8s.io/v1, Kind=Gateway */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- if $.Config.GetBool "deep" }}
+        {{- $obj := $.KubeGetFirst "" "GatewayClass" .Spec.gatewayClassName }}
+        {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 2 }}{{ end }}
+    {{- else }}
+        {{- "Class" | bold | nindent 2 }}: {{ .Spec.gatewayClassName | cyan }}
+    {{- end }}
+    {{- with .Status.addresses }}
+        {{- "Addresses" | bold | nindent 2 }}: {{ range $i, $a := . }}{{ if $i }}, {{ end }}{{ $a.value | cyan }}{{ end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- with .Spec.listeners }}
+        {{- "Listeners" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- $specListener := . }}
+            {{- $statusListener := dict }}
+            {{- range $.Status.listeners }}
+                {{- if eq .name $specListener.name }}{{ $statusListener = . }}{{ end }}
+            {{- end }}
+            {{- .name | bold | nindent 4 }}: port={{ printf "%d" (.port | int) | cyan }}/{{ .protocol | cyan }}
+            {{- with .hostname }}, host={{ . | cyan }}{{ end }}
+            {{- with .allowedRoutes.namespaces.from }}, namespaces={{ . | cyan }}{{ end }}
+            {{- with $statusListener.supportedKinds }}, accepts={{ range $i, $k := . }}{{ if $i }}/{{ end }}{{ $k.kind | cyan }}{{ end }}{{ end }}
+            {{- if hasKey $statusListener "attachedRoutes" }}, routes={{ $statusListener.attachedRoutes | toString | cyan }}{{ end }}
+            {{- with .tls }}
+                {{- printf "TLS mode:%s" (.mode | default "Terminate") | nindent 6 }}
+                {{- with .certificateRefs }}
+                    {{- range . }}{{ printf ", cert:%s/%s" (.kind | default "Secret") .name | cyan }}{{ end }}
+                {{- end }}
+            {{- end }}
+            {{- range $statusListener.conditions }}
+                {{- $.Include "condition_summary" . | nindent 6 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.infrastructure.parametersRef }}
+        {{- if $.Config.GetBool "deep" }}
+            {{- $ns := coalesce .namespace $.Namespace }}
+            {{- $obj := $.KubeGetFirst $ns .kind .name }}
+            {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 2 }}{{ end }}
+        {{- else }}
+            {{- "Infrastructure" | bold | nindent 2 }}: {{ printf "%s/%s" .kind .name | cyan }}
+            {{- with .group }} ({{ . }}){{ end }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

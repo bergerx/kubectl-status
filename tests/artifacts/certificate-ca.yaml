@@ -1,0 +1,37 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"cert-manager.io/v1","kind":"Certificate","metadata":{"annotations":{},"name":"kubectl-status-ca","namespace":"default"},"spec":{"commonName":"kubectl-status-ca","duration":"87600h","isCA":true,"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":"selfsigned-bootstrap"},"privateKey":{"algorithm":"ECDSA","size":256},"renewBefore":"720h","secretName":"kubectl-status-ca-secret"}}
+  creationTimestamp: "2026-06-26T23:53:04Z"
+  generation: 1
+  name: kubectl-status-ca
+  namespace: default
+  resourceVersion: "3825"
+  uid: 24d484ec-dbdc-4032-82ee-c9091eb5d439
+spec:
+  commonName: kubectl-status-ca
+  duration: 87600h
+  isCA: true
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: selfsigned-bootstrap
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  renewBefore: 720h
+  secretName: kubectl-status-ca-secret
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-26T23:53:04Z"
+    message: Certificate is up to date and has not expired
+    observedGeneration: 1
+    reason: Ready
+    status: "True"
+    type: Ready
+  notAfter: "2036-06-23T23:53:04Z"
+  notBefore: "2026-06-26T23:53:04Z"
+  renewalTime: "2036-05-24T23:53:04Z"
+  revision: 1

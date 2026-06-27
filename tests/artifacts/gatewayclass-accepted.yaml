@@ -1,0 +1,20 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  creationTimestamp: "2026-06-26T23:39:52Z"
+  finalizers:
+  - gateway-exists-finalizer.gateway.networking.k8s.io
+  generation: 1
+  name: eg
+  resourceVersion: "2593"
+  uid: 30d4af15-15a2-4ab8-ade9-3004e5e44562
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-26T23:39:52Z"
+    message: Valid GatewayClass
+    observedGeneration: 1
+    reason: Accepted
+    status: "True"
+    type: Accepted

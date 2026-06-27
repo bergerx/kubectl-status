@@ -50,14 +50,18 @@
     {{- end }}
 {{- end -}}
 
+{{- define "resource_ref" }}
+    {{- .kind | cyan | bold }}/{{ .name | cyan }}
+    {{- with .namespace }} -n {{ if eq . "default" }}{{ . | red }}{{ else }}{{ . | cyan }}{{ end }}{{ end }}
+{{- end -}}
+
 {{- define "status_summary_line" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- if (.Object | default dict).inline }}
         {{- .Kind | bold }}/{{ .Name }}
     {{- else }}
-        {{- .Kind | cyan | bold }}/{{ .Name | cyan }}
+        {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
     {{- end }}
-    {{- with .Namespace }} -n {{ if eq . "default" }}{{ . | red }}{{ else }}{{ . }}{{ end }}{{ end }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if .Metadata.ownerReferences }} by {{ range $index, $ownerReference := .Metadata.ownerReferences }}
         {{- if $index }},{{ end }}{{ $ownerReference.kind | bold }}/{{ $ownerReference.name }}
@@ -196,5 +200,52 @@
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- with not (.Config.GetBool "include-rollout-diffs") }}
       {{- " Use the `--include-rollout-diffs` flag to see the diff between each rollout!" | blue }}
+    {{- end }}
+{{- end }}
+
+{{- define "pod_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- with .Status.phase }} {{ . | colorKeyword }}{{ end }}
+    {{- $total := 0 }}{{ $ready := 0 }}
+    {{- range .Status.containerStatuses }}
+        {{- $total = add1 $total }}
+        {{- if .ready }}{{ $ready = add1 $ready }}{{ end }}
+    {{- end }}
+    {{- if $total }}, {{ if lt $ready $total }}{{ printf "%d/%d" $ready $total | red | bold }}{{ else }}{{ printf "%d/%d" $ready $total | green }}{{ end }} ready{{ end }}
+{{- end }}
+
+{{- define "service_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
+    {{- $ready := 0 }}{{ $notReady := 0 }}
+    {{- range $slices }}
+        {{- range (.Object.endpoints | default list) }}
+            {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{ $ready = add1 $ready }}{{ else }}{{ $notReady = add1 $notReady }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- if not $slices }}
+        {{- ", " }}{{ "no endpoints" | red | bold }}
+    {{- else if or $ready $notReady }}
+        {{- if $ready }}, {{ $ready | toString | green }} ready{{ end }}
+        {{- if $notReady }}, {{ $notReady | toString | red | bold }} not ready{{ end }}
+    {{- else }}
+        {{- ", " }}{{ "no matching pods" | red | bold }}
+    {{- end }}
+{{- end }}
+
+{{- define "workload_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- if eq .Kind "DaemonSet" }}
+        {{- $desired := .Status.desiredNumberScheduled | int }}
+        {{- $ready := .Status.numberReady | default 0 | int }}
+        {{- if lt $ready $desired }}{{ printf ", %d/%d" $ready $desired | red | bold }}{{ else }}{{ printf ", %d/%d" $ready $desired | green }}{{ end }} scheduled
+    {{- else }}
+        {{- $desired := 1 }}{{ if hasKey .Spec "replicas" }}{{ $desired = .Spec.replicas | int }}{{ end }}
+        {{- $ready := .Status.readyReplicas | default 0 | int }}
+        {{- if lt $ready $desired }}{{ printf ", %d/%d" $ready $desired | red | bold }}{{ else }}{{ printf ", %d/%d" $ready $desired | green }}{{ end }} ready
+        {{- with .RolloutStatus . }}{{ if not .done }}, {{ "rolling out" | yellow }}{{ end }}{{ end }}
     {{- end }}
 {{- end }}

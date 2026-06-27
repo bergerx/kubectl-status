@@ -1,0 +1,79 @@
+{{- define "Issuer" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: cert-manager.io/v1, Kind=Issuer */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- if hasKey .Spec "selfSigned" }}
+        {{- "Backend" | bold | nindent 2 }}: {{ "Self-Signed" | cyan }}
+        {{- with .Spec.selfSigned.crlDistributionPoints }}
+            {{- "CRL" | bold | nindent 4 }}: {{ join ", " . | cyan }}
+        {{- end }}
+    {{- else if .Spec.ca }}
+        {{- "Backend" | bold | nindent 2 }}: {{ "CA" | cyan }} · signing key in {{ printf "secret/%s" .Spec.ca.secretName | cyan }}
+        {{- with .Spec.ca.ocspServers }}
+            {{- "OCSP" | bold | nindent 4 }}: {{ join ", " . | cyan }}
+        {{- end }}
+        {{- with .Spec.ca.crlDistributionPoints }}
+            {{- "CRL" | bold | nindent 4 }}: {{ join ", " . | cyan }}
+        {{- end }}
+    {{- else if .Spec.acme }}
+        {{- "Backend" | bold | nindent 2 }}: {{ "ACME" | cyan }} at {{ .Spec.acme.server | cyan }}
+        {{- with .Spec.acme.email }}
+            {{- "Account" | bold | nindent 4 }}: {{ . | cyan }}
+            {{- with $.Spec.acme.privateKeySecretRef }} · key in {{ printf "secret/%s" .name | cyan }}{{ end }}
+        {{- else }}
+            {{- with .Spec.acme.privateKeySecretRef }}
+                {{- "Account key" | bold | nindent 4 }}: {{ printf "secret/%s" .name | cyan }}
+            {{- end }}
+        {{- end }}
+        {{- with .Spec.acme.preferredChain }}
+            {{- "Preferred chain" | bold | nindent 4 }}: {{ . | cyan }}
+        {{- end }}
+        {{- with .Status.acme }}
+            {{- with .uri }}
+                {{- "Registered at" | bold | nindent 4 }}: {{ . | cyan }}
+            {{- end }}
+            {{- if and .lastRegisteredEmail (ne .lastRegisteredEmail ($.Spec.acme.email | default "")) }}
+                {{- "Registered email" | bold | nindent 4 }}: {{ .lastRegisteredEmail | cyan }}
+            {{- end }}
+        {{- end }}
+        {{- $solverTypes := list }}
+        {{- range .Spec.acme.solvers | default list }}
+            {{- if .http01 }}{{ $solverTypes = append $solverTypes "HTTP-01" }}{{ end }}
+            {{- if .dns01 }}{{ $solverTypes = append $solverTypes "DNS-01" }}{{ end }}
+        {{- end }}
+        {{- with $solverTypes | uniq }}
+            {{- "Solvers" | bold | nindent 4 }}: {{ join ", " . | cyan }}
+        {{- end }}
+    {{- else if .Spec.vault }}
+        {{- "Backend" | bold | nindent 2 }}: {{ "Vault" | cyan }} at {{ .Spec.vault.server | cyan }} · path {{ .Spec.vault.path | cyan }}
+        {{- with .Spec.vault.namespace }}
+            {{- "Namespace" | bold | nindent 4 }}: {{ . | cyan }}
+        {{- end }}
+        {{- with .Spec.vault.auth }}
+            {{- if .appRole }}
+                {{- "Auth" | bold | nindent 4 }}: {{ "AppRole" | cyan }} · role-id={{ .appRole.roleId | cyan }}
+            {{- else if .kubernetes }}
+                {{- "Auth" | bold | nindent 4 }}: {{ "Kubernetes" | cyan }} · role={{ .kubernetes.role | cyan }}
+            {{- else if .tokenSecretRef }}
+                {{- "Auth" | bold | nindent 4 }}: {{ "Token" | cyan }} from {{ printf "secret/%s" .tokenSecretRef.name | cyan }}
+            {{- else if .clientCertificate }}
+                {{- "Auth" | bold | nindent 4 }}: {{ "Client Certificate" | cyan }}
+            {{- end }}
+        {{- end }}
+    {{- else if .Spec.venafi }}
+        {{- "Backend" | bold | nindent 2 }}: {{ "Venafi" | cyan }} · zone {{ .Spec.venafi.zone | cyan }}
+        {{- if .Spec.venafi.tpp }}
+            {{- "TPP" | bold | nindent 4 }}: {{ .Spec.venafi.tpp.url | cyan }}
+        {{- else if .Spec.venafi.cloud }}
+            {{- "Cloud" | bold | nindent 4 }}: {{ coalesce .Spec.venafi.cloud.url "https://api.venafi.cloud/" | cyan }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

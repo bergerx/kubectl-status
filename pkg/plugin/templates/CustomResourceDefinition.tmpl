@@ -1,0 +1,74 @@
+{{- define "CustomResourceDefinition" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: apiextensions.k8s.io/v1, Kind=CustomResourceDefinition */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- .Spec.group | bold | nindent 2 }}, scope: {{ .Spec.scope | colorKeyword }}
+    {{- with .Spec.names.shortNames }}, short: {{ join ", " . }}{{ end }}
+    {{- with .Spec.names.categories }}, categories: {{ join ", " . }}{{ end }}
+    {{- if eq (len .Spec.versions) 1 }}
+        {{- $v := index .Spec.versions 0 }}
+        {{- "Versions" | bold | nindent 2 }}: {{ $v.name | green | bold }} {{ "[storage]" | bold }}
+    {{- else }}
+        {{- "Versions" | bold | nindent 2 }}:
+        {{- range .Spec.versions }}
+            {{- if .deprecated }}
+                {{- .name | red | bold | nindent 4 }}
+            {{- else if .storage }}
+                {{- .name | green | bold | nindent 4 }}
+            {{- else if not .served }}
+                {{- .name | yellow | nindent 4 }}
+            {{- else }}
+                {{- .name | nindent 4 }}
+            {{- end }}
+            {{- if .storage }} {{ "[storage]" | bold }}{{ end }}
+            {{- if not .served }} unserved{{ end }}
+            {{- if .deprecated }} deprecated{{ with .deprecationWarning }}: {{ . }}{{ end }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- $storageVersion := "" }}
+    {{- range .Spec.versions }}{{ if .storage }}{{ $storageVersion = .name }}{{ end }}{{ end }}
+    {{- $stale := list }}
+    {{- range .Status.storedVersions }}{{ if ne . $storageVersion }}{{ $stale = append $stale . }}{{ end }}{{ end }}
+    {{- with $stale }}
+        {{- "Stored" | red | bold | nindent 2 }}: {{ join ", " . | red }} (migration pending)
+    {{- end }}
+    {{- with .Spec.conversion }}{{ if ne (.strategy | default "None") "None" }}
+        {{- "Conversion" | bold | nindent 2 }}: {{ .strategy }}
+        {{- if .webhook.clientConfig.service }}
+            {{- $svc := .webhook.clientConfig.service }}
+            {{- $svcName := $svc.name }}
+            {{- $svcNs := $svc.namespace }}
+            {{- $svcPort := $svc.port | default 443 }}
+            {{- $svcPath := $svc.path }}
+            {{- if $.Config.GetBool "shallow" }}
+                {{- "→ Service" | bold | nindent 4 }}/{{ $svcName }}.{{ $svcNs }}:{{ $svcPort }}{{ $svcPath }}
+            {{- else }}
+                {{- $svcObj := $.KubeGetFirst $svcNs "Service" $svcName }}
+                {{- if not $svcObj.Object }}
+                    {{- "→ Service" | red | bold | nindent 4 }}/{{ $svcName | red }}.{{ $svcNs | red }}:{{ $svcPort }}{{ $svcPath }}{{ " (not found)" | red }}
+                {{- else }}
+                    {{- $slices := $.KubeGetEndpointSlicesForService $svcNs $svcName }}
+                    {{- $readyCount := 0 }}
+                    {{- range $slices }}
+                        {{- range (.Object.endpoints | default list) }}
+                            {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{- $readyCount = add1 $readyCount }}{{- end }}
+                        {{- end }}
+                    {{- end }}
+                    {{- if gt $readyCount 0 }}
+                        {{- "→ Service" | green | bold | nindent 4 }}/{{ $svcName | green }}.{{ $svcNs | green }}:{{ $svcPort }}{{ $svcPath }}
+                    {{- else }}
+                        {{- "→ Service" | red | bold | nindent 4 }}/{{ $svcName | red }}.{{ $svcNs | red }}:{{ $svcPort }}{{ $svcPath }}{{ " (no ready endpoints)" | red }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- else }}
+            {{- with .webhook.clientConfig.url }} → {{ . }}{{ end }}
+        {{- end }}
+    {{- end }}{{ end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

@@ -1,0 +1,43 @@
+{{- define "CertificateRequest" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: cert-manager.io/v1, Kind=CertificateRequest */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- /* Request context: who asked, for what, via which issuer */ -}}
+    {{- $certName := index .Annotations "cert-manager.io/certificate-name" }}
+    {{- $certRevision := index .Annotations "cert-manager.io/certificate-revision" }}
+    {{- with .Spec.username }}
+        {{- "Requested by" | nindent 2 }} {{ . | cyan | bold }}
+        {{- with $certName }} for {{ printf "Certificate/%s" . | cyan | bold }}{{ end }}
+        {{- with $certRevision }} (rev {{ . | cyan }}){{ end }}
+    {{- end }}
+    {{- with .Spec.issuerRef }}
+        {{- "Via" | bold | nindent 4 }}: {{ printf "%s/%s" (.kind | default "Issuer") .name | cyan }}
+        {{- with .group }} ({{ . | cyan }}){{ end }}
+    {{- end }}
+    {{- /* Requester group membership */ -}}
+    {{- with .Spec.groups }}
+        {{- "Member of" | bold | nindent 4 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- /* What is being requested */ -}}
+    {{- if .Spec.isCA }}
+        {{- "Requesting" | bold | nindent 2 }}: {{ "Certificate Authority" | yellow | bold }} cert
+    {{- end }}
+    {{- with .Spec.usages }}
+        {{- "Usages" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- with .Spec.duration }}
+        {{- "Requested duration" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- /* Failure */ -}}
+    {{- with .Status.failureTime }}
+        {{- "Failed" | red | bold | nindent 2 }} {{ . | colorAgo }}{{ agoSuffix }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

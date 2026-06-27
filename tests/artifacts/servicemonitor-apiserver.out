@@ -1,0 +1,10 @@
+
+ServiceMonitor/kube-prometheus-stack-1782-apiserver -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Selector:
+    component=apiserver
+    provider=kubernetes
+  Namespaces: default
+  Endpoints:
+    https/https, TLS, 1 metricRelabelings
+  Job label: component
