@@ -1,0 +1,12 @@
+
+ServiceMonitor/kube-prometheus-stack-1782-kubelet -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Selector:
+    app.kubernetes.io/name=kubelet
+    k8s-app=kubelet
+  Namespaces: kube-system
+  Endpoints:
+    https-metrics/https, honor-labels, TLS, 1 relabelings, 1 metricRelabelings
+    https-metrics/https → /metrics/cadvisor, every 10s, honor-labels, TLS, 1 relabelings, 8 metricRelabelings
+    https-metrics/https → /metrics/probes, honor-labels, TLS, 1 relabelings
+  Job label: k8s-app

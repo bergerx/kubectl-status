@@ -1,0 +1,53 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  creationTimestamp: "2026-06-26T23:14:55Z"
+  generation: 1
+  labels:
+    app: kube-prometheus-stack-prometheus
+    app.kubernetes.io/instance: kube-prometheus-stack-1782515683
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    app.kubernetes.io/version: 87.2.1
+    chart: kube-prometheus-stack-87.2.1
+    heritage: Helm
+    release: kube-prometheus-stack-1782515683
+  name: prometheus-pods
+  namespace: default
+  resourceVersion: "700"
+  uid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+spec:
+  jobLabel: app.kubernetes.io/name
+  namespaceSelector:
+    matchNames:
+    - default
+  podMetricsEndpoints:
+  - honorLabels: true
+    interval: 30s
+    metricRelabelings:
+    - action: drop
+      regex: prometheus_tsdb_exemplar_exemplars_appended_total
+      sourceLabels:
+      - __name__
+    path: /metrics
+    port: http-web
+    relabelings:
+    - action: replace
+      regex: (.*)
+      replacement: $1
+      sourceLabels:
+      - __meta_kubernetes_pod_node_name
+      targetLabel: node
+    scrapeTimeout: 10s
+  - path: /federate
+    port: http-web
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+  podTargetLabels:
+  - app.kubernetes.io/name
+  - app.kubernetes.io/instance
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+      app.kubernetes.io/instance: kube-prometheus-stack-1782515683

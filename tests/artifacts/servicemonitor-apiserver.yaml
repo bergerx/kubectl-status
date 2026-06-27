@@ -1,0 +1,44 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  annotations:
+    meta.helm.sh/release-name: kube-prometheus-stack-1782515683
+    meta.helm.sh/release-namespace: default
+  creationTimestamp: "2026-06-26T23:14:55Z"
+  generation: 1
+  labels:
+    app: kube-prometheus-stack-apiserver
+    app.kubernetes.io/instance: kube-prometheus-stack-1782515683
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    app.kubernetes.io/version: 87.2.1
+    chart: kube-prometheus-stack-87.2.1
+    heritage: Helm
+    release: kube-prometheus-stack-1782515683
+  name: kube-prometheus-stack-1782-apiserver
+  namespace: default
+  resourceVersion: "670"
+  uid: 524b2b63-6328-4f1b-9dee-6cd217c3381d
+spec:
+  endpoints:
+  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    metricRelabelings:
+    - action: drop
+      regex: (etcd_request|apiserver_request_slo|apiserver_request_sli|apiserver_request)_duration_seconds_bucket;(0\.15|0\.2|0\.3|0\.35|0\.4|0\.45|0\.6|0\.7|0\.8|0\.9|1\.25|1\.5|1\.75|2|3|3\.5|4|4\.5|6|7|8|9|15|20|40|45|50)(\.0)?
+      sourceLabels:
+      - __name__
+      - le
+    port: https
+    scheme: https
+    tlsConfig:
+      caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      insecureSkipVerify: false
+      serverName: kubernetes
+  jobLabel: component
+  namespaceSelector:
+    matchNames:
+    - default
+  selector:
+    matchLabels:
+      component: apiserver
+      provider: kubernetes

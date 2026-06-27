@@ -1,0 +1,62 @@
+{{- define "PodMonitor" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: monitoring.coreos.com/v1, Kind=PodMonitor */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.selector }}
+        {{- "Selector" | bold | nindent 2 }}:
+        {{- range $k, $v := .matchLabels }}
+            {{- printf "%s=%s" $k $v | cyan | nindent 4 }}
+        {{- end }}
+        {{- range .matchExpressions }}
+            {{- printf "%s %s [%s]" .key .operator (.values | default list | join ",") | cyan | nindent 4 }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.namespaceSelector }}
+        {{- if .any }}
+            {{- "Namespaces" | bold | nindent 2 }}: {{ "all" | cyan }}
+        {{- else }}
+            {{- with .matchNames }}
+                {{- "Namespaces" | bold | nindent 2 }}:
+                {{- if eq (len .) 1 }}
+                    {{- " " }}{{ index . 0 | cyan }}
+                {{- else }}
+                    {{- range . }}
+                        {{- . | cyan | nindent 4 }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.podMetricsEndpoints }}
+        {{- "Endpoints" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- if .port }}{{ .port | cyan | nindent 4 }}
+            {{- else if .portNumber }}{{ .portNumber | toString | cyan | nindent 4 }}
+            {{- else }}{{ .targetPort | toString | cyan | nindent 4 }}
+            {{- end }}
+            {{- with .scheme }}{{ if ne . "http" }}/{{ . | cyan }}{{ end }}{{ end }}
+            {{- with .path }}{{ if ne . "/metrics" }} → {{ . | cyan }}{{ end }}{{ end }}
+            {{- with .interval }}, every {{ . | cyan }}{{ end }}
+            {{- with .scrapeTimeout }}, timeout={{ . | cyan }}{{ end }}
+            {{- if .honorLabels }}, {{ "honor-labels" | yellow }}{{ end }}
+            {{- if eq .filterRunning false }}, {{ "include-non-running" | yellow }}{{ end }}
+            {{- with .tlsConfig }}, {{ "TLS" | cyan }}{{ end }}
+            {{- with .relabelings }}, {{ len . | toString | cyan }} relabelings{{ end }}
+            {{- with .metricRelabelings }}, {{ len . | toString | cyan }} metricRelabelings{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.jobLabel }}
+        {{- "Job label" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- with .Spec.podTargetLabels }}
+        {{- "Pod target labels" | bold | nindent 2 }}: {{ . | join ", " | cyan }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

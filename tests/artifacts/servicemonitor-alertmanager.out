@@ -1,0 +1,11 @@
+
+ServiceMonitor/kube-prometheus-stack-1782-alertmanager -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Selector:
+    app=kube-prometheus-stack-alertmanager
+    release=kube-prometheus-stack-1782515683
+    self-monitor=true
+  Namespaces: default
+  Endpoints:
+    http-web
+    reloader-web
