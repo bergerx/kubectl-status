@@ -18,8 +18,8 @@
     {{- end }}{{ end }}
     {{- with .Spec.selector }}
         {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
-        {{- if not ($.Config.GetBool "shallow") }}
-            {{- $matchLabels := .matchLabels }}
+        {{- $matchLabels := .matchLabels }}
+        {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
             {{- if $.Config.GetBool "deep" }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}
@@ -42,7 +42,8 @@
         {{- with $rolloutStatus.message }}: {{ . | yellow }}{{ end }}
         {{- with $rolloutStatus.error }}: Error: {{ . | red }}{{ end }}
     {{- end }}
-    {{- if (.Spec.replicas | default 1 | int) }}
+    {{- $replicas := 1 }}{{ if hasKey .Spec "replicas" }}{{ $replicas = .Spec.replicas | int }}{{ end }}
+    {{- if $replicas }}
         {{- if not .Status.readyReplicas }}
             {{- "Outage" | red | bold | nindent 2 }}: Deployment has no Ready replicas.
         {{- else if ne .Status.replicas .Status.readyReplicas }}

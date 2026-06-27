@@ -222,7 +222,7 @@
     {{- $ready := 0 }}{{ $notReady := 0 }}
     {{- range $slices }}
         {{- range (.Object.endpoints | default list) }}
-            {{- if .conditions.ready }}{{ $ready = add1 $ready }}{{ else }}{{ $notReady = add1 $notReady }}{{ end }}
+            {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{ $ready = add1 $ready }}{{ else }}{{ $notReady = add1 $notReady }}{{ end }}
         {{- end }}
     {{- end }}
     {{- if not $slices }}
@@ -243,7 +243,7 @@
         {{- $ready := .Status.numberReady | default 0 | int }}
         {{- if lt $ready $desired }}{{ printf ", %d/%d" $ready $desired | red | bold }}{{ else }}{{ printf ", %d/%d" $ready $desired | green }}{{ end }} scheduled
     {{- else }}
-        {{- $desired := .Spec.replicas | default 1 | int }}
+        {{- $desired := 1 }}{{ if hasKey .Spec "replicas" }}{{ $desired = .Spec.replicas | int }}{{ end }}
         {{- $ready := .Status.readyReplicas | default 0 | int }}
         {{- if lt $ready $desired }}{{ printf ", %d/%d" $ready $desired | red | bold }}{{ else }}{{ printf ", %d/%d" $ready $desired | green }}{{ end }} ready
         {{- with .RolloutStatus . }}{{ if not .done }}, {{ "rolling out" | yellow }}{{ end }}{{ end }}

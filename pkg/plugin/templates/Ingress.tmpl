@@ -36,7 +36,7 @@
                         {{- $addressCount := 0 }}
                         {{- range $slices }}
                             {{- range (.Object.endpoints | default list) }}
-                                {{- if .conditions.ready }}{{- $addressCount = add1 $addressCount }}{{- end }}
+                                {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{- $addressCount = add1 $addressCount }}{{- end }}
                             {{- end }}
                         {{- end }}
                         {{- if not $slices }}

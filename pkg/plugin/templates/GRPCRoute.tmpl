@@ -42,7 +42,7 @@
                     {{- printf "→ %s/%s" (.kind | default "Service") .name | cyan | nindent 4 }}
                     {{- with .port }}:{{ . }}{{ end }}
                     {{- with .namespace }} -n {{ . }}{{ end }}
-                    {{- if and .weight (ne (.weight | int) 1) }}, weight:{{ .weight }}{{ end }}
+                    {{- if and (hasKey . "weight") (ne (.weight | int) 1) }}, weight:{{ .weight }}{{ end }}
                 {{- end }}
             {{- end }}
         {{- end }}

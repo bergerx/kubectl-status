@@ -19,7 +19,7 @@
     {{- range $slices }}
         {{- range (.Object.endpoints | default list) }}
             {{- $hasAnyEndpoints = true }}
-            {{- if .conditions.ready }}{{- $hasReadyEndpoints = true }}{{- end }}
+            {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{- $hasReadyEndpoints = true }}{{- end }}
         {{- end }}
     {{- end }}
     {{- if not $slices }}
@@ -30,7 +30,7 @@
         {{- range $slices }}
             {{- $ports := .Object.ports }}
             {{- range (.Object.endpoints | default list) }}
-                {{- if .conditions.ready }}
+                {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}
   Ready: {{ template "endpoint_slice_endpoint" (dict "endpoint" . "ports" $ports) }}
                 {{- end }}
             {{- end }}
@@ -41,7 +41,7 @@
         {{- range $slices }}
             {{- $ports := .Object.ports }}
             {{- range (.Object.endpoints | default list) }}
-                {{- if not .conditions.ready }}
+                {{- if and (hasKey (.conditions | default dict) "ready") (not .conditions.ready) }}
   {{ "NotReady" | red | bold }}: {{ template "endpoint_slice_endpoint" (dict "endpoint" . "ports" $ports) }}
                 {{- end }}
             {{- end }}

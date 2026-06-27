@@ -87,7 +87,7 @@
                     {{- range . }}
                         {{- "→" | nindent 4 }} {{ $.Include "resource_ref" (dict "kind" (.kind | default "Service") "name" .name "namespace" .namespace) }}
                         {{- with .port }}:{{ . | toString | cyan }}{{ end }}
-                        {{- if and .weight (ne (.weight | int) 1) }}, weight:{{ .weight | toString | cyan }}{{ end }}
+                        {{- if and (hasKey . "weight") (ne (.weight | int) 1) }}, weight:{{ .weight | toString | cyan }}{{ end }}
                     {{- end }}
                 {{- end }}
             {{- end }}

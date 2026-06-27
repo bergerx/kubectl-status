@@ -216,7 +216,7 @@ func (r RenderableObject) KubeGetEndpointSlicesForService(namespace, serviceName
 	}
 	klog.V(5).InfoS("called KubeGetEndpointSlicesForService", "r", r, "namespace", namespace, "serviceName", serviceName)
 	selector := discoveryv1.LabelServiceName + "=" + serviceName
-	objects, err := r.repo.Objects(namespace, []string{"EndpointSlices"}, selector)
+	objects, err := r.repo.Objects(namespace, []string{"endpointslices"}, selector)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing endpointslices for service", "r", r, "namespace", namespace, "serviceName", serviceName)
 		return

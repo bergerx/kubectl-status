@@ -10,7 +10,9 @@ export GO111MODULE=on
 bin: fmt vet staticcheck
 	mkdir -p bin
 	goreleaser build --single-target --skip=validate --clean
-	ln -Ffs ../dist/status_$$(go env GOOS)_$$(go env GOARCH)_$$(go env GO$$(echo $$(go env GOARCH) | tr '[:lower:]' '[:upper:]'))/status bin/
+	@suffix=$$(go env GO$$(echo $$(go env GOARCH) | tr '[:lower:]' '[:upper:]' 2>/dev/null)); \
+	if [ -n "$$suffix" ]; then suffix="_$$suffix"; fi; \
+	ln -Ffs ../dist/status_$$(go env GOOS)_$$(go env GOARCH)$$suffix/status bin/
 
 .PHONY: clean
 clean:
