@@ -34,13 +34,11 @@
             {{- if not $svcObj.Object }}
                 {{- "→ Service" | red | bold | nindent 4 }}/{{ $svcName | red }}.{{ $svcNs | red }}:{{ $svcPort }}{{ $svcPath }}{{ " (not found)" | red }}
             {{- else }}
-                {{- $ep := $root.KubeGetFirst $svcNs "Endpoints" $svcName }}
+                {{- $slices := $root.KubeGetEndpointSlicesForService $svcNs $svcName }}
                 {{- $readyCount := 0 }}
-                {{- if $ep.Object }}
-                    {{- range ($ep.Object.subsets | default list) }}
-                        {{- range .addresses }}
-                            {{- $readyCount = add1 $readyCount }}
-                        {{- end }}
+                {{- range $slices }}
+                    {{- range (.Object.endpoints | default list) }}
+                        {{- if .conditions.ready }}{{- $readyCount = add1 $readyCount }}{{- end }}
                     {{- end }}
                 {{- end }}
                 {{- if gt $readyCount 0 }}

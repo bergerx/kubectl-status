@@ -11,6 +11,7 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -177,24 +178,27 @@ func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) 
 		return
 	}
 	klog.V(5).InfoS("called KubeGetServicesMatchingPod", "r", r, "namespace", namespace, "podName", podName)
-	endpoints, err := r.repo.Endpoints(r.Namespace())
+	endpointSlices, err := r.repo.EndpointSlices(r.Namespace())
 	if err != nil {
-		klog.V(3).ErrorS(err, "error listing endpoints", "r", r, "namespace", namespace)
+		klog.V(3).ErrorS(err, "error listing endpointslices", "r", r, "namespace", namespace)
 		return
 	}
-	for _, ep := range endpoints.Items {
+	for _, eps := range endpointSlices.Items {
 		matched := false
-		for _, subset := range ep.Subsets {
-			for _, address := range subset.Addresses {
-				if address.TargetRef != nil && address.TargetRef.Kind == "Pod" && address.TargetRef.Name == podName {
-					matched = true
-				}
+		for _, endpoint := range eps.Endpoints {
+			if endpoint.TargetRef != nil && endpoint.TargetRef.Kind == "Pod" && endpoint.TargetRef.Name == podName {
+				matched = true
+				break
 			}
 		}
 		if matched {
-			svc, err := r.repo.Service(r.Namespace(), ep.Name)
+			svcName := eps.Labels[discoveryv1.LabelServiceName]
+			if svcName == "" {
+				continue
+			}
+			svc, err := r.repo.Service(r.Namespace(), svcName)
 			if err != nil {
-				klog.V(3).ErrorS(err, "error getting matching service", "r", r, "namespace", namespace, "name", ep.Name)
+				klog.V(3).ErrorS(err, "error getting matching service", "r", r, "namespace", namespace, "name", svcName)
 				continue
 			}
 			svc.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Service"))
@@ -203,6 +207,21 @@ func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) 
 		}
 	}
 	return out
+}
+
+// KubeGetEndpointSlicesForService returns EndpointSlices associated with the given service.
+func (r RenderableObject) KubeGetEndpointSlicesForService(namespace, serviceName string) (out []RenderableObject) {
+	if viper.GetBool("shallow") {
+		return
+	}
+	klog.V(5).InfoS("called KubeGetEndpointSlicesForService", "r", r, "namespace", namespace, "serviceName", serviceName)
+	selector := discoveryv1.LabelServiceName + "=" + serviceName
+	objects, err := r.repo.Objects(namespace, []string{"EndpointSlices"}, selector)
+	if err != nil {
+		klog.V(3).ErrorS(err, "error listing endpointslices for service", "r", r, "namespace", namespace, "serviceName", serviceName)
+		return
+	}
+	return r.objectsToRenderableObjects(objects)
 }
 
 func doesServiceMatchLabels(svc corev1.Service, labels map[string]string) bool {

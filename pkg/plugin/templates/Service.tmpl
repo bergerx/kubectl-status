@@ -6,36 +6,46 @@
     {{- if eq .Spec.type "LoadBalancer" }}
         {{- template "load_balancer_ingress" . }}
     {{- end }}
-    {{- $endpoint := .KubeGetFirst .Namespace "Endpoints" .Name }}
-    {{- if $endpoint.Object }}
-        {{- if hasKey $endpoint.Annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
-            , last endpoint change was {{ index $endpoint.Annotations "endpoints.kubernetes.io/last-change-trigger-time"  | colorAgo }}{{ agoSuffix }}
+    {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
+    {{- if $slices }}
+        {{- if hasKey (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
+            , last endpoint change was {{ index (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" | colorAgo }}{{ agoSuffix }}
         {{- end}}
     {{- end}}
     {{- template "kstatus_summary" . }}
     {{- template "application_details" . }}
-    {{- if $endpoint.Object }}
-        {{- if $endpoint.Object.subsets }}
-            {{- range $endpoint.Object.subsets }}
-                {{- $ports := .ports }}
-                {{- if .addresses }}
-                    {{- range .addresses }}
-  Ready: {{ template "endpoint_subset_address" (dict "address" . "ports" $ports) }}
-                    {{- end }}
-                {{- else }}
-  {{ "Outage" | red | bold }}: This service doesn't match any Ready pods.
-                {{- end }}
-                {{- with .notReadyAddresses }}
-                    {{- range . }}
-  {{ "NotReady" | red | bold }}: {{ template "endpoint_subset_address" (dict "address" . "ports" $ports) }}
-                    {{- end }}
+    {{- $hasAnyEndpoints := false }}
+    {{- $hasReadyEndpoints := false }}
+    {{- range $slices }}
+        {{- range (.Object.endpoints | default list) }}
+            {{- $hasAnyEndpoints = true }}
+            {{- if .conditions.ready }}{{- $hasReadyEndpoints = true }}{{- end }}
+        {{- end }}
+    {{- end }}
+    {{- if not $slices }}
+  {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
+    {{- else if not $hasAnyEndpoints }}
+  {{ "No matching pods" | red | bold }}: Service selector either doesn't match any Pods or the Service's targetPort doesn't match the Pod's port.
+    {{- else }}
+        {{- range $slices }}
+            {{- $ports := .Object.ports }}
+            {{- range (.Object.endpoints | default list) }}
+                {{- if .conditions.ready }}
+  Ready: {{ template "endpoint_slice_endpoint" (dict "endpoint" . "ports" $ports) }}
                 {{- end }}
             {{- end }}
-        {{- else }}
-  {{ "No matching pods" | red | bold }}: Service selector either doens't match any Pods or the Service's targetPort doesn't match the Pod's port.
         {{- end }}
-    {{- else }}
-  {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
+        {{- if not $hasReadyEndpoints }}
+  {{ "Outage" | red | bold }}: This service doesn't match any Ready pods.
+        {{- end }}
+        {{- range $slices }}
+            {{- $ports := .Object.ports }}
+            {{- range (.Object.endpoints | default list) }}
+                {{- if not .conditions.ready }}
+  {{ "NotReady" | red | bold }}: {{ template "endpoint_slice_endpoint" (dict "endpoint" . "ports" $ports) }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
     {{- end }}
     {{- template "recent_updates" . }}
     {{- template "matching_ingresses" . }}
@@ -55,17 +65,17 @@
     {{- end }}
 {{- end }}
 
-{{- define "endpoint_subset_address" }}
-    {{- /* Expects to get a map with these keys:
-           * address: either Endpoints.subsets.addresses[N] or Endpoints.subsets.notReadyAddresses
-           * ports: Endpoints.subsets.ports
+{{- define "endpoint_slice_endpoint" }}
+    {{- /* Expects:
+           * endpoint: EndpointSlice.endpoints[N]
+           * ports: EndpointSlice.ports
         */ -}}
-    {{- $ip := .address.ip | ip }}
-    {{- $hasTargetRef := not (not .address.targetRef) }}
-    {{- if .address.targetRef }}
-        {{- .address.targetRef.kind | bold }}/{{ .address.targetRef.name }}
-        {{- with .address.targetRef.namespace }} -n {{ . }}{{ end }}
-        {{- with .address.nodeName }} on {{ "Node" | bold }}/{{ . }}{{ end }}
+    {{- $ip := (index .endpoint.addresses 0) | ip }}
+    {{- $hasTargetRef := not (not .endpoint.targetRef) }}
+    {{- if .endpoint.targetRef }}
+        {{- .endpoint.targetRef.kind | bold }}/{{ .endpoint.targetRef.name }}
+        {{- with .endpoint.targetRef.namespace }} -n {{ . }}{{ end }}
+        {{- with .endpoint.nodeName }} on {{ "Node" | bold }}/{{ . }}{{ end }}
     {{- end }}
     {{- range $index, $port := .ports }}
         {{- if $hasTargetRef }}, {{ else }}{{if $index}}, {{end}}{{ end }}

@@ -218,21 +218,20 @@
 {{- define "service_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
-    {{- $endpoint := .KubeGetFirst .Namespace "Endpoints" .Name }}
-    {{- if $endpoint.Object }}
-        {{- $ready := 0 }}{{ $notReady := 0 }}
-        {{- range $endpoint.Object.subsets }}
-            {{- range .addresses }}{{ $ready = add1 $ready }}{{ end }}
-            {{- range .notReadyAddresses }}{{ $notReady = add1 $notReady }}{{ end }}
+    {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
+    {{- $ready := 0 }}{{ $notReady := 0 }}
+    {{- range $slices }}
+        {{- range (.Object.endpoints | default list) }}
+            {{- if .conditions.ready }}{{ $ready = add1 $ready }}{{ else }}{{ $notReady = add1 $notReady }}{{ end }}
         {{- end }}
-        {{- if or $ready $notReady }}
-            {{- if $ready }}, {{ $ready | toString | green }} ready{{ end }}
-            {{- if $notReady }}, {{ $notReady | toString | red | bold }} not ready{{ end }}
-        {{- else }}
-            {{- ", " }}{{ "no matching pods" | red | bold }}
-        {{- end }}
-    {{- else }}
+    {{- end }}
+    {{- if not $slices }}
         {{- ", " }}{{ "no endpoints" | red | bold }}
+    {{- else if or $ready $notReady }}
+        {{- if $ready }}, {{ $ready | toString | green }} ready{{ end }}
+        {{- if $notReady }}, {{ $notReady | toString | red | bold }} not ready{{ end }}
+    {{- else }}
+        {{- ", " }}{{ "no matching pods" | red | bold }}
     {{- end }}
 {{- end }}
 
