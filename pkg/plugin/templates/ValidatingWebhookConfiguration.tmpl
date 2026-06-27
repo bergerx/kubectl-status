@@ -1,0 +1,76 @@
+{{- define "ValidatingWebhookConfiguration" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: admissionregistration.k8s.io/v1, Kind=ValidatingWebhookConfiguration */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "application_details" . }}
+    {{- range .Object.webhooks }}
+        {{- template "vwc_webhook_entry" (dict "wh" . "root" $) }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}
+
+{{- define "vwc_webhook_entry" }}
+    {{- $root := .root }}
+    {{- $wh := .wh }}
+    {{- "Webhook" | bold | nindent 2 }}: {{ $wh.name | bold }}
+    {{- $isFail := eq ($wh.failurePolicy | default "Fail") "Fail" }}
+    {{- "failurePolicy" | nindent 4 }}: {{ $wh.failurePolicy | default "Fail" | redBoldIf $isFail }}
+    {{- with $wh.sideEffects }}, sideEffects: {{ . }}{{ end }}
+    {{- with $wh.timeoutSeconds }}, timeout: {{ printf "%ds" . }}{{ end }}
+    {{- if $wh.clientConfig.service }}
+        {{- $svc := $wh.clientConfig.service }}
+        {{- $svcName := $svc.name }}
+        {{- $svcNs := $svc.namespace }}
+        {{- $svcPort := $svc.port | default 443 }}
+        {{- $svcPath := $svc.path }}
+        {{- if $root.Config.GetBool "shallow" }}
+            {{- "→ Service" | bold | nindent 4 }}/{{ $svcName }}.{{ $svcNs }}:{{ $svcPort }}{{ $svcPath }}
+        {{- else }}
+            {{- $svcObj := $root.KubeGetFirst $svcNs "Service" $svcName }}
+            {{- if not $svcObj.Object }}
+                {{- "→ Service" | red | bold | nindent 4 }}/{{ $svcName | red }}.{{ $svcNs | red }}:{{ $svcPort }}{{ $svcPath }}{{ " (not found)" | red }}
+            {{- else }}
+                {{- $ep := $root.KubeGetFirst $svcNs "Endpoints" $svcName }}
+                {{- $readyCount := 0 }}
+                {{- if $ep.Object }}
+                    {{- range ($ep.Object.subsets | default list) }}
+                        {{- range .addresses }}
+                            {{- $readyCount = add1 $readyCount }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+                {{- if gt $readyCount 0 }}
+                    {{- "→ Service" | green | bold | nindent 4 }}/{{ $svcName | green }}.{{ $svcNs | green }}:{{ $svcPort }}{{ $svcPath }}
+                {{- else }}
+                    {{- "→ Service" | red | bold | nindent 4 }}/{{ $svcName | red }}.{{ $svcNs | red }}:{{ $svcPort }}{{ $svcPath }}{{ " (no ready endpoints)" | red }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- else if $wh.clientConfig.url }}
+        {{- "→ URL" | bold | nindent 4 }}: {{ $wh.clientConfig.url }}
+    {{- end }}
+    {{- range $wh.rules }}
+        {{- $ops := .operations | join "," }}
+        {{- $groups := .apiGroups | join "," | default "core" }}
+        {{- $resources := .resources | join "," }}
+        {{- $versions := .apiVersions | join "," }}
+        {{- "" | nindent 4 }}{{ $ops | bold }} {{ $groups }}/{{ $resources }}
+        {{- with $versions }}/{{ . }}{{ end }}
+        {{- with .scope }}{{ if not (eq . "*") }} scope:{{ . }}{{ end }}{{ end }}
+    {{- end }}
+    {{- with $wh.namespaceSelector }}
+        {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+            {{- "namespaceSelector" | nindent 4 }}:
+            {{- range .matchExpressions }}
+                {{- "" | nindent 6 }}{{ .key }} {{ .operator }} [{{ .values | join ", " }}]
+            {{- end }}
+            {{- range $k, $v := .matchLabels }}
+                {{- "" | nindent 6 }}{{ $k }}: {{ $v }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}

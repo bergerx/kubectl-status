@@ -1,0 +1,52 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  annotations:
+    meta.helm.sh/release-name: kube-prometheus-stack-1782515683
+    meta.helm.sh/release-namespace: default
+  creationTimestamp: "2026-06-26T23:14:54Z"
+  generation: 2
+  labels:
+    app: kube-prometheus-stack-admission
+    app.kubernetes.io/component: prometheus-operator-webhook
+    app.kubernetes.io/instance: kube-prometheus-stack-1782515683
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: kube-prometheus-stack-prometheus-operator
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    app.kubernetes.io/version: 87.2.1
+    chart: kube-prometheus-stack-87.2.1
+    heritage: Helm
+    release: kube-prometheus-stack-1782515683
+  name: kube-prometheus-stack-1782-admission
+  resourceVersion: "698"
+  uid: e69ebee0-ebf8-4df9-9a17-41852ee711d2
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJkakNDQVJ5Z0F3SUJBZ0lSQUo5dFMwWjcrSTZGOGlRZVZsQkZrYTh3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVDaE1FYm1sc01UQWdGdzB5TmpBMk1qWXlNekE1TlRGYUdBOHlNVEkyTURZd01qSXpNRGsxTVZvdwpEekVOTUFzR0ExVUVDaE1FYm1sc01UQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJGSFNmMHFPCnRUNVpBQWc4Wks4bFB2TUV6dUFuWDlIbnpma0M3ZVFhSWY2MDdpRzZhczRmZ1lEd0p1K1ZTRFFKOW8vMW5RVzMKNGs3NDk2MG5hMkNHcDBDalZ6QlZNQTRHQTFVZER3RUIvd1FFQXdJQ0JEQVRCZ05WSFNVRUREQUtCZ2dyQmdFRgpCUWNEQVRBUEJnTlZIUk1CQWY4RUJUQURBUUgvTUIwR0ExVWREZ1FXQkJUUHlSTXV2RmN6WEVVL3Y3dllGTEtVCjVZZHFlVEFLQmdncWhrak9QUVFEQWdOSUFEQkZBaUVBbzJjWmY2a2ROelFJS3R4dElMeHQ2cU1KSFR0OTZkeEsKMUdEM1NWMkk5UzBDSUZUajBrcUJxR0dVd0RWb2cxWUdZUFpOOXpSYTdyNjN4SHFlck5BZFJvVlcKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+    service:
+      name: kube-prometheus-stack-1782-operator
+      namespace: default
+      path: /admission-prometheusrules/mutate
+      port: 443
+  failurePolicy: Ignore
+  matchPolicy: Equivalent
+  name: prometheusrulemutate.monitoring.coreos.com
+  namespaceSelector: {}
+  objectSelector: {}
+  reinvocationPolicy: Never
+  rules:
+  - apiGroups:
+    - monitoring.coreos.com
+    apiVersions:
+    - '*'
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - prometheusrules
+    scope: '*'
+  sideEffects: None
+  timeoutSeconds: 10

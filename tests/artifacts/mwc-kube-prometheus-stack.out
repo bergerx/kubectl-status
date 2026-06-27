@@ -1,0 +1,7 @@
+
+MutatingWebhookConfiguration/kube-prometheus-stack-1782-admission, created 1m ago, gen:2
+  Current: Resource is current
+  Webhook: prometheusrulemutate.monitoring.coreos.com
+    failurePolicy: Ignore, sideEffects: None, timeout: 10s
+    → Service/kube-prometheus-stack-1782-operator.default:443/admission-prometheusrules/mutate
+    CREATE,UPDATE monitoring.coreos.com/prometheusrules/*
