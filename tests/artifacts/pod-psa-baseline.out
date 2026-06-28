@@ -1,5 +1,5 @@
 
-Pod/pod-psa-baseline -n psa-baseline, created 1m ago, gen:1, started after 0s Running Burstable
+Pod/pod-psa-baseline -n psa-baseline, created 1m ago, gen:1 Running Burstable
   Current: Pod is Ready
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
   Standalone POD.

@@ -1,12 +1,12 @@
 
-Pod/etcd-minikube -n kube-system, created 1m ago by Node/minikube, started after 0s Running Burstable
+Pod/etcd-minikube -n kube-system, created 1m ago by Node/minikube, started after 1m Running Burstable
   Current: Pod is Ready
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
   Containers:
     etcd (registry.k8s.io/etcd:3.5.9-0) Running for 1m and Ready, restarted 9 times
       previously: Started 1m ago and Completed after 1m
 
-Pod/storage-provisioner -n kube-system, created 1m ago, started after 0s Running BestEffort
+Pod/storage-provisioner -n kube-system, created 1m ago Running BestEffort
   Current: Pod is Ready
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
   Standalone POD.

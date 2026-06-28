@@ -1,5 +1,5 @@
 
-Pod/pod-ephemeral-base -n default, created 1m ago, gen:2, started after 0s Running Burstable
+Pod/pod-ephemeral-base -n default, created 1m ago, gen:2 Running Burstable
   Current: Pod is Ready
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
   Standalone POD.

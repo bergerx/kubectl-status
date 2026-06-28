@@ -71,7 +71,7 @@
         {{- $created := .Metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
         {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" }}
         {{- $startedIn := $started.Sub $created}}
-        {{- if gt ($startedIn.Seconds | int) 0 }}, started after {{ $startedIn.Seconds | ago }}{{ end }}
+        {{- if gt ($startedIn.Minutes | int) 0 }}, started after {{ colorDuration $startedIn }}{{ end }}
     {{- end }}
     {{- if .Status.completionTime }}
         {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" -}}
