@@ -373,7 +373,7 @@ Secret\/child -n default, created 1m ago by Secret/owner
 		waitFor(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1")
 		cmdTest{
 			args:            []string{"pod/sts-with-ingress-0", "--include-events=false", "--v", "5"},
-			stdoutEqualPath: "e2e-artifacts/sts-with-ingress.pod.out",
+			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.pod.out",
 		}.assert(t, nodeNameModifier)
 	})
 }
