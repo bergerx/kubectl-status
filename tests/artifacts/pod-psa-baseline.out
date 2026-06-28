@@ -1,0 +1,7 @@
+
+Pod/pod-psa-baseline -n psa-baseline, created 1m ago, gen:1, started after 0s Running Burstable
+  Current: Pod is Ready
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Standalone POD.
+  Containers:
+    main (nginx:alpine) Running for 1m and Ready

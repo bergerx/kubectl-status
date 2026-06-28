@@ -1,0 +1,53 @@
+{{- define "Namespace" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: /v1, Kind=Namespace */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- $labels := .Metadata.labels | default dict }}
+    {{- $psaEnforce := index $labels "pod-security.kubernetes.io/enforce" }}
+    {{- $psaEnforceVer := index $labels "pod-security.kubernetes.io/enforce-version" }}
+    {{- $psaWarn := index $labels "pod-security.kubernetes.io/warn" }}
+    {{- $psaWarnVer := index $labels "pod-security.kubernetes.io/warn-version" }}
+    {{- $psaAudit := index $labels "pod-security.kubernetes.io/audit" }}
+    {{- $psaAuditVer := index $labels "pod-security.kubernetes.io/audit-version" }}
+    {{- if or $psaEnforce $psaWarn $psaAudit }}
+        {{- $parts := list }}
+        {{- if $psaEnforce }}
+            {{- $part := printf "enforces %s" ($.Include "namespace_psa_level" $psaEnforce) }}
+            {{- if and $psaEnforceVer (ne $psaEnforceVer "latest") }}
+                {{- $part = printf "%s (%s)" $part ($psaEnforceVer | cyan) }}
+            {{- end }}
+            {{- $parts = append $parts $part }}
+        {{- end }}
+        {{- if $psaWarn }}
+            {{- $part := printf "warns on %s" ($.Include "namespace_psa_level" $psaWarn) }}
+            {{- if and $psaWarnVer (ne $psaWarnVer "latest") }}
+                {{- $part = printf "%s (%s)" $part ($psaWarnVer | cyan) }}
+            {{- end }}
+            {{- $parts = append $parts $part }}
+        {{- end }}
+        {{- if $psaAudit }}
+            {{- $part := printf "audits at %s" ($.Include "namespace_psa_level" $psaAudit) }}
+            {{- if and $psaAuditVer (ne $psaAuditVer "latest") }}
+                {{- $part = printf "%s (%s)" $part ($psaAuditVer | cyan) }}
+            {{- end }}
+            {{- $parts = append $parts $part }}
+        {{- end }}
+        {{- "PSA:" | bold | nindent 2 }} {{ join ", " $parts }}
+    {{- else }}
+        {{- "PSA: no labels set" | yellow | nindent 2 }} (cluster defaults apply — not readable via API)
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}
+
+{{- define "namespace_psa_level" -}}
+{{- if eq . "restricted" }}{{ . | green -}}
+{{- else if eq . "baseline" }}{{ . | yellow -}}
+{{- else if eq . "privileged" }}{{ . | red | bold -}}
+{{- else }}{{ . | cyan -}}
+{{- end }}
+{{- end }}

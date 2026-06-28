@@ -5,12 +5,25 @@
     {{- template "finalizer_details_on_termination" . }}
     {{- template "application_details" . }}
     {{- .Include "pod_conditions_summary" . | nindent 2 }}
+    {{- $secCtx := .Spec.securityContext | default dict }}
+    {{- $seccomp := index $secCtx "seccompProfile" | default dict }}
+    {{- if eq (index $seccomp "type" | default "") "Unconfined" }}
+        {{- "seccomp: Unconfined" | red | bold | nindent 2 }} (no syscall filtering)
+    {{- end }}
+    {{- $ns := $.KubeGetFirst "" "Namespace" $.Namespace }}
+    {{- if $ns.Object }}
+        {{- $enforce := index ($ns.Object.metadata.labels | default dict) "pod-security.kubernetes.io/enforce" }}
+        {{- if $enforce }}
+            {{- "Namespace PSA:" | bold | nindent 2 }} {{ $enforce | colorKeyword }}
+        {{- end }}
+    {{- end }}
     {{- if not .Metadata.ownerReferences }}
         {{- $container := index .Spec.containers 0 }}{{/* not ideal but will likely work in most cases if not all */}}
         {{- "Standalone POD" | red | bold | nindent 2 }}{{ if $container.stdin }}, interactive{{ end }}{{ if $container.tty }} with attached TTY{{ end }}.
     {{- end }}
     {{- template "pod_init_containers" . }}
     {{- template "pod_containers" . }}
+    {{- template "pod_ephemeral_containers" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "pod_volumes" . }}
@@ -31,7 +44,7 @@
         {{- "InitContainers:" | nindent 2 }}
         {{- range $containerStatus := . }}
             {{- $containerSpec := $.Spec.initContainers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
-            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec "includeVolumes" ($.Config.GetBool "include-volumes")) | nindent 4 }}
+            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec "includeVolumes" ($.Config.GetBool "include-volumes") "sidecar" (eq ($containerSpec.restartPolicy | default "") "Always")) | nindent 4 }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -164,6 +177,14 @@
             {{- $.Include "condition_summary" . | nindent 2}}
         {{- end }}
     {{- end }}
+    {{- with .Spec.schedulingGates }}
+        {{- if eq (len .) 1 }}
+            {{- "Scheduling gate:" | yellow | nindent 2 }} {{ (index . 0).name | cyan }}
+        {{- else }}
+            {{- printf "Scheduling gates (%d):" (len .) | yellow | nindent 2 }}
+            {{- range . }}{{ .name | cyan | nindent 4 }}{{ end }}
+        {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "container_usage" -}}
@@ -202,7 +223,7 @@
            * defaultContainer (optional): Boolean
            * defaultLogsContainer (optional): Boolean
         */ -}}
-    {{- .containerStatus.name | bold }} ({{ .containerStatus.image | markYellow "latest" }}) {{ template "container_state_summary" .containerStatus.state }}
+    {{- .containerStatus.name | bold }}{{ if .sidecar }}{{ " [sidecar]" | cyan }}{{ end }} ({{ .containerStatus.image | markYellow "latest" }}) {{ template "container_state_summary" .containerStatus.state }}
     {{- if .containerStatus.state.running }}{{ if .containerStatus.ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
     {{- if gt (.containerStatus.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.containerStatus.restartCount | int) | yellow | bold }}{{ end }}
     {{- if or .defaultContainer .defaultLogsContainer }} (default kubectl container){{ end }}
@@ -246,6 +267,20 @@
         {{- end }}
     {{- end }}
 {{- end -}}
+
+{{- define "pod_ephemeral_containers" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- with .Status.ephemeralContainerStatuses }}
+        {{- "Debug containers:" | nindent 2 }}
+        {{- range $containerStatus := . }}
+            {{- $containerSpec := $.Spec.ephemeralContainers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
+            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec) | nindent 4 }}
+            {{- with $containerSpec.targetContainerName }}
+                {{- "targeting:" | bold | nindent 6 }} {{ . | cyan }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
 
 {{- define "exit_code_summary" }}
     {{- "exit with" }} {{ .exitCode | toString | redBoldIf (ne (.exitCode | toString) "0" ) }}

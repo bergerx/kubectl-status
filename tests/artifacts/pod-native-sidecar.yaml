@@ -1,0 +1,170 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Pod","metadata":{"annotations":{},"name":"pod-native-sidecar","namespace":"default"},"spec":{"containers":[{"image":"nginx:alpine","name":"main","resources":{"requests":{"cpu":"10m","memory":"16Mi"}}}],"initContainers":[{"command":["sh","-c","while true; do echo logging; sleep 5; done"],"image":"busybox:latest","name":"log-collector","resources":{"requests":{"cpu":"5m","memory":"8Mi"}},"restartPolicy":"Always"}]}}
+  creationTimestamp: "2026-06-28T21:14:08Z"
+  generation: 1
+  name: pod-native-sidecar
+  namespace: default
+  resourceVersion: "183029"
+  uid: b1473b76-4b6a-45ec-9b79-458fd2f121db
+spec:
+  containers:
+  - image: nginx:alpine
+    imagePullPolicy: IfNotPresent
+    name: main
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-lqk98
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  initContainers:
+  - command:
+    - sh
+    - -c
+    - while true; do echo logging; sleep 5; done
+    image: busybox:latest
+    imagePullPolicy: Always
+    name: log-collector
+    resources:
+      requests:
+        cpu: 5m
+        memory: 8Mi
+    restartPolicy: Always
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-lqk98
+      readOnly: true
+  nodeName: minikube
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: kube-api-access-lqk98
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:14:19Z"
+    observedGeneration: 1
+    status: "True"
+    type: PodReadyToStartContainers
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:14:19Z"
+    observedGeneration: 1
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:14:40Z"
+    observedGeneration: 1
+    status: "True"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:14:40Z"
+    observedGeneration: 1
+    status: "True"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:14:08Z"
+    observedGeneration: 1
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - allocatedResources:
+      cpu: 10m
+      memory: 16Mi
+    containerID: docker://b8e76c9c7c289764d8c13c0bc54543579cf3854479064bda4d040d8802c85cf7
+    image: nginx:alpine
+    imageID: docker-pullable://nginx@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
+    lastState: {}
+    name: main
+    ready: true
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+    restartCount: 0
+    started: true
+    state:
+      running:
+        startedAt: "2026-06-28T21:14:40Z"
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-lqk98
+      readOnly: true
+      recursiveReadOnly: Disabled
+  hostIP: 192.168.49.2
+  hostIPs:
+  - ip: 192.168.49.2
+  initContainerStatuses:
+  - allocatedResources:
+      cpu: 5m
+      memory: 8Mi
+    containerID: docker://1dee2d04cf1aed8d3a0000365d845ef0eefa9ff871c838f0563de590f7653a4b
+    image: busybox:latest
+    imageID: docker-pullable://busybox@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d
+    lastState: {}
+    name: log-collector
+    ready: true
+    resources:
+      requests:
+        cpu: 5m
+        memory: 8Mi
+    restartCount: 0
+    started: true
+    state:
+      running:
+        startedAt: "2026-06-28T21:14:18Z"
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-lqk98
+      readOnly: true
+      recursiveReadOnly: Disabled
+  observedGeneration: 1
+  phase: Running
+  podIP: 10.244.0.34
+  podIPs:
+  - ip: 10.244.0.34
+  qosClass: Burstable
+  startTime: "2026-06-28T21:14:09Z"

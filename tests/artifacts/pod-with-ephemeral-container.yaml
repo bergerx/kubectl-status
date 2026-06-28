@@ -1,0 +1,151 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Pod","metadata":{"annotations":{},"name":"pod-ephemeral-base","namespace":"default"},"spec":{"containers":[{"image":"nginx:alpine","name":"main","resources":{"requests":{"cpu":"10m","memory":"16Mi"}}}]}}
+  creationTimestamp: "2026-06-28T21:19:32Z"
+  generation: 2
+  name: pod-ephemeral-base
+  namespace: default
+  resourceVersion: "183289"
+  uid: 28c49f14-9a2b-4db1-a591-7f7fffbd66be
+spec:
+  containers:
+  - image: nginx:alpine
+    imagePullPolicy: IfNotPresent
+    name: main
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-78pkf
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  ephemeralContainers:
+  - command:
+    - sh
+    - -c
+    - sleep 3600
+    image: busybox:latest
+    imagePullPolicy: Always
+    name: debug-shell
+    resources: {}
+    targetContainerName: main
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+  nodeName: minikube
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: kube-api-access-78pkf
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:20:12Z"
+    observedGeneration: 2
+    status: "True"
+    type: PodReadyToStartContainers
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:19:38Z"
+    observedGeneration: 2
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:20:12Z"
+    observedGeneration: 2
+    status: "True"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:20:12Z"
+    observedGeneration: 2
+    status: "True"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:19:37Z"
+    observedGeneration: 2
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - allocatedResources:
+      cpu: 10m
+      memory: 16Mi
+    containerID: docker://617d76fbb0815174406655abe6abbfd73183d729e5d1dde7034c8de4e8232142
+    image: nginx:alpine
+    imageID: docker-pullable://nginx@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
+    lastState: {}
+    name: main
+    ready: true
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+    restartCount: 0
+    started: true
+    state:
+      running:
+        startedAt: "2026-06-28T21:20:11Z"
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-78pkf
+      readOnly: true
+      recursiveReadOnly: Disabled
+  ephemeralContainerStatuses:
+  - containerID: docker://f9d240cedfe78d380ea7bec7a2f6d804418c25595cfb805c3e41fef2aa7bfa9a
+    image: busybox:latest
+    imageID: docker-pullable://busybox@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d
+    lastState: {}
+    name: debug-shell
+    ready: false
+    resources: {}
+    restartCount: 0
+    state:
+      running:
+        startedAt: "2026-06-28T21:20:31Z"
+  hostIP: 192.168.49.2
+  hostIPs:
+  - ip: 192.168.49.2
+  observedGeneration: 2
+  phase: Running
+  podIP: 10.244.0.36
+  podIPs:
+  - ip: 10.244.0.36
+  qosClass: Burstable
+  startTime: "2026-06-28T21:19:38Z"

@@ -1,0 +1,8 @@
+
+Pod/pod-seccomp-unconfined -n default, created 1m ago, gen:1 Running Burstable
+  Current: Pod is Ready
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  seccomp: Unconfined (no syscall filtering)
+  Standalone POD.
+  Containers:
+    main (nginx:alpine) Running for 1m and Ready

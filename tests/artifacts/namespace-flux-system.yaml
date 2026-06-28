@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  creationTimestamp: "2026-06-27T15:38:50Z"
+  labels:
+    app.kubernetes.io/instance: flux-system
+    app.kubernetes.io/part-of: flux
+    app.kubernetes.io/version: v2.8.8
+    kubernetes.io/metadata.name: flux-system
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+  name: flux-system
+  resourceVersion: "2467"
+  uid: 8b2d83ff-c28c-4ac8-bdad-3a03acdd3191
+spec:
+  finalizers:
+  - kubernetes
+status:
+  phase: Active

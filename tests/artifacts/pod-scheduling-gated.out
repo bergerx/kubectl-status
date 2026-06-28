@@ -1,0 +1,10 @@
+
+Pod/pod-scheduling-gated -n default, created 1m ago, gen:1 Pending Burstable
+  InProgress: Pod is in the Pending phase
+    Reconciling: PodPending, Pod is in the Pending phase
+  Not PodScheduled -> Not Initialized -> Not ContainersReady -> Not Ready
+    PodScheduled SchedulingGated, Scheduling is blocked due to non-empty scheduling gates for 1m
+    Scheduling gates (2):
+      example.com/feature-gate
+      example.com/capacity-gate
+  Standalone POD.
