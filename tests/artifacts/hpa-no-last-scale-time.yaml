@@ -1,0 +1,44 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  creationTimestamp: "2024-01-01T00:00:00Z"
+  name: my-app
+  namespace: default
+  resourceVersion: "12345"
+  uid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+spec:
+  maxReplicas: 10
+  minReplicas: 2
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-app
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+status:
+  currentReplicas: 3
+  desiredReplicas: 3
+  currentMetrics:
+  - type: Resource
+    resource:
+      name: cpu
+      current:
+        averageUtilization: 45
+        averageValue: 450m
+  conditions:
+  - lastTransitionTime: "2024-01-01T00:01:00Z"
+    message: the HPA was able to successfully calculate a replica count
+    reason: ValidMetricFound
+    status: "True"
+    type: ScalingActive
+  - lastTransitionTime: "2024-01-01T00:01:00Z"
+    message: recommended size matches current size
+    reason: DesiredWithinRange
+    status: "False"
+    type: ScalingLimited
+  observedGeneration: 1
