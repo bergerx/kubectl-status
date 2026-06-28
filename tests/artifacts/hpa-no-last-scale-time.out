@@ -1,0 +1,9 @@
+
+HorizontalPodAutoscaler/my-app -n default, created 1m ago
+  Current: Resource is current
+  Scales: Deployment/my-app -n default
+  Replicas: 3/2-10
+  Metrics:
+    cpu:45%/70%
+  ScalingActive ValidMetricFound, the HPA was able to successfully calculate a replica count for 1m
+  ScalingLimited DesiredWithinRange, recommended size matches current size for 1m
