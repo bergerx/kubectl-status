@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  creationTimestamp: "2020-03-18T02:05:46Z"
+  name: data-web-0
+  namespace: default
+  resourceVersion: "317041"
+  uid: 23498768-c86b-4102-a660-139ed9044bc2
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+  volumeMode: Filesystem
+  volumeName: pvc-23498768-c86b-4102-a660-139ed9044bc2
+status:
+  accessModes:
+  - ReadWriteOnce
+  allocatedResources:
+    storage: 20Gi
+  allocatedResourceStatuses:
+    storage: NodeExpansionRequired
+  capacity:
+    storage: 10Gi
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2020-03-18T02:10:00Z"
+    message: Waiting for user to (re-)start a pod to finish file system resize of
+      volume on node.
+    reason: FileSystemResizePending
+    status: "True"
+    type: FileSystemResizePending
+  phase: Bound

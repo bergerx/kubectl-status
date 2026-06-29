@@ -5,5 +5,4 @@ StatefulSet/web -n test1, created 1m ago, gen:2
   desired:3, existing:3, ready:2, current:3
   Ongoing rollout: Waiting for 1 pods to be ready...
   Stuck Rollout?: Still replacing the first Pod, may indicate a stuck rollout.
-  Volume Claims:
-    www (1Gi)
+  Volume Claims: www (1Gi)

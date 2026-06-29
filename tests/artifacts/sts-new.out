@@ -6,5 +6,4 @@ StatefulSet/web -n test1, created 1m ago, gen:1
   Outage: StatefulSet has no Ready replicas.
   Ongoing rollout: Waiting for statefulset spec update to be observed...
   Stuck Rollout?: Still replacing the first Pod, may indicate a stuck rollout.
-  Volume Claims:
-    www (1Gi)
+  Volume Claims: www (1Gi)

@@ -11,9 +11,7 @@
     {{- with .Status.capacity.storage }}, asks for {{ . | bold }}{{ end }}
     {{- with index .Annotations "volume.beta.kubernetes.io/storage-provisioner" }}, provisioned by {{ . | bold }}{{ end }}
     {{- with index .Annotations "volume.kubernetes.io/selected-node" }}, attached on {{ "Node" | bold }}/{{ . }}{{ end }}
-    {{- if not .Spec.volumeName }}
-        {{- "Pending" | red | bold | nindent 2 }}: This PVC doesnt yet have a paired PV.
-    {{- end }}
+    {{- if not .Spec.volumeName }}, {{ "Pending" | red | bold }}: no paired PV yet{{ end }}
     {{- /* Disk usage: find a running pod that has this PVC mounted */ -}}
     {{- $pvcName := $.Name }}
     {{- $volStats := dict }}
@@ -33,25 +31,25 @@
         {{- end }}
     {{- end }}
     {{- if hasKey $volStats "usedBytes" }}
-        {{- template "pod_volume_inline_stats" $volStats | nindent 2 | trimPrefix "  " | nindent 2 }}
+        {{- $used := $volStats.usedBytes | float64 }}
+        {{- $cap := $volStats.capacityBytes | float64 }}
+        {{- $pct := percent $used $cap }}
+        {{- printf ", usage: %s/%s[%s]" ($used | humanizeSI "B") ($cap | humanizeSI "B") ($pct | colorPercent "%.0f%%") }}
     {{- end }}
-    {{- /* Resize / expansion status */ -}}
-    {{- with .Status.resizeStatus }}
-        {{- "Resize:" | bold | nindent 2 }} {{ . | colorKeyword }}
+    {{- if and .Spec.volumeName ($.Config.GetBool "deep") }}
+        {{- $pv := $.KubeGetFirst "" "PersistentVolume" .Spec.volumeName }}
+        {{- $.Include "PersistentVolume" $pv | nindent 4 }}
     {{- end }}
-    {{- with $.StatusConditions | getMatchingItemInMapList (dict "type" "FileSystemResizePending") }}
-        {{- "FileSystemResizePending" | yellow | nindent 2 }}: resize started, waiting for pod restart
+    {{- /* Resize tracking: resizeStatus (pre-1.28) and allocatedResources/allocatedResourceStatuses (1.23+) */ -}}
+    {{- $allocStorage := index (.Status.allocatedResources | default dict) "storage" }}
+    {{- $allocStatusStorage := index (.Status.allocatedResourceStatuses | default dict) "storage" }}
+    {{- if or .Status.resizeStatus $allocStorage $allocStatusStorage }}
+        {{- "Resize" | bold | nindent 2 }}:
+        {{- if $allocStorage }} storage {{ .Status.capacity.storage | cyan }} → {{ $allocStorage | cyan }}{{ end }}
+        {{- with .Status.resizeStatus }} ({{ . | colorKeyword }}){{ end }}
+        {{- with $allocStatusStorage }} {{ . }}{{ end }}
     {{- end }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
-    {{- with $volumeName := .Spec.volumeName }}
-        {{- if $.Config.GetBool "include-all-volumes" }}
-            {{- "Binds:" | nindent 2 }}
-            {{- $pv := $.KubeGetFirst "" "PersistentVolume" $volumeName }}
-            {{- $.Include "PersistentVolume" $pv | nindent 4 -}}
-        {{- else }}
-            {{- "Binds:" | nindent 2 }} PersistentVolume/{{ $volumeName }}
-        {{- end }}
-    {{- end }}
 {{- end -}}

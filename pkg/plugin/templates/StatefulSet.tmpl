@@ -53,14 +53,15 @@
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- with .Spec.volumeClaimTemplates }}
         {{- $pods := $.KubeGetByLabelsMap $.Namespace "pods" ($.Spec.selector.matchLabels | default dict) }}
-        {{- "Volume Claims:" | nindent 2 }}
+        {{- $entries := list }}
         {{- range $pvcTmpl := . }}
             {{- $tmplName := $pvcTmpl.metadata.name }}
             {{- $pvcSpec := index $pvcTmpl "spec" | default dict }}
             {{- $pvcResources := index $pvcSpec "resources" | default dict }}
             {{- $pvcRequests := index $pvcResources "requests" | default dict }}
             {{- $storage := index $pvcRequests "storage" }}
-            {{- $tmplName | bold | nindent 4 }}{{ with $storage }} ({{ . }}){{ end }}
+            {{- $entry := $tmplName | bold }}
+            {{- $inner := $storage | default "" }}
             {{- /* Gather usage min/max across all pods */ -}}
             {{- $minUsed := 0.0 }}
             {{- $maxUsed := 0.0 }}
@@ -77,32 +78,48 @@
                         {{- with $podStat.volume | default list | getMatchingItemInMapList (dict "name" $tmplName) }}
                             {{- $used := .usedBytes | float64 }}
                             {{- $cap := .capacityBytes | float64 }}
-                            {{- $pct := percent $used $cap }}
-                            {{- if not $found }}
-                                {{- $minUsed = $used }}
-                                {{- $maxUsed = $used }}
-                                {{- $minPct = $pct }}
-                                {{- $maxPct = $pct }}
-                                {{- $capacity = $cap }}
-                                {{- $found = true }}
-                            {{- else }}
-                                {{- if lt $used $minUsed }}{{- $minUsed = $used }}{{- end }}
-                                {{- if gt $used $maxUsed }}{{- $maxUsed = $used }}{{- end }}
-                                {{- if lt $pct $minPct }}{{- $minPct = $pct }}{{- end }}
-                                {{- if gt $pct $maxPct }}{{- $maxPct = $pct }}{{- end }}
+                            {{- if $cap }}
+                                {{- $pct := percent $used $cap }}
+                                {{- if not $found }}
+                                    {{- $minUsed = $used }}
+                                    {{- $maxUsed = $used }}
+                                    {{- $minPct = $pct }}
+                                    {{- $maxPct = $pct }}
+                                    {{- $capacity = $cap }}
+                                    {{- $found = true }}
+                                {{- else }}
+                                    {{- if lt $used $minUsed }}{{- $minUsed = $used }}{{- end }}
+                                    {{- if gt $used $maxUsed }}{{- $maxUsed = $used }}{{- end }}
+                                    {{- if lt $pct $minPct }}{{- $minPct = $pct }}{{- end }}
+                                    {{- if gt $pct $maxPct }}{{- $maxPct = $pct }}{{- end }}
+                                {{- end }}
                             {{- end }}
                         {{- end }}
                     {{- end }}
                 {{- end }}
             {{- end }}
             {{- if $found }}
-                {{- if eq $minPct $maxPct }}
-                    {{- "usage:" | nindent 6 }} {{ $minUsed | humanizeSI "B" }}/{{ $capacity | humanizeSI "B" }} ({{- $minPct | colorPercent "%.0f%%" -}})
+                {{- $minUsedStr := $minUsed | humanizeSI "B" }}
+                {{- $maxUsedStr := $maxUsed | humanizeSI "B" }}
+                {{- $minPctStr := $minPct | printf "%.0f" }}
+                {{- $maxPctStr := $maxPct | printf "%.0f" }}
+                {{- $capStr := $capacity | humanizeSI "B" }}
+                {{- $usageStr := "" }}
+                {{- if and (eq $minUsedStr $maxUsedStr) (eq $minPctStr $maxPctStr) }}
+                    {{- $usageStr = printf "usage: %s/%s[%s]" $minUsedStr $capStr ($minPct | colorPercent "%.0f%%") }}
                 {{- else }}
-                    {{- "usage:" | nindent 6 }} min {{ $minUsed | humanizeSI "B" }}/{{ $capacity | humanizeSI "B" }} ({{- $minPct | colorPercent "%.0f%%" -}}), max {{ $maxUsed | humanizeSI "B" }}/{{ $capacity | humanizeSI "B" }} ({{- $maxPct | colorPercent "%.0f%%" -}})
+                    {{- $usageStr = printf "usage: min %s/%s[%s], max %s/%s[%s]" $minUsedStr $capStr ($minPct | colorPercent "%.0f%%") $maxUsedStr $capStr ($maxPct | colorPercent "%.0f%%") }}
+                {{- end }}
+                {{- if $inner }}
+                    {{- $inner = printf "%s, %s" $inner $usageStr }}
+                {{- else }}
+                    {{- $inner = $usageStr }}
                 {{- end }}
             {{- end }}
+            {{- if $inner }}{{- $entry = printf "%s (%s)" $entry $inner }}{{- end }}
+            {{- $entries = append $entries $entry }}
         {{- end }}
+        {{- "Volume Claims:" | nindent 2 }} {{ join ", " $entries }}
     {{- end }}
 {{- end }}
 

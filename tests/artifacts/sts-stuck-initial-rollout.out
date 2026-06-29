@@ -7,5 +7,4 @@ StatefulSet/web -n test1, created 1m ago, gen:1
   Stuck Initial Rollout? First rollout not yet progressed.
   Ongoing rollout: Waiting for 3 pods to be ready...
   Stuck Rollout?: Still replacing the first Pod, may indicate a stuck rollout.
-  Volume Claims:
-    www (1Gi)
+  Volume Claims: www (1Gi)
