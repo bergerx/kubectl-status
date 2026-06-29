@@ -1,4 +1,4 @@
 
-CronJob/hello -n default, created 1m ago
+CronJob/hello -n default, created 1m ago, schedule: */1 * * * *
   Not yet scheduled
   Current: Resource is always ready

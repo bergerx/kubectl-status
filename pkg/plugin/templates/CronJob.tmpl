@@ -1,9 +1,22 @@
 {{- define "CronJob" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: batch/v1, Kind=CronJob */ -}}
     {{- template "status_summary_line" . }}
+    {{- with .Spec.schedule }}, schedule: {{ . | cyan }}{{ with $.Spec.timeZone }} [{{ . | cyan }}]{{ end }}{{ end }}
+    {{- if .Spec.suspend }}, {{ "Suspended" | yellow | bold }}{{ end }}
     {{- if .Status.lastScheduleTime }}, last ran at {{ .Status.lastScheduleTime }}{{ relativeTime .Status.lastScheduleTime }}
-    {{- else }}
+    {{- else if not .Spec.suspend }}
         {{- "Not yet scheduled" | yellow | bold | nindent 2 }}
+    {{- end }}
+    {{- if and .Status.lastSuccessfulTime .Status.lastScheduleTime }}
+        {{- if lt .Status.lastSuccessfulTime .Status.lastScheduleTime }}
+            {{- "Last succeeded" | nindent 2 }}: {{ .Status.lastSuccessfulTime | colorAgo }}{{ agoSuffix }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.concurrencyPolicy }}
+        {{- if ne . "Allow" }}
+            {{- printf "Concurrency: %s" . | yellow | nindent 2 }}
+        {{- end }}
     {{- end }}
     {{- with .Status.active }}
         {{- range . }}

@@ -1,0 +1,63 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"batch/v1","kind":"Job","metadata":{"annotations":{},"name":"job-suspended","namespace":"default"},"spec":{"completionMode":"Indexed","completions":5,"suspend":true,"template":{"spec":{"containers":[{"command":["/bin/sh","-c","echo done"],"image":"busybox:1.36","name":"worker"}],"restartPolicy":"Never"}}}}
+  creationTimestamp: "2026-06-29T01:27:23Z"
+  generation: 1
+  labels:
+    batch.kubernetes.io/controller-uid: e5540bf0-ac5f-4d74-ba8f-f89c2fafa2d3
+    batch.kubernetes.io/job-name: job-suspended
+    controller-uid: e5540bf0-ac5f-4d74-ba8f-f89c2fafa2d3
+    job-name: job-suspended
+  name: job-suspended
+  namespace: default
+  resourceVersion: "208346"
+  uid: e5540bf0-ac5f-4d74-ba8f-f89c2fafa2d3
+spec:
+  backoffLimit: 6
+  completionMode: Indexed
+  completions: 5
+  manualSelector: false
+  parallelism: 1
+  podReplacementPolicy: TerminatingOrFailed
+  selector:
+    matchLabels:
+      batch.kubernetes.io/controller-uid: e5540bf0-ac5f-4d74-ba8f-f89c2fafa2d3
+  suspend: true
+  template:
+    metadata:
+      labels:
+        batch.kubernetes.io/controller-uid: e5540bf0-ac5f-4d74-ba8f-f89c2fafa2d3
+        batch.kubernetes.io/job-name: job-suspended
+        controller-uid: e5540bf0-ac5f-4d74-ba8f-f89c2fafa2d3
+        job-name: job-suspended
+    spec:
+      containers:
+      - command:
+        - /bin/sh
+        - -c
+        - echo done
+        image: busybox:1.36
+        imagePullPolicy: IfNotPresent
+        name: worker
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Never
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  conditions:
+  - lastProbeTime: "2026-06-29T01:27:24Z"
+    lastTransitionTime: "2026-06-29T01:27:24Z"
+    message: Job suspended
+    reason: JobSuspended
+    status: "True"
+    type: Suspended
+  ready: 0
+  terminating: 0
+  uncountedTerminatedPods: {}

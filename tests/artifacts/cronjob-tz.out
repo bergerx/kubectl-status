@@ -1,0 +1,5 @@
+
+CronJob/cronjob-tz -n default, created 1m ago, gen:1, schedule: 30 9 * * 1-5 [Europe/Berlin]
+  Not yet scheduled
+  Concurrency: Forbid
+  Current: Resource is always ready

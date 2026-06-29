@@ -1,0 +1,6 @@
+
+Job/job-indexed -n default, created 1m ago, gen:1, started at 2026-06-29T01:27:52Z (1m ago) and completed in 1m, Succeeded
+  Indexed: 5/5 (0-4)
+  Current: Job Completed. succeeded: 5/5
+  SuccessCriteriaMet CompletionsReached, Reached expected number of succeeded pods for 1m
+  Complete CompletionsReached, Reached expected number of succeeded pods for 1m

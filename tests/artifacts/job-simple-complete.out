@@ -1,0 +1,5 @@
+
+Job/job-simple -n default, created 1m ago, gen:1, started at 2026-06-29T01:27:22Z (1m ago) and completed in 1m, Succeeded
+  Current: Job Completed. succeeded: 1/1
+  SuccessCriteriaMet CompletionsReached, Reached expected number of succeeded pods for 1m
+  Complete CompletionsReached, Reached expected number of succeeded pods for 1m

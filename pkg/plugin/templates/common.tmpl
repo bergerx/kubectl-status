@@ -67,13 +67,13 @@
         {{- if $index }},{{ end }}{{ $ownerReference.kind | bold }}/{{ $ownerReference.name }}
     {{- end }}{{ end }}
     {{- with .Metadata.generation }}, gen:{{ . }}{{ end }}
-    {{- if .Status.startTime }}
+    {{- if and .Status.startTime (ne .Kind "Job") }}
         {{- $created := .Metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
         {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" }}
         {{- $startedIn := $started.Sub $created}}
         {{- if gt ($startedIn.Seconds | int) 0 }}, started after {{ $startedIn.Seconds | ago }}{{ end }}
     {{- end }}
-    {{- if .Status.completionTime }}
+    {{- if and .Status.startTime .Status.completionTime (ne .Kind "Job") }}
         {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" -}}
         {{- $completed := .Status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
         {{- $ranfor := $completed.Sub $started }} and {{ "completed" | green }} in {{ $ranfor | colorDuration }}

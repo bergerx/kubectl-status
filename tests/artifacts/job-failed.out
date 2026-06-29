@@ -1,0 +1,6 @@
+
+Job/job-failed -n default, created 1m ago, gen:1, started at 2026-06-29T01:27:23Z (1m ago), Failed: 3/2
+  Failed: Job Failed. failed: 3/1
+    Stalled: JobFailed, Job Failed. failed: 3/1
+  FailureTarget BackoffLimitExceeded, Job has reached the specified backoff limit for 1m
+  Failed BackoffLimitExceeded, Job has reached the specified backoff limit for 1m
