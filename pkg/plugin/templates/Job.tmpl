@@ -3,17 +3,15 @@
     {{- /* GVK: batch/v1, Kind=Job */ -}}
     {{- template "status_summary_line" . }}
     {{- if .Status.startTime }}, started at {{ .Status.startTime }}{{ relativeTime .Status.startTime }}{{ end }}
-    {{- if .Status.completionTime }}
+    {{- if and .Status.startTime .Status.completionTime }}
         {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" -}}
         {{- $completed := .Status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
         {{- $ranfor := $completed.Sub $started }} and {{ "completed" | green }} in {{ $ranfor | colorDuration }}
     {{- end }}
-    {{- if .Spec.suspend }}, {{ "Suspended" | yellow | bold }}
-    {{- else }}
-        {{- if .Status.active }}, {{ "Active" | yellow | bold }}{{ end }}
-        {{- if .Status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
-        {{- if .Status.failed }}, {{ "Failed" | red | bold }}{{ end }}
-    {{- end }}
+    {{- if .Spec.suspend }}, {{ "Suspended" | yellow | bold }}{{ end }}
+    {{- if .Status.active }}, {{ "Active" | yellow | bold }}{{ end }}
+    {{- if .Status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
+    {{- if .Status.failed }}, {{ printf "Failed: %d" (.Status.failed | int) | red | bold }}{{ with .Spec.backoffLimit }}/{{ . | toString }}{{ end }}{{ end }}
     {{- if eq (.Spec.completionMode | default "NonIndexed") "Indexed" }}
         {{- template "job_indexed_details" . }}
     {{- else }}

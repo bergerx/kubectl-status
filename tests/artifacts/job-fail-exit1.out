@@ -1,5 +1,5 @@
 
-Job/job-fail-exit1 -n default, created 1m ago, gen:1, started at 2026-06-29T02:31:34Z (1m ago), Failed
+Job/job-fail-exit1 -n default, created 1m ago, gen:1, started at 2026-06-29T02:31:34Z (1m ago), Failed: 2/1
   Failed: Job Failed. failed: 2/1
     Stalled: JobFailed, Job Failed. failed: 2/1
   FailureTarget BackoffLimitExceeded, Job has reached the specified backoff limit for 1m

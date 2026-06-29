@@ -73,7 +73,7 @@
         {{- $startedIn := $started.Sub $created}}
         {{- if gt ($startedIn.Seconds | int) 0 }}, started after {{ $startedIn.Seconds | ago }}{{ end }}
     {{- end }}
-    {{- if and .Status.completionTime (ne .Kind "Job") }}
+    {{- if and .Status.startTime .Status.completionTime (ne .Kind "Job") }}
         {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" -}}
         {{- $completed := .Status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
         {{- $ranfor := $completed.Sub $started }} and {{ "completed" | green }} in {{ $ranfor | colorDuration }}
