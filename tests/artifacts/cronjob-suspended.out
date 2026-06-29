@@ -1,0 +1,3 @@
+
+CronJob/hello -n default, created 1m ago, gen:2, schedule: */1 * * * *, Suspended
+  Current: Resource is always ready

@@ -1,0 +1,5 @@
+
+CronJob/hello -n default, created 1m ago, gen:1, schedule: */1 * * * *, last ran at 2026-06-29T01:31:00Z (1m ago)
+  Last succeeded: 1m ago
+  Active: Job/hello-29711611 is running.
+  Current: Resource is always ready

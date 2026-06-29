@@ -1,0 +1,84 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"batch/v1","kind":"Job","metadata":{"annotations":{},"name":"job-with-sidecar","namespace":"default"},"spec":{"template":{"spec":{"containers":[{"command":["/bin/sh","-c","sleep 8 \u0026\u0026 echo main done"],"image":"busybox:1.36","name":"main"}],"initContainers":[{"command":["/bin/sh","-c","while true; do echo sidecar; sleep 5; done"],"image":"busybox:1.36","name":"log-collector","restartPolicy":"Always"}],"restartPolicy":"Never"}}}}
+  creationTimestamp: "2026-06-29T01:27:54Z"
+  generation: 1
+  labels:
+    batch.kubernetes.io/controller-uid: b05ebff9-b34b-41ce-8d2b-de971a987fd1
+    batch.kubernetes.io/job-name: job-with-sidecar
+    controller-uid: b05ebff9-b34b-41ce-8d2b-de971a987fd1
+    job-name: job-with-sidecar
+  name: job-with-sidecar
+  namespace: default
+  resourceVersion: "208941"
+  uid: b05ebff9-b34b-41ce-8d2b-de971a987fd1
+spec:
+  backoffLimit: 6
+  completionMode: NonIndexed
+  completions: 1
+  manualSelector: false
+  parallelism: 1
+  podReplacementPolicy: TerminatingOrFailed
+  selector:
+    matchLabels:
+      batch.kubernetes.io/controller-uid: b05ebff9-b34b-41ce-8d2b-de971a987fd1
+  suspend: false
+  template:
+    metadata:
+      labels:
+        batch.kubernetes.io/controller-uid: b05ebff9-b34b-41ce-8d2b-de971a987fd1
+        batch.kubernetes.io/job-name: job-with-sidecar
+        controller-uid: b05ebff9-b34b-41ce-8d2b-de971a987fd1
+        job-name: job-with-sidecar
+    spec:
+      containers:
+      - command:
+        - /bin/sh
+        - -c
+        - sleep 8 && echo main done
+        image: busybox:1.36
+        imagePullPolicy: IfNotPresent
+        name: main
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      initContainers:
+      - command:
+        - /bin/sh
+        - -c
+        - while true; do echo sidecar; sleep 5; done
+        image: busybox:1.36
+        imagePullPolicy: IfNotPresent
+        name: log-collector
+        resources: {}
+        restartPolicy: Always
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      restartPolicy: Never
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  completionTime: "2026-06-29T01:31:22Z"
+  conditions:
+  - lastProbeTime: "2026-06-29T01:31:22Z"
+    lastTransitionTime: "2026-06-29T01:31:22Z"
+    message: Reached expected number of succeeded pods
+    reason: CompletionsReached
+    status: "True"
+    type: SuccessCriteriaMet
+  - lastProbeTime: "2026-06-29T01:31:23Z"
+    lastTransitionTime: "2026-06-29T01:31:23Z"
+    message: Reached expected number of succeeded pods
+    reason: CompletionsReached
+    status: "True"
+    type: Complete
+  ready: 0
+  startTime: "2026-06-29T01:27:55Z"
+  succeeded: 1
+  terminating: 0
+  uncountedTerminatedPods: {}

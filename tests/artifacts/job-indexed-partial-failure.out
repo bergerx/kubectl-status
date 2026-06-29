@@ -1,0 +1,8 @@
+
+Job/job-indexed-backoff -n default, created 1m ago, gen:1, started at 2026-06-29T01:27:54Z (1m ago), Succeeded, Failed
+  Indexed: 3/6 (1,3,5)
+  Failed indexes: 0,2,4 (limit: 1 per index)
+  Failed: Job Failed. failed: 6/6
+    Stalled: JobFailed, Job Failed. failed: 6/6
+  FailureTarget FailedIndexes, Job has failed indexes for 1m
+  Failed FailedIndexes, Job has failed indexes for 1m

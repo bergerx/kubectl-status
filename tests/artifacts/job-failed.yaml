@@ -1,0 +1,71 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"batch/v1","kind":"Job","metadata":{"annotations":{},"name":"job-failed","namespace":"default"},"spec":{"backoffLimit":2,"template":{"spec":{"containers":[{"command":["/bin/sh","-c","exit 1"],"image":"busybox:1.36","name":"worker"}],"restartPolicy":"Never"}}}}
+  creationTimestamp: "2026-06-29T01:27:23Z"
+  generation: 1
+  labels:
+    batch.kubernetes.io/controller-uid: caf67de1-6b59-4912-9c41-a2a07e22a707
+    batch.kubernetes.io/job-name: job-failed
+    controller-uid: caf67de1-6b59-4912-9c41-a2a07e22a707
+    job-name: job-failed
+  name: job-failed
+  namespace: default
+  resourceVersion: "208997"
+  uid: caf67de1-6b59-4912-9c41-a2a07e22a707
+spec:
+  backoffLimit: 2
+  completionMode: NonIndexed
+  completions: 1
+  manualSelector: false
+  parallelism: 1
+  podReplacementPolicy: TerminatingOrFailed
+  selector:
+    matchLabels:
+      batch.kubernetes.io/controller-uid: caf67de1-6b59-4912-9c41-a2a07e22a707
+  suspend: false
+  template:
+    metadata:
+      labels:
+        batch.kubernetes.io/controller-uid: caf67de1-6b59-4912-9c41-a2a07e22a707
+        batch.kubernetes.io/job-name: job-failed
+        controller-uid: caf67de1-6b59-4912-9c41-a2a07e22a707
+        job-name: job-failed
+    spec:
+      containers:
+      - command:
+        - /bin/sh
+        - -c
+        - exit 1
+        image: busybox:1.36
+        imagePullPolicy: IfNotPresent
+        name: worker
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Never
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  conditions:
+  - lastProbeTime: "2026-06-29T01:31:42Z"
+    lastTransitionTime: "2026-06-29T01:31:42Z"
+    message: Job has reached the specified backoff limit
+    reason: BackoffLimitExceeded
+    status: "True"
+    type: FailureTarget
+  - lastProbeTime: "2026-06-29T01:31:43Z"
+    lastTransitionTime: "2026-06-29T01:31:43Z"
+    message: Job has reached the specified backoff limit
+    reason: BackoffLimitExceeded
+    status: "True"
+    type: Failed
+  failed: 3
+  ready: 0
+  startTime: "2026-06-29T01:27:23Z"
+  terminating: 0
+  uncountedTerminatedPods: {}
