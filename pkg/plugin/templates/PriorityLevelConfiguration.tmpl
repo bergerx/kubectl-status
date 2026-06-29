@@ -12,22 +12,25 @@
         {{- with .Spec.limited }}
             {{- $shares := .nominalConcurrencyShares | toString | cyan }}
             {{- $lend := .lendablePercent | default 0 | toString }}
-            {{- $respType := .limitResponse.type | default "Queue" }}
+            {{- $respType := "Queue" }}
+            {{- with .limitResponse }}{{ $respType = .type | default "Queue" }}{{ end }}
             {{- "Concurrency" | bold | nindent 2 }}: {{ $shares }} nominal shares, {{ $lend | cyan }}% lendable
             {{- if eq $respType "Reject" }}
                 {{- ", overflow: " }}{{ "Reject" | red | bold }}
             {{- else }}
-                {{- with .limitResponse.queuing }}
-                    {{- $queues := .queues | toString | cyan }}
-                    {{- $hand := .handSize | toString | cyan }}
-                    {{- $ql := .queueLengthLimit | toString | cyan }}
-                    {{- ", queues: " }}{{ $queues }}, hand size: {{ $hand }}, max queue depth: {{ $ql }}
+                {{- with .limitResponse }}
+                    {{- with .queuing }}
+                        {{- $queues := .queues | toString | cyan }}
+                        {{- $hand := .handSize | toString | cyan }}
+                        {{- $ql := .queueLengthLimit | toString | cyan }}
+                        {{- ", queues: " }}{{ $queues }}, hand size: {{ $hand }}, max queue depth: {{ $ql }}
+                    {{- end }}
                 {{- end }}
             {{- end }}
         {{- end }}
     {{- end }}
     {{- /* Show auto-update annotation only when present — managed by kube-apiserver */}}
-    {{- $autoUpdate := index (.Metadata.annotations | default dict) "apf.kubernetes.io/autoupdate-spec" }}
+    {{- $autoUpdate := index .Annotations "apf.kubernetes.io/autoupdate-spec" }}
     {{- if eq $autoUpdate "true" }}
         {{- "Note" | bold | nindent 2 }}: spec is auto-managed by the API server
     {{- end }}
@@ -36,7 +39,13 @@
         {{- $plcName := .Name }}
         {{- $schemas := list }}
         {{- range $.KubeGet "" "flowschemas" }}
-            {{- if eq .Spec.priorityLevelConfiguration.name $plcName }}
+            {{- $fsPlcName := "" }}
+            {{- with .Spec }}
+                {{- with .priorityLevelConfiguration }}
+                    {{- $fsPlcName = .name }}
+                {{- end }}
+            {{- end }}
+            {{- if eq $fsPlcName $plcName }}
                 {{- $schemas = append $schemas . }}
             {{- end }}
         {{- end }}
