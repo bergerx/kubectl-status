@@ -14,11 +14,39 @@
     {{- if not .Spec.volumeName }}
         {{- "Pending" | red | bold | nindent 2 }}: This PVC doesnt yet have a paired PV.
     {{- end }}
+    {{- /* Disk usage: find a running pod that has this PVC mounted */ -}}
+    {{- $pvcName := $.Name }}
+    {{- $volStats := dict }}
+    {{- range $.KubeGet $.Namespace "pods" }}
+        {{- if not (hasKey $volStats "usedBytes") }}
+            {{- $pod := . }}
+            {{- range $pod.Spec.volumes | default list }}
+                {{- if and (hasKey . "persistentVolumeClaim") (eq .persistentVolumeClaim.claimName $pvcName) }}
+                    {{- $volName := .name }}
+                    {{- $nodeSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
+                    {{- $podStat := $nodeSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
+                    {{- with $podStat.volume | default list | getMatchingItemInMapList (dict "name" $volName) }}
+                        {{- $volStats = . }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- if hasKey $volStats "usedBytes" }}
+        {{- template "pod_volume_inline_stats" $volStats | nindent 2 | trimPrefix "  " | nindent 2 }}
+    {{- end }}
+    {{- /* Resize / expansion status */ -}}
+    {{- with .Status.resizeStatus }}
+        {{- "Resize:" | bold | nindent 2 }} {{ . | colorKeyword }}
+    {{- end }}
+    {{- with $.StatusConditions | getMatchingItemInMapList (dict "type" "FileSystemResizePending") }}
+        {{- "FileSystemResizePending" | yellow | nindent 2 }}: resize started, waiting for pod restart
+    {{- end }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
     {{- with $volumeName := .Spec.volumeName }}
-        {{- if $.Config.GetBool "include-volumes" }}
+        {{- if $.Config.GetBool "include-all-volumes" }}
             {{- "Binds:" | nindent 2 }}
             {{- $pv := $.KubeGetFirst "" "PersistentVolume" $volumeName }}
             {{- $.Include "PersistentVolume" $pv | nindent 4 -}}

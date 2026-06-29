@@ -7,5 +7,4 @@ Pod/test-pod -n test1, created 1m ago Running BestEffort
     test-pod (k8s.gcr.io/pause:3.1) Running for 1m and Ready
       Volume Mounts:
         /var/run/secrets/kubernetes.io/serviceaccount from default-token-mq57w (ro)
-  Volumes:
-    default-token-mq57w (Secret: default-token-mq57w)
+  Volumes: default-token-mq57w (Secret: default-token-mq57w)

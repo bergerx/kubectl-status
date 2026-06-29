@@ -4,3 +4,5 @@ StatefulSet/web -n test1, created 1m ago, gen:4
   desired:0, ready:0, current:0
   Suspended: Scaled down to 0.
   Outage: StatefulSet has no Ready replicas.
+  Volume Claims:
+    www (1Gi)

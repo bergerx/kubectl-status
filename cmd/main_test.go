@@ -210,7 +210,7 @@ func TestAllArtifactsLocal(t *testing.T) {
 	}
 }
 
-func TestAllArtifactsLocalWithIncludeVolumes(t *testing.T) {
+func TestAllArtifactsLocalWithIncludeAllVolumes(t *testing.T) {
 	t.Setenv("KUBECONFIG", "/dev/null")
 	testHack(t)
 	viperTestHack(t)
@@ -224,8 +224,8 @@ func TestAllArtifactsLocalWithIncludeVolumes(t *testing.T) {
 		name = strings.Replace(name, ".yaml", "", 1)
 		t.Run(name, func(t *testing.T) {
 			test := cmdTest{
-				args:            []string{"-f", artifact, "--local", "--shallow", "--v", "255", "--include-volumes"},
-				stdoutEqualPath: name + ".include-volumes.out",
+				args:            []string{"-f", artifact, "--local", "--shallow", "--v", "255", "--include-all-volumes"},
+				stdoutEqualPath: name + ".include-all-volumes.out",
 			}
 			test.assert(t, nil)
 		})

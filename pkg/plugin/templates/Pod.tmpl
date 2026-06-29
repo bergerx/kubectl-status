@@ -24,9 +24,9 @@
     {{- template "pod_init_containers" . }}
     {{- template "pod_containers" . }}
     {{- template "pod_ephemeral_containers" . }}
+    {{- template "pod_volumes" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
-    {{- template "pod_volumes" . }}
     {{- template "owners" . }}
     {{- template "matching_services" . }}
 {{- end }}
@@ -44,7 +44,7 @@
         {{- "InitContainers:" | nindent 2 }}
         {{- range $containerStatus := . }}
             {{- $containerSpec := $.Spec.initContainers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
-            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec "includeVolumes" ($.Config.GetBool "include-volumes") "sidecar" (eq ($containerSpec.restartPolicy | default "") "Always")) | nindent 4 }}
+            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec "includeAllVolumes" ($.Config.GetBool "include-all-volumes") "sidecar" (eq ($containerSpec.restartPolicy | default "") "Always")) | nindent 4 }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -66,7 +66,7 @@
                                                        "containerSpec" $containerSpec
                                                        "defaultContainer" (eq $containerStatus.name $defaultContainer)
                                                        "defaultLogsContainer" (eq $containerStatus.name $defaultLogsContainer)
-                                                       "includeVolumes" ($.Config.GetBool "include-volumes")
+                                                       "includeAllVolumes" ($.Config.GetBool "include-all-volumes")
                 }}
             {{- else }}
                 {{- $containerSpec := $.Spec.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
@@ -74,7 +74,7 @@
                                                        "containerSpec" $containerSpec
                                                        "defaultContainer" (eq $containerStatus.name $defaultContainer)
                                                        "defaultLogsContainer" (eq $containerStatus.name $defaultLogsContainer)
-                                                       "includeVolumes" ($.Config.GetBool "include-volumes")
+                                                       "includeAllVolumes" ($.Config.GetBool "include-all-volumes")
                 }}
             {{- end }}
             {{- $.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
@@ -82,52 +82,68 @@
     {{- end }}
 {{- end }}
 
+{{- define "pod_volume_inline_stats" }}
+    {{- /* pod_volume_inline_stats returns inline usage for a volume stats entry from kubelet */ -}}
+    {{- $pct := percent (.usedBytes | float64) (.capacityBytes | float64) -}}
+    {{- " " -}}usage: {{ .usedBytes | float64 | humanizeSI "B" }}/{{ .capacityBytes | float64 | humanizeSI "B" }} ({{- $pct | colorPercent "%.0f%%" -}})
+    {{- $inodePct := percent (.inodesUsed | float64) (.inodes | float64) }}
+    {{- if gt $inodePct 75.0 }}, inodes: {{ .inodesUsed | float64 | humanizeSI "" }}/{{ .inodes | float64 | humanizeSI "" }} ({{- $inodePct | colorPercent "%.0f%%" -}}){{ end }}
+{{- end }}
+
+{{- define "pod_volume_line" }}
+    {{- /* Renders a single volume spec entry. Expects dict "vol" (spec entry) "stats" (kubelet VolumeStats or nil) */ -}}
+    {{- .vol.name | bold }}
+    {{- if hasKey .vol "emptyDir" }} (EmptyDir{{ with .vol.emptyDir.medium }}, medium: {{ . }}{{ end }}{{ with .vol.emptyDir.sizeLimit }}, limit: {{ . }}{{ end }})
+    {{- else if hasKey .vol "hostPath" }} (HostPath: {{ .vol.hostPath.path }}{{ with .vol.hostPath.type }}, type: {{ . }}{{ end }})
+    {{- else if hasKey .vol "configMap" }} (ConfigMap: {{ .vol.configMap.name }})
+    {{- else if hasKey .vol "secret" }} (Secret: {{ .vol.secret.secretName }})
+    {{- else if hasKey .vol "persistentVolumeClaim" }} (PVC: {{ .vol.persistentVolumeClaim.claimName }}{{ if .vol.persistentVolumeClaim.readOnly }}, readOnly{{ end }})
+    {{- else if hasKey .vol "downwardAPI" }} (DownwardAPI)
+    {{- else if hasKey .vol "projected" }} (Projected)
+    {{- else if hasKey .vol "csi" }} (CSI: {{ .vol.csi.driver }})
+    {{- else if hasKey .vol "nfs" }} (NFS: {{ .vol.nfs.server }}:{{ .vol.nfs.path }})
+    {{- end }}
+    {{- with .stats }}{{ template "pod_volume_inline_stats" . }}{{ end }}
+{{- end }}
+
 {{- define "pod_volumes" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if .Config.GetBool "include-volumes" }}
-        {{- with .Spec.volumes }}
+    {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
+    {{- $podStatsSummary := $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
+    {{- $ephemeralStorage := index $podStatsSummary "ephemeral-storage" }}
+    {{- /* Build the list of volumes to show by default (size-relevant) and under the gate */ -}}
+    {{- $displayVols := list }}
+    {{- range $.Spec.volumes }}
+        {{- $vol := . }}
+        {{- if or (hasKey . "persistentVolumeClaim") (hasKey . "hostPath") (hasKey . "nfs") (hasKey . "csi") }}
+            {{- $displayVols = append $displayVols . }}
+        {{- else if hasKey . "emptyDir" }}
+            {{- /* show emptyDir only if kubelet has stats for it */ -}}
+            {{- with $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $vol.name) }}
+                {{- $displayVols = append $displayVols $vol }}
+            {{- end }}
+        {{- else if $.Config.GetBool "include-all-volumes" }}
+            {{- $displayVols = append $displayVols . }}
+        {{- end }}
+    {{- end }}
+    {{- if or $ephemeralStorage $displayVols }}
+        {{- if and (eq (len $displayVols) 1) (not $ephemeralStorage) }}
+            {{- /* single-line format */ -}}
+            {{- $vol := index $displayVols 0 }}
+            {{- $stats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $vol.name) }}
+            {{- "Volumes:" | nindent 2 }} {{ template "pod_volume_line" (dict "vol" $vol "stats" $stats) }}
+        {{- else }}
             {{- "Volumes:" | nindent 2 }}
-            {{- range $volume := . }}
-                {{- $volume.name | bold | nindent 4 }}
-                {{- if hasKey $volume "emptyDir" }} (EmptyDir{{ with $volume.emptyDir.medium }}, medium: {{ . }}{{ end }})
-                {{- else if hasKey $volume "hostPath" }} (HostPath: {{ $volume.hostPath.path }}{{ with $volume.hostPath.type }}, type: {{ . }}{{ end }})
-                {{- else if hasKey $volume "configMap" }} (ConfigMap: {{ $volume.configMap.name }})
-                {{- else if hasKey $volume "secret" }} (Secret: {{ $volume.secret.secretName }})
-                {{- else if hasKey $volume "persistentVolumeClaim" }} (PVC: {{ $volume.persistentVolumeClaim.claimName }}{{ if $volume.persistentVolumeClaim.readOnly }}, readOnly{{ end }})
-                {{- else if hasKey $volume "downwardAPI" }} (DownwardAPI)
-                {{- else if hasKey $volume "projected" }} (Projected)
-                {{- else if hasKey $volume "csi" }} (CSI: {{ $volume.csi.driver }})
-                {{- else if hasKey $volume "nfs" }} (NFS: {{ $volume.nfs.server }}:{{ $volume.nfs.path }})
-                {{- end }}
+            {{- with $ephemeralStorage }}
+                {{- "ephemeral-storage" | bold | nindent 4 }}{{ template "pod_volume_inline_stats" . }}
             {{- end }}
-        {{- end }}
-        {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
-        {{- $podStatsSummary := $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
-        {{- $ephemeralStorage := index $podStatsSummary "ephemeral-storage" }}
-        {{- if $ephemeralStorage }}
-            {{- "Ephemeral storage" | bold | nindent 2 }} {{ template "pod_volume_stats" $ephemeralStorage }}
-        {{- end }}
-        {{- range $volume := .Spec.volumes }}
-            {{- if hasKey $volume "emptyDir" }}
-                {{- with $volumeStats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $volume.name) }}
-                    {{- $volume.name | bold | nindent 4 }}: {{ template "pod_volume_stats" $volumeStats }}
-                {{- end }}
-            {{- end }}
-            {{- with $volume.persistentVolumeClaim }}
-                {{- with $volumeStats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $volume.name) }}
-                    {{- $volume.name | bold | nindent 4 }}: {{ template "pod_volume_stats" $volumeStats }}
-                {{- end }}
+            {{- range $displayVols }}
+                {{- $vol := . }}
+                {{- $stats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $vol.name) }}
+                {{- $.Include "pod_volume_line" (dict "vol" $vol "stats" $stats) | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}
-{{- end }}
-
-{{- define "pod_volume_stats" }}
-    {{- /* pod_volume_stats returns a single liner representing all the known volume details */ -}}
-    {{- $bytesUsagePercentOfCapacity := percent (.usedBytes | float64) (.capacityBytes | float64) }}
-    {{- .usedBytes | float64 | humanizeSI "B" }}/{{ .capacityBytes | float64 | humanizeSI "B" }}({{- $bytesUsagePercentOfCapacity | colorPercent "%.0f%%" }}) used, {{ .availableBytes | float64 | humanizeSI "B" }} free, {{""}}
-    {{- $inodesUsagePercentOfCapacity := percent (.inodesUsed | float64) (.inodes | float64) }}
-    {{- .inodesUsed | float64 | humanizeSI "" }}/{{ .inodes | float64 | humanizeSI "" }}({{- $inodesUsagePercentOfCapacity | colorPercent "%.0f%%" }}) inodes used, {{ .inodesFree | float64 | humanizeSI "" }} free.
 {{- end }}
 
 {{- define "matching_services" }}
@@ -231,7 +247,7 @@
     {{- with .containerStatus.lastState }}
         {{- "previously:" | yellow | nindent 2 }} {{ template "container_state_summary" . }}
     {{- end }}
-    {{- if .includeVolumes }}
+    {{- if .includeAllVolumes }}
         {{- with .containerSpec.volumeMounts }}
             {{- "Volume Mounts:" | nindent 2 }}
             {{- range . }}

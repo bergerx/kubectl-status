@@ -189,8 +189,8 @@ func addRenderFlags(flags *pflag.FlagSet) {
 		"This will include well known application metadata into the output.")
 	flags.Bool("include-rollout-diffs", false,
 		"Include unified diff between stored revisions of Deployment, DaemonSet and StatefulSets.")
-	flags.Bool("include-volumes", false,
-		"Include volume relates information.")
+	flags.Bool("include-all-volumes", false,
+		"Include config-only volumes (configMap/secret/projected/downwardAPI) and per-container volume mount lists.")
 	flags.Bool("include-managed-fields", true,
 		"Include managed field details in the output.")
 	flags.Bool("include-node-lease", false,
