@@ -41,7 +41,10 @@
 {{- define "pod_init_containers" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
-    {{- $podStatsSummary := $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
+    {{- $podStatsSummary := dict }}
+    {{- if $nodeStatsSummary }}
+        {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
+    {{- end }}
     {{- with .Status.initContainerStatuses }}
         {{- "InitContainers:" | nindent 2 }}
         {{- range $containerStatus := . }}
@@ -57,7 +60,10 @@
     {{- $defaultLogsContainer := index .Annotations "kubectl.kubernetes.io/default-logs-container" }}
     {{- $defaultContainer := index .Annotations "kubectl.kubernetes.io/default-container" }}
     {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
-    {{- $podStatsSummary := $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
+    {{- $podStatsSummary := dict }}
+    {{- if $nodeStatsSummary }}
+        {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
+    {{- end }}
     {{- with .Status.containerStatuses }}
         {{- $single := eq (len .) 1 }}
         {{- "Containers:" | nindent 2 }}
@@ -96,11 +102,13 @@
 
 {{- define "pod_volume_inline_stats" }}
     {{- /* pod_volume_inline_stats returns inline usage for a volume stats entry from kubelet */ -}}
-    {{- $pct := percent (.usedBytes | float64) (.capacityBytes | float64) -}}
-    {{- " " -}}usage: {{ .usedBytes | float64 | humanizeSI "B" }}/{{ .capacityBytes | float64 | humanizeSI "B" }} ({{- $pct | colorPercent "%.0f%%" -}})
-    {{- if .inodes }}
-        {{- $inodePct := percent (.inodesUsed | float64) (.inodes | float64) }}
-        {{- if gt $inodePct 75.0 }}, inodes: {{ .inodesUsed | float64 | humanizeSI "" }}/{{ .inodes | float64 | humanizeSI "" }} ({{- $inodePct | colorPercent "%.0f%%" -}}){{ end }}
+    {{- if .capacityBytes }}
+        {{- $pct := percent (.usedBytes | float64) (.capacityBytes | float64) -}}
+        {{- " " -}}usage: {{ .usedBytes | float64 | humanizeSI "B" }}/{{ .capacityBytes | float64 | humanizeSI "B" }} ({{- $pct | colorPercent "%.0f%%" -}})
+        {{- if .inodes }}
+            {{- $inodePct := percent (.inodesUsed | float64) (.inodes | float64) }}
+            {{- if gt $inodePct 75.0 }}, inodes: {{ .inodesUsed | float64 | humanizeSI "" }}/{{ .inodes | float64 | humanizeSI "" }} ({{- $inodePct | colorPercent "%.0f%%" -}}){{ end }}
+        {{- end }}
     {{- end }}
 {{- end }}
 
@@ -148,7 +156,10 @@
 {{- define "pod_volumes" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
-    {{- $podStatsSummary := $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
+    {{- $podStatsSummary := dict }}
+    {{- if $nodeStatsSummary }}
+        {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
+    {{- end }}
     {{- $ephemeralStorage := index $podStatsSummary "ephemeral-storage" }}
     {{- /* Build the list of volumes to show by default (size-relevant) and under the gate */ -}}
     {{- $displayVols := list }}
@@ -175,7 +186,12 @@
             {{- $pvcStorage := "" }}
             {{- if hasKey $vol "persistentVolumeClaim" }}
                 {{- $pvc = $.KubeGetFirst $.Namespace "PersistentVolumeClaim" $vol.persistentVolumeClaim.claimName }}
-                {{- $pvcStorage = index ($pvc.Spec.resources.requests | default dict) "storage" | default "" }}
+                {{- if $pvc.Object }}
+                    {{- $pvcSpec := $pvc.Spec | default dict }}
+                    {{- $pvcResources := $pvcSpec.resources | default dict }}
+                    {{- $pvcRequests := $pvcResources.requests | default dict }}
+                    {{- $pvcStorage = index $pvcRequests "storage" | default "" }}
+                {{- end }}
             {{- end }}
             {{- "Volumes:" | nindent 2 }} {{ template "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage) }}
             {{- if and $deep $pvc.Metadata }}
@@ -196,7 +212,12 @@
                 {{- $pvcStorage := "" }}
                 {{- if hasKey $vol "persistentVolumeClaim" }}
                     {{- $pvc = $.KubeGetFirst $.Namespace "PersistentVolumeClaim" $vol.persistentVolumeClaim.claimName }}
-                    {{- $pvcStorage = index ($pvc.Spec.resources.requests | default dict) "storage" | default "" }}
+                    {{- if $pvc.Object }}
+                        {{- $pvcSpec := $pvc.Spec | default dict }}
+                        {{- $pvcResources := $pvcSpec.resources | default dict }}
+                        {{- $pvcRequests := $pvcResources.requests | default dict }}
+                        {{- $pvcStorage = index $pvcRequests "storage" | default "" }}
+                    {{- end }}
                 {{- end }}
                 {{- $.Include "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage) | nindent 4 }}
                 {{- if and $deep $pvc.Metadata }}

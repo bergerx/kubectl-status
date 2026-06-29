@@ -52,7 +52,8 @@
 {{- define "statefulset_volume_claims" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- with .Spec.volumeClaimTemplates }}
-        {{- $pods := $.KubeGetByLabelsMap $.Namespace "pods" ($.Spec.selector.matchLabels | default dict) }}
+        {{- $selector := $.Spec.selector | default dict }}
+        {{- $pods := $.KubeGetByLabelsMap $.Namespace "pods" ($selector.matchLabels | default dict) }}
         {{- $entries := list }}
         {{- range $pvcTmpl := . }}
             {{- $tmplName := $pvcTmpl.metadata.name }}
@@ -74,7 +75,10 @@
                 {{- range $pod.Spec.volumes | default list }}
                     {{- if eq .name $tmplName }}
                         {{- $nodeSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
-                        {{- $podStat := $nodeSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
+                        {{- $podStat := dict }}
+                        {{- if $nodeSummary }}
+                            {{- $podStat = $nodeSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
+                        {{- end }}
                         {{- with $podStat.volume | default list | getMatchingItemInMapList (dict "name" $tmplName) }}
                             {{- $used := .usedBytes | float64 }}
                             {{- $cap := .capacityBytes | float64 }}

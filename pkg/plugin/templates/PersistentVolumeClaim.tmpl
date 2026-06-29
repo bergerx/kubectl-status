@@ -22,7 +22,10 @@
                 {{- if and (hasKey . "persistentVolumeClaim") (eq .persistentVolumeClaim.claimName $pvcName) }}
                     {{- $volName := .name }}
                     {{- $nodeSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
-                    {{- $podStat := $nodeSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
+                    {{- $podStat := dict }}
+                    {{- if $nodeSummary }}
+                        {{- $podStat = $nodeSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
+                    {{- end }}
                     {{- with $podStat.volume | default list | getMatchingItemInMapList (dict "name" $volName) }}
                         {{- $volStats = . }}
                     {{- end }}
@@ -33,20 +36,23 @@
     {{- if hasKey $volStats "usedBytes" }}
         {{- $used := $volStats.usedBytes | float64 }}
         {{- $cap := $volStats.capacityBytes | float64 }}
-        {{- $pct := percent $used $cap }}
-        {{- printf ", usage: %s/%s[%s]" ($used | humanizeSI "B") ($cap | humanizeSI "B") ($pct | colorPercent "%.0f%%") }}
+        {{- if $cap }}
+            {{- $pct := percent $used $cap }}
+            {{- printf ", usage: %s/%s[%s]" ($used | humanizeSI "B") ($cap | humanizeSI "B") ($pct | colorPercent "%.0f%%") }}
+        {{- end }}
     {{- end }}
     {{- if and .Spec.volumeName ($.Config.GetBool "deep") }}
         {{- $pv := $.KubeGetFirst "" "PersistentVolume" .Spec.volumeName }}
         {{- $.Include "PersistentVolume" $pv | nindent 4 }}
     {{- end }}
     {{- /* Resize tracking: resizeStatus (pre-1.28) and allocatedResources/allocatedResourceStatuses (1.23+) */ -}}
-    {{- $allocStorage := index (.Status.allocatedResources | default dict) "storage" }}
-    {{- $allocStatusStorage := index (.Status.allocatedResourceStatuses | default dict) "storage" }}
-    {{- if or .Status.resizeStatus $allocStorage $allocStatusStorage }}
+    {{- $status := .Status | default dict }}
+    {{- $allocStorage := index ($status.allocatedResources | default dict) "storage" }}
+    {{- $allocStatusStorage := index ($status.allocatedResourceStatuses | default dict) "storage" }}
+    {{- if or $status.resizeStatus $allocStorage $allocStatusStorage }}
         {{- "Resize" | bold | nindent 2 }}:
-        {{- if $allocStorage }} storage {{ .Status.capacity.storage | cyan }} → {{ $allocStorage | cyan }}{{ end }}
-        {{- with .Status.resizeStatus }} ({{ . | colorKeyword }}){{ end }}
+        {{- if $allocStorage }} storage {{ ($status.capacity | default dict).storage | cyan }} → {{ $allocStorage | cyan }}{{ end }}
+        {{- with $status.resizeStatus }} ({{ . | colorKeyword }}){{ end }}
         {{- with $allocStatusStorage }} {{ . }}{{ end }}
     {{- end }}
     {{- template "recent_updates" . }}
