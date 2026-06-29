@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"batch/v1","kind":"CronJob","metadata":{"annotations":{},"name":"cronjob-tz","namespace":"default"},"spec":{"concurrencyPolicy":"Forbid","jobTemplate":{"spec":{"template":{"spec":{"containers":[{"command":["sh","-c","echo done"],"image":"busybox","name":"worker"}],"restartPolicy":"OnFailure"}}}},"schedule":"30 9 * * 1-5","timeZone":"Europe/Berlin"}}
+  creationTimestamp: "2026-06-29T02:31:48Z"
+  generation: 1
+  name: cronjob-tz
+  namespace: default
+  resourceVersion: "215380"
+  uid: ea4f8776-5742-41dd-8888-da9bd6d63f4f
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata: {}
+    spec:
+      template:
+        metadata: {}
+        spec:
+          containers:
+          - command:
+            - sh
+            - -c
+            - echo done
+            image: busybox
+            imagePullPolicy: Always
+            name: worker
+            resources: {}
+            terminationMessagePath: /dev/termination-log
+            terminationMessagePolicy: File
+          dnsPolicy: ClusterFirst
+          restartPolicy: OnFailure
+          schedulerName: default-scheduler
+          securityContext: {}
+          terminationGracePeriodSeconds: 30
+  schedule: 30 9 * * 1-5
+  successfulJobsHistoryLimit: 3
+  suspend: false
+  timeZone: Europe/Berlin
+status: {}

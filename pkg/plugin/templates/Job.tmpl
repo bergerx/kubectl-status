@@ -25,6 +25,24 @@
             {{- printf "replacement: %s" . | yellow | nindent 2 }}
         {{- end }}
     {{- end }}
+    {{- if and .Status.failed (not ($.Config.GetBool "shallow")) }}
+        {{- $failedPods := list }}
+        {{- range $.KubeGetByLabelsMap $.Namespace "pods" (dict "job-name" .Name) }}
+            {{- if eq .Status.phase "Failed" }}
+                {{- $failedPods = append $failedPods . }}
+            {{- end }}
+        {{- end }}
+        {{- with $failedPods }}
+            {{- "Failed pods" | red | bold | nindent 2 }}:
+            {{- range . }}
+                {{- if $.Config.GetBool "deep" }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- else }}
+                    {{- $.Include "job_failed_pod_summary" . | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
     {{- template "conditions_summary" . }}
@@ -32,6 +50,20 @@
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
+{{- end -}}
+
+{{- define "job_failed_pod_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- .Name | bold }}
+    {{- range .Status.containerStatuses }}
+        {{- with .state.terminated }}
+            {{- if ne (.reason | default "") "Completed" }}
+                {{- ": " }}{{ .reason | default "Error" | colorKeyword }}
+                {{- if .exitCode }}, exit {{ .exitCode | toString | cyan }}{{ end }}
+                {{- with .message }}, {{ . | trim | red }}{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "job_indexed_details" }}

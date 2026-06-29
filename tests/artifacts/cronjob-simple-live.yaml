@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"batch/v1","kind":"CronJob","metadata":{"annotations":{},"name":"cronjob-simple","namespace":"default"},"spec":{"jobTemplate":{"spec":{"template":{"spec":{"containers":[{"command":["sh","-c","echo done"],"image":"busybox","name":"worker"}],"restartPolicy":"OnFailure"}}}},"schedule":"*/1 * * * *"}}
+  creationTimestamp: "2026-06-29T02:31:42Z"
+  generation: 1
+  name: cronjob-simple
+  namespace: default
+  resourceVersion: "216824"
+  uid: 8d566fc1-f876-4229-9986-26974e004178
+spec:
+  concurrencyPolicy: Allow
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata: {}
+    spec:
+      template:
+        metadata: {}
+        spec:
+          containers:
+          - command:
+            - sh
+            - -c
+            - echo done
+            image: busybox
+            imagePullPolicy: Always
+            name: worker
+            resources: {}
+            terminationMessagePath: /dev/termination-log
+            terminationMessagePolicy: File
+          dnsPolicy: ClusterFirst
+          restartPolicy: OnFailure
+          schedulerName: default-scheduler
+          securityContext: {}
+          terminationGracePeriodSeconds: 30
+  schedule: '*/1 * * * *'
+  successfulJobsHistoryLimit: 3
+  suspend: false
+status:
+  lastScheduleTime: "2026-06-29T02:41:00Z"
+  lastSuccessfulTime: "2026-06-29T02:41:20Z"

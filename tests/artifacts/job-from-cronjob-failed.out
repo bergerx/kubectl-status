@@ -1,0 +1,6 @@
+
+Job/cronjob-failing-29711681 -n default, created 1m ago by CronJob/cronjob-failing, gen:1, started at 2026-06-29T02:41:00Z (1m ago), Failed
+  Failed: Job Failed. failed: 1/1
+    Stalled: JobFailed, Job Failed. failed: 1/1
+  FailureTarget BackoffLimitExceeded, Job has reached the specified backoff limit for 1m
+  Failed BackoffLimitExceeded, Job has reached the specified backoff limit for 1m
