@@ -1,0 +1,5 @@
+
+PriorityLevelConfiguration/catch-all, created 1m ago, gen:1
+  Current: Resource is current
+  Concurrency: 5 nominal shares, 0% lendable, overflow: Reject
+  Note: spec is auto-managed by the API server

@@ -1,0 +1,62 @@
+{{- define "FlowSchema" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: flowcontrol.apiserver.k8s.io/v1, Kind=FlowSchema */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- /* Dangling=True means the referenced PriorityLevelConfiguration is missing */}}
+    {{- range .Status.conditions }}
+        {{- if and (eq .type "Dangling") (eq .status "True") }}
+            {{- printf "PriorityLevelConfiguration/%s not found — matching requests will be rejected" $.Spec.priorityLevelConfiguration.name | red | bold | nindent 2 }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec }}
+        {{- $plcName := .priorityLevelConfiguration.name }}
+        {{- $prec := .matchingPrecedence | toString | cyan }}
+        {{- $plc := printf "PriorityLevelConfiguration/%s" $plcName | cyan }}
+        {{- "Assigns" | bold | nindent 2 }} precedence={{ $prec }} → {{ $plc }}
+        {{- with .distinguisherMethod }}, queue by {{ .type | cyan }}{{ end }}
+        {{- with .rules }}
+            {{- "Rules" | bold | nindent 2 }}:
+            {{- range . }}
+                {{- /* Render subjects as a compact comma-separated list */}}
+                {{- $subjects := list }}
+                {{- range .subjects }}
+                    {{- if eq .kind "Group" }}
+                        {{- $subjects = append $subjects (printf "group:%s" .group.name) }}
+                    {{- else if eq .kind "User" }}
+                        {{- $subjects = append $subjects (printf "user:%s" .user.name) }}
+                    {{- else if eq .kind "ServiceAccount" }}
+                        {{- $subjects = append $subjects (printf "sa:%s/%s" .serviceAccount.namespace .serviceAccount.name) }}
+                    {{- end }}
+                {{- end }}
+                {{- join ", " $subjects | cyan | nindent 4 }}
+                {{- range .resourceRules }}
+                    {{- $groups := join "," .apiGroups }}
+                    {{- $resources := join "," .resources }}
+                    {{- $verbs := join "," .verbs }}
+                    {{- $scope := "" }}
+                    {{- if .clusterScope }}{{ $scope = " cluster-scoped" }}{{ end }}
+                    {{- $ns := join "," (.namespaces | default (list "*")) }}
+                    {{- if ne $ns "*" }}{{ $scope = printf " ns=%s" $ns }}{{ end }}
+                    {{- printf "[%s] %s/%s%s" $verbs $groups $resources $scope | nindent 6 }}
+                {{- end }}
+                {{- range .nonResourceRules }}
+                    {{- $urls := join "," .nonResourceURLs }}
+                    {{- $verbs := join "," .verbs }}
+                    {{- printf "[%s] non-resource:%s" $verbs $urls | nindent 6 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- /* Only show the Dangling condition when it is actually dangling (True) — the healthy False state is already implicit */}}
+    {{- range .Status.conditions }}
+        {{- if ne .type "Dangling" }}
+            {{- $.Include "condition_summary" . | nindent 2 }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

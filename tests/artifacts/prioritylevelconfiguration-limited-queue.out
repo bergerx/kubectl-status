@@ -1,0 +1,5 @@
+
+PriorityLevelConfiguration/global-default, created 1m ago, gen:1
+  Current: Resource is current
+  Concurrency: 20 nominal shares, 50% lendable, queues: 128, hand size: 6, max queue depth: 50
+  Note: spec is auto-managed by the API server
