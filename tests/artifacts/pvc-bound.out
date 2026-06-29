@@ -1,0 +1,4 @@
+
+PersistentVolumeClaim/data-web-0 -n default, created 1m ago Bound
+  Current: PVC is Bound
+  PVC uses PersistentVolume/pvc-23498768-c86b-4102-a660-139ed9044bc1, with Filesystem mode, asks for 10Gi

@@ -1,0 +1,6 @@
+
+PersistentVolume/pvc-23498768-c86b-4102-a660-139ed9044bc1, created 1m ago Bound
+  Current: Resource is current
+  PV is Bound, since 1m ago managed by StorageClass/standard provisioned by docker.io/hostpath with ReadWriteOnce mode, reclaim: Retain
+  Created for PersistentVolumeClaim/data-web-0 -n default
+    Replaced: This PVC doesn't exist anymore. Its likely that this PV is dangling.

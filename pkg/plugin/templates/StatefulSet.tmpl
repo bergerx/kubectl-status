@@ -43,9 +43,88 @@
         {{- end }}
     {{- end }}
     {{- template "recent_statefulset_rollouts" . }}
+    {{- template "statefulset_volume_claims" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
+{{- end }}
+
+{{- define "statefulset_volume_claims" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- with .Spec.volumeClaimTemplates }}
+        {{- $selector := $.Spec.selector | default dict }}
+        {{- $pods := $.KubeGetByLabelsMap $.Namespace "pods" ($selector.matchLabels | default dict) }}
+        {{- $entries := list }}
+        {{- range $pvcTmpl := . }}
+            {{- $tmplName := $pvcTmpl.metadata.name }}
+            {{- $pvcSpec := index $pvcTmpl "spec" | default dict }}
+            {{- $pvcResources := index $pvcSpec "resources" | default dict }}
+            {{- $pvcRequests := index $pvcResources "requests" | default dict }}
+            {{- $storage := index $pvcRequests "storage" }}
+            {{- $entry := $tmplName | bold }}
+            {{- $inner := $storage | default "" }}
+            {{- /* Gather usage min/max across all pods */ -}}
+            {{- $minUsed := 0.0 }}
+            {{- $maxUsed := 0.0 }}
+            {{- $minPct := 0.0 }}
+            {{- $maxPct := 0.0 }}
+            {{- $capacity := 0.0 }}
+            {{- $found := false }}
+            {{- range $pods }}
+                {{- $pod := . }}
+                {{- range $pod.Spec.volumes | default list }}
+                    {{- if eq .name $tmplName }}
+                        {{- $nodeSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
+                        {{- $podStat := dict }}
+                        {{- if $nodeSummary }}
+                            {{- $podStat = $nodeSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
+                        {{- end }}
+                        {{- with $podStat.volume | default list | getMatchingItemInMapList (dict "name" $tmplName) }}
+                            {{- $used := .usedBytes | float64 }}
+                            {{- $cap := .capacityBytes | float64 }}
+                            {{- if $cap }}
+                                {{- $pct := percent $used $cap }}
+                                {{- if not $found }}
+                                    {{- $minUsed = $used }}
+                                    {{- $maxUsed = $used }}
+                                    {{- $minPct = $pct }}
+                                    {{- $maxPct = $pct }}
+                                    {{- $capacity = $cap }}
+                                    {{- $found = true }}
+                                {{- else }}
+                                    {{- if lt $used $minUsed }}{{- $minUsed = $used }}{{- end }}
+                                    {{- if gt $used $maxUsed }}{{- $maxUsed = $used }}{{- end }}
+                                    {{- if lt $pct $minPct }}{{- $minPct = $pct }}{{- end }}
+                                    {{- if gt $pct $maxPct }}{{- $maxPct = $pct }}{{- end }}
+                                {{- end }}
+                            {{- end }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+            {{- if $found }}
+                {{- $minUsedStr := $minUsed | humanizeSI "B" }}
+                {{- $maxUsedStr := $maxUsed | humanizeSI "B" }}
+                {{- $minPctStr := $minPct | printf "%.0f" }}
+                {{- $maxPctStr := $maxPct | printf "%.0f" }}
+                {{- $capStr := $capacity | humanizeSI "B" }}
+                {{- $usageStr := "" }}
+                {{- if and (eq $minUsedStr $maxUsedStr) (eq $minPctStr $maxPctStr) }}
+                    {{- $usageStr = printf "usage: %s/%s[%s]" $minUsedStr $capStr ($minPct | colorPercent "%.0f%%") }}
+                {{- else }}
+                    {{- $usageStr = printf "usage: min %s/%s[%s], max %s/%s[%s]" $minUsedStr $capStr ($minPct | colorPercent "%.0f%%") $maxUsedStr $capStr ($maxPct | colorPercent "%.0f%%") }}
+                {{- end }}
+                {{- if $inner }}
+                    {{- $inner = printf "%s, %s" $inner $usageStr }}
+                {{- else }}
+                    {{- $inner = $usageStr }}
+                {{- end }}
+            {{- end }}
+            {{- if $inner }}{{- $entry = printf "%s (%s)" $entry $inner }}{{- end }}
+            {{- $entries = append $entries $entry }}
+        {{- end }}
+        {{- "Volume Claims:" | nindent 2 }} {{ join ", " $entries }}
+    {{- end }}
 {{- end }}
 
 {{- define "recent_statefulset_rollouts" }}

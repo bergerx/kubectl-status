@@ -210,7 +210,7 @@ func TestAllArtifactsLocal(t *testing.T) {
 	}
 }
 
-func TestAllArtifactsLocalWithIncludeVolumes(t *testing.T) {
+func TestAllArtifactsLocalWithIncludeAllVolumes(t *testing.T) {
 	t.Setenv("KUBECONFIG", "/dev/null")
 	testHack(t)
 	viperTestHack(t)
@@ -224,8 +224,8 @@ func TestAllArtifactsLocalWithIncludeVolumes(t *testing.T) {
 		name = strings.Replace(name, ".yaml", "", 1)
 		t.Run(name, func(t *testing.T) {
 			test := cmdTest{
-				args:            []string{"-f", artifact, "--local", "--shallow", "--v", "255", "--include-volumes"},
-				stdoutEqualPath: name + ".include-volumes.out",
+				args:            []string{"-f", artifact, "--local", "--shallow", "--v", "255", "--include-all-volumes"},
+				stdoutEqualPath: name + ".include-all-volumes.out",
 			}
 			test.assert(t, nil)
 		})
@@ -372,8 +372,10 @@ Secret\/child -n default, created 1m ago by Secret/owner
 		applyManifest(t, "e2e-artifacts/sts-with-ingress.yaml")
 		waitFor(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1")
 		cmdTest{
+			// Log/volume usage bytes come from live kubelet stats and aren't reproducible
+			// across runs, so this is matched as a regex rather than exact text.
 			args:            []string{"pod/sts-with-ingress-0", "--include-events=false", "--v", "5"},
-			stdoutEqualPath: "e2e-artifacts/sts-with-ingress.pod.out",
+			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.pod.regex",
 		}.assert(t, nodeNameModifier)
 	})
 }
