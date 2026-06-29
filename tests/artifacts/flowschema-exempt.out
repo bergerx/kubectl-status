@@ -1,0 +1,8 @@
+
+FlowSchema/exempt, created 1m ago, gen:1
+  Current: Resource is current
+  Assigns precedence=1 → PriorityLevelConfiguration/exempt
+  Rules:
+    group:system:masters
+      [*] */* cluster-scoped
+      [*] non-resource:*

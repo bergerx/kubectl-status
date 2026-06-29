@@ -1,0 +1,63 @@
+{{- define "PriorityLevelConfiguration" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: flowcontrol.apiserver.k8s.io/v1, Kind=PriorityLevelConfiguration */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- $type := .Spec.type }}
+    {{- if eq $type "Exempt" }}
+        {{- "Type" | bold | nindent 2 }}: {{ "Exempt" | green }} (requests are never queued or rejected)
+    {{- else if eq $type "Limited" }}
+        {{- with .Spec.limited }}
+            {{- $shares := .nominalConcurrencyShares | toString | cyan }}
+            {{- $lend := .lendablePercent | default 0 | toString }}
+            {{- $respType := "Queue" }}
+            {{- with .limitResponse }}{{ $respType = .type | default "Queue" }}{{ end }}
+            {{- "Concurrency" | bold | nindent 2 }}: {{ $shares }} nominal shares, {{ $lend | cyan }}% lendable
+            {{- if eq $respType "Reject" }}
+                {{- ", overflow: " }}{{ "Reject" | red | bold }}
+            {{- else }}
+                {{- with .limitResponse }}
+                    {{- with .queuing }}
+                        {{- $queues := .queues | toString | cyan }}
+                        {{- $hand := .handSize | toString | cyan }}
+                        {{- $ql := .queueLengthLimit | toString | cyan }}
+                        {{- ", queues: " }}{{ $queues }}, hand size: {{ $hand }}, max queue depth: {{ $ql }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- /* Show auto-update annotation only when present — managed by kube-apiserver */}}
+    {{- $autoUpdate := index .Annotations "apf.kubernetes.io/autoupdate-spec" }}
+    {{- if eq $autoUpdate "true" }}
+        {{- "Note" | bold | nindent 2 }}: spec is auto-managed by the API server
+    {{- end }}
+    {{- /* In non-shallow mode, show which FlowSchemas route to this priority level */}}
+    {{- if not ($.Config.GetBool "shallow") }}
+        {{- $plcName := .Name }}
+        {{- $schemas := list }}
+        {{- range $.KubeGet "" "flowschemas" }}
+            {{- $fsPlcName := "" }}
+            {{- with .Spec }}
+                {{- with .priorityLevelConfiguration }}
+                    {{- $fsPlcName = .name }}
+                {{- end }}
+            {{- end }}
+            {{- if eq $fsPlcName $plcName }}
+                {{- $schemas = append $schemas . }}
+            {{- end }}
+        {{- end }}
+        {{- with $schemas }}
+            {{- "FlowSchemas" | bold | nindent 2 }}:
+            {{- range . }}
+                {{- $prec := .Spec.matchingPrecedence | toString }}
+                {{- printf "precedence=%-5s %s" $prec .Name | cyan | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

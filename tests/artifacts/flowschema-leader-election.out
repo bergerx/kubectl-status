@@ -1,0 +1,7 @@
+
+FlowSchema/system-leader-election, created 1m ago, gen:1
+  Current: Resource is current
+  Assigns precedence=100 → PriorityLevelConfiguration/leader-election, queue by ByUser
+  Rules:
+    user:system:kube-controller-manager, user:system:kube-scheduler, sa:kube-system/*
+      [get,create,update] coordination.k8s.io/leases

@@ -1,0 +1,8 @@
+
+FlowSchema/global-default, created 1m ago, gen:1
+  Current: Resource is current
+  Assigns precedence=9900 → PriorityLevelConfiguration/global-default, queue by ByUser
+  Rules:
+    group:system:unauthenticated, group:system:authenticated
+      [*] */* cluster-scoped
+      [*] non-resource:*
