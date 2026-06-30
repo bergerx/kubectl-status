@@ -18,9 +18,13 @@
     {{- $usingPods := list }}
     {{- range $.KubeGet $.Namespace "pods" }}
         {{- $pod := . }}
+        {{- $added := false }}
         {{- range $pod.Spec.volumes | default list }}
             {{- if and (hasKey . "persistentVolumeClaim") (eq .persistentVolumeClaim.claimName $pvcName) }}
-                {{- $usingPods = append $usingPods $pod }}
+                {{- if not $added }}
+                    {{- $usingPods = append $usingPods $pod }}
+                    {{- $added = true }}
+                {{- end }}
                 {{- if not (hasKey $volStats "usedBytes") }}
                     {{- $volName := .name }}
                     {{- $nodeSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
