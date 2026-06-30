@@ -223,7 +223,7 @@
 {{- define "service_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
-    {{- with .Spec.type }}, {{ . | colorKeyword }}{{ end }}
+    {{- with .Spec }}{{ with .type }}, {{ . | colorKeyword }}{{ end }}{{ end }}
     {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
     {{- $ready := 0 }}{{ $notReady := 0 }}
     {{- range $slices }}
@@ -239,12 +239,12 @@
     {{- else }}
         {{- ", " }}{{ "no matching pods" | red | bold }}
     {{- end }}
-    {{- with .Spec.ports }}
-        {{- range $i, $p := . }}
-            {{- if $i }}, {{ else }}, {{ end }}
-            {{- if $p.name }}{{ printf "%s(%d/%s)" $p.name ($p.port | int) ($p.protocol | default "TCP") | cyan }}{{ else }}{{ printf "%d/%s" ($p.port | int) ($p.protocol | default "TCP") | cyan }}{{ end }}
+    {{- with .Spec }}{{ with .ports }}
+        {{- range . }}
+            {{- ", " }}
+            {{- if .name }}{{ printf "%s(%d/%s)" .name (.port | int) (.protocol | default "TCP") | cyan }}{{ else }}{{ printf "%d/%s" (.port | int) (.protocol | default "TCP") | cyan }}{{ end }}
         {{- end }}
-    {{- end }}
+    {{- end }}{{ end }}
 {{- end }}
 
 {{- define "job_health_summary" }}
