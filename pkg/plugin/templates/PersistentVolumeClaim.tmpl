@@ -12,14 +12,16 @@
     {{- with index .Annotations "volume.beta.kubernetes.io/storage-provisioner" }}, provisioned by {{ . | bold }}{{ end }}
     {{- with index .Annotations "volume.kubernetes.io/selected-node" }}, attached on {{ "Node" | bold }}/{{ . }}{{ end }}
     {{- if not .Spec.volumeName }}, {{ "Pending" | red | bold }}: no paired PV yet{{ end }}
-    {{- /* Disk usage: find a running pod that has this PVC mounted */ -}}
+    {{- /* Disk usage: find running pods that have this PVC mounted, collect usage stats from the first one */ -}}
     {{- $pvcName := $.Name }}
     {{- $volStats := dict }}
+    {{- $usingPods := list }}
     {{- range $.KubeGet $.Namespace "pods" }}
-        {{- if not (hasKey $volStats "usedBytes") }}
-            {{- $pod := . }}
-            {{- range $pod.Spec.volumes | default list }}
-                {{- if and (hasKey . "persistentVolumeClaim") (eq .persistentVolumeClaim.claimName $pvcName) }}
+        {{- $pod := . }}
+        {{- range $pod.Spec.volumes | default list }}
+            {{- if and (hasKey . "persistentVolumeClaim") (eq .persistentVolumeClaim.claimName $pvcName) }}
+                {{- $usingPods = append $usingPods $pod }}
+                {{- if not (hasKey $volStats "usedBytes") }}
                     {{- $volName := .name }}
                     {{- $nodeSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
                     {{- $podStat := dict }}
@@ -54,6 +56,12 @@
         {{- if $allocStorage }} storage {{ ($status.capacity | default dict).storage | cyan }} → {{ $allocStorage | cyan }}{{ end }}
         {{- with $status.resizeStatus }} ({{ . | colorKeyword }}){{ end }}
         {{- with $allocStatusStorage }} {{ . }}{{ end }}
+    {{- end }}
+    {{- if $usingPods }}
+        {{- "Pods" | bold | nindent 2 }}:
+        {{- range $usingPods }}
+            {{- $.Include "pod_health_summary" . | nindent 4 }}
+        {{- end }}
     {{- end }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
