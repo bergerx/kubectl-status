@@ -4,6 +4,8 @@ Pod/etcd-minikube -n kube-system, created 1m ago by Node/minikube, started after
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
   Containers: etcd (registry.k8s.io/etcd:3.5.9-0) Running for 1m and Ready, restarted 9 times
   previously: Started 1m ago and Completed after 1m
+  livenessProbe: httpGet HTTP://127.0.0.1:2381/health?exclude=NOSPACE&serializable=true (delay 10s, every 10s, timeout 15s, fail after 8x) kill budget: 90s
+  startupProbe: httpGet HTTP://127.0.0.1:2381/health?serializable=false (delay 10s, every 10s, timeout 15s, fail after 24x) kill budget: 250s
   Volumes:
     etcd-certs (HostPath: /var/lib/minikube/certs/etcd, type: DirectoryOrCreate)
     etcd-data (HostPath: /var/lib/minikube/etcd, type: DirectoryOrCreate)

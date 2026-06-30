@@ -1,0 +1,12 @@
+
+Pod/probe-liveness-restarting -n default, created 1m ago, gen:1 Running BestEffort
+  InProgress: Pod is running but is not Ready
+    Reconciling: PodRunningNotReady, Pod is running but is not Ready
+  PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
+    Ready ContainersNotReady, containers with unready status: [app] for 1m
+    ContainersReady ContainersNotReady, containers with unready status: [app] for 1m
+  Standalone POD.
+  Containers: app (registry.k8s.io/pause:3.9) Running for 1m but Not Ready, restarted 1 times
+  previously: Started 1m ago and Completed after 1m
+  livenessProbe: exec /bin/sh -c cat /tmp/healthy (delay 1s, every 5s, timeout 1s, fail after 2x) kill budget: 11s
+  startupProbe: exec /bin/sh -c test -f /tmp/started (delay 1s, every 3s, timeout 1s, fail after 3x) kill budget: 10s

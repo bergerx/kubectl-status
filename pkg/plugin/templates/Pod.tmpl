@@ -283,6 +283,28 @@
             {{- range . }}{{ .name | cyan | nindent 4 }}{{ end }}
         {{- end }}
     {{- end }}
+    {{- with .Spec.readinessGates }}
+        {{- if eq (len .) 1 }}
+            {{- $condType := (index . 0).conditionType }}
+            {{- $cond := $.StatusConditions | getMatchingItemInMapList (dict "type" $condType) }}
+            {{- if $cond }}
+                {{- "Readiness gate:" | yellow | nindent 2 }} {{ $.Include "condition_summary" $cond }}
+            {{- else }}
+                {{- "Readiness gate:" | yellow | nindent 2 }} {{ $condType | cyan }}: condition not yet set
+            {{- end }}
+        {{- else }}
+            {{- printf "Readiness gates (%d):" (len .) | yellow | nindent 2 }}
+            {{- range . }}
+                {{- $condType := .conditionType }}
+                {{- $cond := $.StatusConditions | getMatchingItemInMapList (dict "type" $condType) }}
+                {{- if $cond }}
+                    {{- $.Include "condition_summary" $cond | nindent 4 }}
+                {{- else }}
+                    {{- $condType | cyan | nindent 4 }}: condition not yet set
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "container_usage" -}}
@@ -341,6 +363,35 @@
     {{- with .containerStatus.lastState }}
         {{- "previously:" | yellow | nindent 2 }} {{ template "container_state_summary" . }}
     {{- end }}
+    {{- $runningNotReady := and .containerStatus.state.running (not .containerStatus.ready) }}
+    {{- $hasRestarts := gt (.containerStatus.restartCount | int) 0 }}
+    {{- if and $hasRestarts .containerSpec.livenessProbe }}
+        {{- with .containerStatus.lastState.terminated }}
+            {{- if and (eq (.exitCode | int) 137) (ne .reason "OOMKilled") }}
+                {{- "(possible liveness probe SIGKILL)" | red | nindent 2 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- if and $runningNotReady .containerSpec.readinessProbe }}
+        {{- "readinessProbe:" | yellow | nindent 2 }} {{ template "probe_summary" .containerSpec.readinessProbe }}
+    {{- end }}
+    {{- if and $hasRestarts .containerSpec.livenessProbe }}
+        {{- $p := .containerSpec.livenessProbe -}}
+        {{- $budget := add ($p.initialDelaySeconds | default 0 | int) (mul ($p.failureThreshold | default 3 | int) ($p.periodSeconds | default 10 | int)) -}}
+        {{- "livenessProbe:" | yellow | nindent 2 }} {{ template "probe_summary" $p }} {{ "kill budget:" | bold }} {{ printf "%ds" $budget | cyan }}
+    {{- end }}
+    {{- if and $hasRestarts .containerSpec.startupProbe }}
+        {{- $p := .containerSpec.startupProbe -}}
+        {{- $budget := add ($p.initialDelaySeconds | default 0 | int) (mul ($p.failureThreshold | default 3 | int) ($p.periodSeconds | default 10 | int)) -}}
+        {{- "startupProbe:" | yellow | nindent 2 }} {{ template "probe_summary" $p }} {{ "kill budget:" | bold }} {{ printf "%ds" $budget | cyan }}
+    {{- end }}
+    {{- with .containerStatus.state.waiting }}
+        {{- if eq .reason "PostStartHookError" }}
+            {{- with $.containerSpec.lifecycle.postStart }}
+                {{- "postStart:" | yellow | nindent 2 }} {{ template "lifecycle_hook_summary" . }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
     {{- with .containerStats }}
         {{- with .rootfs }}
             {{- if .usedBytes }}
@@ -387,6 +438,28 @@
             {{- " " }}{{ template "exit_code_summary" . }}
         {{- end }}
     {{- end }}
+{{- end -}}
+
+{{- define "probe_summary" }}
+    {{- /* Displays probe action type and timing parameters. Expects a probe object. */ -}}
+    {{- with .exec }}{{ "exec" | bold }} {{ .command | join " " | cyan }}{{ end -}}
+    {{- with .httpGet }}{{ "httpGet" | bold }} {{ printf "%s://%s:%v%s" (.scheme | default "HTTP") (.host | default "localhost") .port .path | cyan }}{{ end -}}
+    {{- with .tcpSocket }}{{ "tcpSocket" | bold }} {{ printf "%s:%v" (.host | default "localhost") .port | cyan }}{{ end -}}
+    {{- with .grpc }}{{ "grpc" | bold }} {{ printf ":%v" .port | cyan }}{{ with .service }} {{ . | cyan }}{{ end }}{{ end -}}
+    {{- $parts := list -}}
+    {{- with .initialDelaySeconds }}{{ $parts = append $parts (printf "delay %ds" (. | int)) }}{{ end -}}
+    {{- with .periodSeconds }}{{ $parts = append $parts (printf "every %ds" (. | int)) }}{{ end -}}
+    {{- with .timeoutSeconds }}{{ $parts = append $parts (printf "timeout %ds" (. | int)) }}{{ end -}}
+    {{- with .failureThreshold }}{{ $parts = append $parts (printf "fail after %dx" (. | int)) }}{{ end -}}
+    {{- if $parts }} ({{ join ", " $parts }}){{ end -}}
+{{- end -}}
+
+{{- define "lifecycle_hook_summary" }}
+    {{- /* Displays a lifecycle hook action. Expects a LifecycleHandler object. */ -}}
+    {{- with .exec }}{{ "exec" | bold }} {{ .command | join " " | cyan }}{{ end -}}
+    {{- with .httpGet }}{{ "httpGet" | bold }} {{ printf "%s://%s:%v%s" (.scheme | default "HTTP") (.host | default "localhost") .port .path | cyan }}{{ end -}}
+    {{- with .tcpSocket }}{{ "tcpSocket" | bold }} {{ printf "%s:%v" (.host | default "localhost") .port | cyan }}{{ end -}}
+    {{- with .sleep }}{{ "sleep" | bold }} {{ printf "%vs" .seconds | cyan }}{{ end -}}
 {{- end -}}
 
 {{- define "pod_ephemeral_containers" }}

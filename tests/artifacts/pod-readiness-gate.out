@@ -1,0 +1,9 @@
+
+Pod/pod-readiness-gate -n default, created 1m ago, gen:1 Running BestEffort
+  InProgress: Pod is running but is not Ready
+    Reconciling: PodRunningNotReady, Pod is running but is not Ready
+  PodScheduled -> Initialized -> ContainersReady -> Not Ready
+    Ready ReadinessGatesNotReady, corresponding condition of pod readiness gate "custom.io/feature-ready" does not exist. for 1m
+    Readiness gate: custom.io/feature-ready: condition not yet set
+  Standalone POD.
+  Containers: app (registry.k8s.io/pause:3.9) Running for 1m and Ready
