@@ -26,9 +26,9 @@ builds:
       -X main.version={{ .Summary }}
 archives:
   - id: status
-    builds:
+    ids:
       - status
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
