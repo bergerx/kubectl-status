@@ -1,0 +1,11 @@
+
+Pod/pod-poststart-hook-error -n default, created 1m ago, gen:1 Running BestEffort
+  InProgress: Pod is running but is not Ready
+    Reconciling: PodRunningNotReady, Pod is running but is not Ready
+  PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
+    Ready ContainersNotReady, containers with unready status: [app] for 1m
+    ContainersReady ContainersNotReady, containers with unready status: [app] for 1m
+  Standalone POD.
+  Containers: app (busybox:1.36) Waiting PostStartHookError: Exec lifecycle hook ([/bin/sh -c exit 1]) for Container "app" in Pod "pod-poststart-hook-error_default(9af6a317-3023-4f5d-b537-68ca9118a791)" failed - error: command '/bin/sh -c exit 1' exited with 1: , message: ""
+  previously: Started 1m ago and Error after 1m with exit code exit with 137 (SIGKILL)
+  postStart: exec /bin/sh -c exit 1

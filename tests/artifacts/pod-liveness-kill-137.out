@@ -1,0 +1,12 @@
+
+Pod/pod-liveness-kill-137 -n default, created 1m ago, gen:1, started after 0s Running BestEffort
+  Failed: Containers in CrashLoop state: app
+    Stalled: ContainerCrashLooping, Containers in CrashLoop state: app
+  PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
+    Ready ContainersNotReady, containers with unready status: [app] for 1m
+    ContainersReady ContainersNotReady, containers with unready status: [app] for 1m
+  Standalone POD.
+  Containers: app (busybox:1.36) Waiting CrashLoopBackOff: back-off 20s restarting failed container=app pod=pod-liveness-kill-137_default(d2bf2b74-5f4b-45e4-b391-5b8cd9d253eb), restarted 3 times
+  previously: Started 1m ago and Error after 1m with exit code exit with 137 (SIGKILL)
+  (possible liveness probe SIGKILL)
+  livenessProbe: exec false (delay 1s, every 2s, timeout 1s, fail after 2x) kill budget: 5s

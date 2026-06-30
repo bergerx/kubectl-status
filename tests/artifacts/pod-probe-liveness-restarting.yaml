@@ -1,0 +1,150 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Pod","metadata":{"annotations":{},"name":"probe-liveness-restarting","namespace":"default"},"spec":{"containers":[{"image":"registry.k8s.io/pause:3.9","livenessProbe":{"exec":{"command":["/bin/sh","-c","cat /tmp/healthy"]},"failureThreshold":2,"initialDelaySeconds":1,"periodSeconds":5},"name":"app","startupProbe":{"exec":{"command":["/bin/sh","-c","test -f /tmp/started"]},"failureThreshold":3,"initialDelaySeconds":1,"periodSeconds":3}}]}}
+  creationTimestamp: "2026-06-30T18:20:24Z"
+  generation: 1
+  name: probe-liveness-restarting
+  namespace: default
+  resourceVersion: "3258"
+  uid: adc3e428-fe75-4dfd-b408-7856ddf6a053
+spec:
+  containers:
+  - image: registry.k8s.io/pause:3.9
+    imagePullPolicy: IfNotPresent
+    livenessProbe:
+      exec:
+        command:
+        - /bin/sh
+        - -c
+        - cat /tmp/healthy
+      failureThreshold: 2
+      initialDelaySeconds: 1
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 1
+    name: app
+    resources: {}
+    startupProbe:
+      exec:
+        command:
+        - /bin/sh
+        - -c
+        - test -f /tmp/started
+      failureThreshold: 3
+      initialDelaySeconds: 1
+      periodSeconds: 3
+      successThreshold: 1
+      timeoutSeconds: 1
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-rgjm6
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: minikube
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: kube-api-access-rgjm6
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-30T18:20:32Z"
+    observedGeneration: 1
+    status: "True"
+    type: PodReadyToStartContainers
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-30T18:20:24Z"
+    observedGeneration: 1
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-30T18:20:24Z"
+    message: 'containers with unready status: [app]'
+    observedGeneration: 1
+    reason: ContainersNotReady
+    status: "False"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-30T18:20:24Z"
+    message: 'containers with unready status: [app]'
+    observedGeneration: 1
+    reason: ContainersNotReady
+    status: "False"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-30T18:20:24Z"
+    observedGeneration: 1
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - containerID: docker://b639b7e429943d3c1a8cfdb4092223d257a163b4edee7264aea59f944190775d
+    image: registry.k8s.io/pause:3.9
+    imageID: docker-pullable://registry.k8s.io/pause@sha256:7031c1b283388d2c2e09b57badb803c05ebed362dc88d84b480cc47f72a21097
+    lastState:
+      terminated:
+        containerID: docker://a614cc8372e773c7e5e623551e8029740ee3f7c62281e40a360b53c1b44f6f79
+        exitCode: 0
+        finishedAt: "2026-06-30T18:20:41Z"
+        reason: Completed
+        startedAt: "2026-06-30T18:20:30Z"
+    name: app
+    ready: false
+    resources: {}
+    restartCount: 1
+    started: false
+    state:
+      running:
+        startedAt: "2026-06-30T18:20:44Z"
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-rgjm6
+      readOnly: true
+      recursiveReadOnly: Disabled
+  hostIP: 192.168.49.2
+  hostIPs:
+  - ip: 192.168.49.2
+  observedGeneration: 1
+  phase: Running
+  podIP: 10.244.0.13
+  podIPs:
+  - ip: 10.244.0.13
+  qosClass: BestEffort
+  startTime: "2026-06-30T18:20:24Z"

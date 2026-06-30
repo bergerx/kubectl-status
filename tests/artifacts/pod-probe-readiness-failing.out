@@ -1,0 +1,10 @@
+
+Pod/probe-readiness-failing -n default, created 1m ago, gen:1 Running BestEffort
+  InProgress: Pod is running but is not Ready
+    Reconciling: PodRunningNotReady, Pod is running but is not Ready
+  PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
+    Ready ContainersNotReady, containers with unready status: [app] for 1m
+    ContainersReady ContainersNotReady, containers with unready status: [app] for 1m
+  Standalone POD.
+  Containers: app (registry.k8s.io/pause:3.9) Running for 1m but Not Ready
+  readinessProbe: httpGet HTTP://localhost:8080/ready (delay 1s, every 5s, timeout 1s, fail after 3x)
