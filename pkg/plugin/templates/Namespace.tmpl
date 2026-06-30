@@ -4,6 +4,7 @@
     {{- template "status_summary_line" . }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
+    {{- template "application_details" . }}
     {{- $labels := .Metadata.labels | default dict }}
     {{- $psaEnforce := index $labels "pod-security.kubernetes.io/enforce" }}
     {{- $psaEnforceVer := index $labels "pod-security.kubernetes.io/enforce-version" }}

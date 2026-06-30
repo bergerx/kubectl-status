@@ -181,8 +181,6 @@ func addRenderFlags(flags *pflag.FlagSet) {
 		"Follow the ownerReferences in the objects and render them as well.")
 	flags.Bool("include-events", true,
 		"Include events in the output.")
-	flags.Bool("include-matching-services", true,
-		"Include Services matching the Pod in the output.")
 	flags.Bool("include-matching-ingresses", true,
 		"Include Ingresses referencing the Service in the output.")
 	flags.Bool("include-application-details", true,
