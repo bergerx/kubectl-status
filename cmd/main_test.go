@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -177,8 +178,11 @@ func TestE2EAgainstVanillaMinikube(t *testing.T) {
 func testHack(t *testing.T) {
 	t.Helper()
 	durationRevert := plugin.SetDurationRound(func(_ interface{}) string { return "1m" })
+	fixedNow := time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC)
+	nowRevert := plugin.SetNowFunc(func() time.Time { return fixedNow })
 	t.Cleanup(func() {
 		durationRevert()
+		nowRevert()
 	})
 }
 

@@ -1,4 +1,4 @@
 
 CronJob/hello -n default, created 1m ago, schedule: */1 * * * *
   Not yet scheduled
-  Current: Resource is always ready
+  Next: 2026-06-30T00:01:00Z (in 1m)

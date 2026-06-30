@@ -4,13 +4,9 @@
     {{- template "status_summary_line" . }}
     {{- with .Spec.schedule }}, schedule: {{ . | cyan }}{{ with $.Spec.timeZone }} [{{ . | cyan }}]{{ end }}{{ end }}
     {{- if .Spec.suspend }}, {{ "Suspended" | yellow | bold }}{{ end }}
-    {{- if .Status.lastScheduleTime }}, last ran at {{ .Status.lastScheduleTime }}{{ relativeTime .Status.lastScheduleTime }}
-    {{- else if not .Spec.suspend }}
-        {{- "Not yet scheduled" | yellow | bold | nindent 2 }}
-    {{- end }}
-    {{- if and .Status.lastSuccessfulTime .Status.lastScheduleTime }}
-        {{- if lt .Status.lastSuccessfulTime .Status.lastScheduleTime }}
-            {{- "Last succeeded" | nindent 2 }}: {{ .Status.lastSuccessfulTime | colorAgo }}{{ agoSuffix }}
+    {{- if not .Status.lastScheduleTime }}
+        {{- if not .Spec.suspend }}
+            {{- "Not yet scheduled" | yellow | bold | nindent 2 }}
         {{- end }}
     {{- end }}
     {{- with .Spec.concurrencyPolicy }}
@@ -23,7 +19,32 @@
             {{- "Active" | green | nindent 2 }}: {{ .kind | bold }}/{{ .name }} is running.
         {{- end }}
     {{- end }}
-    {{- template "kstatus_summary" . }}
+    {{- $cronJobJobs := list }}
+    {{- range $.KubeGet $.Namespace "Jobs" }}
+        {{- $job := . }}
+        {{- range .Metadata.ownerReferences }}
+            {{- if and .controller (eq .kind "CronJob") (eq .name $.Name) }}
+                {{- $cronJobJobs = append $cronJobJobs $job }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with $cronJobJobs }}
+        {{- "Jobs" | bold | nindent 2 }}, keep last {{ $.Spec.successfulJobsHistoryLimit | default 3 | int | toString | cyan }} successful / {{ $.Spec.failedJobsHistoryLimit | default 1 | int | toString | cyan }} failed:
+        {{- range . }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- $.IncludeRenderableObject . | nindent 4 }}
+            {{- else }}
+                {{- $.Include "job_health_summary" . | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- if .Status.lastScheduleTime }}
+        {{- "Last ran" | nindent 2 }}: {{ .Status.lastScheduleTime }}{{ relativeTime .Status.lastScheduleTime }}
+        {{- if and .Status.lastSuccessfulTime (lt .Status.lastSuccessfulTime .Status.lastScheduleTime) }}, last succeeded: {{ .Status.lastSuccessfulTime }}{{ relativeTime .Status.lastSuccessfulTime }}{{ end }}
+        {{- if not .Spec.suspend }}, next: {{ cronNextTime .Spec.schedule .Spec.timeZone }}{{ end }}
+    {{- else if and .Spec.schedule (not .Spec.suspend) }}
+        {{- "Next" | nindent 2 }}: {{ cronNextTime .Spec.schedule .Spec.timeZone }}
+    {{- end }}
     {{- template "finalizer_details_on_termination" . }}
     {{- template "application_details" . }}
     {{- template "recent_updates" . }}

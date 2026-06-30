@@ -235,6 +235,20 @@
     {{- end }}
 {{- end }}
 
+{{- define "job_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- if .Status.active }}, {{ "Active" | yellow | bold }}{{ end }}
+    {{- if .Status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
+    {{- if .Status.failed }}, {{ printf "Failed: %d" (.Status.failed | int) | red | bold }}{{ end }}
+    {{- if .Status.startTime }}, started {{ .Status.startTime | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- if and .Status.startTime .Status.completionTime }}
+        {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" -}}
+        {{- $completed := .Status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
+        {{- ", ran for " }}{{ $completed.Sub $started | colorDuration }}
+    {{- end }}
+{{- end -}}
+
 {{- define "workload_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
