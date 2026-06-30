@@ -1,0 +1,5 @@
+
+DaemonSet/kube-proxy -n kube-system, created 1m ago, gen:1
+  Current: All replicas scheduled as expected. Replicas: 1
+  Selector: k8s-app=kube-proxy
+  desired:1, current:1, available:1, ready:1, updated:1

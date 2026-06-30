@@ -12,6 +12,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 	"github.com/go-sprout/sprout"
+	"github.com/robfig/cron/v3"
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
@@ -21,6 +22,16 @@ import (
 )
 
 var durationRound = DefaultDurationRound()
+
+var nowFunc = time.Now
+
+// SetNowFunc is a helper method for tests
+func SetNowFunc(f func() time.Time) (revertFunc func()) {
+	nowFunc = f
+	return func() {
+		nowFunc = time.Now
+	}
+}
 
 func DefaultDurationRound() func(duration interface{}) string {
 	return (sprout.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
@@ -68,6 +79,7 @@ func funcMap() template.FuncMap {
 		"forOrSince":               forOrSince,
 		"relativeTime":             relativeTime,
 		"labelSelector":            labelSelector,
+		"cronNextTime":             cronNextTime,
 	}
 }
 
@@ -410,6 +422,31 @@ func (r RenderableObject) IncludeRenderableObject(obj RenderableObject) (output 
 	klog.V(5).InfoS("called IncludeRenderableObject", "r", r, "obj", obj)
 	renderString, _ := obj.renderString()
 	return renderString
+}
+
+func cronNextTime(schedule string, timezone interface{}) string {
+	tz, _ := timezone.(string)
+	schedStr := schedule
+	if !strings.Contains(schedule, "TZ") && tz != "" {
+		if _, err := time.LoadLocation(tz); err == nil {
+			schedStr = fmt.Sprintf("TZ=%s %s", tz, schedule)
+		}
+	}
+	sched, err := cron.ParseStandard(schedStr)
+	if err != nil {
+		return ""
+	}
+	now := nowFunc()
+	next := sched.Next(now)
+	if next.IsZero() {
+		return ""
+	}
+	nextStr := next.UTC().Format("2006-01-02T15:04:05Z")
+	if viper.GetBool("absolute-time") {
+		return nextStr
+	}
+	duration := next.Sub(now).Round(time.Second)
+	return fmt.Sprintf("%s (in %s)", nextStr, colorDuration(duration))
 }
 
 func labelSelector(s map[string]interface{}) string {

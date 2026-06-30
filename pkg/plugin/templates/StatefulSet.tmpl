@@ -5,6 +5,7 @@
     {{- template "finalizer_details_on_termination" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
+    {{- template "selector_with_health_summary" . }}
     {{- /* When there is no readyReplicas, STS may not have related fields at all */ -}}
     {{- $status := .Status }}
     {{- $_ := set $status "readyReplicas" ($status.readyReplicas | default 0) }}
@@ -129,16 +130,18 @@
 
 {{- define "recent_statefulset_rollouts" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- $sectionHeader := false }}
-    {{- $previousRevision := "" }}
+    {{- $revisions := list }}
     {{- range .KubeGetByLabelsMap .Namespace "controllerrevisions" .Labels }}
         {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
         {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
-            {{- if not $sectionHeader }}
-                {{- "Rollouts:" | nindent 2 }}
-                {{- template "rollout_diffs_flag_help" $ }}
-                {{- $sectionHeader = true }}
-            {{- end }}
+            {{- $revisions = append $revisions . }}
+        {{- end }}
+    {{- end }}
+    {{- if ge (len $revisions) 2 }}
+        {{- "Rollouts:" | nindent 2 }}
+        {{- template "rollout_diffs_flag_help" $ }}
+        {{- $previousRevision := "" }}
+        {{- range $revisions }}
             {{- "" | nindent 4 }}
             {{- with .Metadata.creationTimestamp }}{{ . | colorAgo }}{{ agoSuffix }}{{ end }} used {{ .Kind | bold }}/{{ .Name }}.
             {{- if and $previousRevision ($.Config.GetBool "include-rollout-diffs") }}

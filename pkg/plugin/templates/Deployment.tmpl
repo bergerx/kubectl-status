@@ -16,24 +16,7 @@
     {{- with .Spec.strategy }}{{ if ne (.type | default "RollingUpdate") "RollingUpdate" }}
         {{- "Strategy" | bold | nindent 2 }}: {{ .type | yellow }}
     {{- end }}{{ end }}
-    {{- with .Spec.selector }}
-        {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
-        {{- $matchLabels := .matchLabels }}
-        {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
-            {{- if $.Config.GetBool "deep" }}
-                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
-                    {{- $.IncludeRenderableObject . | nindent 4 }}
-                {{- end }}
-            {{- else }}
-                {{- range $.KubeGetServicesMatchingLabels $.Namespace $matchLabels }}
-                    {{- $.Include "service_health_summary" . | nindent 4 }}
-                {{- end }}
-                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
-                    {{- $.Include "pod_health_summary" . | nindent 4 }}
-                {{- end }}
-            {{- end }}
-        {{- end }}
-    {{- end }}
+    {{- template "selector_with_health_summary" . }}
     {{- template "conditions_summary" . }}
     {{- template "suspended" . }}
     {{- $rolloutStatus := .RolloutStatus . }}
@@ -65,16 +48,18 @@
 {{- define "recent_deployment_rollouts" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- $deploymentRevision := index .Annotations "deployment.kubernetes.io/revision" }}
-    {{- $sectionHeader := false }}
-    {{- $previousReplicaSet := "" }}
+    {{- $replicaSets := list }}
     {{- range .KubeGet .Namespace "ReplicaSets" }}
         {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
         {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
-            {{- if not $sectionHeader }}
-                {{- "Rollouts:" | nindent 2}}
-                {{- template "rollout_diffs_flag_help" $ }}
-                {{- $sectionHeader = true }}
-            {{- end }}
+            {{- $replicaSets = append $replicaSets . }}
+        {{- end }}
+    {{- end }}
+    {{- if ge (len $replicaSets) 2 }}
+        {{- "Rollouts:" | nindent 2}}
+        {{- template "rollout_diffs_flag_help" $ }}
+        {{- $previousReplicaSet := "" }}
+        {{- range $replicaSets }}
             {{- with .Metadata.creationTimestamp }}{{ . | colorAgo | nindent 4 }}{{ agoSuffix }}{{ end }}, managed by {{ .Kind | bold }}/{{ .Name }}
             {{- $replicationSetRevision := index .Annotations "deployment.kubernetes.io/revision" }}
             {{- $activeReplicaSet := eq $deploymentRevision $replicationSetRevision }}
