@@ -40,7 +40,7 @@
     {{- end }}
     {{- if .Status.lastScheduleTime }}
         {{- "Last ran" | nindent 2 }}: {{ .Status.lastScheduleTime }}{{ relativeTime .Status.lastScheduleTime }}
-        {{- if and .Status.lastSuccessfulTime (lt .Status.lastSuccessfulTime .Status.lastScheduleTime) }}, last succeeded: {{ .Status.lastSuccessfulTime }}{{ relativeTime .Status.lastSuccessfulTime }}{{ end }}
+        {{- if .Status.lastSuccessfulTime }}{{- if lt .Status.lastSuccessfulTime .Status.lastScheduleTime }}, last succeeded: {{ .Status.lastSuccessfulTime }}{{ relativeTime .Status.lastSuccessfulTime }}{{ end }}{{ end }}
         {{- if not .Spec.suspend }}, next: {{ cronNextTime .Spec.schedule .Spec.timeZone }}{{ end }}
     {{- else if and .Spec.schedule (not .Spec.suspend) }}
         {{- "Next" | nindent 2 }}: {{ cronNextTime .Spec.schedule .Spec.timeZone }}

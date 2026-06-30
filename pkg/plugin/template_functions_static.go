@@ -438,6 +438,9 @@ func cronNextTime(schedule string, timezone interface{}) string {
 	}
 	now := nowFunc()
 	next := sched.Next(now)
+	if next.IsZero() {
+		return ""
+	}
 	nextStr := next.UTC().Format("2006-01-02T15:04:05Z")
 	if viper.GetBool("absolute-time") {
 		return nextStr

@@ -249,6 +249,28 @@
     {{- end }}
 {{- end -}}
 
+{{- define "selector_with_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- with .Spec.selector }}
+        {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
+        {{- $matchLabels := .matchLabels }}
+        {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- range $.KubeGetServicesMatchingLabels $.Namespace $matchLabels }}
+                    {{- $.Include "service_health_summary" . | nindent 4 }}
+                {{- end }}
+                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
+                    {{- $.Include "pod_health_summary" . | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
 {{- define "workload_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}

@@ -16,24 +16,7 @@
     {{- with .Spec.strategy }}{{ if ne (.type | default "RollingUpdate") "RollingUpdate" }}
         {{- "Strategy" | bold | nindent 2 }}: {{ .type | yellow }}
     {{- end }}{{ end }}
-    {{- with .Spec.selector }}
-        {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
-        {{- $matchLabels := .matchLabels }}
-        {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
-            {{- if $.Config.GetBool "deep" }}
-                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
-                    {{- $.IncludeRenderableObject . | nindent 4 }}
-                {{- end }}
-            {{- else }}
-                {{- range $.KubeGetServicesMatchingLabels $.Namespace $matchLabels }}
-                    {{- $.Include "service_health_summary" . | nindent 4 }}
-                {{- end }}
-                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
-                    {{- $.Include "pod_health_summary" . | nindent 4 }}
-                {{- end }}
-            {{- end }}
-        {{- end }}
-    {{- end }}
+    {{- template "selector_with_health_summary" . }}
     {{- template "conditions_summary" . }}
     {{- template "suspended" . }}
     {{- $rolloutStatus := .RolloutStatus . }}
