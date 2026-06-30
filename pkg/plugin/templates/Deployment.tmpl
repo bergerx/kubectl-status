@@ -65,16 +65,18 @@
 {{- define "recent_deployment_rollouts" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- $deploymentRevision := index .Annotations "deployment.kubernetes.io/revision" }}
-    {{- $sectionHeader := false }}
-    {{- $previousReplicaSet := "" }}
+    {{- $replicaSets := list }}
     {{- range .KubeGet .Namespace "ReplicaSets" }}
         {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
         {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
-            {{- if not $sectionHeader }}
-                {{- "Rollouts:" | nindent 2}}
-                {{- template "rollout_diffs_flag_help" $ }}
-                {{- $sectionHeader = true }}
-            {{- end }}
+            {{- $replicaSets = append $replicaSets . }}
+        {{- end }}
+    {{- end }}
+    {{- if ge (len $replicaSets) 2 }}
+        {{- "Rollouts:" | nindent 2}}
+        {{- template "rollout_diffs_flag_help" $ }}
+        {{- $previousReplicaSet := "" }}
+        {{- range $replicaSets }}
             {{- with .Metadata.creationTimestamp }}{{ . | colorAgo | nindent 4 }}{{ agoSuffix }}{{ end }}, managed by {{ .Kind | bold }}/{{ .Name }}
             {{- $replicationSetRevision := index .Annotations "deployment.kubernetes.io/revision" }}
             {{- $activeReplicaSet := eq $deploymentRevision $replicationSetRevision }}
