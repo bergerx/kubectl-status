@@ -365,25 +365,32 @@
     {{- end }}
     {{- $runningNotReady := and .containerStatus.state.running (not .containerStatus.ready) }}
     {{- $hasRestarts := gt (.containerStatus.restartCount | int) 0 }}
-    {{- $lastTerminated := .containerStatus.lastState.terminated }}
-    {{- if and $hasRestarts .containerSpec.livenessProbe (eq ($lastTerminated.exitCode | int) 137) (ne $lastTerminated.reason "OOMKilled") }}
-        {{- "(possible liveness probe SIGKILL)" | red | nindent 2 }}
+    {{- if and $hasRestarts .containerSpec.livenessProbe }}
+        {{- with .containerStatus.lastState.terminated }}
+            {{- if and (eq (.exitCode | int) 137) (ne .reason "OOMKilled") }}
+                {{- "(possible liveness probe SIGKILL)" | red | nindent 2 }}
+            {{- end }}
+        {{- end }}
     {{- end }}
     {{- if and $runningNotReady .containerSpec.readinessProbe }}
         {{- "readinessProbe:" | yellow | nindent 2 }} {{ template "probe_summary" .containerSpec.readinessProbe }}
     {{- end }}
     {{- if and $hasRestarts .containerSpec.livenessProbe }}
         {{- $p := .containerSpec.livenessProbe -}}
-        {{- $budget := add ($p.initialDelaySeconds | int) (mul ($p.failureThreshold | int) ($p.periodSeconds | int)) -}}
+        {{- $budget := add ($p.initialDelaySeconds | default 0 | int) (mul ($p.failureThreshold | default 3 | int) ($p.periodSeconds | default 10 | int)) -}}
         {{- "livenessProbe:" | yellow | nindent 2 }} {{ template "probe_summary" $p }} {{ "kill budget:" | bold }} {{ printf "%ds" $budget | cyan }}
     {{- end }}
     {{- if and $hasRestarts .containerSpec.startupProbe }}
         {{- $p := .containerSpec.startupProbe -}}
-        {{- $budget := add ($p.initialDelaySeconds | int) (mul ($p.failureThreshold | int) ($p.periodSeconds | int)) -}}
+        {{- $budget := add ($p.initialDelaySeconds | default 0 | int) (mul ($p.failureThreshold | default 3 | int) ($p.periodSeconds | default 10 | int)) -}}
         {{- "startupProbe:" | yellow | nindent 2 }} {{ template "probe_summary" $p }} {{ "kill budget:" | bold }} {{ printf "%ds" $budget | cyan }}
     {{- end }}
-    {{- if and (eq .containerStatus.state.waiting.reason "PostStartHookError") .containerSpec.lifecycle.postStart }}
-        {{- "postStart:" | yellow | nindent 2 }} {{ template "lifecycle_hook_summary" .containerSpec.lifecycle.postStart }}
+    {{- with .containerStatus.state.waiting }}
+        {{- if eq .reason "PostStartHookError" }}
+            {{- with $.containerSpec.lifecycle.postStart }}
+                {{- "postStart:" | yellow | nindent 2 }} {{ template "lifecycle_hook_summary" . }}
+            {{- end }}
+        {{- end }}
     {{- end }}
     {{- with .containerStats }}
         {{- with .rootfs }}
@@ -436,7 +443,7 @@
 {{- define "probe_summary" }}
     {{- /* Displays probe action type and timing parameters. Expects a probe object. */ -}}
     {{- with .exec }}{{ "exec" | bold }} {{ .command | join " " | cyan }}{{ end -}}
-    {{- with .httpGet }}{{ "httpGet" | bold }} {{ printf "%s://%s:%v%s" .scheme (.host | default "localhost") .port .path | cyan }}{{ end -}}
+    {{- with .httpGet }}{{ "httpGet" | bold }} {{ printf "%s://%s:%v%s" (.scheme | default "HTTP") (.host | default "localhost") .port .path | cyan }}{{ end -}}
     {{- with .tcpSocket }}{{ "tcpSocket" | bold }} {{ printf "%s:%v" (.host | default "localhost") .port | cyan }}{{ end -}}
     {{- with .grpc }}{{ "grpc" | bold }} {{ printf ":%v" .port | cyan }}{{ with .service }} {{ . | cyan }}{{ end }}{{ end -}}
     {{- $parts := list -}}
@@ -450,7 +457,7 @@
 {{- define "lifecycle_hook_summary" }}
     {{- /* Displays a lifecycle hook action. Expects a LifecycleHandler object. */ -}}
     {{- with .exec }}{{ "exec" | bold }} {{ .command | join " " | cyan }}{{ end -}}
-    {{- with .httpGet }}{{ "httpGet" | bold }} {{ printf "%s://%s:%v%s" .scheme (.host | default "localhost") .port .path | cyan }}{{ end -}}
+    {{- with .httpGet }}{{ "httpGet" | bold }} {{ printf "%s://%s:%v%s" (.scheme | default "HTTP") (.host | default "localhost") .port .path | cyan }}{{ end -}}
     {{- with .tcpSocket }}{{ "tcpSocket" | bold }} {{ printf "%s:%v" (.host | default "localhost") .port | cyan }}{{ end -}}
     {{- with .sleep }}{{ "sleep" | bold }} {{ printf "%vs" .seconds | cyan }}{{ end -}}
 {{- end -}}
