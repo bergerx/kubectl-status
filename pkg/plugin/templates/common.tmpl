@@ -266,6 +266,8 @@
     {{- with .Spec.selector }}
         {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
         {{- $matchLabels := .matchLabels }}
+        {{- /* $matchLabels is nil when the selector uses only matchExpressions; passing nil to
+             KubeGetByLabelsMap builds an empty selector and matches every pod in the namespace. */ -}}
         {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
             {{- if $.Config.GetBool "deep" }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}

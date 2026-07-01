@@ -12,9 +12,9 @@ Generate kubectl-status Go template files for resource kinds and write them to
 
 ## Reference material — read before writing
 
+- **`CONVENTIONS.md`** — output philosophy, color rules, and all template design conventions. Read this first.
 - **`pkg/plugin/templates/common.tmpl`** — all shared sub-templates and available functions.
 - **`pkg/plugin/templates/`** — built-in templates as style examples.
-- **`CONTRIBUTING.md`** — read the **General Guidelines** section (Output Contents Guidelines and Color Coding Guidelines).
 - **`~/.kubectl-status/templates/`** — user CRD template examples.
 
 ## Steps
@@ -33,10 +33,10 @@ Note the exact **Kind** string (case-sensitive — used as the template `define`
 kubectl get crd <full-crd-name> -o json | jq '.spec.versions[0].schema.openAPIV3Schema.properties'
 ```
 
-Read `spec` and `status` sub-schemas **in full** — not just top-level keys. For each field, check its `description` to understand what it means. Use that meaning to decide whether it warrants inclusion, applying the Output Contents Guidelines under **General Guidelines** in CONTRIBUTING.md.
+Read `spec` and `status` sub-schemas **in full** — not just top-level keys. For each field, check its `description` to understand what it means. Use that meaning to decide whether it warrants inclusion, applying the output philosophy in CONVENTIONS.md.
 
 Pay specific attention to:
-- **Timestamps** — apply the date formatting pattern below.
+- **Timestamps** — apply the date formatting pattern in CONVENTIONS.md § Dates.
 - **Booleans and enums** — never emit raw `true`/`false`; emit a meaningful label only when the value is operationally interesting.
 - **Fields that are always at their default** — omit them.
 
@@ -74,49 +74,21 @@ File: `~/.kubectl-status/templates/<Kind>.tmpl`
 
 The GVK comment (`{{- /* GVK: ... */ -}}`) must always follow the `gotype` comment. Use the exact group/version from `kubectl api-resources` output (column `APIVERSION`).
 
-Do not reorder the shared sub-templates. Do not repeat what `status_summary_line` already shows (Kind, Name, Namespace, creation time, owner, phase).
+Section order and what `status_summary_line` already covers are defined in CONVENTIONS.md § Section order.
 
-#### Prose over key:value
+#### Output and style conventions
 
-When multiple related fields form a natural sentence, write prose rather than stacked labels:
+All design rules are in CONVENTIONS.md. Key reminders for implementation:
 
-```
-{{- "Issued by" | nindent 2 }} {{ printf "%s/%s" .kind .name | cyan | bold }} for {{ $primary | cyan }} · stored in {{ printf "secret/%s" $.Spec.secretName | cyan }}
-```
+- **Prose over key:value** — when fields form a sentence, write prose; fall back to `Bold: cyan` for standalone fields. See CONVENTIONS.md § Prose over key:value.
+- **Value highlighting** — `| cyan` on all plain values; never override `redBoldIf`, `redIf`, `colorKeyword`, `colorAgo`. Integers need `| toString` first.
+- **Zero-value fields** — `{{with}}` hides `false`/`0`/`""`; use `{{if hasKey}}` when zero is operationally meaningful.
+- **Dates** — `colorAgo` for past only; date-string for future (colorAgo goes negative for future timestamps).
+- **Conditions** — always `conditions_summary`; never re-render manually.
 
-Indent supporting detail under a prose line with `nindent 4` to show grouping:
+#### Single-item list collapsing
 
-```
-  Issued by ClusterIssuer/cluster-issuer for "foo" · stored in secret/foo-tls
-    Org: ServiceNow
-    Also valid for: foo.svc, foo.svc.cluster.local
-```
-
-Fall back to `"Label" | bold | nindent 2 }}: {{ value | cyan }}` for fields that stand alone.
-
-#### Value highlighting
-
-Apply `| cyan` to plain values so they are visually distinct from bold labels. Do **not** stack `cyan` on top of a semantic color function (`redBoldIf`, `redIf`, `colorKeyword`, `colorAgo`) — those must not be overridden.
-
-`cyan` expects a string. Integer fields must be converted first:
-
-```
-{{- $statusListener.attachedRoutes | toString | cyan }}
-```
-
-#### Zero-value fields
-
-`{{- with .someField }}` skips when the value is zero, `false`, or empty — which hides operationally meaningful zeroes (e.g. `routes=0` means nothing is attached). Use `if hasKey` instead when zero is significant:
-
-```
-{{- if hasKey $statusEntry "attachedRoutes" }}, routes={{ $statusEntry.attachedRoutes | toString | cyan }}{{ end }}
-```
-
-Use `with` only when the zero/empty case genuinely means "omit this field entirely".
-
-#### Single-item lists
-
-When a list field is rendered as an indented block under a bold title, check the length at render time. If there is only one item, collapse it onto the title line instead — the indented block form only pays off when there are multiple items to scan:
+See CONVENTIONS.md § Single-item list collapsing for the rule. Implementation:
 
 ```
 {{- with .Spec.hostnames }}
@@ -131,7 +103,7 @@ When a list field is rendered as an indented block under a bold title, check the
 {{- end }}
 ```
 
-Apply this wherever a label + list would otherwise always produce a block. Lists of structs follow the same rule — if there is one item, render its key fields inline after the title rather than indenting a sub-block:
+Lists of structs follow the same rule — if there is one item, render its key fields inline after the title:
 
 ```
 {{- with .Spec.parentRefs }}
@@ -149,11 +121,11 @@ Apply this wherever a label + list would otherwise always produce a block. Lists
 {{- end }}
 ```
 
-**Exception:** skip this collapsing when the items themselves have rich sub-fields (conditions, nested refs) that always require indented lines — collapsing the header does not help if the body still expands below it.
+Exception: skip collapsing when items have rich sub-fields (conditions, nested refs) that always require indented lines.
 
 #### Merging parallel spec/status lists
 
-Some resources split a single logical list across `spec` and `status` — same items, complementary fields (e.g. Gateway `spec.listeners` + `status.listeners`, both keyed by `name`). **Do not render them as two separate blocks.** Merge them by ranging over the spec list and looking up the matching status entry by key:
+See CONVENTIONS.md § Merging parallel spec/status lists for the rule. Implementation — range over spec, look up matching status entry by key:
 
 ```
 {{- with .Spec.listeners }}
@@ -175,40 +147,13 @@ Some resources split a single logical list across `spec` and `status` — same i
 {{- end }}
 ```
 
-**How to spot this pattern in the schema:** look for a `status` field whose items have a `name` (or similar key) that matches item names in a `spec` list, where the status items carry only runtime fields (counts, conditions, supported kinds) and no config. When you see this, always merge — the reader should never have to cross-reference two separate blocks by name.
-
-#### Dates
-
-`colorAgo` uses `time.Since()`, so future dates produce a confusing negative output. For past dates use `colorAgo` with a relative hint; for future dates show only the date portion:
-
-```
-{{- $issuedDate := (split "T" .Status.issuedAt)._0 }}
-{{- "Issued" | bold | nindent 2 }} {{ $issuedDate | cyan }} ({{ .Status.issuedAt | colorAgo }}{{ agoSuffix }}), expires {{ (split "T" .Status.notAfter)._0 | cyan }}
-```
-
-#### Conditions
-
-`conditions_summary` renders `.status.conditions[]` with coloring and timestamps already applied. Do not re-render conditions manually.
+How to spot this pattern: a `status` list whose items share a key field (usually `name`) with a `spec` list, where status items carry only runtime fields (counts, conditions, supported kinds).
 
 #### Label selectors
 
-Any field that is a Kubernetes `LabelSelector` (has `matchLabels` and/or `matchExpressions`) must be rendered with the `labelSelector` pipe function — it handles both selector forms and produces a `kubectl get --selector`-compatible string:
+Any `LabelSelector` field must use the `labelSelector` pipe function — manually joining `matchLabels` silently drops `matchExpressions`. See CONVENTIONS.md § Label selectors for the rule.
 
-```
-{{- with .Spec.selector }}
-    {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
-{{- end }}
-```
-
-Do **not** manually join `matchLabels` keys — that silently drops `matchExpressions`.
-
-When a `LabelSelector` targets pods (as in PDB, NetworkPolicy, etc.), show matching resource health summaries indented under the selector line. Three shared sub-templates in `common.tmpl` produce compact single-line summaries:
-
-- **`pod_health_summary`** — `Pod/name -n ns Running, 2/2 ready`
-- **`service_health_summary`** — `Service/name -n ns, 3 ready, 1 not ready`
-- **`workload_health_summary`** — `Deployment/name -n ns, 2/2 ready` / `DaemonSet/name -n ns, 3/3 scheduled`
-
-Standard selector block pattern (respects all three modes — `--shallow`, default, `--deep`):
+Standard selector block (implements all three rendering modes — see CONVENTIONS.md § Rendering depth):
 
 ```
 {{- with .Spec.selector }}
@@ -241,13 +186,13 @@ Standard selector block pattern (respects all three modes — `--shallow`, defau
 {{- end }}
 ```
 
-Behaviour: `--shallow` → selector string only; default → services + workloads as single-line summaries (falls back to pods if no workloads match); `--deep` → full inline pod renders.
+`selector_with_health_summary` in `common.tmpl` implements this pattern — prefer it when you don't need custom health summary logic.
 
-Note: `KubeGetByLabelsMap` queries metadata labels of the workload resources, not their pod template labels. This works for the common Kubernetes pattern where Deployments/DS/STS carry the same labels as their pod selector. `KubeGetServicesMatchingLabels` checks whether the service's selector is a subset of `matchLabels`, which correctly identifies services fronting the same pods.
+Note: `KubeGetByLabelsMap` queries workload metadata labels. `KubeGetServicesMatchingLabels` checks whether the service's selector is a subset of `matchLabels`.
 
-#### Reference fields (`--deep` inline rendering)
+#### Reference fields
 
-Any field that references another Kubernetes resource by kind/name must be rendered inline when `--deep` is set. Always show the reference as `Kind/name -n namespace` using the `resource_ref` template in the default case. Use `$.Include "resource_ref"` (not `template`) so the result can be piped to `nindent`.
+See CONVENTIONS.md § Rendering depth for the rule. Use `$.Include "resource_ref"` (not `template`) so the result can be piped to `nindent`.
 
 Single ref:
 ```
@@ -277,8 +222,7 @@ List of refs:
 {{- end }}
 ```
 
-Identify ref fields in the schema by looking for objects with `kind`, `name` (and optionally `namespace`, `group`, `apiVersion`) properties, or by reading the field description.
-
+Identify ref fields by looking for objects with `kind`, `name` (and optionally `namespace`, `group`, `apiVersion`) properties, or by reading the field description.
 
 ### 5. Verify
 

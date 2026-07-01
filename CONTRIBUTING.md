@@ -25,11 +25,8 @@ community looks forward to your contributions. 🎉
   - [Suggesting Enhancements](#suggesting-enhancements)
     - [Before Submitting an Enhancement](#before-submitting-an-enhancement)
     - [How Do I Submit a Good Enhancement Suggestion?](#how-do-i-submit-a-good-enhancement-suggestion-)
-  - [General Guidelines](#general-guidelines)
-    - [Output Contents Guidelines](#output-contents-guidelines)
-    - [Color Coding Guidelines](#color-coding-guidelines)
-  - [Claude Code Integration](#claude-code-integration)
   - [Your First Code Contribution](#your-first-code-contribution)
+  - [Claude Code Integration](#claude-code-integration)
   - [Improving The Documentation](#improving-the-documentation)
 - [Styleguides](#styleguides)
   - [Commit Messages](#commit-messages)
@@ -157,55 +154,10 @@ Enhancement suggestions are tracked as [GitHub issues](https://github.com/berger
 - **Explain why this enhancement would be useful** to most kubectl-status users. You may also want to point out the
   other projects that solved it better and which could serve as inspiration.
 
-### General Guidelines
+### Design conventions
 
-#### Output Contents Guidelines
+Before writing or reviewing any template output, read [**CONVENTIONS.md**](CONVENTIONS.md). It covers output philosophy, color coding, template section order, prose style, value highlighting, and the shallow/default/deep rendering pattern.
 
-* Aim output to be for humans "only", don't put any effort to make the output friendly for parsers.
-* Try to keep the output as compact as possible. Compact output is one of the main differentiation points
-  from `kubectl describe`.
-* It's tempting to assume colors always work but don't forget that users will want to share the output with others by
-  copy-paste, which results in lost ASCII color codes. E.g., coloring "Ready" in green or red to indicate the status is
-  usually not ideal. Prefer "Not Ready" for representing the faulty state in such cases.
-* Not all status fields/values are meaningful as they are represented in the raw Kubernetes resources, don't try to keep
-  them as they are if you can make it more human-friendly. E.g., Prefer "Not Ready" over "Ready: false".
-* Drop not so meaningful fields or fields with a well-known default from the output. E.g., podIP, hostIP, containerID,
-  imageID of a pod doesn't hold much value for understanding the status of a pod.
-* Be opinionated about representing the status, as long as it helps users get the current status of the resource in
-  question.
-* Assume some level of knowledge and don't try to over-explain, but explain non-obvious/edge cases and be explicit about
-  possibly impacting states of resources. E.g., ongoing rollout issues, or not having any "Ready" Pods in a Deployment (
-  usually means Outage), or a Service with no endpoints (again likely an Outage).
-* Don't include spec fields unless they have significant value for setting the context for the current status. E.g.,
-  Knowing the .spec.replicas value is relevant to understand the status of a ReplicaSet, but ingress host values are
-  pure spec.
-* When some related information is not available in the status fields of a resource, go the extra mile of doing further
-  queries to obtain more information which may be helpful for users to understand the current status. E.g., fetch
-  NodeMetrics and Pods when showing a node's status.
-* Being aligned with the terminology used by Kubernetes and used in the individual status fields is good but not
-  mandatory.
-* If you can identify conventions in the status fields, make them generic templates and include them in the
-  DefaultResource template, so any other CRDs following those conventions can benefit right away without having to
-  implement a new Kind template. E.g., `observedGeneration`, `conditions`, `replicas`.
-
-#### Color Coding Guidelines
-
-* Follow traffic lights convention. Users expect them to map to error/warning/ok consecutively. But, prefer \[`red`
-  /`yellow`/regular] over \[`red`/`yellow`/`green`] to prevent `green` over-usage.
-* Don't use `green` extensively. Use when a dedicated status field indicates an explicit healthy status. E.g., use green
-  when Ready is True (or "active", "running"), but don't use when ready replicas are matching the desired replicas.
-* Use `yellow` for issues that are well known to be transient but may be impacting or bad practices. E.g., ongoing
-  rollout, or using a `latest` image tag.
-* Use `bold red` for potential issues that need attention.
-* Prefer `red` over `bold red` for long explanation/description of a faulty state. E.g.
-  for `.status.conditions[].message` field for a faulty condition.
-* Prefer `bold red` over `red` if the highlighted text is a single word, camelCase, or PascalCase. E.g. for `
-  .status.conditions[].reason field for a faulty condition.
-* When you need to colorize a short key/value pair in a faulty state, prefer highlighting both the key and the value,
-  not either. E.g., For `readyPodCount:0`, paint the whole expression to `red` rather than just key or value.
-
-<!-- You might want to create an issue template for enhancement suggestions that can be used as a guide and that defines
-     the structure of the information to be included. If you do so, reference it here in the description. -->
 ### Your First Code Contribution
 
 Then use `make` to get the compiled binary:
@@ -230,8 +182,6 @@ Before submitting a PR, ensure tests pass:
 ```bash
 make test
 ```
-
-kubectl-status follows the below guidelines to have a consistent user experience across different resources.
 
 ### Claude Code Integration
 
