@@ -25,10 +25,10 @@
     {{- template "pod_containers" . }}
     {{- template "pod_ephemeral_containers" . }}
     {{- template "pod_volumes" . }}
+    {{- template "matching_services" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
-    {{- template "matching_services" . }}
 {{- end }}
 
 {{- define "pod_status_summary_line" }}
@@ -177,33 +177,40 @@
         {{- end }}
     {{- end }}
     {{- $deep := $.Config.GetBool "deep" }}
-    {{- if or $ephemeralStorage $displayVols }}
-        {{- if and (eq (len $displayVols) 1) (not $ephemeralStorage) }}
+    {{- $showEphemeral := and $ephemeralStorage (index $ephemeralStorage "usedBytes") (index $ephemeralStorage "capacityBytes") }}
+    {{- $totalCount := len $displayVols }}
+    {{- if $showEphemeral }}{{ $totalCount = add1 $totalCount }}{{ end }}
+    {{- if gt $totalCount 0 }}
+        {{- if eq $totalCount 1 }}
             {{- /* single-line format */ -}}
-            {{- $vol := index $displayVols 0 }}
-            {{- $stats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $vol.name) }}
-            {{- $pvc := dict }}
-            {{- $pvcStorage := "" }}
-            {{- if hasKey $vol "persistentVolumeClaim" }}
-                {{- $pvc = $.KubeGetFirst $.Namespace "PersistentVolumeClaim" $vol.persistentVolumeClaim.claimName }}
-                {{- if $pvc.Object }}
-                    {{- $pvcSpec := $pvc.Spec | default dict }}
-                    {{- $pvcResources := $pvcSpec.resources | default dict }}
-                    {{- $pvcRequests := $pvcResources.requests | default dict }}
-                    {{- $pvcStorage = index $pvcRequests "storage" | default "" }}
+            {{- "Volumes:" | nindent 2 }}
+            {{- if $showEphemeral }}
+                {{- $pct := percent (index $ephemeralStorage "usedBytes" | float64) (index $ephemeralStorage "capacityBytes" | float64) }}
+                {{- printf " ephemeral-storage (%s/%s[%s])" (index $ephemeralStorage "usedBytes" | float64 | humanizeSI "B") (index $ephemeralStorage "capacityBytes" | float64 | humanizeSI "B") ($pct | colorPercent "%.0f%%") }}
+            {{- else }}
+                {{- $vol := index $displayVols 0 }}
+                {{- $stats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $vol.name) }}
+                {{- $pvc := dict }}
+                {{- $pvcStorage := "" }}
+                {{- if hasKey $vol "persistentVolumeClaim" }}
+                    {{- $pvc = $.KubeGetFirst $.Namespace "PersistentVolumeClaim" $vol.persistentVolumeClaim.claimName }}
+                    {{- if $pvc.Object }}
+                        {{- $pvcSpec := $pvc.Spec | default dict }}
+                        {{- $pvcResources := $pvcSpec.resources | default dict }}
+                        {{- $pvcRequests := $pvcResources.requests | default dict }}
+                        {{- $pvcStorage = index $pvcRequests "storage" | default "" }}
+                    {{- end }}
                 {{- end }}
-            {{- end }}
-            {{- "Volumes:" | nindent 2 }} {{ template "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage) }}
-            {{- if and $deep $pvc.Metadata }}
-                {{- $.Include "PersistentVolumeClaim" $pvc | nindent 4 }}
+                {{- " " }}{{ template "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage) }}
+                {{- if and $deep $pvc.Metadata }}
+                    {{- $.Include "PersistentVolumeClaim" $pvc | nindent 4 }}
+                {{- end }}
             {{- end }}
         {{- else }}
             {{- "Volumes:" | nindent 2 }}
-            {{- with $ephemeralStorage }}
-                {{- if and .usedBytes .capacityBytes }}
-                    {{- $pct := percent (.usedBytes | float64) (.capacityBytes | float64) }}
-                    {{- printf "%s (%s/%s[%s])" ("ephemeral-storage" | bold) (.usedBytes | float64 | humanizeSI "B") (.capacityBytes | float64 | humanizeSI "B") ($pct | colorPercent "%.0f%%") | nindent 4 }}
-                {{- end }}
+            {{- if $showEphemeral }}
+                {{- $pct := percent (index $ephemeralStorage "usedBytes" | float64) (index $ephemeralStorage "capacityBytes" | float64) }}
+                {{- printf "%s (%s/%s[%s])" ("ephemeral-storage" | bold) (index $ephemeralStorage "usedBytes" | float64 | humanizeSI "B") (index $ephemeralStorage "capacityBytes" | float64 | humanizeSI "B") ($pct | colorPercent "%.0f%%") | nindent 4 }}
             {{- end }}
             {{- range $displayVols }}
                 {{- $vol := . }}
@@ -230,14 +237,24 @@
 
 {{- define "matching_services" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if .Config.GetBool "include-matching-services" }}
-        {{- range $index, $svc := .KubeGetServicesMatchingPod .Namespace .Name }}
-            {{- if eq $index 0 }}
-                {{- "Services matching this pod:" | nindent 2 }}
+    {{- if not ($.Config.GetBool "shallow") }}
+        {{- $svcs := $.KubeGetServicesMatchingPod $.Namespace $.Name }}
+        {{- if $svcs }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- "Services:" | bold | nindent 2 }}
+                {{- range $svcs }}
+                    {{- $.Include "Service" . | nindent 4 }}
+                {{- end }}
+            {{- else if eq (len $svcs) 1 }}
+                {{- "Services:" | bold | nindent 2 }} {{ $.Include "service_health_summary" (index $svcs 0) }}
+            {{- else }}
+                {{- "Services:" | bold | nindent 2 }}
+                {{- range $svcs }}
+                    {{- $.Include "service_health_summary" . | nindent 4 }}
+                {{- end }}
             {{- end }}
-            {{- $.Include "Service" $svc | nindent 4 }}
-        {{- end}}
-    {{- end}}
+        {{- end }}
+    {{- end }}
 {{- end }}
 
 {{- define "pod_conditions_summary" }}

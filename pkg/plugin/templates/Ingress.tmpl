@@ -6,7 +6,7 @@
     {{- template "load_balancer_ingress" . }}
     {{- template "application_details" . }}
     {{- $missingSvcs := list }}
-    {{- $unhealthySvcs := list }}
+    {{- $shownSvcs := list }}
     {{- range .Spec.rules }}
         {{- range .http.paths }}
             {{- $ingSvcName := coalesce .backend.service.name .backend.serviceName }}
@@ -31,24 +31,9 @@
                     {{- end }}
                     {{- if not $portDefinedInSvc }}
                         {{- "Service port doesnt exist" | red | bold | nindent 2 }}: {{ "Service" | bold }}/{{ $ingSvcName }}:{{ $ingSvcPort }} referenced in ingress, but Service doesn't have that port defined.
-                    {{- else }}
-                        {{- $slices := $.KubeGetEndpointSlicesForService $.Namespace $ingSvcName }}
-                        {{- $addressCount := 0 }}
-                        {{- range $slices }}
-                            {{- range (.Object.endpoints | default list) }}
-                                {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{- $addressCount = add1 $addressCount }}{{- end }}
-                            {{- end }}
-                        {{- end }}
-                        {{- if not $slices }}
-                            {{ "Service" | bold | nindent 2 }}/{{ $ingSvcName }} is {{ "experiencing outage" | red | bold }}, it doesn't have any EndpointSlices.
-                        {{- else if not $addressCount }}
-                            {{- if not ($unhealthySvcs | has $ingSvcName) }}
-                                {{- "Service" | bold | nindent 2 }}/{{ $ingSvcName }} is {{ "experiencing outage" | red | bold }}, it doesn't have any Healthy endpoints.
-                                {{- $unhealthySvcs = append $unhealthySvcs $ingSvcName }}
-                            {{- end }}
-                        {{- else }}
-                            {{- "Service" | bold | nindent 2 }}/{{ $ingSvcName }}:{{ $ingSvcPort }} has {{ printf "%d" $addressCount | green }} endpoints.
-                        {{- end }}
+                    {{- else if not ($shownSvcs | has $ingSvcName) }}
+                        {{- $.Include "service_health_summary" $svc | nindent 2 }}
+                        {{- $shownSvcs = append $shownSvcs $ingSvcName }}
                     {{- end }}
                 {{- end }}
             {{- end }}

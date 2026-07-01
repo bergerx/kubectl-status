@@ -194,6 +194,11 @@
             {{- with $version }}{{ if not (contains $version $name) }} using version {{ . | bold }}{{ end }}{{ end }}
         {{- end -}}
     {{- end }}
+    {{- template "custom_application_details" .}}
+{{- end -}}
+
+{{- define "custom_application_details" }}
+    {{- /* Can be overridden through ~/.kubectl-status/templates/*.tmpl files to inject user-specific data */ -}}
 {{- end -}}
 
 {{- define "rollout_diffs_flag_help" }}
@@ -218,6 +223,7 @@
 {{- define "service_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- with .Spec }}{{ with .type }}, {{ . | colorKeyword }}{{ end }}{{ end }}
     {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
     {{- $ready := 0 }}{{ $notReady := 0 }}
     {{- range $slices }}
@@ -233,6 +239,12 @@
     {{- else }}
         {{- ", " }}{{ "no matching pods" | red | bold }}
     {{- end }}
+    {{- with .Spec }}{{ with .ports }}
+        {{- range . }}
+            {{- ", " }}
+            {{- if .name }}{{ printf "%s(%d/%s)" .name (.port | int) (.protocol | default "TCP") | cyan }}{{ else }}{{ printf "%d/%s" (.port | int) (.protocol | default "TCP") | cyan }}{{ end }}
+        {{- end }}
+    {{- end }}{{ end }}
 {{- end }}
 
 {{- define "job_health_summary" }}
