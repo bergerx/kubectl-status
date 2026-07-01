@@ -13,7 +13,7 @@ fully supported.
 - [Features](#features)
 - [Usage](#usage)
 - [Development](#development)
-    * [Guidelines](./CONTRIBUTING.md#general-guidelines)
+    * [Conventions](./CONVENTIONS.md)
 - [License](#license)
 
 ## Installation
@@ -84,7 +84,8 @@ kubectl status node -l node-role.kubernetes.io/master  # Show status of nodes ma
 
 ## Development
 
-Please see [CONTRIBUTING.md](./CONTRIBUTING.md) file for development related documents.
+- [CONVENTIONS.md](./CONVENTIONS.md) — output philosophy, color rules, and template patterns
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — how to build, test, and submit changes
 
 The project includes a [Claude Code](https://claude.ai/code) skill (`/generate-template`) that can scaffold kubectl-status templates for any CRD in your current context. See [Claude Code Integration](./CONTRIBUTING.md#claude-code-integration) in CONTRIBUTING.md.
 
