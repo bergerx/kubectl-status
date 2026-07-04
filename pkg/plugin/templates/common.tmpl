@@ -271,7 +271,7 @@
              KubeGetByLabelsMap builds an empty selector and matches every pod in the namespace. */ -}}
         {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
             {{- $svcs := $.KubeGetServicesMatchingLabels $.Namespace $matchLabels }}
-            {{- if not $svcs }}
+            {{- if and (not $svcs) (not ($.Config.GetBool "local")) }}
                 {{- "Not matched by any Service" | yellow | bold | nindent 4 }}
             {{- end }}
             {{- if $.Config.GetBool "deep" }}
