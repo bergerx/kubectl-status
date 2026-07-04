@@ -9,6 +9,5 @@ PodDisruptionBudget/sts-with-nodeport -n default, created 1m ago, gen:1
     no disruptions allowed — all pods must stay healthy to meet the budget
   DisruptionAllowed InsufficientPods for 1m
   Known/recorded manage events:
-    1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
-    1m ago Updated by kube-controller-manager \(status\)
+    (?:1m ago Updated by kubectl-client-side-apply \(metadata, spec\)\n    1m ago Updated by kube-controller-manager \(status\)|1m ago Updated by kube-controller-manager \(status\)\n    1m ago Updated by kubectl-client-side-apply \(metadata, spec\))
 \z

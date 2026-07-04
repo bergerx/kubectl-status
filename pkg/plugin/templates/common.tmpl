@@ -248,6 +248,27 @@
     {{- end }}{{ end }}
 {{- end }}
 
+{{- define "ingress_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- with .Spec.rules }}, {{ range $index, $rule := . }}{{ if $index }}, {{ end }}{{ $rule.host | cyan }}{{ end }}{{ end }}
+    {{- with .Status.loadBalancer.ingress }}
+        {{- with (index . 0).hostname }}, {{ "LoadBalancer" | green }}:{{ . | cyan }}{{ end }}
+        {{- with (index . 0).ip }}, {{ "LoadBalancer" | green }}:{{ . | cyan }}{{ end }}
+    {{- else }}
+        {{- ", " }}{{ "Pending LoadBalancer" | red | bold }}
+    {{- end }}
+    {{- with $.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
+{{- end -}}
+
+{{- define "route_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Shared compact summary for HTTPRoute, GRPCRoute, TCPRoute, UDPRoute and TLSRoute. */ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- with .Spec.hostnames }}, {{ join ", " . | cyan }}{{ end }}
+    {{- with $.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
+{{- end -}}
+
 {{- define "job_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}

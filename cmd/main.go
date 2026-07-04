@@ -183,6 +183,8 @@ func addRenderFlags(flags *pflag.FlagSet) {
 		"Include events in the output.")
 	flags.Bool("include-matching-ingresses", true,
 		"Include Ingresses referencing the Service in the output.")
+	flags.Bool("include-matching-routes", true,
+		"Include Gateway API routes (HTTPRoute, GRPCRoute, TCPRoute, UDPRoute, TLSRoute) referencing the Service in the output.")
 	flags.Bool("include-application-details", true,
 		"This will include well known application metadata into the output.")
 	flags.Bool("include-rollout-diffs", false,

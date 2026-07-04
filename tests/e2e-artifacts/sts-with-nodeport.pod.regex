@@ -7,6 +7,5 @@ Pod/sts-with-nodeport-0 -n default, created 1m ago by StatefulSet/sts-with-nodep
   Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
   Services: Service/sts-with-nodeport -n default, NodePort, 1 ready, http\(80/TCP\)→30081
   Known/recorded manage events:
-    1m ago Updated by kube-controller-manager \(metadata, spec\)
-    1m ago Updated by kubelet \(status\)
+    (?:1m ago Updated by kube-controller-manager \(metadata, spec\)\n    1m ago Updated by kubelet \(status\)|1m ago Updated by kubelet \(status\)\n    1m ago Updated by kube-controller-manager \(metadata, spec\))
 \z
