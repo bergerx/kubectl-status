@@ -1,5 +1,5 @@
 
-Pod/pod-liveness-kill-137 -n default, created 1m ago, gen:1, started after 0s Running BestEffort
+Pod/pod-liveness-kill-137 -n default, created 1m ago, gen:1, started after 1m Running BestEffort
   Failed: Containers in CrashLoop state: app
     Stalled: ContainerCrashLooping, Containers in CrashLoop state: app
   PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
