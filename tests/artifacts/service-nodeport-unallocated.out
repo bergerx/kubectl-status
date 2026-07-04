@@ -1,0 +1,4 @@
+
+Service/web -n nodeport-demo NodePort:auto (http)
+  Current: Service is ready
+  Missing Endpoint: Service has no matching endpoint.

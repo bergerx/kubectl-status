@@ -9,7 +9,7 @@
     {{- if eq .Spec.type "NodePort" }}
         {{- " " }}{{ "NodePort" | yellow | bold }}:
         {{- range $index, $port := .Spec.ports }}
-            {{- if $index }}, {{ end }}{{ $port.nodePort | toString | cyan }}{{ with $port.name }} ({{ . }}){{ end }}
+            {{- if $index }}, {{ end }}{{ with $port.nodePort }}{{ . | toString | cyan }}{{ else }}{{ "auto" | yellow }}{{ end }}{{ with $port.name }} ({{ . }}){{ end }}
         {{- end }}
     {{- end }}
     {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
