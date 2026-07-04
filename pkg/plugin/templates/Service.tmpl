@@ -79,13 +79,7 @@
 {{- define "matching_routes" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- if .Config.GetBool "include-matching-routes" }}
-        {{- $routes := list }}
-        {{- range .KubeGetHTTPRoutesMatchingService .Namespace .Name }}{{ $routes = append $routes . }}{{ end }}
-        {{- range .KubeGetGRPCRoutesMatchingService .Namespace .Name }}{{ $routes = append $routes . }}{{ end }}
-        {{- range .KubeGetTCPRoutesMatchingService .Namespace .Name }}{{ $routes = append $routes . }}{{ end }}
-        {{- range .KubeGetUDPRoutesMatchingService .Namespace .Name }}{{ $routes = append $routes . }}{{ end }}
-        {{- range .KubeGetTLSRoutesMatchingService .Namespace .Name }}{{ $routes = append $routes . }}{{ end }}
-        {{- range $index, $route := $routes }}
+        {{- range $index, $route := .KubeGetRoutesMatchingService .Namespace .Name }}
             {{- if eq $index 0 }}
                 {{- "Routes matching this Service:" | nindent 2}}
             {{- end }}

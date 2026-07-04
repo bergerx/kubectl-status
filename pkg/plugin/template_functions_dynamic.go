@@ -147,29 +147,16 @@ func doesIngressUseService(ing netv1.Ingress, svcName string) bool {
 	return false
 }
 
-func (r RenderableObject) KubeGetHTTPRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
-	return r.kubeGetRoutesMatchingService(namespace, svcName, "httproutes")
-}
-
-func (r RenderableObject) KubeGetGRPCRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
-	return r.kubeGetRoutesMatchingService(namespace, svcName, "grpcroutes")
-}
-
-func (r RenderableObject) KubeGetTCPRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
-	return r.kubeGetRoutesMatchingService(namespace, svcName, "tcproutes")
-}
-
-func (r RenderableObject) KubeGetUDPRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
-	return r.kubeGetRoutesMatchingService(namespace, svcName, "udproutes")
-}
-
-func (r RenderableObject) KubeGetTLSRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
-	return r.kubeGetRoutesMatchingService(namespace, svcName, "tlsroutes")
-}
-
-// kubeGetRoutesMatchingService lists Gateway API route resources (HTTPRoute, GRPCRoute, TCPRoute,
+// KubeGetRoutesMatchingService lists Gateway API route resources (HTTPRoute, GRPCRoute, TCPRoute,
 // UDPRoute, TLSRoute) whose spec.rules[].backendRefs[] reference the given Service. All 5 route
 // kinds share the same rules[].backendRefs[].name shape, so a single implementation covers them.
+func (r RenderableObject) KubeGetRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
+	for _, resourceType := range []string{"httproutes", "grpcroutes", "tcproutes", "udproutes", "tlsroutes"} {
+		out = append(out, r.kubeGetRoutesMatchingService(namespace, svcName, resourceType)...)
+	}
+	return
+}
+
 func (r RenderableObject) kubeGetRoutesMatchingService(namespace, svcName, resourceType string) (out []RenderableObject) {
 	if viper.GetBool("shallow") {
 		return
@@ -178,18 +165,21 @@ func (r RenderableObject) kubeGetRoutesMatchingService(namespace, svcName, resou
 		"r", r, "namespace", namespace, "svcName", svcName, "resourceType", resourceType)
 	objects, err := r.repo.Objects(namespace, []string{resourceType}, "")
 	if err != nil {
-		klog.V(3).ErrorS(err, "error listing routes", "r", r, "namespace", namespace, "resourceType", resourceType)
+		// Most clusters don't install the experimental route kinds (TCPRoute, UDPRoute, TLSRoute),
+		// and some don't have Gateway API at all, so a missing CRD here is expected, not an error.
+		klog.V(4).InfoS("failed to list routes, the CRD is likely not installed",
+			"r", r, "namespace", namespace, "resourceType", resourceType, "err", err)
 		return
 	}
 	for _, obj := range objects {
-		if doesRouteUseService(obj, svcName) {
+		if doesRouteUseService(obj, namespace, svcName) {
 			out = append(out, r.newRenderableObject(obj))
 		}
 	}
 	return
 }
 
-func doesRouteUseService(obj input.Object, svcName string) bool {
+func doesRouteUseService(obj input.Object, routeNamespace, svcName string) bool {
 	rules, found, _ := unstructured.NestedSlice(obj, "spec", "rules")
 	if !found {
 		return false
@@ -208,9 +198,19 @@ func doesRouteUseService(obj input.Object, svcName string) bool {
 			if !ok {
 				continue
 			}
-			if name, _ := ref["name"].(string); name == svcName {
-				return true
+			if name, _ := ref["name"].(string); name != svcName {
+				continue
 			}
+			if kind, _ := ref["kind"].(string); kind != "" && kind != "Service" {
+				continue
+			}
+			if group, _ := ref["group"].(string); group != "" {
+				continue
+			}
+			if refNamespace, _ := ref["namespace"].(string); refNamespace != "" && refNamespace != routeNamespace {
+				continue
+			}
+			return true
 		}
 	}
 	return false
