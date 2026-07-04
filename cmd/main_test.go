@@ -395,12 +395,12 @@ Secret\/child -n default, created 1m ago by Secret/owner
 		installGatewayAPICRDs(t)
 		applyManifest(t, "e2e-artifacts/svc-with-httproute.yaml")
 		cmdTest{
-			args:        []string{"service/svc-with-httproute", "--include-events=false", "--v", "5"},
-			stdoutRegex: `(?m)Routes matching this Service:\n    HTTPRoute/svc-with-httproute -n default, svc-with-httproute\.example\.com`,
+			args:            []string{"service/svc-with-httproute", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/svc-with-httproute.regex",
 		}.assert(t, nil)
 		cmdTest{
-			args:        []string{"service/svc-with-httproute", "--include-events=false", "--deep", "--v", "5"},
-			stdoutRegex: `(?m)Routes matching this Service:\n    HTTPRoute/svc-with-httproute -n default, created 1m ago, gen:1`,
+			args:            []string{"service/svc-with-httproute", "--include-events=false", "--deep", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/svc-with-httproute.deep.regex",
 		}.assert(t, nil)
 	})
 	t.Run("sts-with-nodeport", func(t *testing.T) {
