@@ -218,13 +218,12 @@ func hasMapListAMatchingItem(searchFor map[string]interface{}, typedMapListItem 
 func sortMapListByKeysValue(key string, mapList []interface{}) (result []interface{}) {
 	result = append(result, mapList...)
 	sort.SliceStable(result, func(i, j int) bool {
-		typedMapListItemI, ok := result[i].(map[string]interface{})[key].(string)
-		if !ok {
-			typedMapListItemI = ""
+		var typedMapListItemI, typedMapListItemJ string
+		if mapI, ok := result[i].(map[string]interface{}); ok {
+			typedMapListItemI, _ = mapI[key].(string)
 		}
-		typedMapListItemJ, ok := result[j].(map[string]interface{})[key].(string)
-		if !ok {
-			typedMapListItemJ = ""
+		if mapJ, ok := result[j].(map[string]interface{}); ok {
+			typedMapListItemJ, _ = mapJ[key].(string)
 		}
 		return typedMapListItemI < typedMapListItemJ
 	})
