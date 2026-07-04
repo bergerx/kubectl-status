@@ -111,6 +111,7 @@ func processObj(obj runtime.Object, engine *renderEngine, repo *input.ResourceRe
 		errorPrintf(streams.ErrOut, "Failed to decode obj=%s: %s", obj, err)
 		return
 	}
+	resetRenderedUIDs()
 	r := newRenderableObject(out, engine, repo)
 	err = r.render(streams.Out)
 	if err != nil {

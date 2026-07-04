@@ -381,6 +381,27 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			args:            []string{"pod/sts-with-ingress-0", "--include-events=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.pod.regex",
 		}.assert(t, nodeNameModifier)
+		cmdTest{
+			args:        []string{"service/sts-with-ingress", "--include-events=false", "--v", "5"},
+			stdoutRegex: `(?m)Ingresses matching this Service:\n    Ingress/sts-with-ingress -n default, sts-with-ingress\.com, [^\n]*Current`,
+		}.assert(t, nil)
+		cmdTest{
+			args:        []string{"service/sts-with-ingress", "--include-events=false", "--deep", "--v", "5"},
+			stdoutRegex: `(?m)Ingresses matching this Service:\n    Ingress/sts-with-ingress -n default, created 1m ago, gen:1\n      Current: Resource is current`,
+		}.assert(t, nil)
+	})
+	t.Run("svc-with-httproute", func(t *testing.T) {
+		viperTestHack(t)
+		installGatewayAPICRDs(t)
+		applyManifest(t, "e2e-artifacts/svc-with-httproute.yaml")
+		cmdTest{
+			args:        []string{"service/svc-with-httproute", "--include-events=false", "--v", "5"},
+			stdoutRegex: `(?m)Routes matching this Service:\n    HTTPRoute/svc-with-httproute -n default, svc-with-httproute\.example\.com`,
+		}.assert(t, nil)
+		cmdTest{
+			args:        []string{"service/svc-with-httproute", "--include-events=false", "--deep", "--v", "5"},
+			stdoutRegex: `(?m)Routes matching this Service:\n    HTTPRoute/svc-with-httproute -n default, created 1m ago, gen:1`,
+		}.assert(t, nil)
 	})
 	t.Run("sts-with-nodeport", func(t *testing.T) {
 		viperTestHack(t)
@@ -406,6 +427,32 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			args:            []string{"sts/sts-without-service", "--include-events=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-without-service.regex",
 		}.assert(t, nil)
+	})
+}
+
+// installGatewayAPICRDs installs the Gateway API standard channel CRDs (HTTPRoute, GRPCRoute,
+// Gateway, GatewayClass, ...) so route-related manifests can be applied against the test cluster.
+func installGatewayAPICRDs(t *testing.T) {
+	t.Helper()
+	const url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml"
+	cmd := exec.Command("kubectl", "apply", "-f", url)
+	output, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "failed to install Gateway API CRDs: %s", string(output))
+	t.Logf("installed Gateway API CRDs: %s", string(output))
+	waitCmd := exec.Command("kubectl", "wait", "--for", "condition=Established", "--timeout=60s",
+		"crd/gatewayclasses.gateway.networking.k8s.io",
+		"crd/gateways.gateway.networking.k8s.io",
+		"crd/grpcroutes.gateway.networking.k8s.io",
+		"crd/httproutes.gateway.networking.k8s.io",
+		"crd/referencegrants.gateway.networking.k8s.io")
+	waitOutput, err := waitCmd.CombinedOutput()
+	require.NoErrorf(t, err, "failed waiting for Gateway API CRDs to establish: %s", string(waitOutput))
+	t.Cleanup(func() {
+		cmd := exec.Command("kubectl", "delete", "-f", url)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Log("Error deleting Gateway API CRDs:", string(output))
+		}
 	})
 }
 

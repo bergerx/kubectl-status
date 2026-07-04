@@ -55,6 +55,7 @@
     {{- end }}
     {{- template "recent_updates" . }}
     {{- template "matching_ingresses" . }}
+    {{- template "matching_routes" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
@@ -66,7 +67,33 @@
             {{- if eq $index 0 }}
                 {{- "Ingresses matching this Service:" | nindent 2}}
             {{- end }}
-            {{- $.Include "Ingress" $ing | nindent 4 }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- $.IncludeRenderableObject $ing | nindent 4 }}
+            {{- else }}
+                {{- $.Include "ingress_health_summary" $ing | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_routes" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if .Config.GetBool "include-matching-routes" }}
+        {{- $routes := list }}
+        {{- range .KubeGetHTTPRoutesMatchingService .Namespace .Name }}{{ $routes = append $routes . }}{{ end }}
+        {{- range .KubeGetGRPCRoutesMatchingService .Namespace .Name }}{{ $routes = append $routes . }}{{ end }}
+        {{- range .KubeGetTCPRoutesMatchingService .Namespace .Name }}{{ $routes = append $routes . }}{{ end }}
+        {{- range .KubeGetUDPRoutesMatchingService .Namespace .Name }}{{ $routes = append $routes . }}{{ end }}
+        {{- range .KubeGetTLSRoutesMatchingService .Namespace .Name }}{{ $routes = append $routes . }}{{ end }}
+        {{- range $index, $route := $routes }}
+            {{- if eq $index 0 }}
+                {{- "Routes matching this Service:" | nindent 2}}
+            {{- end }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- $.IncludeRenderableObject $route | nindent 4 }}
+            {{- else }}
+                {{- $.Include "route_health_summary" $route | nindent 4 }}
+            {{- end }}
         {{- end }}
     {{- end }}
 {{- end }}

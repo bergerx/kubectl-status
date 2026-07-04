@@ -147,6 +147,75 @@ func doesIngressUseService(ing netv1.Ingress, svcName string) bool {
 	return false
 }
 
+func (r RenderableObject) KubeGetHTTPRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
+	return r.kubeGetRoutesMatchingService(namespace, svcName, "httproutes")
+}
+
+func (r RenderableObject) KubeGetGRPCRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
+	return r.kubeGetRoutesMatchingService(namespace, svcName, "grpcroutes")
+}
+
+func (r RenderableObject) KubeGetTCPRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
+	return r.kubeGetRoutesMatchingService(namespace, svcName, "tcproutes")
+}
+
+func (r RenderableObject) KubeGetUDPRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
+	return r.kubeGetRoutesMatchingService(namespace, svcName, "udproutes")
+}
+
+func (r RenderableObject) KubeGetTLSRoutesMatchingService(namespace, svcName string) (out []RenderableObject) {
+	return r.kubeGetRoutesMatchingService(namespace, svcName, "tlsroutes")
+}
+
+// kubeGetRoutesMatchingService lists Gateway API route resources (HTTPRoute, GRPCRoute, TCPRoute,
+// UDPRoute, TLSRoute) whose spec.rules[].backendRefs[] reference the given Service. All 5 route
+// kinds share the same rules[].backendRefs[].name shape, so a single implementation covers them.
+func (r RenderableObject) kubeGetRoutesMatchingService(namespace, svcName, resourceType string) (out []RenderableObject) {
+	if viper.GetBool("shallow") {
+		return
+	}
+	klog.V(5).InfoS("called kubeGetRoutesMatchingService",
+		"r", r, "namespace", namespace, "svcName", svcName, "resourceType", resourceType)
+	objects, err := r.repo.Objects(namespace, []string{resourceType}, "")
+	if err != nil {
+		klog.V(3).ErrorS(err, "error listing routes", "r", r, "namespace", namespace, "resourceType", resourceType)
+		return
+	}
+	for _, obj := range objects {
+		if doesRouteUseService(obj, svcName) {
+			out = append(out, r.newRenderableObject(obj))
+		}
+	}
+	return
+}
+
+func doesRouteUseService(obj input.Object, svcName string) bool {
+	rules, found, _ := unstructured.NestedSlice(obj, "spec", "rules")
+	if !found {
+		return false
+	}
+	for _, ruleRaw := range rules {
+		rule, ok := ruleRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		backendRefs, found, _ := unstructured.NestedSlice(rule, "backendRefs")
+		if !found {
+			continue
+		}
+		for _, refRaw := range backendRefs {
+			ref, ok := refRaw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if name, _ := ref["name"].(string); name == svcName {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels map[string]interface{}) (out []RenderableObject) {
 	if viper.GetBool("shallow") {
 		return
