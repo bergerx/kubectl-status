@@ -398,6 +398,15 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pdb.regex",
 		}.assert(t, nodeNameModifier)
 	})
+	t.Run("sts-without-service", func(t *testing.T) {
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/sts-without-service.yaml")
+		waitFor(t, "sts/sts-without-service", "jsonpath={.status.readyReplicas}=1")
+		cmdTest{
+			args:            []string{"sts/sts-without-service", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/sts-without-service.regex",
+		}.assert(t, nil)
+	})
 }
 
 func applyManifest(t *testing.T, filepath string) {

@@ -270,12 +270,16 @@
         {{- /* $matchLabels is nil when the selector uses only matchExpressions; passing nil to
              KubeGetByLabelsMap builds an empty selector and matches every pod in the namespace. */ -}}
         {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
+            {{- $svcs := $.KubeGetServicesMatchingLabels $.Namespace $matchLabels }}
+            {{- if and (not $svcs) (not ($.Config.GetBool "local")) }}
+                {{- "Not matched by any Service" | yellow | bold | nindent 4 }}
+            {{- end }}
             {{- if $.Config.GetBool "deep" }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}
                 {{- end }}
             {{- else }}
-                {{- range $.KubeGetServicesMatchingLabels $.Namespace $matchLabels }}
+                {{- range $svcs }}
                     {{- $.Include "service_health_summary" . | nindent 4 }}
                 {{- end }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
