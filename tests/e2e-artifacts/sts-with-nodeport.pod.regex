@@ -1,5 +1,5 @@
 \A
-Pod/sts-with-nodeport-0 -n default, created 1m ago by StatefulSet/sts-with-nodeport, gen:1 Running BestEffort
+Pod/sts-with-nodeport-0 -n default, created 1m ago by StatefulSet/sts-with-nodeport, gen:1(, started after [0-9.]+[A-Za-z]+)? Running BestEffort
   Current: Pod is Ready
   Managed by sts-with-nodeport application
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m

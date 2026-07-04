@@ -217,7 +217,7 @@ func hasMapListAMatchingItem(searchFor map[string]interface{}, typedMapListItem 
 // we need to use "[]interface{}" and cast it inside.
 func sortMapListByKeysValue(key string, mapList []interface{}) (result []interface{}) {
 	result = append(result, mapList...)
-	sort.Slice(result, func(i, j int) bool {
+	sort.SliceStable(result, func(i, j int) bool {
 		typedMapListItemI, ok := result[i].(map[string]interface{})[key].(string)
 		if !ok {
 			typedMapListItemI = ""

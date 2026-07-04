@@ -427,7 +427,7 @@ func applyManifest(t *testing.T, filepath string) {
 
 func waitFor(t *testing.T, resource, forParam string) {
 	t.Helper()
-	cmd := exec.Command("kubectl", "wait", "--for", forParam, resource)
+	cmd := exec.Command("kubectl", "wait", "--for", forParam, resource, "--timeout=2m")
 	output, err := cmd.CombinedOutput()
 	t.Logf("wait result for %s: %s", resource, string(output))
 	require.NoError(t, err)

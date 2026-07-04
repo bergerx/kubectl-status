@@ -135,6 +135,25 @@ func TestGetMatchingItemInMapList(t *testing.T) {
 	}
 }
 
+func TestSortMapListByKeysValueIsStableOnTies(t *testing.T) {
+	// When multiple items share the same key value, the sort must preserve
+	// their original relative order (as returned by the k8s API) instead of
+	// reordering them arbitrarily, otherwise output like "Known/recorded
+	// manage events" becomes flaky between otherwise identical runs.
+	mapList := []interface{}{
+		map[string]interface{}{"manager": "kubectl-client-side-apply", "time": "2024-01-01T00:00:00Z"},
+		map[string]interface{}{"manager": "kube-controller-manager", "time": "2024-01-01T00:00:00Z"},
+		map[string]interface{}{"manager": "another-manager", "time": "2023-12-31T00:00:00Z"},
+	}
+	for i := 0; i < 10; i++ {
+		got := sortMapListByKeysValue("time", mapList)
+		want := []interface{}{mapList[2], mapList[0], mapList[1]}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("sortMapListByKeysValue() = %v, want %v", got, want)
+		}
+	}
+}
+
 func TestAgoSuffix(t *testing.T) {
 	viper.Set("absolute-time", false)
 	if got := agoSuffix(); got != " ago" {
