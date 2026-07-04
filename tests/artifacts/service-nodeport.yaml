@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{},"name":"web","namespace":"nodeport-demo"},"spec":{"ports":[{"name":"http","nodePort":30080,"port":80,"targetPort":80}],"selector":{"app":"web"},"type":"NodePort"}}
+  creationTimestamp: "2026-07-04T07:28:58Z"
+  name: web
+  namespace: nodeport-demo
+  resourceVersion: "249838"
+  uid: 42acaba0-9b33-48af-b7ab-46cf21b912b3
+spec:
+  clusterIP: 10.110.96.91
+  clusterIPs:
+  - 10.110.96.91
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: http
+    nodePort: 30080
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: web
+  sessionAffinity: None
+  type: NodePort
+status:
+  loadBalancer: {}

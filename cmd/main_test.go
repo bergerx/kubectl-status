@@ -382,6 +382,22 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.pod.regex",
 		}.assert(t, nodeNameModifier)
 	})
+	t.Run("sts-with-nodeport", func(t *testing.T) {
+		viperTestHack(t)
+		// using sts here as the pod name is predictable in that case, not true for deployments and ds
+		applyManifest(t, "e2e-artifacts/sts-with-nodeport.yaml")
+		waitFor(t, "sts/sts-with-nodeport", "jsonpath={.status.readyReplicas}=1")
+		cmdTest{
+			// Log/volume usage bytes come from live kubelet stats and aren't reproducible
+			// across runs, so this is matched as a regex rather than exact text.
+			args:            []string{"pod/sts-with-nodeport-0", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pod.regex",
+		}.assert(t, nodeNameModifier)
+		cmdTest{
+			args:            []string{"pdb/sts-with-nodeport", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pdb.regex",
+		}.assert(t, nodeNameModifier)
+	})
 }
 
 func applyManifest(t *testing.T, filepath string) {

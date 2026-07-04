@@ -223,7 +223,7 @@
 {{- define "service_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
-    {{- with .Spec }}{{ with .type }}, {{ . | colorKeyword }}{{ end }}{{ end }}
+    {{- with .Spec }}{{ with .type }}, {{ if eq . "NodePort" }}{{ . | yellow | bold }}{{ else }}{{ . | colorKeyword }}{{ end }}{{ end }}{{ end }}
     {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
     {{- $ready := 0 }}{{ $notReady := 0 }}
     {{- range $slices }}
@@ -243,6 +243,7 @@
         {{- range . }}
             {{- ", " }}
             {{- if .name }}{{ printf "%s(%d/%s)" .name (.port | int) (.protocol | default "TCP") | cyan }}{{ else }}{{ printf "%d/%s" (.port | int) (.protocol | default "TCP") | cyan }}{{ end }}
+            {{- with .nodePort }}{{ printf "→%d" (. | int) | yellow | bold }}{{ end }}
         {{- end }}
     {{- end }}{{ end }}
 {{- end }}

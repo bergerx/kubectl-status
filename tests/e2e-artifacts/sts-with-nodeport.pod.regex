@@ -1,0 +1,12 @@
+\A
+Pod/sts-with-nodeport-0 -n default, created 1m ago by StatefulSet/sts-with-nodeport, gen:1 Running BestEffort
+  Current: Pod is Ready
+  Managed by sts-with-nodeport application
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Containers: sts-with-nodeport \(registry\.k8s\.io/pause:3\.9\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  Services: Service/sts-with-nodeport -n default, NodePort, 1 ready, http\(80/TCP\)→30081
+  Known/recorded manage events:
+    1m ago Updated by kube-controller-manager \(metadata, spec\)
+    1m ago Updated by kubelet \(status\)
+\z

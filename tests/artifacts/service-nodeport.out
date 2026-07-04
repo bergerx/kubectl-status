@@ -1,0 +1,4 @@
+
+Service/web -n nodeport-demo, created 1m ago NodePort:30080 (http)
+  Current: Service is ready
+  Missing Endpoint: Service has no matching endpoint.

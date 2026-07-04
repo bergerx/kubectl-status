@@ -6,6 +6,12 @@
     {{- if eq .Spec.type "LoadBalancer" }}
         {{- template "load_balancer_ingress" . }}
     {{- end }}
+    {{- if eq .Spec.type "NodePort" }}
+        {{- " " }}{{ "NodePort" | yellow | bold }}:
+        {{- range $index, $port := .Spec.ports }}
+            {{- if $index }}, {{ end }}{{ $port.nodePort | toString | cyan }}{{ with $port.name }} ({{ . }}){{ end }}
+        {{- end }}
+    {{- end }}
     {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
     {{- if $slices }}
         {{- if hasKey (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}

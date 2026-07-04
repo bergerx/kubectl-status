@@ -1,0 +1,14 @@
+\A
+PodDisruptionBudget/sts-with-nodeport -n default, created 1m ago, gen:1
+  Current: AllowedDisruptions has been computed.
+  Budget: min available=1, Constrained
+  Selector: app=sts-with-nodeport
+    Service/sts-with-nodeport -n default, NodePort, 1 ready, http\(80/TCP\)→30081
+    Pod/sts-with-nodeport-0 -n default Running, 1/1 ready
+  healthy:1/expected:1, disruptions allowed:0
+    no disruptions allowed — all pods must stay healthy to meet the budget
+  DisruptionAllowed InsufficientPods for 1m
+  Known/recorded manage events:
+    1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
+    1m ago Updated by kube-controller-manager \(status\)
+\z
