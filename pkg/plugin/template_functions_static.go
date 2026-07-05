@@ -85,6 +85,7 @@ func funcMap() template.FuncMap {
 		"labelSelector":             labelSelector,
 		"cronNextTime":              cronNextTime,
 		"parseTLSSecretCertificate": parseTLSSecretCertificate,
+		"certificatesInSecret":      certificatesInSecret,
 	}
 }
 
@@ -570,4 +571,88 @@ func parseTLSSecretCertificate(secret RenderableObject, hostname string) map[str
 	}
 
 	return result
+}
+
+// certificatesInSecret scans a Secret's data for keys ending in ".crt", regardless of the
+// Secret's declared type, and parses each as an X.509 certificate. This covers secrets that
+// don't use the standard kubernetes.io/tls layout, e.g. cert-manager's internal CA secrets,
+// which are type Opaque and hold a ca.crt alongside a tls.crt/tls.key pair.
+func certificatesInSecret(secret RenderableObject) []map[string]interface{} {
+	var results []map[string]interface{}
+	if secret.Object == nil {
+		return results
+	}
+	data, _ := secret.Object["data"].(map[string]interface{})
+	if data == nil {
+		return results
+	}
+
+	var keys []string
+	for key := range data {
+		if strings.HasSuffix(key, ".crt") {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		entry := map[string]interface{}{
+			"Name":         key,
+			"ParseError":   "",
+			"Subject":      "",
+			"Issuer":       "",
+			"SerialNumber": "",
+			"NotBefore":    time.Time{},
+			"NotAfter":     time.Time{},
+			"AltDNSNames":  []string{},
+			"IPAddresses":  []string{},
+			"KeyAlgorithm": "",
+			"SelfSigned":   false,
+		}
+		results = append(results, entry)
+
+		encoded, ok := data[key].(string)
+		if !ok {
+			entry["ParseError"] = fmt.Sprintf("%s is not a string", key)
+			continue
+		}
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			entry["ParseError"] = fmt.Sprintf("failed to base64-decode %s: %v", key, err)
+			continue
+		}
+		block, _ := pem.Decode(decoded)
+		if block == nil {
+			entry["ParseError"] = fmt.Sprintf("failed to PEM-decode %s", key)
+			continue
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			entry["ParseError"] = fmt.Sprintf("failed to parse certificate in %s: %v", key, err)
+			continue
+		}
+
+		var ipAddresses []string
+		for _, ip := range cert.IPAddresses {
+			ipAddresses = append(ipAddresses, ip.String())
+		}
+		var altDNSNames []string
+		for _, dns := range cert.DNSNames {
+			if dns != cert.Subject.CommonName {
+				altDNSNames = append(altDNSNames, dns)
+			}
+		}
+
+		entry["Subject"] = cert.Subject.String()
+		entry["Issuer"] = cert.Issuer.String()
+		entry["SerialNumber"] = cert.SerialNumber.String()
+		entry["NotBefore"] = cert.NotBefore
+		entry["NotAfter"] = cert.NotAfter
+		entry["AltDNSNames"] = altDNSNames
+		entry["IPAddresses"] = ipAddresses
+		entry["KeyAlgorithm"] = cert.PublicKeyAlgorithm.String()
+		entry["SelfSigned"] = bytes.Equal(cert.RawIssuer, cert.RawSubject)
+	}
+
+	return results
 }
