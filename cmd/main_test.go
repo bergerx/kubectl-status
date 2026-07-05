@@ -449,7 +449,17 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-secret-leaf.regex"))
 			require.NoError(t, rerr)
 			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
-			assert.NotContains(t, stdout, "Self-signed:")
+			// The secret also carries a ca.crt (the self-signed root CA cert), which
+			// legitimately renders its own "Self-signed:" line further down -- scope the
+			// check to the leaf cert's own block, which precedes it.
+			leafBlock, _, _ := strings.Cut(stdout, "Certificate (ca.crt)")
+			assert.NotContains(t, leafBlock, "Self-signed:")
+		})
+		t.Run("secret/leaf with --deep inlines the full Certificate and Issuer detail", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"secret/e2e-tls-leaf-tls", "--deep", "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/tls-validation-secret-leaf-deep.regex",
+			}.assert(t, nil)
 		})
 		t.Run("secret/root-ca is flagged self-signed", func(t *testing.T) {
 			cmdTest{

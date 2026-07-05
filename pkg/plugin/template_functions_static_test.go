@@ -494,3 +494,72 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 		}
 	}
 }
+
+func TestCertificatesInSecret(t *testing.T) {
+	caPEM, caCert, caKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "Test CA",
+		isCA:       true,
+		selfSigned: true,
+	})
+	leafPEM, _, _ := generateTestCert(t, genCertOptions{
+		subjectCN: "leaf.example.com",
+		dnsNames:  []string{"leaf.example.com"},
+		parent:    caCert,
+		parentKey: caKey,
+	})
+
+	t.Run("opaque secret with ca.crt and tls.crt/tls.key", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"type": "Opaque",
+			"data": map[string]interface{}{
+				"ca.crt":  base64.StdEncoding.EncodeToString(caPEM),
+				"tls.crt": base64.StdEncoding.EncodeToString(leafPEM),
+				"tls.key": base64.StdEncoding.EncodeToString([]byte("irrelevant")),
+			},
+		}
+		got := certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if len(got) != 2 {
+			t.Fatalf("expected 2 certificates, got %d: %#v", len(got), got)
+		}
+		// sorted alphabetically: ca.crt before tls.crt
+		if got[0]["Name"] != "ca.crt" || got[0]["SelfSigned"] != true {
+			t.Errorf("got[0] = %#v, want ca.crt/self-signed", got[0])
+		}
+		if got[1]["Name"] != "tls.crt" || got[1]["SelfSigned"] != false {
+			t.Errorf("got[1] = %#v, want tls.crt/not self-signed", got[1])
+		}
+		if got[1]["Issuer"] != caCert.Subject.String() {
+			t.Errorf("got[1][Issuer] = %v, want %v", got[1]["Issuer"], caCert.Subject.String())
+		}
+	})
+
+	t.Run("secret with no .crt fields", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"type": "Opaque",
+			"data": map[string]interface{}{
+				"username": base64.StdEncoding.EncodeToString([]byte("admin")),
+			},
+		}
+		got := certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if len(got) != 0 {
+			t.Errorf("expected no certificates, got %#v", got)
+		}
+	})
+
+	t.Run("malformed cert data reports ParseError", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"type": "Opaque",
+			"data": map[string]interface{}{
+				"ca.crt": "not-valid-base64!!!",
+			},
+		}
+		got := certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if len(got) != 1 || got[0]["ParseError"] == "" {
+			t.Errorf("expected 1 entry with non-empty ParseError, got %#v", got)
+		}
+	})
+
+	if got := certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: nil}}); len(got) != 0 {
+		t.Errorf("expected nil Object to yield no certificates, got %#v", got)
+	}
+}
