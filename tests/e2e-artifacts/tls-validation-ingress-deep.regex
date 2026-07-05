@@ -1,0 +1,3 @@
+Ingress/e2e-tls-ingress-healthy -n default, created .* ago, gen:1.*
+    Secret/e2e-tls-leaf-tls -n default, created .* ago.*
+      Certificate for CN=e2e-tls\.example\.com · issued by CN=e2e-tls-root-ca

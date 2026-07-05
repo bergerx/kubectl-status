@@ -1,6 +1,10 @@
 package plugin
 
 import (
+	"bytes"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -47,39 +51,40 @@ func SetDurationRound(f func(duration interface{}) string) (revertFunc func()) {
 
 func funcMap() template.FuncMap {
 	return template.FuncMap{
-		"green":                    color.GreenString,
-		"yellow":                   color.YellowString,
-		"red":                      color.RedString,
-		"cyan":                     color.CyanString,
-		"blue":                     color.BlueString,
-		"bold":                     color.New(color.Bold).SprintfFunc(),
-		"colorAgo":                 colorAgo,
-		"colorDuration":            colorDuration,
-		"colorBool":                colorBool,
-		"colorKeyword":             colorKeyword,
-		"markRed":                  markRed,
-		"markYellow":               markYellow,
-		"markGreen":                markGreen,
-		"redIf":                    redIf,
-		"redBoldIf":                redBoldIf,
-		"signalName":               signalName,
-		"isStatusConditionHealthy": isStatusConditionHealthy,
-		"quantityToFloat64":        quantityToFloat64,
-		"quantityToInt64":          quantityToInt64,
-		"percent":                  percent,
-		"colorPercent":             colorPercent,
-		"humanizeSI":               humanizeSI,
-		"getMatchingItemInMapList": getMatchingItemInMapList,
-		"sortMapListByKeysValue":   sortMapListByKeysValue,
-		"addFloat64":               addFloat64,
-		"subFloat64":               subFloat64,
-		"divFloat64":               divFloat64,
-		"ip":                       ip,
-		"agoSuffix":                agoSuffix,
-		"forOrSince":               forOrSince,
-		"relativeTime":             relativeTime,
-		"labelSelector":            labelSelector,
-		"cronNextTime":             cronNextTime,
+		"green":                     color.GreenString,
+		"yellow":                    color.YellowString,
+		"red":                       color.RedString,
+		"cyan":                      color.CyanString,
+		"blue":                      color.BlueString,
+		"bold":                      color.New(color.Bold).SprintfFunc(),
+		"colorAgo":                  colorAgo,
+		"colorDuration":             colorDuration,
+		"colorBool":                 colorBool,
+		"colorKeyword":              colorKeyword,
+		"markRed":                   markRed,
+		"markYellow":                markYellow,
+		"markGreen":                 markGreen,
+		"redIf":                     redIf,
+		"redBoldIf":                 redBoldIf,
+		"signalName":                signalName,
+		"isStatusConditionHealthy":  isStatusConditionHealthy,
+		"quantityToFloat64":         quantityToFloat64,
+		"quantityToInt64":           quantityToInt64,
+		"percent":                   percent,
+		"colorPercent":              colorPercent,
+		"humanizeSI":                humanizeSI,
+		"getMatchingItemInMapList":  getMatchingItemInMapList,
+		"sortMapListByKeysValue":    sortMapListByKeysValue,
+		"addFloat64":                addFloat64,
+		"subFloat64":                subFloat64,
+		"divFloat64":                divFloat64,
+		"ip":                        ip,
+		"agoSuffix":                 agoSuffix,
+		"forOrSince":                forOrSince,
+		"relativeTime":              relativeTime,
+		"labelSelector":             labelSelector,
+		"cronNextTime":              cronNextTime,
+		"parseTLSSecretCertificate": parseTLSSecretCertificate,
 	}
 }
 
@@ -454,4 +459,115 @@ func labelSelector(s map[string]interface{}) string {
 		return fmt.Sprintf("%v", s)
 	}
 	return metav1.FormatLabelSelector(ls)
+}
+
+// parseTLSSecretCertificate inspects a Secret expected to be type kubernetes.io/tls and
+// returns both full certificate detail (for Secret.tmpl's own display) and consistency
+// flags against an optional expected hostname (for Ingress/Gateway callers). hostname == ""
+// skips the hostname-match check and is used by Secret.tmpl, which has no "expected host" of
+// its own.
+func parseTLSSecretCertificate(secret RenderableObject, hostname string) map[string]interface{} {
+	result := map[string]interface{}{
+		"Exists":          false,
+		"WrongType":       false,
+		"ActualType":      "",
+		"MissingKeys":     []string{},
+		"ParseError":      "",
+		"Subject":         "",
+		"Issuer":          "",
+		"SerialNumber":    "",
+		"NotBefore":       time.Time{},
+		"NotAfter":        time.Time{},
+		"DNSNames":        []string{},
+		"AltDNSNames":     []string{},
+		"IPAddresses":     []string{},
+		"KeyAlgorithm":    "",
+		"SelfSigned":      false,
+		"MatchesHostname": false,
+	}
+	if secret.Object == nil {
+		return result
+	}
+	result["Exists"] = true
+
+	actualType, _ := secret.Object["type"].(string)
+	result["ActualType"] = actualType
+	if actualType != "kubernetes.io/tls" {
+		result["WrongType"] = true
+		return result
+	}
+
+	data, _ := secret.Object["data"].(map[string]interface{})
+	var missingKeys []string
+	for _, key := range []string{"tls.crt", "tls.key"} {
+		if _, ok := data[key]; !ok {
+			missingKeys = append(missingKeys, key)
+		}
+	}
+	if missingKeys != nil {
+		result["MissingKeys"] = missingKeys
+		return result
+	}
+
+	crtEncoded, ok := data["tls.crt"].(string)
+	if !ok {
+		result["ParseError"] = "tls.crt is not a string"
+		return result
+	}
+	crtDecoded, err := base64.StdEncoding.DecodeString(crtEncoded)
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to base64-decode tls.crt: %v", err)
+		return result
+	}
+	block, _ := pem.Decode(crtDecoded)
+	if block == nil {
+		result["ParseError"] = "failed to PEM-decode tls.crt"
+		return result
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to parse leaf certificate: %v", err)
+		return result
+	}
+
+	var ipAddresses []string
+	for _, ip := range cert.IPAddresses {
+		ipAddresses = append(ipAddresses, ip.String())
+	}
+
+	dnsNames := cert.DNSNames
+	if dnsNames == nil {
+		dnsNames = []string{}
+	}
+	if ipAddresses == nil {
+		ipAddresses = []string{}
+	}
+	var altDNSNames []string
+	for _, dns := range dnsNames {
+		if dns != cert.Subject.CommonName {
+			altDNSNames = append(altDNSNames, dns)
+		}
+	}
+	if altDNSNames == nil {
+		altDNSNames = []string{}
+	}
+
+	result["Subject"] = cert.Subject.String()
+	result["Issuer"] = cert.Issuer.String()
+	result["SerialNumber"] = cert.SerialNumber.String()
+	result["NotBefore"] = cert.NotBefore
+	result["NotAfter"] = cert.NotAfter
+	result["DNSNames"] = dnsNames
+	result["AltDNSNames"] = altDNSNames
+	result["IPAddresses"] = ipAddresses
+	result["KeyAlgorithm"] = cert.PublicKeyAlgorithm.String()
+	result["SelfSigned"] = bytes.Equal(cert.RawIssuer, cert.RawSubject)
+
+	if hostname == "" {
+		result["MatchesHostname"] = true
+	} else {
+		result["MatchesHostname"] = cert.VerifyHostname(hostname) == nil
+	}
+
+	return result
 }

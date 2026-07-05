@@ -16,6 +16,9 @@
             {{- end }}
         {{- end }}
     {{- end }}
+    {{- $routeHostnames := .Spec.hostnames }}
+    {{- $routeHostname := "" }}
+    {{- if eq (len $routeHostnames) 1 }}{{ $routeHostname = index $routeHostnames 0 }}{{ end }}
     {{- with .Spec.parentRefs }}
         {{- "Parents" | bold | nindent 2 }}:
         {{- range . }}
@@ -33,6 +36,52 @@
             {{- else }}
                 {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace) | nindent 4 }}
                 {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
+                {{- if and (eq (.kind | default "Gateway") "Gateway") (not ($.Config.GetBool "shallow")) }}
+                    {{- $ns := coalesce .namespace $.Namespace }}
+                    {{- $gw := $.KubeGetFirst $ns "Gateway" .name }}
+                    {{- if $gw.Object }}
+                        {{- $sectionName := .sectionName }}
+                        {{- range $gw.Spec.listeners }}
+                            {{- $matches := false }}
+                            {{- if $sectionName }}
+                                {{- if eq .name $sectionName }}{{ $matches = true }}{{ end }}
+                            {{- else if eq .protocol "HTTPS" }}
+                                {{- $hostnameOk := true }}
+                                {{- with .hostname }}
+                                    {{- if and $routeHostnames (not (has . $routeHostnames)) }}{{ $hostnameOk = false }}{{ end }}
+                                {{- end }}
+                                {{- if $hostnameOk }}{{ $matches = true }}{{ end }}
+                            {{- end }}
+                            {{- if $matches }}
+                                {{- with .tls }}
+                                    {{- range .certificateRefs }}
+                                        {{- $refKind := .kind | default "Secret" }}
+                                        {{- if eq $refKind "Secret" }}
+                                            {{- printf ", cert:%s/%s" $refKind .name | cyan | nindent 6 }}
+                                            {{- $refNs := coalesce .namespace $ns }}
+                                            {{- $secret := $.KubeGetFirst $refNs "Secret" .name }}
+                                            {{- if not $secret.Object }}
+                                                {{- " doesn't exist" | red | bold }}
+                                            {{- else }}
+                                                {{- $cert := parseTLSSecretCertificate $secret $routeHostname }}
+                                                {{- if $cert.WrongType }}
+                                                    {{- printf ", wrong type:%s" $cert.ActualType | red | bold }}
+                                                {{- else if $cert.MissingKeys }}
+                                                    {{- printf ", missing keys:%s" (join "," $cert.MissingKeys) | red | bold }}
+                                                {{- else if $cert.ParseError }}
+                                                    {{- printf ", parse error:%s" $cert.ParseError | red | bold }}
+                                                {{- else }}
+                                                    {{- if $cert.SelfSigned }}{{ ", self-signed" | yellow }}{{ end }}
+                                                    {{- if not $cert.MatchesHostname }}{{ ", hostname mismatch" | red | bold }}{{ end }}
+                                                {{- end }}
+                                            {{- end }}
+                                        {{- end }}
+                                    {{- end }}
+                                {{- end }}
+                            {{- end }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
             {{- end }}
             {{- with $statusEntry.controllerName }}
                 {{- "controller" | nindent 6 }}: {{ . | cyan }}

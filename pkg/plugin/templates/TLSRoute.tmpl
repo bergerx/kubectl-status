@@ -1,6 +1,6 @@
 {{- define "TLSRoute" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- /* GVK: gateway.networking.k8s.io/v1alpha2, Kind=TLSRoute */ -}}
+    {{- /* GVK: gateway.networking.k8s.io/v1, Kind=TLSRoute */ -}}
     {{- template "status_summary_line" . }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
@@ -10,6 +10,10 @@
         {{- "Hostnames" | bold | nindent 2 }}: {{ join ", " . | cyan }}
     {{- end }}
     {{- with .Spec.parentRefs }}
+        {{- $routeHostname := "" }}
+        {{- with $.Spec.hostnames }}
+            {{- if eq (len .) 1 }}{{ $routeHostname = index . 0 }}{{ end }}
+        {{- end }}
         {{- "Parents" | bold | nindent 2 }}:
         {{- range . }}
             {{- if $.Config.GetBool "deep" }}
@@ -20,6 +24,49 @@
                 {{- printf "%s/%s" (.kind | default "Gateway") .name | cyan | nindent 4 }}
                 {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
                 {{- with .namespace }} -n {{ . }}{{ end }}
+                {{- $parentRef := . }}
+                {{- if and (not ($.Config.GetBool "shallow")) (or (not $parentRef.kind) (eq $parentRef.kind "Gateway")) }}
+                    {{- $gwNs := coalesce $parentRef.namespace $.Namespace }}
+                    {{- $gw := $.KubeGetFirst $gwNs (coalesce $parentRef.kind "Gateway") $parentRef.name }}
+                    {{- if $gw.Object }}
+                        {{- range $gw.Spec.listeners }}
+                            {{- $listenerMatches := false }}
+                            {{- if $parentRef.sectionName }}
+                                {{- if eq .name $parentRef.sectionName }}{{ $listenerMatches = true }}{{ end }}
+                            {{- else if eq .protocol "TLS" }}
+                                {{- $listenerMatches = true }}
+                            {{- end }}
+                            {{- if $listenerMatches }}
+                                {{- with .tls }}
+                                    {{- if eq (.mode | default "Terminate") "Terminate" }}
+                                        {{- range .certificateRefs }}
+                                            {{- $refKind := .kind | default "Secret" }}
+                                            {{- if eq $refKind "Secret" }}
+                                                {{- $refNs := coalesce .namespace $gwNs }}
+                                                {{- $secret := $.KubeGetFirst $refNs "Secret" .name }}
+                                                {{- if $secret.Object }}
+                                                    {{- $cert := parseTLSSecretCertificate $secret $routeHostname }}
+                                                    {{- if $cert.WrongType }}
+                                                        {{- printf ", wrong type:%s" $cert.ActualType | red | bold }}
+                                                    {{- else if $cert.MissingKeys }}
+                                                        {{- printf ", missing keys:%s" (join "," $cert.MissingKeys) | red | bold }}
+                                                    {{- else if $cert.ParseError }}
+                                                        {{- printf ", parse error:%s" $cert.ParseError | red | bold }}
+                                                    {{- else }}
+                                                        {{- if $cert.SelfSigned }}{{ ", self-signed" | yellow }}{{ end }}
+                                                        {{- if not $cert.MatchesHostname }}{{ ", hostname mismatch" | red | bold }}{{ end }}
+                                                    {{- end }}
+                                                {{- else }}
+                                                    {{- " doesn't exist" | red | bold }}
+                                                {{- end }}
+                                            {{- end }}
+                                        {{- end }}
+                                    {{- end }}
+                                {{- end }}
+                            {{- end }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
             {{- end }}
         {{- end }}
     {{- end }}

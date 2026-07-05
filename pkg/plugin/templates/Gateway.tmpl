@@ -31,7 +31,34 @@
             {{- with .tls }}
                 {{- printf "TLS mode:%s" (.mode | default "Terminate") | nindent 6 }}
                 {{- with .certificateRefs }}
-                    {{- range . }}{{ printf ", cert:%s/%s" (.kind | default "Secret") .name | cyan }}{{ end }}
+                    {{- range . }}
+                        {{- $refKind := .kind | default "Secret" }}
+                        {{- printf ", cert:%s/%s" $refKind .name | cyan }}
+                        {{- if and (eq $refKind "Secret") (not ($.Config.GetBool "shallow")) }}
+                            {{- $refNs := coalesce .namespace $.Namespace }}
+                            {{- $secret := $.KubeGetFirst $refNs "Secret" .name }}
+                            {{- if not $secret.Object }}
+                                {{- " doesn't exist" | red | bold }}
+                            {{- else }}
+                                {{- $hostname := "" }}
+                                {{- with $specListener.hostname }}{{ $hostname = . }}{{ end }}
+                                {{- $cert := parseTLSSecretCertificate $secret $hostname }}
+                                {{- if $cert.WrongType }}
+                                    {{- printf ", wrong type:%s" $cert.ActualType | red | bold }}
+                                {{- else if $cert.MissingKeys }}
+                                    {{- printf ", missing keys:%s" (join "," $cert.MissingKeys) | red | bold }}
+                                {{- else if $cert.ParseError }}
+                                    {{- printf ", parse error:%s" $cert.ParseError | red | bold }}
+                                {{- else }}
+                                    {{- if $cert.SelfSigned }}{{ ", self-signed" | yellow }}{{ end }}
+                                    {{- if not $cert.MatchesHostname }}{{ ", hostname mismatch" | red | bold }}{{ end }}
+                                {{- end }}
+                                {{- if $.Config.GetBool "deep" }}
+                                    {{- $.IncludeRenderableObject $secret | nindent 6 }}
+                                {{- end }}
+                            {{- end }}
+                        {{- end }}
+                    {{- end }}
                 {{- end }}
             {{- end }}
             {{- range $statusListener.conditions }}

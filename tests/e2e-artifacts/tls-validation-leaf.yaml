@@ -1,0 +1,122 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: e2e-tls-leaf
+spec:
+  commonName: e2e-tls.example.com
+  dnsNames:
+  - e2e-tls.example.com
+  - e2e-tls-alt.example.com
+  secretName: e2e-tls-leaf-tls
+  issuerRef:
+    name: e2e-tls-ca-issuer
+    kind: Issuer
+    group: cert-manager.io
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: e2e-tls-svc
+spec:
+  ports:
+  - port: 80
+    name: http
+  selector:
+    app: e2e-tls-svc-nonexistent
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: e2e-tls-ingress-healthy
+spec:
+  tls:
+  - hosts:
+    - e2e-tls.example.com
+    secretName: e2e-tls-leaf-tls
+  rules:
+  - host: e2e-tls.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: e2e-tls-svc
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: e2e-tls-ingress-mismatch
+spec:
+  tls:
+  - hosts:
+    - wrong-host.example.com
+    secretName: e2e-tls-leaf-tls
+  rules:
+  - host: wrong-host.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: e2e-tls-svc
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: e2e-tls-ingress-selfsigned
+spec:
+  tls:
+  - hosts:
+    - e2e-tls.example.com
+    secretName: e2e-tls-root-ca-secret
+  rules:
+  - host: e2e-tls.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: e2e-tls-svc
+            port:
+              number: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: e2e-tls-gw-healthy
+spec:
+  gatewayClassName: e2e-tls-unused-gwc
+  listeners:
+  - name: https
+    port: 443
+    protocol: HTTPS
+    hostname: e2e-tls.example.com
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: e2e-tls-leaf-tls
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: e2e-tls-gw-mismatch
+spec:
+  gatewayClassName: e2e-tls-unused-gwc
+  listeners:
+  - name: https
+    port: 443
+    protocol: HTTPS
+    hostname: wrong-host.example.com
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: e2e-tls-leaf-tls
