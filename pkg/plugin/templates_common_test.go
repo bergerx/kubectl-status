@@ -249,3 +249,120 @@ func TestOwnersTemplate(t *testing.T) {
 		})
 	}
 }
+
+// renderTemplateForTest mirrors checkTemplate's setup but returns the rendered string
+// directly, so callers can assert both presence and absence of substrings.
+func renderTemplateForTest(t *testing.T, templateName string, obj map[string]interface{}) string {
+	t.Helper()
+	tmpl, _ := getTemplate()
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	t.Cleanup(func() { f.Cleanup() })
+	repo, _ := input.NewResourceRepo(f)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard())
+	e.Template = *tmpl
+	r := newRenderableObject(map[string]interface{}{}, e, repo)
+	got, err := r.renderTemplate(templateName, obj)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	return got
+}
+
+func TestContainerStatusSummaryImagePullBackoffHintTemplate(t *testing.T) {
+	waitingImagePullBackOff := map[string]interface{}{
+		"name":  "main",
+		"image": "some-image",
+		"state": map[string]interface{}{
+			"waiting": map[string]interface{}{
+				"reason": "ImagePullBackOff",
+			},
+		},
+	}
+	tests := []struct {
+		name            string
+		obj             map[string]interface{}
+		wantContains    string
+		wantNotContains string
+	}{
+		{
+			name: "no imagePullSecrets on the Pod hints at likely cause",
+			obj: map[string]interface{}{
+				"containerStatus": waitingImagePullBackOff,
+				"containerSpec":   map[string]interface{}{},
+			},
+			wantContains: "no imagePullSecrets on this Pod",
+		}, {
+			name: "imagePullSecrets present and healthy shows no hint",
+			obj: map[string]interface{}{
+				"containerStatus":      waitingImagePullBackOff,
+				"containerSpec":        map[string]interface{}{},
+				"podImagePullSecrets":  []interface{}{map[string]interface{}{"name": "some-secret"}},
+				"podPullSecretsBroken": false,
+			},
+			wantNotContains: "imagePullSecrets",
+		}, {
+			name: "imagePullSecrets present but broken correlates with the pull failure",
+			obj: map[string]interface{}{
+				"containerStatus":      waitingImagePullBackOff,
+				"containerSpec":        map[string]interface{}{},
+				"podImagePullSecrets":  []interface{}{map[string]interface{}{"name": "some-secret"}},
+				"podPullSecretsBroken": true,
+			},
+			wantContains: "this Pod's imagePullSecrets have problems",
+		}, {
+			name: "imagePullPolicy Never suppresses the hint even with no imagePullSecrets",
+			obj: map[string]interface{}{
+				"containerStatus": waitingImagePullBackOff,
+				"containerSpec":   map[string]interface{}{"imagePullPolicy": "Never"},
+			},
+			wantNotContains: "imagePullSecrets",
+		}, {
+			name: "unrelated waiting reason shows no hint",
+			obj: map[string]interface{}{
+				"containerStatus": map[string]interface{}{
+					"name":  "main",
+					"image": "some-image",
+					"state": map[string]interface{}{
+						"waiting": map[string]interface{}{
+							"reason": "CrashLoopBackOff",
+						},
+					},
+				},
+				"containerSpec": map[string]interface{}{},
+			},
+			wantNotContains: "imagePullSecrets",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := renderTemplateForTest(t, "container_status_summary", tt.obj)
+			if tt.wantContains != "" && !strings.Contains(got, tt.wantContains) {
+				t.Errorf("got = %q, want contains %q", got, tt.wantContains)
+			}
+			if tt.wantNotContains != "" && strings.Contains(got, tt.wantNotContains) {
+				t.Errorf("got = %q, want not contains %q", got, tt.wantNotContains)
+			}
+		})
+	}
+}
+
+func TestPodImagePullSecretMissingTemplate(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"name":      "some-pod",
+			"namespace": "test",
+		},
+		"spec": map[string]interface{}{
+			"containers": []interface{}{
+				map[string]interface{}{"name": "main", "image": "some-image"},
+			},
+			"imagePullSecrets": []interface{}{
+				map[string]interface{}{"name": "does-not-exist"},
+			},
+		},
+		"status": map[string]interface{}{},
+	}
+	checkTemplate(t, "Pod", obj, "Secret/does-not-exist doesn't exist, but it's referenced in Pod's imagePullSecrets.", true)
+}

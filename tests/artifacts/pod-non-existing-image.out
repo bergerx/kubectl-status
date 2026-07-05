@@ -6,3 +6,4 @@ Pod/missing-image-755c8c54f7-26v4c -n test1, created 1m ago by ReplicaSet/missin
     Ready ContainersNotReady, containers with unready status: [missing-image] for 1m
     ContainersReady ContainersNotReady, containers with unready status: [missing-image] for 1m
   Containers: missing-image (this-image-doesnt-exist) Waiting ImagePullBackOff: Back-off pulling image "this-image-doesnt-exist"
+  (no imagePullSecrets on this Pod — if this image is on a private registry not covered by node-level credentials, that's likely why)

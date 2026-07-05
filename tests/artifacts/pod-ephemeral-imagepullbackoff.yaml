@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: "2026-06-28T21:19:32Z"
+  generation: 2
+  name: pod-ephemeral-imagepullbackoff
+  namespace: default
+  resourceVersion: "183290"
+  uid: 28c49f14-9a2b-4db1-a591-7f7fffbd66bf
+spec:
+  containers:
+  - image: nginx:alpine
+    imagePullPolicy: IfNotPresent
+    name: main
+    resources: {}
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  ephemeralContainers:
+  - command:
+    - sh
+    - -c
+    - sleep 3600
+    image: this-debug-image-doesnt-exist
+    imagePullPolicy: Always
+    name: debug-shell
+    resources: {}
+    targetContainerName: main
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+  nodeName: minikube
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:20:12Z"
+    observedGeneration: 2
+    status: "True"
+    type: PodReadyToStartContainers
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:19:38Z"
+    observedGeneration: 2
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:20:12Z"
+    observedGeneration: 2
+    status: "True"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:20:12Z"
+    observedGeneration: 2
+    status: "True"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:19:37Z"
+    observedGeneration: 2
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - containerID: docker://617d76fbb0815174406655abe6abbfd73183d729e5d1dde7034c8de4e8232142
+    image: nginx:alpine
+    imageID: docker-pullable://nginx@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
+    lastState: {}
+    name: main
+    ready: true
+    restartCount: 0
+    started: true
+    state:
+      running:
+        startedAt: "2026-06-28T21:20:11Z"
+  ephemeralContainerStatuses:
+  - image: this-debug-image-doesnt-exist
+    imageID: ""
+    lastState: {}
+    name: debug-shell
+    ready: false
+    restartCount: 0
+    started: false
+    state:
+      waiting:
+        message: Back-off pulling image "this-debug-image-doesnt-exist"
+        reason: ImagePullBackOff
+  hostIP: 192.168.49.2
+  hostIPs:
+  - ip: 192.168.49.2
+  observedGeneration: 2
+  phase: Running
+  podIP: 10.244.0.36
+  podIPs:
+  - ip: 10.244.0.36
+  qosClass: BestEffort
+  startTime: "2026-06-28T21:19:38Z"
