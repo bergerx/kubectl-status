@@ -224,6 +224,14 @@ separate manual setup needed. Bump the pinned versions in that target periodical
 upstream stable releases; CI uses the same `make test-e2e` target, so it stays in sync
 automatically.
 
+When a template change adds or touches `$.KubeGetFirst`, `$.IncludeRenderableObject`/`$.Include`,
+or any other interaction with a live cluster, add or extend a case in `TestE2EDynamicManifests`
+(`cmd/main_test.go`) plus matching manifests/regex fixtures under `tests/e2e-artifacts/`. The
+offline golden-file tests (`TestAllArtifactsLocal*`) run with `--shallow` (alongside `--local`,
+since there's no live cluster to query either way), which makes `KubeGetFirst` a no-op — they
+can't exercise the "found the related object" or `--deep` include branches, so the live e2e suite
+is the only place that covers them.
+
 ### Improving The Documentation
 
 We don't yet have a comprehensive documentation, we maintain just a few Markdown files in the repo. We aim to keep the
