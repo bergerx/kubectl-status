@@ -296,6 +296,14 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 
 	chainPEM := append(append([]byte{}, leafPEM...), caPEM...)
 
+	// CommonName deliberately does not come first in DNSNames, to catch any assumption that
+	// slicing off DNSNames[0] is equivalent to filtering out the CommonName.
+	cnNotFirstPEM, _, cnNotFirstKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "cn.example.com",
+		dnsNames:   []string{"extra.example.com", "cn.example.com"},
+		selfSigned: true,
+	})
+
 	tests := []struct {
 		name          string
 		secret        RenderableObject
@@ -440,6 +448,16 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 			},
 			checkKeysOnly: []string{"MatchesHostname"},
 		},
+		{
+			name:     "AltDNSNames excludes the CommonName regardless of its position in DNSNames",
+			secret:   tlsSecret("kubernetes.io/tls", cnNotFirstPEM, keyPEMBytes(cnNotFirstKey)),
+			hostname: "",
+			want: map[string]interface{}{
+				"DNSNames":    []string{"extra.example.com", "cn.example.com"},
+				"AltDNSNames": []string{"extra.example.com"},
+			},
+			checkKeysOnly: []string{"DNSNames", "AltDNSNames"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -468,7 +486,7 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 	expectedKeys := []string{
 		"Exists", "WrongType", "ActualType", "MissingKeys", "ParseError",
 		"Subject", "Issuer", "SerialNumber", "NotBefore", "NotAfter",
-		"DNSNames", "IPAddresses", "KeyAlgorithm", "SelfSigned", "MatchesHostname",
+		"DNSNames", "AltDNSNames", "IPAddresses", "KeyAlgorithm", "SelfSigned", "MatchesHostname",
 	}
 	for _, key := range expectedKeys {
 		if _, ok := all[key]; !ok {

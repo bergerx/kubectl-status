@@ -29,7 +29,7 @@
                     {{- $gwNs := coalesce $parentRef.namespace $.Namespace }}
                     {{- $gw := $.KubeGetFirst $gwNs (coalesce $parentRef.kind "Gateway") $parentRef.name }}
                     {{- if $gw.Object }}
-                        {{- range $gw.Object.spec.listeners }}
+                        {{- range $gw.Spec.listeners }}
                             {{- $listenerMatches := false }}
                             {{- if $parentRef.sectionName }}
                                 {{- if eq .name $parentRef.sectionName }}{{ $listenerMatches = true }}{{ end }}

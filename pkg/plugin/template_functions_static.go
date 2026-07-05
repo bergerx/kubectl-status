@@ -479,6 +479,7 @@ func parseTLSSecretCertificate(secret RenderableObject, hostname string) map[str
 		"NotBefore":       time.Time{},
 		"NotAfter":        time.Time{},
 		"DNSNames":        []string{},
+		"AltDNSNames":     []string{},
 		"IPAddresses":     []string{},
 		"KeyAlgorithm":    "",
 		"SelfSigned":      false,
@@ -541,6 +542,15 @@ func parseTLSSecretCertificate(secret RenderableObject, hostname string) map[str
 	if ipAddresses == nil {
 		ipAddresses = []string{}
 	}
+	var altDNSNames []string
+	for _, dns := range dnsNames {
+		if dns != cert.Subject.CommonName {
+			altDNSNames = append(altDNSNames, dns)
+		}
+	}
+	if altDNSNames == nil {
+		altDNSNames = []string{}
+	}
 
 	result["Subject"] = cert.Subject.String()
 	result["Issuer"] = cert.Issuer.String()
@@ -548,6 +558,7 @@ func parseTLSSecretCertificate(secret RenderableObject, hostname string) map[str
 	result["NotBefore"] = cert.NotBefore
 	result["NotAfter"] = cert.NotAfter
 	result["DNSNames"] = dnsNames
+	result["AltDNSNames"] = altDNSNames
 	result["IPAddresses"] = ipAddresses
 	result["KeyAlgorithm"] = cert.PublicKeyAlgorithm.String()
 	result["SelfSigned"] = bytes.Equal(cert.RawIssuer, cert.RawSubject)

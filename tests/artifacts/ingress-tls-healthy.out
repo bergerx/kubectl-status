@@ -9,5 +9,6 @@ Service/web -n test1
 
 Secret/gateway-tls -n test1, created 1m ago
   Certificate for CN=example.com · issued by CN=Test CA
+    Also valid for: gateway.example.com
     Valid 1m ago, expires 2126-06-10
     Key: RSA · serial 712137069015432309918504661311928280986348109454
