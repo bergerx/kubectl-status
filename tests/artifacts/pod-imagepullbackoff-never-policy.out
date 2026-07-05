@@ -1,0 +1,9 @@
+
+Pod/backoff-never-policy -n test1, created 1m ago Pending BestEffort
+  InProgress: Pod is in the Pending phase
+    Reconciling: PodPending, Pod is in the Pending phase
+  PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
+    Ready ContainersNotReady, containers with unready status: [main] for 1m
+    ContainersReady ContainersNotReady, containers with unready status: [main] for 1m
+  Standalone POD.
+  Containers: main (this-image-doesnt-exist) Waiting ImagePullBackOff: Back-off pulling image "this-image-doesnt-exist"

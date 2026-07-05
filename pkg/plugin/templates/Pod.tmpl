@@ -21,9 +21,29 @@
         {{- $container := .Spec.containers | default list | first | default dict }}
         {{- "Standalone POD" | red | bold | nindent 2 }}{{ if $container.stdin }}, interactive{{ end }}{{ if $container.tty }} with attached TTY{{ end }}.
     {{- end }}
-    {{- template "pod_init_containers" . }}
-    {{- template "pod_containers" . }}
-    {{- template "pod_ephemeral_containers" . }}
+    {{- $missingPullSecrets := list }}
+    {{- $podPullSecretsBroken := false }}
+    {{- range .Spec.imagePullSecrets }}
+        {{- $secretName := .name }}
+        {{- if $secretName }}
+            {{- if not ($.Config.GetBool "shallow") }}
+                {{- $secret := $.KubeGetFirst $.Namespace "Secret" $secretName }}
+                {{- if not $secret.Object }}
+                    {{- $podPullSecretsBroken = true }}
+                    {{- if not ($missingPullSecrets | has $secretName) }}
+                        {{- "Secret" | bold | nindent 2 }}/{{ $secretName }} {{ "doesn't exist" | red | bold }}, but it's referenced in Pod's imagePullSecrets.
+                        {{- $missingPullSecrets = append $missingPullSecrets $secretName }}
+                    {{- end }}
+                {{- else if not (has $secret.Object.type (list "kubernetes.io/dockerconfigjson" "kubernetes.io/dockercfg")) }}
+                    {{- $podPullSecretsBroken = true }}
+                    {{- "Secret" | bold | nindent 2 }}/{{ $secretName }} {{ printf "wrong type: %s" $secret.Object.type | red | bold }}, but it's referenced in Pod's imagePullSecrets.
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "pod_init_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
+    {{- template "pod_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
+    {{- template "pod_ephemeral_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
     {{- template "pod_volumes" . }}
     {{- template "matching_services" . }}
     {{- template "recent_updates" . }}
@@ -39,38 +59,40 @@
 {{- end -}}
 
 {{- define "pod_init_containers" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
+    {{- /* Expects a dict "pod" (Pod RenderableObject) "podPullSecretsBroken" (bool) */ -}}
+    {{- $pod := .pod }}
+    {{- $nodeStatsSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
     {{- $podStatsSummary := dict }}
     {{- if $nodeStatsSummary }}
-        {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
+        {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
     {{- end }}
-    {{- with .Status.initContainerStatuses }}
+    {{- with $pod.Status.initContainerStatuses }}
         {{- "InitContainers:" | nindent 2 }}
         {{- range $containerStatus := . }}
-            {{- $containerSpec := $.Spec.initContainers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
+            {{- $containerSpec := $pod.Spec.initContainers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
             {{- $containerKubeletStats := $podStatsSummary.containers | default list | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
-            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec "containerStats" $containerKubeletStats "includeAllVolumes" ($.Config.GetBool "include-all-volumes") "sidecar" (eq ($containerSpec.restartPolicy | default "") "Always")) | nindent 4 }}
+            {{- $pod.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec "containerStats" $containerKubeletStats "includeAllVolumes" ($pod.Config.GetBool "include-all-volumes") "sidecar" (eq ($containerSpec.restartPolicy | default "") "Always") "podImagePullSecrets" $pod.Spec.imagePullSecrets "podPullSecretsBroken" $.podPullSecretsBroken) | nindent 4 }}
         {{- end }}
     {{- end }}
 {{- end }}
 
 {{- define "pod_containers" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- $defaultLogsContainer := index .Annotations "kubectl.kubernetes.io/default-logs-container" }}
-    {{- $defaultContainer := index .Annotations "kubectl.kubernetes.io/default-container" }}
-    {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
+    {{- /* Expects a dict "pod" (Pod RenderableObject) "podPullSecretsBroken" (bool) */ -}}
+    {{- $pod := .pod }}
+    {{- $defaultLogsContainer := index $pod.Annotations "kubectl.kubernetes.io/default-logs-container" }}
+    {{- $defaultContainer := index $pod.Annotations "kubectl.kubernetes.io/default-container" }}
+    {{- $nodeStatsSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
     {{- $podStatsSummary := dict }}
     {{- if $nodeStatsSummary }}
-        {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
+        {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
     {{- end }}
-    {{- with .Status.containerStatuses }}
+    {{- with $pod.Status.containerStatuses }}
         {{- $single := eq (len .) 1 }}
         {{- "Containers:" | nindent 2 }}
-        {{- $podMetrics := $.KubeGetFirst $.Namespace "PodMetrics" $.Name }}
+        {{- $podMetrics := $pod.KubeGetFirst $pod.Namespace "PodMetrics" $pod.Name }}
         {{- $containerStatusSummaryDict := dict }}
         {{- range $containerStatus := . }}
-            {{- $containerSpec := $.Spec.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
+            {{- $containerSpec := $pod.Spec.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
             {{- $containerKubeletStats := $podStatsSummary.containers | default list | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
             {{- if ($podMetrics.Object | default dict).containers }}
                 {{- $containerMetrics := $podMetrics.Object.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
@@ -80,7 +102,9 @@
                                                        "containerStats" $containerKubeletStats
                                                        "defaultContainer" (eq $containerStatus.name $defaultContainer)
                                                        "defaultLogsContainer" (eq $containerStatus.name $defaultLogsContainer)
-                                                       "includeAllVolumes" ($.Config.GetBool "include-all-volumes")
+                                                       "includeAllVolumes" ($pod.Config.GetBool "include-all-volumes")
+                                                       "podImagePullSecrets" $pod.Spec.imagePullSecrets
+                                                       "podPullSecretsBroken" $.podPullSecretsBroken
                 }}
             {{- else }}
                 {{- $containerStatusSummaryDict = dict "containerStatus" $containerStatus
@@ -88,13 +112,15 @@
                                                        "containerStats" $containerKubeletStats
                                                        "defaultContainer" (eq $containerStatus.name $defaultContainer)
                                                        "defaultLogsContainer" (eq $containerStatus.name $defaultLogsContainer)
-                                                       "includeAllVolumes" ($.Config.GetBool "include-all-volumes")
+                                                       "includeAllVolumes" ($pod.Config.GetBool "include-all-volumes")
+                                                       "podImagePullSecrets" $pod.Spec.imagePullSecrets
+                                                       "podPullSecretsBroken" $.podPullSecretsBroken
                 }}
             {{- end }}
             {{- if $single }}
-                {{- " " }}{{- $.Include "container_status_summary" $containerStatusSummaryDict }}
+                {{- " " }}{{- $pod.Include "container_status_summary" $containerStatusSummaryDict }}
             {{- else }}
-                {{- $.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
+                {{- $pod.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}
@@ -359,6 +385,8 @@
            * containerSpec (optional): Pod.spec.containers[name=container]
            * defaultContainer (optional): Boolean
            * defaultLogsContainer (optional): Boolean
+           * podImagePullSecrets (optional): Pod.spec.imagePullSecrets
+           * podPullSecretsBroken (optional): Boolean, true if any podImagePullSecrets entry doesn't resolve to a usable Secret
         */ -}}
     {{- .containerStatus.name | bold }}{{ if .sidecar }}{{ " [sidecar]" | cyan }}{{ end }} ({{ .containerStatus.image | markYellow "latest" }}) {{ template "container_state_summary" .containerStatus.state }}
     {{- if .containerStatus.state.running }}{{ if .containerStatus.ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
@@ -406,6 +434,13 @@
         {{- if eq .reason "PostStartHookError" }}
             {{- with $.containerSpec.lifecycle.postStart }}
                 {{- "postStart:" | yellow | nindent 2 }} {{ template "lifecycle_hook_summary" . }}
+            {{- end }}
+        {{- end }}
+        {{- if and (or (eq .reason "ImagePullBackOff") (eq .reason "ErrImagePull")) (ne (get ($.containerSpec | default dict) "imagePullPolicy") "Never") }}
+            {{- if not $.podImagePullSecrets }}
+                {{- "(no imagePullSecrets on this Pod — if this image is on a private registry not covered by node-level credentials, that's likely why)" | yellow | nindent 2 }}
+            {{- else if $.podPullSecretsBroken }}
+                {{- "(this Pod's imagePullSecrets have problems, see above — that's likely why)" | yellow | nindent 2 }}
             {{- end }}
         {{- end }}
     {{- end }}
@@ -480,12 +515,13 @@
 {{- end -}}
 
 {{- define "pod_ephemeral_containers" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- with .Status.ephemeralContainerStatuses }}
+    {{- /* Expects a dict "pod" (Pod RenderableObject) "podPullSecretsBroken" (bool) */ -}}
+    {{- $pod := .pod }}
+    {{- with $pod.Status.ephemeralContainerStatuses }}
         {{- "Debug containers:" | nindent 2 }}
         {{- range $containerStatus := . }}
-            {{- $containerSpec := $.Spec.ephemeralContainers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
-            {{- $.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec) | nindent 4 }}
+            {{- $containerSpec := $pod.Spec.ephemeralContainers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
+            {{- $pod.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec "podImagePullSecrets" $pod.Spec.imagePullSecrets "podPullSecretsBroken" $.podPullSecretsBroken) | nindent 4 }}
             {{- with $containerSpec.targetContainerName }}
                 {{- "targeting:" | bold | nindent 6 }} {{ . | cyan }}
             {{- end }}

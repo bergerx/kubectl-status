@@ -570,6 +570,39 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			}.assert(t, nil)
 		})
 	})
+	t.Run("pod-image-pull-secrets", func(t *testing.T) {
+		// --shallow (used by the offline golden-file tests) makes KubeGetFirst a no-op,
+		// so this e2e suite is the only place that exercises the found-secret validation
+		// branches of Pod.tmpl's imagePullSecrets check (Check A) and the "broken secrets"
+		// correlation branch of the ImagePullBackOff hint (Check B).
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/pod-image-pull-secrets.yaml")
+		waitForImagePullBackoff(t, "pod/e2e-pod-missing-pull-secret")
+		waitForImagePullBackoff(t, "pod/e2e-pod-wrong-type-pull-secret")
+		waitForImagePullBackoff(t, "pod/e2e-pod-healthy-pull-secret")
+
+		t.Run("pod referencing a non-existent Secret flags it and correlates with the pull failure", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"pod/e2e-pod-missing-pull-secret", "--include-events=false", "--v", "5"})
+			require.NoError(t, err)
+			assert.Regexp(t, `Secret/e2e-pull-secret-does-not-exist doesn't exist, but it's referenced in Pod's imagePullSecrets\.`, stdout)
+			assert.Contains(t, stdout, "this Pod's imagePullSecrets have problems, see above")
+			assert.NotContains(t, stdout, "no imagePullSecrets on this Pod")
+		})
+		t.Run("pod referencing a wrong-type Secret flags it and correlates with the pull failure", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"pod/e2e-pod-wrong-type-pull-secret", "--include-events=false", "--v", "5"})
+			require.NoError(t, err)
+			assert.Regexp(t, `Secret/e2e-pull-secret-wrong-type wrong type: Opaque, but it's referenced in Pod's imagePullSecrets\.`, stdout)
+			assert.Contains(t, stdout, "this Pod's imagePullSecrets have problems, see above")
+			assert.NotContains(t, stdout, "no imagePullSecrets on this Pod")
+		})
+		t.Run("pod referencing a healthy Secret shows no warnings", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"pod/e2e-pod-healthy-pull-secret", "--include-events=false", "--v", "5"})
+			require.NoError(t, err)
+			for _, problem := range []string{"doesn't exist", "wrong type:", "no imagePullSecrets on this Pod", "imagePullSecrets have problems"} {
+				assert.NotContains(t, stdout, problem)
+			}
+		})
+	})
 }
 
 func applyManifest(t *testing.T, filepath string) {
@@ -594,4 +627,28 @@ func waitFor(t *testing.T, resource, forParam string) {
 	output, err := cmd.CombinedOutput()
 	t.Logf("wait result for %s: %s", resource, string(output))
 	require.NoError(t, err)
+}
+
+// waitForImagePullBackoff polls until the resource's first container reports an
+// ImagePullBackOff or ErrImagePull waiting reason. `kubectl wait` doesn't support
+// waiting for one-of-several jsonpath values, and the kubelet transiently reports
+// other reasons (e.g. ContainerCreating) before settling on the pull-failure state.
+// Transient kubectl errors (e.g. the pod not yet registered in the API server) are
+// tolerated and just retried until the deadline.
+func waitForImagePullBackoff(t *testing.T, resource string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		cmd := exec.Command("kubectl", "get", resource,
+			"-o", "jsonpath={.status.containerStatuses[0].state.waiting.reason}")
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			if reason := strings.TrimSpace(string(output)); reason == "ImagePullBackOff" || reason == "ErrImagePull" {
+				t.Logf("%s container waiting reason: %s", resource, reason)
+				return
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for %s to report ImagePullBackOff/ErrImagePull", resource)
 }

@@ -1,0 +1,10 @@
+
+Pod/pod-ephemeral-imagepullbackoff -n default, created 1m ago, gen:2, started after 1m Running BestEffort
+  Current: Pod is Ready
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Standalone POD.
+  Containers: main (nginx:alpine) Running for 1m and Ready
+  Debug containers:
+    debug-shell (this-debug-image-doesnt-exist) Waiting ImagePullBackOff: Back-off pulling image "this-debug-image-doesnt-exist"
+      (no imagePullSecrets on this Pod — if this image is on a private registry not covered by node-level credentials, that's likely why)
+      targeting: main
