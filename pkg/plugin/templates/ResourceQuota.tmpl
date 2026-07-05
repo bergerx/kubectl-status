@@ -1,11 +1,48 @@
 {{- define "ResourceQuota" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: v1, Kind=ResourceQuota */ -}}
     {{- template "status_summary_line" . }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
-    {{- $hard := .Status.hard }}
-    {{- range $key, $value := .Status.used }}
-        {{- $key | nindent 2 }}: {{ $value }}/{{ index $hard $key }}
+    {{- template "observed_generation_summary" . }}
+    {{- with .Spec.scopes }}
+        {{- "Scopes" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- with .Spec.scopeSelector }}
+        {{- with .matchExpressions }}
+            {{- "Scope selector" | bold | nindent 2 }}:
+            {{- range . }}
+                {{- printf "%s %s" .scopeName .operator | nindent 4 }}
+                {{- with .values }} {{ join "," . | cyan }}{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- $status := .Status | default dict }}
+    {{- $hard := $status.hard | default dict }}
+    {{- $used := $status.used | default dict }}
+    {{- with $hard }}
+        {{- $lines := list }}
+        {{- range $key, $hardStr := . }}
+            {{- $usedStr := index $used $key | default "0" }}
+            {{- $hardVal := $hardStr | toString | quantityToFloat64 }}
+            {{- $usedVal := $usedStr | toString | quantityToFloat64 }}
+            {{- $valStr := "" }}
+            {{- if or (hasSuffix "memory" $key) (hasSuffix "storage" $key) (contains "hugepages" $key) }}
+                {{- $valStr = printf "%s/%s" ($usedVal | humanizeSI "B") ($hardVal | humanizeSI "B") }}
+            {{- else }}
+                {{- $valStr = printf "%s/%s" ($usedVal | printf "%g") ($hardVal | printf "%g") }}
+            {{- end }}
+            {{- if gt $hardVal 0.0 }}{{- $valStr = printf "%s[%s]" $valStr (percent $usedVal $hardVal | colorPercent "%.0f%%") }}{{- end }}
+            {{- $lines = append $lines (printf "%s: %s" $key $valStr) }}
+        {{- end }}
+        {{- if eq (len $lines) 1 }}
+            {{- "Quota" | bold | nindent 2 }}: {{ index $lines 0 }}
+        {{- else }}
+            {{- "Quota" | bold | nindent 2 }}:
+            {{- range $lines }}
+                {{- . | nindent 4 }}
+            {{- end }}
+        {{- end }}
     {{- end }}
     {{- template "application_details" . }}
     {{- template "recent_updates" . }}

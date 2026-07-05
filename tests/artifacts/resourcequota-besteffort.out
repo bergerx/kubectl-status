@@ -1,0 +1,5 @@
+
+ResourceQuota/besteffort-quota -n rq-test, created 1m ago
+  Current: Resource is current
+  Scopes: BestEffort
+  Quota: pods: 0/5[0%]
