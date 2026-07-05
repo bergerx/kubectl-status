@@ -436,7 +436,7 @@
                 {{- "postStart:" | yellow | nindent 2 }} {{ template "lifecycle_hook_summary" . }}
             {{- end }}
         {{- end }}
-        {{- if and (or (eq .reason "ImagePullBackOff") (eq .reason "ErrImagePull")) (ne $.containerSpec.imagePullPolicy "Never") }}
+        {{- if and (or (eq .reason "ImagePullBackOff") (eq .reason "ErrImagePull")) (ne (get ($.containerSpec | default dict) "imagePullPolicy") "Never") }}
             {{- if not $.podImagePullSecrets }}
                 {{- "(no imagePullSecrets on this Pod — if this image is on a private registry not covered by node-level credentials, that's likely why)" | yellow | nindent 2 }}
             {{- else if $.podPullSecretsBroken }}

@@ -577,9 +577,9 @@ Secret\/child -n default, created 1m ago by Secret/owner
 		// correlation branch of the ImagePullBackOff hint (Check B).
 		viperTestHack(t)
 		applyManifest(t, "e2e-artifacts/pod-image-pull-secrets.yaml")
-		waitForContainerWaitingReason(t, "pod/e2e-pod-missing-pull-secret")
-		waitForContainerWaitingReason(t, "pod/e2e-pod-wrong-type-pull-secret")
-		waitForContainerWaitingReason(t, "pod/e2e-pod-healthy-pull-secret")
+		waitForImagePullBackoff(t, "pod/e2e-pod-missing-pull-secret")
+		waitForImagePullBackoff(t, "pod/e2e-pod-wrong-type-pull-secret")
+		waitForImagePullBackoff(t, "pod/e2e-pod-healthy-pull-secret")
 
 		t.Run("pod referencing a non-existent Secret flags it and correlates with the pull failure", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"pod/e2e-pod-missing-pull-secret", "--include-events=false", "--v", "5"})
@@ -629,22 +629,26 @@ func waitFor(t *testing.T, resource, forParam string) {
 	require.NoError(t, err)
 }
 
-// waitForContainerWaitingReason polls until the resource's first container has a
-// state.waiting.reason set (e.g. ErrImagePull/ImagePullBackOff), since `kubectl wait`
-// doesn't support waiting for one-of-several jsonpath values.
-func waitForContainerWaitingReason(t *testing.T, resource string) {
+// waitForImagePullBackoff polls until the resource's first container reports an
+// ImagePullBackOff or ErrImagePull waiting reason. `kubectl wait` doesn't support
+// waiting for one-of-several jsonpath values, and the kubelet transiently reports
+// other reasons (e.g. ContainerCreating) before settling on the pull-failure state.
+// Transient kubectl errors (e.g. the pod not yet registered in the API server) are
+// tolerated and just retried until the deadline.
+func waitForImagePullBackoff(t *testing.T, resource string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
 		cmd := exec.Command("kubectl", "get", resource,
 			"-o", "jsonpath={.status.containerStatuses[0].state.waiting.reason}")
 		output, err := cmd.CombinedOutput()
-		require.NoError(t, err)
-		if reason := strings.TrimSpace(string(output)); reason != "" {
-			t.Logf("%s container waiting reason: %s", resource, reason)
-			return
+		if err == nil {
+			if reason := strings.TrimSpace(string(output)); reason == "ImagePullBackOff" || reason == "ErrImagePull" {
+				t.Logf("%s container waiting reason: %s", resource, reason)
+				return
+			}
 		}
 		time.Sleep(2 * time.Second)
 	}
-	t.Fatalf("timed out waiting for %s to report a container waiting reason", resource)
+	t.Fatalf("timed out waiting for %s to report ImagePullBackOff/ErrImagePull", resource)
 }
