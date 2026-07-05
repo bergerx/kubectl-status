@@ -110,7 +110,7 @@ Any template section that fetches related resources must respect the three rende
 
 **`--shallow`** — skip the section entirely. Some Go helpers already return an empty slice in shallow mode (e.g. `KubeGetIngressesMatchingService`); for label-based lookups, gate explicitly in the template with `if not ($.Config.GetBool "shallow")`.
 
-**`--local`** also makes `KubeGetFirst` a no-op (there's no live cluster to query), so any template calling it must degrade gracefully — typically falling back to `resource_ref` — the same way it does for `--shallow`.
+Note: `--local` runs without a live cluster, so `KubeGetFirst` calls fail to find anything there too — templates don't need to check for `--local` explicitly, they just need to handle the "not found" case (typically falling back to `resource_ref`), which the `--shallow` handling above already requires.
 
 **default** — compact single-line summaries using shared sub-templates from `common.tmpl`:
 
