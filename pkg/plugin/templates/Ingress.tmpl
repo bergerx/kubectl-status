@@ -39,6 +39,49 @@
             {{- end }}
         {{- end }}
     {{- end }}
+    {{- $missingSecrets := list }}
+    {{- $shownSecrets := list }}
+    {{- range .Spec.tls }}
+        {{- $secretName := .secretName }}
+        {{- $hosts := .hosts | default list }}
+        {{- if not $secretName }}
+            {{- "TLS entry has no secretName" | yellow | bold | nindent 2 }}, ingress controller's default certificate will be used for host(s) [{{ $hosts | join ", " }}].
+        {{- else if not ($.Config.GetBool "shallow") }}
+            {{- $secret := $.KubeGetFirst $.Namespace "Secret" $secretName }}
+            {{- if not $secret.Object }}
+                {{- if not ($missingSecrets | has $secretName) }}
+                    {{- "Secret" | bold | nindent 2 }}/{{ $secretName }} {{ "doesn't exist" | red | bold }}, but it's referenced in Ingress TLS for host(s) [{{ $hosts | join ", " }}].
+                    {{- $missingSecrets = append $missingSecrets $secretName }}
+                {{- end }}
+            {{- else }}
+                {{- $certBase := parseTLSSecretCertificate $secret "" }}
+                {{- if $certBase.WrongType }}
+                    {{- "Secret" | bold | nindent 2 }}/{{ $secretName }} {{ printf "wrong type: %s" $certBase.ActualType | red | bold }}, but it's referenced in Ingress TLS for host(s) [{{ $hosts | join ", " }}].
+                {{- else if $certBase.MissingKeys }}
+                    {{- "Secret" | bold | nindent 2 }}/{{ $secretName }} {{ printf "missing keys: %s" (join ", " $certBase.MissingKeys) | red | bold }}, referenced in Ingress TLS for host(s) [{{ $hosts | join ", " }}].
+                {{- else if $certBase.ParseError }}
+                    {{- "Secret" | bold | nindent 2 }}/{{ $secretName }} {{ printf "certificate parse error: %s" $certBase.ParseError | red | bold }}, referenced in Ingress TLS for host(s) [{{ $hosts | join ", " }}].
+                {{- else }}
+                    {{- if $certBase.SelfSigned }}
+                        {{- "Secret" | bold | nindent 2 }}/{{ $secretName }} {{ "certificate is self-signed" | yellow | bold }}, used for host(s) [{{ $hosts | join ", " }}].
+                    {{- end }}
+                    {{- range $hosts }}
+                        {{- $host := . }}
+                        {{- $cert := parseTLSSecretCertificate $secret $host }}
+                        {{- if not $cert.MatchesHostname }}
+                            {{- "Secret" | bold | nindent 2 }}/{{ $secretName }} {{ "certificate doesn't match host" | red | bold }} {{ $host | cyan }}.
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+                {{- if $.Config.GetBool "deep" }}
+                    {{- if not ($shownSecrets | has $secretName) }}
+                        {{- $.IncludeRenderableObject $secret | nindent 4 }}
+                        {{- $shownSecrets = append $shownSecrets $secretName }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}

@@ -1,0 +1,25 @@
+
+GRPCRoute/grpc-app -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Hostnames: gateway.example.com
+  Parents:
+    Gateway/eg [https]
+  Rules:
+    → Service/grpc-app:50051
+  Status:
+    Gateway/eg [https] (gateway.envoyproxy.io/gatewayclass-controller)
+      Accepted Accepted, Route is accepted for 1m
+
+Gateway/eg -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Class: eg
+  Accepted Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
+  Listeners:
+    https: port=443/HTTPS, host=gateway.example.com, namespaces=Same, accepts=GRPCRoute, routes=1
+      TLS mode:Terminate, cert:Secret/gateway-tls
+      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+
+Secret/gateway-tls -n default, created 1m ago
+  Certificate for CN=example.com · issued by CN=Test CA
+    Valid 1m ago, expires 2126-06-10
+    Key: RSA · serial 712137069015432309918504661311928280986348109454

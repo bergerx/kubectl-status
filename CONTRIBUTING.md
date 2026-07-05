@@ -211,6 +211,19 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
 
 3. **Include updated artifacts in PRs** - reviewers use `.out` file diffs to verify template changes.
 
+### Running e2e Tests Locally
+
+`make test-e2e` runs the `TestE2E*` suite against a real cluster (see `cmd/main_test.go`). By
+default it starts its own minikube cluster; set `ASSUME_MINIKUBE_IS_CONFIGURED=true` if your
+current kubeconfig context already points at a suitable cluster (this is what CI does).
+
+Some e2e scenarios exercise cert-manager-issued TLS `Secret`s and Gateway API objects.
+`make test-e2e` installs both automatically (via its `install-e2e-deps` prerequisite target
+in the `Makefile`) against whatever cluster is configured before running the test suite — no
+separate manual setup needed. Bump the pinned versions in that target periodically to track
+upstream stable releases; CI uses the same `make test-e2e` target, so it stays in sync
+automatically.
+
 ### Improving The Documentation
 
 We don't yet have a comprehensive documentation, we maintain just a few Markdown files in the repo. We aim to keep the

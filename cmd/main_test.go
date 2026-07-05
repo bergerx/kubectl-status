@@ -356,14 +356,16 @@ func TestE2EDynamicManifests(t *testing.T) {
 
 		test := cmdTest{
 			args: []string{"secret/child", "--deep", "--v", "7"},
+			// Secret.tmpl intentionally omits kstatus_summary (Secret is always reported
+			// "Resource is always ready" by kstatus, so the "Current:" line is redundant
+			// noise) -- see tests/artifacts/secret-tls-healthy.out for the same committed
+			// expectation.
 			stdoutRegex: `(?ms)
 Secret\/child -n default, created 1m ago by Secret/owner
-  Current: Resource is always ready
   Known\/recorded manage events:
     1m ago Updated by [^ ]+ \(metadata, type\)
   Owners:
     Secret\/owner -n default, created 1m ago
-      Current: Resource is always ready
       Known\/recorded manage events:
         1m ago Updated by [^ ]+ \(type\)
 `,
@@ -427,6 +429,147 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			args:            []string{"sts/sts-without-service", "--include-events=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-without-service.regex",
 		}.assert(t, nil)
+	})
+	t.Run("tls-validation", func(t *testing.T) {
+		// Builds a real cert-manager CA chain (self-signed root -> ca-type Issuer -> leaf
+		// certificate) so the Ingress/Gateway/Secret TLS-consistency checks (self-signed,
+		// hostname/SAN match, wrong type, missing keys) can be exercised against genuine
+		// certificate content. --shallow (used by the offline golden-file tests) makes
+		// KubeGetFirst a no-op, so this e2e suite is the only place in the whole test suite
+		// that exercises the found-secret validation branches of Ingress.tmpl/Gateway.tmpl.
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/tls-validation-ca.yaml")
+		waitFor(t, "certificate/e2e-tls-root-ca", "condition=Ready")
+		waitFor(t, "issuer/e2e-tls-ca-issuer", "condition=Ready")
+		applyManifest(t, "e2e-artifacts/tls-validation-leaf.yaml")
+		waitFor(t, "certificate/e2e-tls-leaf", "condition=Ready")
+
+		t.Run("secret/leaf shows full non-self-signed certificate detail", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"secret/e2e-tls-leaf-tls", "--include-events=false", "--v", "5"})
+			require.NoError(t, err)
+			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-secret-leaf.regex"))
+			require.NoError(t, rerr)
+			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			assert.NotContains(t, stdout, "Self-signed:")
+		})
+		t.Run("secret/root-ca is flagged self-signed", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"secret/e2e-tls-root-ca-secret", "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/tls-validation-secret-root.regex",
+			}.assert(t, nil)
+		})
+		t.Run("ingress with matching hostname is healthy", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"ingress/e2e-tls-ingress-healthy", "--include-events=false", "--v", "5"})
+			require.NoError(t, err)
+			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-ingress-healthy.regex"))
+			require.NoError(t, rerr)
+			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			for _, problem := range []string{
+				"doesn't exist",
+				"wrong type:",
+				"missing keys:",
+				"certificate parse error:",
+				"certificate is self-signed",
+				"certificate doesn't match host",
+			} {
+				assert.NotContains(t, stdout, problem)
+			}
+		})
+		t.Run("ingress with mismatched hostname flags hostname mismatch", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"ingress/e2e-tls-ingress-mismatch", "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-mismatch.regex",
+			}.assert(t, nil)
+		})
+		t.Run("ingress referencing the root CA secret flags self-signed", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"ingress/e2e-tls-ingress-selfsigned", "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-selfsigned.regex",
+			}.assert(t, nil)
+		})
+		t.Run("ingress with --deep inlines the full Secret detail", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"ingress/e2e-tls-ingress-healthy", "--deep", "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-deep.regex",
+			}.assert(t, nil)
+		})
+		t.Run("gateway with matching hostname is healthy", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"gateway/e2e-tls-gw-healthy", "--include-events=false", "--v", "5"})
+			require.NoError(t, err)
+			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-gateway-healthy.regex"))
+			require.NoError(t, rerr)
+			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			for _, problem := range []string{", self-signed", ", hostname mismatch", "wrong type:", "missing keys:", "parse error:"} {
+				assert.NotContains(t, stdout, problem)
+			}
+		})
+		t.Run("gateway with mismatched hostname flags hostname mismatch", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"gateway/e2e-tls-gw-mismatch", "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/tls-validation-gateway-mismatch.regex",
+			}.assert(t, nil)
+		})
+		applyManifest(t, "e2e-artifacts/tls-validation-grpcroute.yaml")
+		t.Run("grpcroute attached to healthy gateway listener shows no cert flags", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"grpcroute/e2e-tls-grpcroute-healthy", "--include-events=false", "--v", "5"})
+			require.NoError(t, err)
+			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-grpcroute-healthy.regex"))
+			require.NoError(t, rerr)
+			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			for _, problem := range []string{", self-signed", ", hostname mismatch", "wrong type:", "missing keys:", "parse error:", "doesn't exist"} {
+				assert.NotContains(t, stdout, problem)
+			}
+		})
+		t.Run("grpcroute with its own hostname mismatching the cert SANs flags hostname mismatch", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"grpcroute/e2e-tls-grpcroute-mismatch", "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/tls-validation-grpcroute-mismatch.regex",
+			}.assert(t, nil)
+		})
+		applyManifest(t, "e2e-artifacts/tls-validation-tlsroute.yaml")
+		t.Run("tlsroute attached to Terminate listener with matching hostname is healthy", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-healthy", "--include-events=false", "--v", "5"})
+			require.NoError(t, err)
+			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-tlsroute-healthy.regex"))
+			require.NoError(t, rerr)
+			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			for _, problem := range []string{", self-signed", ", hostname mismatch", "wrong type:", "missing keys:", "parse error:", "doesn't exist"} {
+				assert.NotContains(t, stdout, problem)
+			}
+		})
+		t.Run("tlsroute with its own hostname mismatching the cert SANs flags hostname mismatch", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"tlsroute/e2e-tlsroute-mismatch", "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/tls-validation-tlsroute-mismatch.regex",
+			}.assert(t, nil)
+		})
+		t.Run("tlsroute attached to a Passthrough listener shows no cert flags", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-passthrough", "--include-events=false", "--v", "5"})
+			require.NoError(t, err)
+			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-tlsroute-passthrough.regex"))
+			require.NoError(t, rerr)
+			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			for _, problem := range []string{", self-signed", ", hostname mismatch", "wrong type:", "missing keys:", "parse error:", "doesn't exist"} {
+				assert.NotContains(t, stdout, problem)
+			}
+		})
+		applyManifest(t, "e2e-artifacts/tls-validation-httproute.yaml")
+		t.Run("httproute attached to a healthy listener is healthy", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-healthy", "--include-events=false", "--v", "5"})
+			require.NoError(t, err)
+			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-httproute-healthy.regex"))
+			require.NoError(t, rerr)
+			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			for _, problem := range []string{"doesn't exist", "wrong type:", "missing keys:", "parse error:", "self-signed", "hostname mismatch"} {
+				assert.NotContains(t, stdout, problem)
+			}
+		})
+		t.Run("httproute attached to a mismatched-hostname listener flags hostname mismatch", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"httproute/e2e-tls-httproute-mismatch", "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/tls-validation-httproute-mismatch.regex",
+			}.assert(t, nil)
+		})
 	})
 }
 

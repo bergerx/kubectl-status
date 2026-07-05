@@ -1,0 +1,131 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  creationTimestamp: "2026-06-26T23:39:52Z"
+  generation: 1
+  name: tls-gw-problems
+  namespace: default
+  resourceVersion: "2886"
+  uid: c435653a-2de9-4020-a816-f4e16013a022
+spec:
+  gatewayClassName: eg
+  listeners:
+  - name: tls-selfsigned
+    port: 443
+    protocol: TLS
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: selfsigned-tls
+  - name: tls-passthrough
+    port: 444
+    protocol: TLS
+    tls:
+      mode: Passthrough
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-26T23:42:41Z"
+    message: The Gateway has been scheduled by Envoy Gateway
+    observedGeneration: 1
+    reason: Accepted
+    status: "True"
+    type: Accepted
+  listeners:
+  - attachedRoutes: 1
+    conditions:
+    - lastTransitionTime: "2026-06-26T23:42:41Z"
+      message: Listener references have been resolved
+      observedGeneration: 1
+      reason: ResolvedRefs
+      status: "True"
+      type: ResolvedRefs
+    name: tls-selfsigned
+  - attachedRoutes: 1
+    conditions:
+    - lastTransitionTime: "2026-06-26T23:42:41Z"
+      message: Listener references have been resolved
+      observedGeneration: 1
+      reason: ResolvedRefs
+      status: "True"
+      type: ResolvedRefs
+    name: tls-passthrough
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  creationTimestamp: "2026-06-26T23:39:52Z"
+  generation: 1
+  name: tls-route-selfsigned
+  namespace: default
+  resourceVersion: "2887"
+  uid: c435653a-2de9-4020-a816-f4e16013a023
+spec:
+  hostnames:
+  - selfsigned.example.com
+  parentRefs:
+  - name: tls-gw-problems
+    sectionName: tls-selfsigned
+  rules:
+  - backendRefs:
+    - kind: Service
+      name: tls-backend
+      port: 443
+status:
+  parents:
+  - parentRef:
+      name: tls-gw-problems
+      sectionName: tls-selfsigned
+    controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    conditions:
+    - lastTransitionTime: "2026-06-26T23:42:41Z"
+      message: Route was valid
+      observedGeneration: 1
+      reason: Accepted
+      status: "True"
+      type: Accepted
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  creationTimestamp: "2026-06-26T23:39:52Z"
+  generation: 1
+  name: tls-route-passthrough
+  namespace: default
+  resourceVersion: "2888"
+  uid: c435653a-2de9-4020-a816-f4e16013a024
+spec:
+  parentRefs:
+  - name: tls-gw-problems
+    sectionName: tls-passthrough
+  rules:
+  - backendRefs:
+    - kind: Service
+      name: tls-backend
+      port: 444
+status:
+  parents:
+  - parentRef:
+      name: tls-gw-problems
+      sectionName: tls-passthrough
+    controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    conditions:
+    - lastTransitionTime: "2026-06-26T23:42:41Z"
+      message: Route was valid
+      observedGeneration: 1
+      reason: Accepted
+      status: "True"
+      type: Accepted
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  creationTimestamp: "2026-06-26T23:39:52Z"
+  name: selfsigned-tls
+  namespace: default
+  resourceVersion: "2883"
+  uid: b435653a-2de9-4020-a816-f4e16013a014
+type: kubernetes.io/tls
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURPVENDQWlHZ0F3SUJBZ0lVVUhrQWNlS3I2UEkrSFRsQURsbUQxblZ1TXJZd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0hERWFNQmdHQTFVRUF3d1JiM1JvWlhJdVpYaGhiWEJzWlM1amIyMHdJQmNOTWpZd056QTBNakV6TXpFeQpXaGdQTWpFeU5qQTJNVEF5TVRNek1USmFNQnd4R2pBWUJnTlZCQU1NRVc5MGFHVnlMbVY0WVcxd2JHVXVZMjl0Ck1JSUJJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBdnZZYzdQbmd5OGthZUFxZVR3SXgKSkFCT0FEbnB3MnR6Zld1S051dmtLa0pYMTdBdzU1eWgvOG5CNDRYdHp3WFFheUozWGZRTXV5b20zRFYyL0dHbApyaVY2WTVWWmhPVVBXSWhpQWs1Y2xWM3hEa3Z2dDFhSzBMM1ViWnJGUTRtczFGaXY2UFEzc2NqbndzRFJ3VGZLClNqYkVMeWZXOTU4a1RXYVRscGFpS3ptSnhrdVlFVzBNM3NUcWV1ei9kTFFNUGxLdlJKMHh2N25UM0RlbHovd2oKb2RGSmhWYjdNWjNXdGdFWFNDLzU0OXNIcHJ2WlJIb01Nd3dheUZNTmg4cTNVNnUrNDJsVnRJNU9laTFyU2JDUApKYnFhRXZWVVpQUFZnMDQxNHJucHZsUlVFSzVmc2pMd1E2Q0J1NFpkNGt4WkpiUnpidlJ5V2haVDlQeno5YUh0Cm5RSURBUUFCbzNFd2J6QWRCZ05WSFE0RUZnUVVhaUREOStWTHk4WjE2RHc3WDM3R2ZvNHA4TEl3SHdZRFZSMGoKQkJnd0ZvQVVhaUREOStWTHk4WjE2RHc3WDM3R2ZvNHA4TEl3RHdZRFZSMFRBUUgvQkFVd0F3RUIvekFjQmdOVgpIUkVFRlRBVGdoRnZkR2hsY2k1bGVHRnRjR3hsTG1OdmJUQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUF1SGZVCkFMcWpSZDFaVXVwUFJUaWI5NWFleEd3ZGNlMU9kMk5BY2ZEOWh1LzRmdTdmNGFNWndQWStnMmdqeVV0WWZGMWIKZVZOSk83UG9La0N5aU9PYkhheVh3MnVOQXRLSXk5K2JYMEJGWHV6b290b0t5K0pncmVUM00vdUE5VDNsQzZ4OQptWmREL3RtUXJvc01tOXI5NitsaDlrRW9FcVBFMk9oSFRuOGRQSSszSkdQNlZ6RUtka3ozblNCbFRsY0pTcCt2CkUyOUNncW04bVU3MGV2Q1Z1bjhvbkh6R3gwUzlFUFNTT25tQ3B6Q0VKQW40bUw1cTBzcVF6VlpZMVE2NzVvQmMKZUdHbiswU2xxN0pIdDFiUFAwZnZWTy8wbndWTnVPQmdxYkN0NXkvZ2dSQ1R1TlZNemluOW4vdVlCaXN0N2UwMwpGYzJmYmlsQXJZQkw4U29tWFE9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2Z0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktnd2dnU2tBZ0VBQW9JQkFRQys5aHpzK2VETHlScDQKQ3A1UEFqRWtBRTRBT2VuRGEzTjlhNG8yNitRcVFsZlhzRERubktIL3ljSGpoZTNQQmRCckluZGQ5QXk3S2liYwpOWGI4WWFXdUpYcGpsVm1FNVE5WWlHSUNUbHlWWGZFT1MrKzNWb3JRdmRSdG1zVkRpYXpVV0svbzlEZXh5T2ZDCndOSEJOOHBLTnNRdko5YjNueVJOWnBPV2xxSXJPWW5HUzVnUmJRemV4T3A2N1A5MHRBdytVcTlFblRHL3VkUGMKTjZYUC9DT2gwVW1GVnZzeG5kYTJBUmRJTC9uajJ3ZW11OWxFZWd3ekRCcklVdzJIeXJkVHE3N2phVlcwams1NgpMV3RKc0k4bHVwb1M5VlJrODlXRFRqWGl1ZW0rVkZRUXJsK3lNdkJEb0lHN2hsM2lURmtsdEhOdTlISmFGbFAwCi9QUDFvZTJkQWdNQkFBRUNnZ0VBWFV2N0YrQ0JicTdqS3JEdFpXYUp3YkFRYTlYZm11VmRlSEpaQmJvOE1GVlgKZTM2T2RpbzFqN1h2NzR4WWdtT3h6eFg0d2NOaGtQUG9Kb0JNa01QWVlYdllEdDFCN2tiSE41YnlZM1FMa2NKaQo2bnc1TXhhcUhaQVJRRGQwbHltbGNkMmVuQzd0SXdRb0R5T0xsMTM5akVLem1PSmJDWUlNQjNETlBLNTlycVhHClFKTTY0Ny9tVWkrTXFvU21pcmpGUm45MVU4enRSeVRpMzRvdks0OFN0WmxEOUdnYytMRGplcVVVTDNuSHFzaU4KUWJiOHpRQ3RweFd0OWprWFl1dnVUSi91dXRiUHVwQnI3RnVHSFQ0YXE3WWJNRnFvS0g1VjlCa1BtWlFseTZEagpzK1kvQmlITDZMbS81TC9NaXJ5MDZrUm1aaFRpc29ycnpiN3N3VWpOOVFLQmdRRHVJbXViRGdLZm1teWN5N0dmClpkUlJlTm1KU2xMNUVUeXVtcGxwajJ3QTVRc05TL2hrSFJPNzM0RGd2MGJ0WmRiQ3dsN3plNGZBZWZCUWtaczMKL2d4cGw1Z3hEK21NejNVa2Z0azBTQ090WjNCbHlPVC9ieno1R0xNckVQTzBXY0NubDFPcGQ1Z0pjWVc1emVCWgpQeW5EV2dLT3V6Q2dIYXJSME04YUdkaDFud0tCZ1FETlNiRlErc3BnbGZneGxyRWxFdnNqSjc2NWRNQk5mQlBVCitQc1VIQzdFY2FyS2hyY0w3ckwxajB4ei8zVEw4emVqWnR3RW0xSmNqQWRXY1htTDFuU052WDlvT2ZBaEpzazkKVXZRUGFFMjJSa3lFQTZpcFRQQkZkbXdwRjZPSHVNY0NNMm1MSytVdmFkZGNMQndoTVNjYy9OVEpqZkh5bHVHYwppVXdYMGZDN1F3S0JnRSt6NTQ0akYwK3lFTzQ5NHZwMXk2VmxMSEllRlQxVnZwaTJGK2pUM3hOQmxmeGlWQVcyCkViZk02OGJOWG9Ed2wvdmhzSVFQOFhURG0ySnNDYWFvK2lDUlk1ZndPbnd0cDRpS2lFcE9adHFRQjNlWjBNT0oKeUwrYXU4VUxUSFl0b0NTM3FvSExESEVFdFB4bVl0T2NKMjlCL2g4bG1mWE5XRElYa0dtdEF0MERBb0dCQUpLMwpGaWpmOC84dmIyQlJhRzBzc1p1Z2JpaXhEamJTZElJREo3NXBuZXI3cWFwd3VTV29CUEtHNVljSmpYbXRhNWcyCmpRd2x6YWtpMHFPdkdjVWRFZE96R1BsdVh2WHllR1NCZ3JmNFBZSUZuKzNCaDZybnQ5aU5HQ1FPSnV0NjNZL3YKR29GQ2I5dUE4MCtHbnR3Qit3ZzJrZ1V5a3paakt2N3JDUjBGQjkxdEFvR0JBTmh6emc3clpQU1pGbUVUeVB5ZwpLUWhEK1JKU1REazc5NXlEWWVYdFZ4RmdWL01sNGYrSjFjcjJiOEJBOFRYVGRVWDcvb2JMUHdWNVpPZnhxNm5LClNaZ1NJTU5UWEZndUZZUW5zOGlQSG5oL0g0SkZKZGRlS3RsdHBmVTRkRnY5eERBV3VTWGc4NFpEYVE4ZUpOZFYKT1JEdnhHU0EzYjFMZnphR3NrdFZidjJnCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0K

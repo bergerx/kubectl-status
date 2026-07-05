@@ -1,0 +1,39 @@
+
+Gateway/tls-gw-problems -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Class: eg
+  Accepted Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
+  Listeners:
+    tls-selfsigned: port=443/TLS, routes=1
+      TLS mode:Terminate, cert:Secret/selfsigned-tls
+      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+    tls-passthrough: port=444/TLS, routes=1
+      TLS mode:Passthrough
+      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+
+TLSRoute/tls-route-selfsigned -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Hostnames: selfsigned.example.com
+  Parents:
+    Gateway/tls-gw-problems [tls-selfsigned]
+  Rules:
+    → Service/tls-backend:443
+  Status:
+    Gateway/tls-gw-problems [tls-selfsigned] (gateway.envoyproxy.io/gatewayclass-controller)
+      Accepted Accepted, Route was valid for 1m
+
+TLSRoute/tls-route-passthrough -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Parents:
+    Gateway/tls-gw-problems [tls-passthrough]
+  Rules:
+    → Service/tls-backend:444
+  Status:
+    Gateway/tls-gw-problems [tls-passthrough] (gateway.envoyproxy.io/gatewayclass-controller)
+      Accepted Accepted, Route was valid for 1m
+
+Secret/selfsigned-tls -n default, created 1m ago
+  Certificate for CN=other.example.com · issued by CN=other.example.com
+    Self-signed: issuer and subject match, not issued by a separate CA
+    Valid 1m ago, expires 2126-06-10
+    Key: RSA · serial 459417690588134963926490921750614064410865316534

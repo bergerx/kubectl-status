@@ -1,0 +1,37 @@
+
+Gateway/eg -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Class: eg
+  Accepted Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
+  Listeners:
+    missing-secret: port=443/HTTPS, namespaces=Same, routes=0
+      TLS mode:Terminate, cert:Secret/does-not-exist
+      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+    wrong-type: port=444/HTTPS, namespaces=Same, routes=0
+      TLS mode:Terminate, cert:Secret/opaque-secret
+      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+    missing-keys: port=445/HTTPS, namespaces=Same, routes=0
+      TLS mode:Terminate, cert:Secret/incomplete-tls
+      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+    self-signed: port=446/HTTPS, namespaces=Same, routes=1
+      TLS mode:Terminate, cert:Secret/selfsigned-tls
+      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+    hostname-mismatch: port=447/HTTPS, host=wrong-host.example.com, namespaces=Same, routes=1
+      TLS mode:Terminate, cert:Secret/gateway-tls
+      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+
+Secret/opaque-secret -n default, created 1m ago
+
+Secret/incomplete-tls -n default, created 1m ago
+  Missing keys: tls.key
+
+Secret/selfsigned-tls -n default, created 1m ago
+  Certificate for CN=other.example.com · issued by CN=other.example.com
+    Self-signed: issuer and subject match, not issued by a separate CA
+    Valid 1m ago, expires 2126-06-10
+    Key: RSA · serial 459417690588134963926490921750614064410865316534
+
+Secret/gateway-tls -n default, created 1m ago
+  Certificate for CN=example.com · issued by CN=Test CA
+    Valid 1m ago, expires 2126-06-10
+    Key: RSA · serial 712137069015432309918504661311928280986348109454
