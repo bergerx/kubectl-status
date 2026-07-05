@@ -1,0 +1,12 @@
+
+ResourceQuota/compute-quota -n rq-test, created 1m ago
+  Current: Resource is current
+  Quota:
+    configmaps: 1/10[10%]
+    limits.cpu: 1/4[25%]
+    limits.memory: 536.8MB/4.2GB[12%]
+    persistentvolumeclaims: 0/4[0%]
+    pods: 1/10[10%]
+    requests.cpu: 0.5/2[25%]
+    requests.memory: 268.4MB/2.1GB[12%]
+    services.loadbalancers: 0/1[0%]

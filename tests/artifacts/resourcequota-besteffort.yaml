@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"ResourceQuota","metadata":{"annotations":{},"name":"besteffort-quota","namespace":"rq-test"},"spec":{"hard":{"pods":"5"},"scopes":["BestEffort"]}}
+  creationTimestamp: "2026-07-05T22:09:29Z"
+  name: besteffort-quota
+  namespace: rq-test
+  resourceVersion: "78223"
+  uid: b10ff231-16b9-431e-b2b6-eae395a155fc
+spec:
+  hard:
+    pods: "5"
+  scopes:
+  - BestEffort
+status:
+  hard:
+    pods: "5"
+  used:
+    pods: "0"

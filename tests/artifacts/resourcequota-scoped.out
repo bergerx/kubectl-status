@@ -1,0 +1,6 @@
+
+ResourceQuota/scoped-quota -n rq-test, created 1m ago
+  Current: Resource is current
+  Scope selector:
+    PriorityClass In high-priority
+  Quota: pods: 0/3[0%]
