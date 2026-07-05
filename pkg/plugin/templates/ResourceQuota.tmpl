@@ -8,23 +8,26 @@
     {{- with .Spec.scopes }}
         {{- "Scopes" | bold | nindent 2 }}: {{ join ", " . | cyan }}
     {{- end }}
-    {{- with .Spec.scopeSelector.matchExpressions }}
-        {{- "Scope selector" | bold | nindent 2 }}:
-        {{- range . }}
-            {{- printf "%s %s" .scopeName .operator | nindent 4 }}
-            {{- with .values }} {{ join "," . | cyan }}{{ end }}
+    {{- with .Spec.scopeSelector }}
+        {{- with .matchExpressions }}
+            {{- "Scope selector" | bold | nindent 2 }}:
+            {{- range . }}
+                {{- printf "%s %s" .scopeName .operator | nindent 4 }}
+                {{- with .values }} {{ join "," . | cyan }}{{ end }}
+            {{- end }}
         {{- end }}
     {{- end }}
-    {{- $hard := .Status.hard | default dict }}
-    {{- $used := .Status.used | default dict }}
+    {{- $status := .Status | default dict }}
+    {{- $hard := $status.hard | default dict }}
+    {{- $used := $status.used | default dict }}
     {{- with $hard }}
         {{- $lines := list }}
         {{- range $key, $hardStr := . }}
             {{- $usedStr := index $used $key | default "0" }}
-            {{- $hardVal := $hardStr | quantityToFloat64 }}
-            {{- $usedVal := $usedStr | quantityToFloat64 }}
+            {{- $hardVal := $hardStr | toString | quantityToFloat64 }}
+            {{- $usedVal := $usedStr | toString | quantityToFloat64 }}
             {{- $valStr := "" }}
-            {{- if or (hasSuffix "memory" $key) (hasSuffix "storage" $key) }}
+            {{- if or (hasSuffix "memory" $key) (hasSuffix "storage" $key) (contains "hugepages" $key) }}
                 {{- $valStr = printf "%s/%s" ($usedVal | humanizeSI "B") ($hardVal | humanizeSI "B") }}
             {{- else }}
                 {{- $valStr = printf "%s/%s" ($usedVal | printf "%g") ($hardVal | printf "%g") }}
