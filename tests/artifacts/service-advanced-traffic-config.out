@@ -1,0 +1,11 @@
+
+Service/svc-advanced-traffic-config -n kubectl-status-svc-test, created 1m ago
+  Current: Service is ready
+  Traffic policy: external=Local (healthCheckNodePort:32501), internal=Local
+  Session affinity: ClientIP (timeout 10800s)
+  Source ranges: 10.0.0.0/8, 172.16.0.0/12
+  External IPs: 203.0.113.10
+  LoadBalancer class: example.com/custom-lb
+  Traffic distribution: PreferSameZone
+  Publishes not-ready addresses: endpoints are included before passing readiness checks.
+  Missing Endpoint: Service has no matching endpoint.

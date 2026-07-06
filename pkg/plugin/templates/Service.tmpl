@@ -12,52 +12,94 @@
             {{- if $index }}, {{ end }}{{ with $port.nodePort }}{{ . | toString | cyan }}{{ else }}{{ "auto" | yellow }}{{ end }}{{ with $port.name }} ({{ . }}){{ end }}
         {{- end }}
     {{- end }}
-    {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
-    {{- if $slices }}
-        {{- if hasKey (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
-            , last endpoint change was {{ index (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" | colorAgo }}{{ agoSuffix }}
+    {{- $slices := list }}
+    {{- if ne .Spec.type "ExternalName" }}
+        {{- $slices = .KubeGetEndpointSlicesForService .Namespace .Name }}
+        {{- if $slices }}
+            {{- if hasKey (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
+                , last endpoint change was {{ index (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" | colorAgo }}{{ agoSuffix }}
+            {{- end}}
         {{- end}}
-    {{- end}}
+    {{- end }}
     {{- template "kstatus_summary" . }}
     {{- template "application_details" . }}
-    {{- $hasAnyEndpoints := false }}
-    {{- $hasReadyEndpoints := false }}
-    {{- range $slices }}
-        {{- range (.Object.endpoints | default list) }}
-            {{- $hasAnyEndpoints = true }}
-            {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{- $hasReadyEndpoints = true }}{{- end }}
-        {{- end }}
-    {{- end }}
-    {{- if not $slices }}
-  {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
-    {{- else if not $hasAnyEndpoints }}
-  {{ "No matching pods" | red | bold }}: Service selector either doesn't match any Pods or the Service's targetPort doesn't match the Pod's port.
+    {{- template "service_traffic_config" . }}
+    {{- if eq .Spec.type "ExternalName" }}
+  {{ "ExternalName" | bold }}: DNS CNAME to {{ .Spec.externalName | cyan }} (no cluster endpoints)
     {{- else }}
+        {{- $hasAnyEndpoints := false }}
+        {{- $hasReadyEndpoints := false }}
         {{- range $slices }}
-            {{- $ports := .Object.ports }}
             {{- range (.Object.endpoints | default list) }}
-                {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}
-  Ready: {{ template "endpoint_slice_endpoint" (dict "endpoint" . "ports" $ports) }}
-                {{- end }}
+                {{- $hasAnyEndpoints = true }}
+                {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{- $hasReadyEndpoints = true }}{{- end }}
             {{- end }}
         {{- end }}
-        {{- if not $hasReadyEndpoints }}
+        {{- if not $slices }}
+  {{ "Missing Endpoint" | red | bold }}: Service has no matching endpoint.
+        {{- else if not $hasAnyEndpoints }}
+  {{ "No matching pods" | red | bold }}: Service selector either doesn't match any Pods or the Service's targetPort doesn't match the Pod's port.
+        {{- else }}
+            {{- range $slices }}
+                {{- $ports := .Object.ports }}
+                {{- range (.Object.endpoints | default list) }}
+                    {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}
+  Ready: {{ template "endpoint_slice_endpoint" (dict "endpoint" . "ports" $ports) }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+            {{- if not $hasReadyEndpoints }}
   {{ "Outage" | red | bold }}: This service doesn't match any Ready pods.
-        {{- end }}
-        {{- range $slices }}
-            {{- $ports := .Object.ports }}
-            {{- range (.Object.endpoints | default list) }}
-                {{- if and (hasKey (.conditions | default dict) "ready") (not .conditions.ready) }}
+            {{- end }}
+            {{- range $slices }}
+                {{- $ports := .Object.ports }}
+                {{- range (.Object.endpoints | default list) }}
+                    {{- if and (hasKey (.conditions | default dict) "ready") (not .conditions.ready) }}
   {{ "NotReady" | red | bold }}: {{ template "endpoint_slice_endpoint" (dict "endpoint" . "ports" $ports) }}
+                    {{- end }}
                 {{- end }}
             {{- end }}
         {{- end }}
     {{- end }}
+    {{- template "conditions_summary" . }}
     {{- template "recent_updates" . }}
     {{- template "matching_ingresses" . }}
     {{- template "matching_routes" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
+{{- end -}}
+
+{{- define "service_traffic_config" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- $etp := .Spec.externalTrafficPolicy | default "Cluster" }}
+    {{- $itp := .Spec.internalTrafficPolicy | default "Cluster" }}
+    {{- $showEtp := ne $etp "Cluster" }}
+    {{- $showItp := ne $itp "Cluster" }}
+    {{- if or $showEtp $showItp }}
+        {{- "Traffic policy" | bold | nindent 2 }}:
+        {{- if $showEtp }} external={{ $etp | cyan }}{{ with .Spec.healthCheckNodePort }} (healthCheckNodePort:{{ . | toString | cyan }}){{ end }}{{ end }}
+        {{- if and $showEtp $showItp }},{{ end }}
+        {{- if $showItp }} internal={{ $itp | cyan }}{{ end }}
+    {{- end }}
+    {{- if eq .Spec.sessionAffinity "ClientIP" }}
+        {{- "Session affinity" | bold | nindent 2 }}: {{ "ClientIP" | cyan }}
+        {{- with .Spec.sessionAffinityConfig.clientIP.timeoutSeconds }} (timeout {{ . | toString | cyan }}s){{ end }}
+    {{- end }}
+    {{- with .Spec.loadBalancerSourceRanges }}
+        {{- "Source ranges" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- with .Spec.externalIPs }}
+        {{- "External IPs" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- with .Spec.loadBalancerClass }}
+        {{- "LoadBalancer class" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- with .Spec.trafficDistribution }}
+        {{- "Traffic distribution" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- if .Spec.publishNotReadyAddresses }}
+        {{- "Publishes not-ready addresses" | yellow | nindent 2 }}: endpoints are included before passing readiness checks.
+    {{- end }}
 {{- end -}}
 
 {{- define "matching_ingresses" }}
