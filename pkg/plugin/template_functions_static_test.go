@@ -163,6 +163,86 @@ func TestSortMapListByKeysValueIsStableOnTies(t *testing.T) {
 	}
 }
 
+func TestTaintsNotToleratedByPod(t *testing.T) {
+	noSchedule := map[string]interface{}{"key": "dedicated", "value": "gpu", "effect": "NoSchedule"}
+	noExecute := map[string]interface{}{"key": "node.kubernetes.io/not-ready", "effect": "NoExecute"}
+	preferNoSchedule := map[string]interface{}{"key": "spot", "effect": "PreferNoSchedule"}
+
+	tests := []struct {
+		name        string
+		nodeTaints  []interface{}
+		tolerations []interface{}
+		want        []interface{}
+	}{
+		{
+			name:        "no taints",
+			nodeTaints:  nil,
+			tolerations: nil,
+			want:        nil,
+		},
+		{
+			name:        "PreferNoSchedule is never a blocker",
+			nodeTaints:  []interface{}{preferNoSchedule},
+			tolerations: nil,
+			want:        nil,
+		},
+		{
+			name:        "untolerated NoSchedule blocks",
+			nodeTaints:  []interface{}{noSchedule},
+			tolerations: nil,
+			want:        []interface{}{noSchedule},
+		},
+		{
+			name:       "Equal toleration with matching key/value tolerates",
+			nodeTaints: []interface{}{noSchedule},
+			tolerations: []interface{}{
+				map[string]interface{}{"key": "dedicated", "operator": "Equal", "value": "gpu", "effect": "NoSchedule"},
+			},
+			want: nil,
+		},
+		{
+			name:       "Equal toleration with mismatched value does not tolerate",
+			nodeTaints: []interface{}{noSchedule},
+			tolerations: []interface{}{
+				map[string]interface{}{"key": "dedicated", "operator": "Equal", "value": "cpu", "effect": "NoSchedule"},
+			},
+			want: []interface{}{noSchedule},
+		},
+		{
+			name:       "Exists toleration with matching key tolerates regardless of value",
+			nodeTaints: []interface{}{noSchedule},
+			tolerations: []interface{}{
+				map[string]interface{}{"key": "dedicated", "operator": "Exists", "effect": "NoSchedule"},
+			},
+			want: nil,
+		},
+		{
+			name:       "Exists toleration with empty key tolerates everything of that effect",
+			nodeTaints: []interface{}{noExecute},
+			tolerations: []interface{}{
+				map[string]interface{}{"operator": "Exists", "effect": "NoExecute"},
+			},
+			want: nil,
+		},
+		{
+			name:       "toleration with wrong effect does not tolerate",
+			nodeTaints: []interface{}{noSchedule},
+			tolerations: []interface{}{
+				map[string]interface{}{"key": "dedicated", "operator": "Equal", "value": "gpu", "effect": "NoExecute"},
+			},
+			want: []interface{}{noSchedule},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := taintsNotToleratedByPod(tt.nodeTaints, tt.tolerations)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("taintsNotToleratedByPod() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAgoSuffix(t *testing.T) {
 	viper.Set("absolute-time", false)
 	if got := agoSuffix(); got != " ago" {

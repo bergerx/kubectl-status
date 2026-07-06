@@ -15,10 +15,12 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
 	"github.com/bergerx/kubectl-status/pkg/plugin"
@@ -34,6 +36,57 @@ type cmdTest struct {
 	stderrRegex     string // Regex
 	stderrEqual     string // Exact
 	wantErr         string // Contains
+}
+
+// createBadNode creates a synthetic Node (no real kubelet backs it) that's cordoned, tainted,
+// and reporting NotReady/MemoryPressure -- everything pod_node_problems/pod_node_problem_flags
+// are meant to surface. It registers cleanup and returns the Node's name.
+func createBadNode(t *testing.T, clientset *kubernetes.Clientset) string {
+	t.Helper()
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "kubectl-status-test-bad-node-",
+		},
+		Spec: corev1.NodeSpec{
+			Unschedulable: true,
+			Taints: []corev1.Taint{
+				{Key: "dedicated", Value: "gpu", Effect: corev1.TaintEffectNoSchedule},
+			},
+		},
+	}
+	node, err := clientset.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		clientset.CoreV1().Nodes().Delete(context.TODO(), node.Name, metav1.DeleteOptions{})
+	})
+	// The real node-lifecycle-controller starts reconciling this Node as soon as it's created
+	// (e.g. adding its own NotReady taint), racing our status update -- retry on conflict.
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest, err := clientset.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		latest.Status.Conditions = []corev1.NodeCondition{
+			{
+				Type:               corev1.NodeReady,
+				Status:             corev1.ConditionFalse,
+				Reason:             "KubeletNotReady",
+				Message:            "kubelet is not ready",
+				LastTransitionTime: metav1.Now(),
+			},
+			{
+				Type:               corev1.NodeMemoryPressure,
+				Status:             corev1.ConditionTrue,
+				Reason:             "KubeletHasInsufficientMemory",
+				Message:            "kubelet has insufficient memory available",
+				LastTransitionTime: metav1.Now(),
+			},
+		}
+		_, err = clientset.CoreV1().Nodes().UpdateStatus(context.TODO(), latest, metav1.UpdateOptions{})
+		return err
+	})
+	require.NoError(t, err)
+	return node.Name
 }
 
 func nodeNameModifier(stdout string) string {
@@ -371,6 +424,81 @@ Secret\/child -n default, created 1m ago by Secret/owner
 `,
 		}
 		test.assert(t, nil) // to update the out files check /tests/artifacts/README.md
+	})
+	t.Run("pod on a cordoned node with an untolerated taint and a bad condition", func(t *testing.T) {
+		viperTestHack(t)
+		nodeName := createBadNode(t, clientset)
+
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-on-bad-node",
+				Namespace: "default",
+			},
+			Spec: corev1.PodSpec{
+				NodeName:   nodeName,
+				Containers: []corev1.Container{{Name: "app", Image: "busybox"}},
+			},
+		}
+		_, err := clientset.CoreV1().Pods("default").Create(context.TODO(), pod, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+
+		cmdTest{
+			args: []string{"pod/pod-on-bad-node", "--include-events=false", "--v", "5"},
+			stdoutRegex: `(?ms)` +
+				`Node/` + nodeName + ` cordoned \(unschedulable\)\n` +
+				`.*Ready KubeletNotReady, kubelet is not ready.*\n` +
+				`.*MemoryPressure KubeletHasInsufficientMemory, kubelet has insufficient memory available.*\n` +
+				`.*taint dedicated=gpu:NoSchedule \(not tolerated\)`,
+		}.assert(t, nil)
+	})
+	t.Run("workload's matching pod on a cordoned node surfaces a compact node-problem flag", func(t *testing.T) {
+		viperTestHack(t)
+		nodeName := createBadNode(t, clientset)
+
+		// The Pod's spec.nodeName is set directly at creation, bypassing the scheduler, so it
+		// never actually runs -- ReplicaSet.tmpl's selector-based pod lookup only needs matching
+		// labels, not real ownership, to include it in the health summary.
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-on-bad-node-for-rs",
+				Namespace: "default",
+				Labels:    map[string]string{"app": "kubectl-status-test-bad-rs"},
+			},
+			Spec: corev1.PodSpec{
+				NodeName:   nodeName,
+				Containers: []corev1.Container{{Name: "app", Image: "busybox"}},
+			},
+		}
+		_, err := clientset.CoreV1().Pods("default").Create(context.TODO(), pod, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+
+		one := int32(1)
+		rs := &appsv1.ReplicaSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "bad-rs",
+				Namespace: "default",
+			},
+			Spec: appsv1.ReplicaSetSpec{
+				Replicas: &one,
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "kubectl-status-test-bad-rs"}},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "kubectl-status-test-bad-rs"}},
+					Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: "busybox"}}},
+				},
+			},
+		}
+		_, err = clientset.AppsV1().ReplicaSets("default").Create(context.TODO(), rs, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.AppsV1().ReplicaSets("default").Delete(context.TODO(), rs.Name, metav1.DeleteOptions{})
+
+		cmdTest{
+			args: []string{"rs/bad-rs", "--include-events=false", "--v", "5"},
+			stdoutRegex: `(?ms)` +
+				`Pod/pod-on-bad-node-for-rs -n default[^\n]*, node cordoned, node NotReady, ` +
+				`node MemoryPressure, untolerated node taint`,
+		}.assert(t, nil)
 	})
 	t.Run("sts-with-ingress", func(t *testing.T) {
 		viperTestHack(t)

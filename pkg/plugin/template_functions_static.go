@@ -83,6 +83,7 @@ func funcMap() template.FuncMap {
 		"forOrSince":                forOrSince,
 		"relativeTime":              relativeTime,
 		"labelSelector":             labelSelector,
+		"taintsNotToleratedByPod":   taintsNotToleratedByPod,
 		"cronNextTime":              cronNextTime,
 		"parseTLSSecretCertificate": parseTLSSecretCertificate,
 		"certificatesInSecret":      certificatesInSecret,
@@ -460,6 +461,67 @@ func labelSelector(s map[string]interface{}) string {
 		return fmt.Sprintf("%v", s)
 	}
 	return metav1.FormatLabelSelector(ls)
+}
+
+// tolerationMatchesTaint reports whether a single toleration covers a single taint, following
+// https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/#concepts
+func tolerationMatchesTaint(toleration, taint map[string]interface{}) bool {
+	if effect, _ := toleration["effect"].(string); effect != "" {
+		taintEffect, _ := taint["effect"].(string)
+		if effect != taintEffect {
+			return false
+		}
+	}
+	key, _ := toleration["key"].(string)
+	operator, _ := toleration["operator"].(string)
+	if operator == "" {
+		operator = "Equal"
+	}
+	taintKey, _ := taint["key"].(string)
+	switch operator {
+	case "Exists":
+		return key == "" || key == taintKey
+	case "Equal":
+		if key != taintKey {
+			return false
+		}
+		value, _ := toleration["value"].(string)
+		taintValue, _ := taint["value"].(string)
+		return value == taintValue
+	default:
+		return false
+	}
+}
+
+// taintsNotToleratedByPod returns the subset of nodeTaints that block scheduling or trigger
+// eviction (NoSchedule/NoExecute) and aren't covered by any of the pod's tolerations.
+// PreferNoSchedule is a soft preference, not a blocker, and is intentionally excluded.
+func taintsNotToleratedByPod(nodeTaints, tolerations []interface{}) (result []interface{}) {
+	for _, t := range nodeTaints {
+		taint, ok := t.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		effect, _ := taint["effect"].(string)
+		if effect != "NoSchedule" && effect != "NoExecute" {
+			continue
+		}
+		tolerated := false
+		for _, tol := range tolerations {
+			toleration, ok := tol.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if tolerationMatchesTaint(toleration, taint) {
+				tolerated = true
+				break
+			}
+		}
+		if !tolerated {
+			result = append(result, taint)
+		}
+	}
+	return result
 }
 
 // parseTLSSecretCertificate inspects a Secret expected to be type kubernetes.io/tls and
