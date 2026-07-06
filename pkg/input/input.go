@@ -211,22 +211,6 @@ func (r *ResourceRepo) DynamicObject(gvr schema.GroupVersionResource, namespace 
 	return u.Object, nil
 }
 
-func (r *ResourceRepo) DynamicObjects(gvr schema.GroupVersionResource, namespace string) (Objects, error) {
-	unstructuredList, err := r.dynamicClient.Resource(gvr).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	var objects Objects
-	for _, unstructuredObj := range unstructuredList.Items {
-		unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(unstructuredObj.Object)
-		if err != nil {
-			return nil, err
-		}
-		objects = append(objects, unstructuredObj)
-	}
-	return objects, nil
-}
-
 func (r *ResourceRepo) GVRFor(resourceOrKindArg string) (schema.GroupVersionResource, error) {
 	mapping, err := r.mappingFor(resourceOrKindArg)
 	if err != nil {
