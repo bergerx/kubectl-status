@@ -141,6 +141,9 @@ func (r *ResourceRepo) Objects(namespace string, args []string, labelSelector st
 		return entry.objects, entry.err
 	}
 	unstructuredObjects, err := r.objectsUncached(namespace, args, labelSelector)
+	if r.objectsCache == nil {
+		r.objectsCache = make(map[string]objectsCacheEntry)
+	}
 	r.objectsCache[cacheKey] = objectsCacheEntry{objects: unstructuredObjects, err: err}
 	return unstructuredObjects, err
 }
@@ -314,6 +317,9 @@ func (r *ResourceRepo) EndpointSlices(namespace string) (*discoveryv1.EndpointSl
 		return entry.list, entry.err
 	}
 	list, err := r.kubernetesClientSet.DiscoveryV1().EndpointSlices(namespace).List(context.TODO(), metav1.ListOptions{})
+	if r.endpointSlicesCache == nil {
+		r.endpointSlicesCache = make(map[string]endpointSlicesCacheEntry)
+	}
 	r.endpointSlicesCache[namespace] = endpointSlicesCacheEntry{list: list, err: err}
 	return list, err
 }
@@ -326,6 +332,9 @@ func (r *ResourceRepo) KubeGetNodeStatsSummary(nodeName string) (Object, error) 
 		return entry.summary, entry.err
 	}
 	nodeStatsSummary, err := r.kubeGetNodeStatsSummaryUncached(nodeName)
+	if r.nodeStatsSummaryCache == nil {
+		r.nodeStatsSummaryCache = make(map[string]nodeStatsSummaryCacheEntry)
+	}
 	r.nodeStatsSummaryCache[nodeName] = nodeStatsSummaryCacheEntry{summary: nodeStatsSummary, err: err}
 	return nodeStatsSummary, err
 }
