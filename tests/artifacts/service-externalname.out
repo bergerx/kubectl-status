@@ -1,0 +1,4 @@
+
+Service/svc-externalname -n kubectl-status-svc-test, created 1m ago
+  Current: Service is ready
+  ExternalName: DNS CNAME to example.database.svc.cluster.local (no cluster endpoints)
