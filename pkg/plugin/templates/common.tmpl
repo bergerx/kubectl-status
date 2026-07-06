@@ -124,7 +124,11 @@
 
 {{- define "condition_summary" }}
     {{- $notHealthy := not (isStatusConditionHealthy .) }}
-    {{- .type | redIf $notHealthy | bold }}
+    {{- if .type }}
+        {{- .type | redIf $notHealthy | bold }}
+    {{- else }}
+        {{- "<empty condition type!>" | red | bold }}
+    {{- end }}
     {{- with .reason }} {{ . | redBoldIf $notHealthy }}{{ end }}
     {{- with .message }}, {{ . | redIf $notHealthy }}{{ end }}
     {{- with .lastTransitionTime }} {{ forOrSince }} {{ . | colorAgo }}{{ end }}
