@@ -12,8 +12,9 @@
             {{- if $index }}, {{ end }}{{ with $port.nodePort }}{{ . | toString | cyan }}{{ else }}{{ "auto" | yellow }}{{ end }}{{ with $port.name }} ({{ . }}){{ end }}
         {{- end }}
     {{- end }}
+    {{- $slices := list }}
     {{- if ne .Spec.type "ExternalName" }}
-        {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
+        {{- $slices = .KubeGetEndpointSlicesForService .Namespace .Name }}
         {{- if $slices }}
             {{- if hasKey (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
                 , last endpoint change was {{ index (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" | colorAgo }}{{ agoSuffix }}
@@ -26,7 +27,6 @@
     {{- if eq .Spec.type "ExternalName" }}
   {{ "ExternalName" | bold }}: DNS CNAME to {{ .Spec.externalName | cyan }} (no cluster endpoints)
     {{- else }}
-        {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
         {{- $hasAnyEndpoints := false }}
         {{- $hasReadyEndpoints := false }}
         {{- range $slices }}
