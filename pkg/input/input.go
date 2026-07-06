@@ -208,11 +208,7 @@ func (r *ResourceRepo) DynamicObject(gvr schema.GroupVersionResource, namespace 
 	if err != nil {
 		return nil, err
 	}
-	object, err := runtime.DefaultUnstructuredConverter.ToUnstructured(u.Object)
-	if err != nil {
-		return nil, err
-	}
-	return object, nil
+	return u.Object, nil
 }
 
 func (r *ResourceRepo) DynamicObjects(gvr schema.GroupVersionResource, namespace string) (Objects, error) {
