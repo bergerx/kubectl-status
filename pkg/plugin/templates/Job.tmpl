@@ -41,6 +41,27 @@
             {{- end }}
         {{- end }}
     {{- end }}
+    {{- if and .Status.active (not ($.Config.GetBool "shallow")) }}
+        {{- /* A Job's own status has no signal for "why hasn't this started" -- only its Pods do.
+               pod_health_summary carries the Node-side hint (cordoned/tainted/unhealthy node),
+               which is usually the answer for a Pod stuck Pending. */ -}}
+        {{- $pendingPods := list }}
+        {{- range $.KubeGetByLabelsMap $.Namespace "pods" (dict "job-name" .Name) }}
+            {{- if eq .Status.phase "Pending" }}
+                {{- $pendingPods = append $pendingPods . }}
+            {{- end }}
+        {{- end }}
+        {{- with $pendingPods }}
+            {{- "Pending pods" | yellow | bold | nindent 2 }}:
+            {{- range . }}
+                {{- if $.Config.GetBool "deep" }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- else }}
+                    {{- $.Include "pod_health_summary" . | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
     {{- template "conditions_summary" . }}

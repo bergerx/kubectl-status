@@ -5,6 +5,7 @@
     {{- template "finalizer_details_on_termination" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
+    {{- template "selector_with_health_summary" . }}
     {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
            and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
     {{- $injectedStatus := .Status }}

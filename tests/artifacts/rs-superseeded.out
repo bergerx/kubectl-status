@@ -1,4 +1,5 @@
 
 ReplicaSet/httpbin-deployment-79f6dfbb9 -n test1, created 1m ago by Deployment/httpbin-deployment, gen:4
   Current: ReplicaSet is available. Replicas: 0
+  Selector: pod-template-hash=79f6dfbb9,run=httpbin-deployment
   Old: This ReplicaSet is likely replaced by a new one, check Owner Reference resources.

@@ -218,6 +218,39 @@
         {{- if .ready }}{{ $ready = add1 $ready }}{{ end }}
     {{- end }}
     {{- if $total }}, {{ if lt $ready $total }}{{ printf "%d/%d" $ready $total | red | bold }}{{ else }}{{ printf "%d/%d" $ready $total | green }}{{ end }} ready{{ end }}
+    {{- $nodeProblems := .Include "pod_node_problem_flags" . }}
+    {{- with $nodeProblems }}, {{ . }}{{ end }}
+{{- end }}
+
+{{- define "pod_node_problem_flags" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects the Pod RenderableObject. Returns a compact, comma-joined inline fragment (no
+           leading separator) naming Node-side problems that explain trouble with this Pod --
+           unhealthy conditions, cordoned state, untolerated taints -- or "" when there's nothing
+           to report. Used where a single-line-per-pod summary is needed; see "pod_node_problems"
+           in Pod.tmpl for the fuller per-condition block used on the Pod's own render. */ -}}
+    {{- $nodeName := get .Spec "nodeName" }}
+    {{- if $nodeName }}
+        {{- $node := .KubeGetFirst "" "Node" $nodeName }}
+        {{- if $node.Object }}
+            {{- $flags := list }}
+            {{- if $node.Spec.unschedulable }}{{ $flags = append $flags ("node cordoned" | red | bold) }}{{ end }}
+            {{- range $node.StatusConditions }}
+                {{- if not (isStatusConditionHealthy .) }}
+                    {{- /* Bare condition types read "abnormal-true" (e.g. MemoryPressure), except
+                           Ready, which is "normal-true" -- name that one explicitly so plain-text
+                           output doesn't read as healthy when it isn't. */ -}}
+                    {{- $label := .type }}
+                    {{- if eq $label "Ready" }}{{ $label = "NotReady" }}{{ end }}
+                    {{- $flags = append $flags (printf "node %s" $label | red | bold) }}
+                {{- end }}
+            {{- end }}
+            {{- if taintsNotToleratedByPod ($node.Spec.taints | default list) (.Spec.tolerations | default list) }}
+                {{- $flags = append $flags ("untolerated node taint" | red | bold) }}
+            {{- end }}
+            {{- join ", " $flags }}
+        {{- end }}
+    {{- end }}
 {{- end }}
 
 {{- define "service_health_summary" }}

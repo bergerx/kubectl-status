@@ -5,6 +5,7 @@
     {{- template "finalizer_details_on_termination" . }}
     {{- template "application_details" . }}
     {{- .Include "pod_conditions_summary" . | nindent 2 }}
+    {{- template "pod_node_problems" . }}
     {{- $secCtx := .Spec.securityContext | default dict }}
     {{- $seccomp := index $secCtx "seccompProfile" | default dict }}
     {{- if eq (index $seccomp "type" | default "") "Unconfined" }}
@@ -57,6 +58,44 @@
     {{- with .Status.qosClass }} {{ if ($.Object | default dict).inline }}{{ . }}{{ else }}{{ . | colorKeyword }}{{ end }}{{ end }}
     {{- with .Status.message }}, message: {{ . }}{{ end }}
 {{- end -}}
+
+{{- define "pod_node_problems" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects the Pod RenderableObject. Fetches the Node this Pod is (or would be) scheduled
+           to and surfaces only what explains trouble with this Pod: unhealthy conditions,
+           cordoned/unschedulable state, and taints this Pod doesn't tolerate. Full Node capacity,
+           labels, etc. are intentionally omitted here -- see Node.tmpl for the complete render. */ -}}
+    {{- $nodeName := get .Spec "nodeName" }}
+    {{- if $nodeName }}
+        {{- $node := .KubeGetFirst "" "Node" $nodeName }}
+        {{- if $node.Object }}
+            {{- if .Config.GetBool "deep" }}
+                {{- "Node:" | bold | nindent 2 }}
+                {{- .IncludeRenderableObject $node | nindent 4 }}
+            {{- else }}
+                {{- $unhealthy := list }}
+                {{- range $node.StatusConditions }}
+                    {{- if not (isStatusConditionHealthy .) }}
+                        {{- $unhealthy = append $unhealthy . }}
+                    {{- end }}
+                {{- end }}
+                {{- $blockingTaints := taintsNotToleratedByPod ($node.Spec.taints | default list) (.Spec.tolerations | default list) }}
+                {{- $cordoned := $node.Spec.unschedulable }}
+                {{- if or $unhealthy $blockingTaints $cordoned }}
+                    {{- "Node/" | bold | nindent 2 }}{{ $nodeName | cyan }}
+                    {{- if $cordoned }} {{ "cordoned (unschedulable)" | red | bold }}{{ end }}
+                    {{- range $unhealthy }}
+                        {{- $.Include "condition_summary" . | nindent 4 }}
+                    {{- end }}
+                    {{- range $blockingTaints }}
+                        {{- $val := "" }}{{ with .value }}{{ $val = printf "=%s" . }}{{ end }}
+                        {{- printf "taint %s%s:%s (not tolerated)" .key $val .effect | red | bold | nindent 4 }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
 
 {{- define "pod_init_containers" }}
     {{- /* Expects a dict "pod" (Pod RenderableObject) "podPullSecretsBroken" (bool) */ -}}

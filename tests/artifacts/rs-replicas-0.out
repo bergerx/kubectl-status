@@ -2,4 +2,5 @@
 ReplicaSet/httpbin-deployment-79f6dfbb9 -n test1, created 1m ago by Deployment/httpbin-deployment, gen:1
   InProgress: Labelled: 0/3
     Reconciling: LessLabelled, Labelled: 0/3
+  Selector: pod-template-hash=79f6dfbb9,run=httpbin-deployment
   Outage: ReplicaSet has no Ready replicas.
