@@ -65,16 +65,37 @@ func NewResourceRepo(factory util.Factory) (*ResourceRepo, error) {
 		return nil, err
 	}
 	return &ResourceRepo{
-		f:                   factory,
-		dynamicClient:       dynamicClient,
-		kubernetesClientSet: kubernetesClientSet,
+		f:                     factory,
+		dynamicClient:         dynamicClient,
+		kubernetesClientSet:   kubernetesClientSet,
+		nodeStatsSummaryCache: make(map[string]nodeStatsSummaryCacheEntry),
+		objectsCache:          make(map[string]objectsCacheEntry),
+		endpointSlicesCache:   make(map[string]endpointSlicesCacheEntry),
 	}, nil
 }
 
 type ResourceRepo struct {
-	f                   util.Factory
-	dynamicClient       dynamic.Interface
-	kubernetesClientSet *kubernetes.Clientset
+	f                     util.Factory
+	dynamicClient         dynamic.Interface
+	kubernetesClientSet   *kubernetes.Clientset
+	nodeStatsSummaryCache map[string]nodeStatsSummaryCacheEntry
+	objectsCache          map[string]objectsCacheEntry
+	endpointSlicesCache   map[string]endpointSlicesCacheEntry
+}
+
+type nodeStatsSummaryCacheEntry struct {
+	summary Object
+	err     error
+}
+
+type objectsCacheEntry struct {
+	objects Objects
+	err     error
+}
+
+type endpointSlicesCacheEntry struct {
+	list *discoveryv1.EndpointSliceList
+	err  error
 }
 
 func (r *ResourceRepo) newBaseBuilder() *resource.Builder {
@@ -115,6 +136,19 @@ func (r *ResourceRepo) CLIQueryResults(args []string) *resource.Result {
 }
 
 func (r *ResourceRepo) Objects(namespace string, args []string, labelSelector string) (Objects, error) {
+	cacheKey := strings.Join([]string{namespace, strings.Join(args, "\x1f"), labelSelector}, "\x1e")
+	if entry, ok := r.objectsCache[cacheKey]; ok {
+		return entry.objects, entry.err
+	}
+	unstructuredObjects, err := r.objectsUncached(namespace, args, labelSelector)
+	if r.objectsCache == nil {
+		r.objectsCache = make(map[string]objectsCacheEntry)
+	}
+	r.objectsCache[cacheKey] = objectsCacheEntry{objects: unstructuredObjects, err: err}
+	return unstructuredObjects, err
+}
+
+func (r *ResourceRepo) objectsUncached(namespace string, args []string, labelSelector string) (Objects, error) {
 	builder := r.newBaseBuilder().
 		NamespaceParam(namespace).
 		ResourceTypeOrNameArgs(true, args...).
@@ -279,13 +313,33 @@ func (r *ResourceRepo) Service(namespace, name string) (*corev1.Service, error) 
 }
 
 func (r *ResourceRepo) EndpointSlices(namespace string) (*discoveryv1.EndpointSliceList, error) {
-	return r.kubernetesClientSet.DiscoveryV1().EndpointSlices(namespace).List(context.TODO(), metav1.ListOptions{})
+	if entry, ok := r.endpointSlicesCache[namespace]; ok {
+		return entry.list, entry.err
+	}
+	list, err := r.kubernetesClientSet.DiscoveryV1().EndpointSlices(namespace).List(context.TODO(), metav1.ListOptions{})
+	if r.endpointSlicesCache == nil {
+		r.endpointSlicesCache = make(map[string]endpointSlicesCacheEntry)
+	}
+	r.endpointSlicesCache[namespace] = endpointSlicesCacheEntry{list: list, err: err}
+	return list, err
 }
 
 // KubeGetNodeStatsSummary returns this structure
 // > kubectl get --raw /api/v1/nodes/{nodeName}/proxy/stats/summary
 // The endpoint that this function uses will be disabled soon: https://github.com/kubernetes/kubernetes/issues/68522
 func (r *ResourceRepo) KubeGetNodeStatsSummary(nodeName string) (Object, error) {
+	if entry, ok := r.nodeStatsSummaryCache[nodeName]; ok {
+		return entry.summary, entry.err
+	}
+	nodeStatsSummary, err := r.kubeGetNodeStatsSummaryUncached(nodeName)
+	if r.nodeStatsSummaryCache == nil {
+		r.nodeStatsSummaryCache = make(map[string]nodeStatsSummaryCacheEntry)
+	}
+	r.nodeStatsSummaryCache[nodeName] = nodeStatsSummaryCacheEntry{summary: nodeStatsSummary, err: err}
+	return nodeStatsSummary, err
+}
+
+func (r *ResourceRepo) kubeGetNodeStatsSummaryUncached(nodeName string) (Object, error) {
 	getBytes, err := r.kubernetesClientSet.CoreV1().RESTClient().Get().
 		Resource("nodes").
 		SubResource("proxy").
