@@ -500,6 +500,50 @@ Secret\/child -n default, created 1m ago by Secret/owner
 				`node MemoryPressure, untolerated node taint`,
 		}.assert(t, nil)
 	})
+	t.Run("deployment rollout with --include-rollout-diffs shows the diff between revisions", func(t *testing.T) {
+		viperTestHack(t)
+		name := "rollout-diff-test"
+		one := int32(1)
+		dep := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: "default",
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &one,
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
+					Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx:1.25"}}},
+				},
+			},
+		}
+		_, err := clientset.AppsV1().Deployments("default").Create(context.TODO(), dep, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.AppsV1().Deployments("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
+		waitFor(t, "deployment/"+name, "condition=Available")
+
+		// Update the image so a second ReplicaSet revision is created, giving --include-rollout-diffs
+		// something to diff.
+		dep, err = clientset.AppsV1().Deployments("default").Get(context.TODO(), name, metav1.GetOptions{})
+		require.NoError(t, err)
+		dep.Spec.Template.Spec.Containers[0].Image = "nginx:1.26"
+		_, err = clientset.AppsV1().Deployments("default").Update(context.TODO(), dep, metav1.UpdateOptions{})
+		require.NoError(t, err)
+		rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", "default", "--timeout=2m")
+		output, err := rolloutCmd.CombinedOutput()
+		t.Logf("rollout status for %s: %s", name, output)
+		require.NoError(t, err)
+
+		stdout, _, err := executeCMD(t, []string{"deployment/" + name, "--include-rollout-diffs", "--include-events=false", "--v", "5"})
+		require.NoError(t, err)
+		// The order in which the two ReplicaSet revisions are diffed (and so which side
+		// gets "-" vs "+") isn't guaranteed, so just assert both images show up as changed
+		// lines rather than pinning down a direction.
+		assert.Contains(t, stdout, "Diff:")
+		assert.Regexp(t, `(?m)^\s*[-+]\s+"image": "nginx:1\.25",\s*$`, stdout)
+		assert.Regexp(t, `(?m)^\s*[-+]\s+"image": "nginx:1\.26",\s*$`, stdout)
+	})
 	t.Run("sts-with-ingress", func(t *testing.T) {
 		viperTestHack(t)
 		// using sts here as the pod name is predictable in that case, not true for deployments and ds
