@@ -559,12 +559,12 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.pod.regex",
 		}.assert(t, nodeNameModifier)
 		cmdTest{
-			args:        []string{"service/sts-with-ingress", "--include-events=false", "--v", "5"},
-			stdoutRegex: `(?m)Ingresses matching this Service:\n    Ingress/sts-with-ingress -n default, sts-with-ingress\.com, [^\n]*Current`,
+			args:            []string{"service/sts-with-ingress", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.service.regex",
 		}.assert(t, nil)
 		cmdTest{
-			args:        []string{"service/sts-with-ingress", "--include-events=false", "--deep", "--v", "5"},
-			stdoutRegex: `(?m)Ingresses matching this Service:\n    Ingress/sts-with-ingress -n default, created 1m ago, gen:1\n      Current: Resource is current`,
+			args:            []string{"service/sts-with-ingress", "--include-events=false", "--deep", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.service-deep.regex",
 		}.assert(t, nil)
 	})
 	t.Run("svc-with-httproute", func(t *testing.T) {

@@ -1,0 +1,2 @@
+Ingresses matching this Service:
+    Ingress/sts-with-ingress -n default, sts-with-ingress\.com, [^\n]*Current
