@@ -79,3 +79,12 @@ new-artifact:
 	go run ./cmd --test-hack $(CMD) --shallow > "tests/artifacts/$(FILE).out"
 	@echo "Created: tests/artifacts/$(FILE).yaml tests/artifacts/$(FILE).out"
 	@echo "Run 'make test' then 'git add' the new files"
+
+#--------------------------
+# Demo Screenshots
+#--------------------------
+.PHONY: screenshots
+screenshots:
+	# Regenerates assets/*.png from a live cluster. Requires kubectl pointed at a
+	# disposable/dev cluster (e.g. minikube) and freeze (charmbracelet/freeze) on PATH.
+	./hack/generate-screenshots.sh

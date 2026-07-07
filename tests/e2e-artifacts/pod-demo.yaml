@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pod-demo-data
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pod-demo
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: pod-demo
+    app.kubernetes.io/name: nginx
+    helm.sh/chart: nginx-15.5.1
+  annotations:
+    meta.helm.sh/release-name: pod-demo
+    meta.helm.sh/release-namespace: kubectl-status-screenshots
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pod-demo
+  template:
+    metadata:
+      labels:
+        app: pod-demo
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/instance: pod-demo
+        app.kubernetes.io/name: nginx
+        helm.sh/chart: nginx-15.5.1
+      annotations:
+        meta.helm.sh/release-name: pod-demo
+        meta.helm.sh/release-namespace: kubectl-status-screenshots
+    spec:
+      initContainers:
+      - name: init-config
+        image: busybox:latest
+        command: ["sh", "-c", "echo ready > /work/ready"]
+        volumeMounts:
+        - name: work
+          mountPath: /work
+      - name: log-shipper
+        image: busybox:latest
+        restartPolicy: Always
+        command: ["sh", "-c", "while true; do sleep 5; done"]
+        resources:
+          requests:
+            cpu: 5m
+            memory: 8Mi
+      containers:
+      - name: nginx
+        image: nginx:1.28
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+        readinessProbe:
+          # Deliberately points at a path nginx 404s on, so this probe stays
+          # failing (pod runs but never turns Ready) to demonstrate the
+          # probe-failure rendering, while livenessProbe below stays healthy
+          # so the container isn't repeatedly restarted.
+          httpGet:
+            path: /definitely-missing-page
+            port: 80
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+        volumeMounts:
+        - name: work
+          mountPath: /work
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: work
+        emptyDir: {}
+      - name: data
+        persistentVolumeClaim:
+          claimName: pod-demo-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pod-demo
+spec:
+  selector:
+    app: pod-demo
+  ports:
+  - port: 80
+    targetPort: 80
