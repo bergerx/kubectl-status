@@ -269,6 +269,30 @@ func (r *ResourceRepo) ObjectEvents(u *unstructured.Unstructured) (*corev1.Event
 	return eventList, nil
 }
 
+// PodContainerLogs returns up to tailLines lines of log output for the named container in the
+// named pod. When previous is true it fetches logs from the container's previous (terminated)
+// instance, equivalent to `kubectl logs --previous`.
+func (r *ResourceRepo) PodContainerLogs(namespace, podName, containerName string, previous bool, tailLines int64) (string, error) {
+	opts := &corev1.PodLogOptions{
+		Container: containerName,
+		Previous:  previous,
+		TailLines: &tailLines,
+	}
+	data, err := r.kubernetesClientSet.CoreV1().Pods(namespace).GetLogs(podName, opts).DoRaw(context.TODO())
+	if err != nil {
+		return "", err
+	}
+	// Some container runtimes/kubelet versions respond 200 OK with this plain-text message
+	// as the body (instead of a proper HTTP error) when the requested container instance's
+	// logs are no longer available (e.g. garbage collected). Surface that as an error rather
+	// than as log content.
+	logs := string(data)
+	if strings.HasPrefix(logs, "unable to retrieve container logs for ") {
+		return "", fmt.Errorf("%s", strings.TrimSpace(logs))
+	}
+	return logs, nil
+}
+
 func (r *ResourceRepo) DynamicObject(gvr schema.GroupVersionResource, namespace string, name string) (Object, error) {
 	u, err := r.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {

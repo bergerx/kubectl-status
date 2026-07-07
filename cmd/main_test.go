@@ -788,6 +788,34 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			}
 		})
 	})
+	t.Run("pod-container-logs", func(t *testing.T) {
+		// --shallow (used by the offline golden-file tests) makes KubeGetContainerLogs a
+		// no-op, so this e2e suite is the only place that exercises real log fetching: a
+		// terminated init container with output (current-state logs), a terminated init
+		// container with no output (yellow "no logs to show"), a crashlooping regular
+		// container that has recently restarted (previous-instance logs), and a healthy
+		// sidecar plus a healthy regular container that should show neither.
+		//
+		// withinLastHour compares real container timestamps against nowFunc, so the
+		// suite-wide fixed clock (testHack, frozen at 2026-06-30) has to be swapped for the
+		// real wall clock for this render, or a live restart looks like it happened in the
+		// future and never matches.
+		viperTestHack(t)
+		plugin.SetNowFunc(time.Now)
+		t.Cleanup(func() {
+			plugin.SetNowFunc(func() time.Time { return time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC) })
+		})
+		applyManifest(t, "e2e-artifacts/pod-container-logs.yaml")
+		// Wait for a stable Waiting(CrashLoopBackOff) state rather than just restartCount > 0:
+		// the container's current state otherwise flips between Waiting and Terminated(Error)
+		// as the kubelet retries, which would make the golden regex flaky.
+		waitForContainerWaitingReason(t, "pod/e2e-pod-container-logs", "crasher", "CrashLoopBackOff")
+
+		cmdTest{
+			args:            []string{"pod/e2e-pod-container-logs", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-container-logs.regex",
+		}.assert(t, nil)
+	})
 	t.Run("node correctly resolves pod metrics for pods in multiple namespaces via the batched PodMetrics lookup", func(t *testing.T) {
 		// Node.tmpl loops over every pod on the node (KubeGetNonTerminatedPodsOnNode) and looks
 		// up each one's PodMetrics via KubeGetPodMetrics, which fetches metrics.k8s.io once for
@@ -874,6 +902,28 @@ func waitForImagePullBackoff(t *testing.T, resource string) {
 		time.Sleep(2 * time.Second)
 	}
 	t.Fatalf("timed out waiting for %s to report ImagePullBackOff/ErrImagePull", resource)
+}
+
+// waitForContainerRestart polls until the named container in the resource reports a
+// restartCount greater than zero.
+// waitForContainerWaitingReason polls until the named container in the resource reports the
+// given waiting-state reason. Used instead of a plain restart-count check because a crashlooping
+// container's current state flips between Waiting(CrashLoopBackOff) and Terminated(Error) as the
+// kubelet retries, so waiting for a stable, specific state avoids a flaky render.
+func waitForContainerWaitingReason(t *testing.T, resource, containerName, reason string) {
+	t.Helper()
+	jsonpath := fmt.Sprintf(`{.status.containerStatuses[?(@.name=="%s")].state.waiting.reason}`, containerName)
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		cmd := exec.Command("kubectl", "get", resource, "-o", "jsonpath="+jsonpath)
+		output, err := cmd.CombinedOutput()
+		if err == nil && strings.TrimSpace(string(output)) == reason {
+			t.Logf("%s container %s reached waiting reason %s", resource, containerName, reason)
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for %s container %s to report waiting reason %s", resource, containerName, reason)
 }
 
 // waitForPodMetrics polls the metrics.k8s.io API directly until it has scraped data for the

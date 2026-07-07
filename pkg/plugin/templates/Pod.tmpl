@@ -110,7 +110,7 @@
         {{- range $containerStatus := . }}
             {{- $containerSpec := $pod.Spec.initContainers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
             {{- $containerKubeletStats := $podStatsSummary.containers | default list | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
-            {{- $pod.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec "containerStats" $containerKubeletStats "includeAllVolumes" ($pod.Config.GetBool "include-all-volumes") "sidecar" (eq ($containerSpec.restartPolicy | default "") "Always") "podImagePullSecrets" $pod.Spec.imagePullSecrets "podPullSecretsBroken" $.podPullSecretsBroken) | nindent 4 }}
+            {{- $pod.Include "container_status_summary" (dict "pod" $pod "containerStatus" $containerStatus "containerSpec" $containerSpec "containerStats" $containerKubeletStats "includeAllVolumes" ($pod.Config.GetBool "include-all-volumes") "sidecar" (eq ($containerSpec.restartPolicy | default "") "Always") "podImagePullSecrets" $pod.Spec.imagePullSecrets "podPullSecretsBroken" $.podPullSecretsBroken) | nindent 4 }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -135,7 +135,8 @@
             {{- $containerKubeletStats := $podStatsSummary.containers | default list | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
             {{- if ($podMetrics.Object | default dict).containers }}
                 {{- $containerMetrics := $podMetrics.Object.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
-                {{- $containerStatusSummaryDict = dict "containerStatus" $containerStatus
+                {{- $containerStatusSummaryDict = dict "pod" $pod
+                                                       "containerStatus" $containerStatus
                                                        "containerMetrics" $containerMetrics
                                                        "containerSpec" $containerSpec
                                                        "containerStats" $containerKubeletStats
@@ -146,7 +147,8 @@
                                                        "podPullSecretsBroken" $.podPullSecretsBroken
                 }}
             {{- else }}
-                {{- $containerStatusSummaryDict = dict "containerStatus" $containerStatus
+                {{- $containerStatusSummaryDict = dict "pod" $pod
+                                                       "containerStatus" $containerStatus
                                                        "containerSpec" $containerSpec
                                                        "containerStats" $containerKubeletStats
                                                        "defaultContainer" (eq $containerStatus.name $defaultContainer)
@@ -419,6 +421,7 @@
 
 {{- define "container_status_summary" }}
     {{- /* Expects to get a map with these keys (and also their initContainer counterparts):
+           * pod (required): Pod RenderableObject, used to fetch logs
            * containerStatus (required): Pod.status.containerStatuses[name=container]
            * containerMetrics (optional): PodMetrics.containers[name=container]
            * containerSpec (optional): Pod.spec.containers[name=container]
@@ -446,6 +449,28 @@
     {{- if .containerMetrics }}{{ if .containerMetrics.usage.cpu }}{{ "usage" | nindent 2 }} {{ template "container_usage" . }}{{ end }}{{ end }}
     {{- with .containerStatus.lastState }}
         {{- "previously:" | yellow | nindent 2 }} {{ template "container_state_summary" . }}
+    {{- end }}
+    {{- with .containerStatus.state.terminated }}
+        {{- if and .startedAt (not ($.pod.Config.GetBool "shallow")) }}
+            {{- $logs := $.pod.KubeGetContainerLogs $.pod.Namespace $.pod.Name $.containerStatus.name false 20 }}
+            {{- if $logs }}
+                {{- "Last 20 lines of logs:" | bold | nindent 2 }}
+                {{- $logs | nindent 4 }}
+            {{- else }}
+                {{- ", " }}{{ "has no logs" | yellow }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .containerStatus.lastState.terminated }}
+        {{- if and (withinLastHour .finishedAt) (not ($.pod.Config.GetBool "shallow")) }}
+            {{- $logs := $.pod.KubeGetContainerLogs $.pod.Namespace $.pod.Name $.containerStatus.name true 20 }}
+            {{- if $logs }}
+                {{- "Last 20 lines of logs from previous instance (restarted within last hour):" | bold | nindent 2 }}
+                {{- $logs | nindent 4 }}
+            {{- else }}
+                {{- ", " }}{{ "has no previous logs" | yellow }}
+            {{- end }}
+        {{- end }}
     {{- end }}
     {{- $runningNotReady := and .containerStatus.state.running (not .containerStatus.ready) }}
     {{- $hasRestarts := gt (.containerStatus.restartCount | int) 0 }}
@@ -560,7 +585,7 @@
         {{- "Debug containers:" | nindent 2 }}
         {{- range $containerStatus := . }}
             {{- $containerSpec := $pod.Spec.ephemeralContainers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
-            {{- $pod.Include "container_status_summary" (dict "containerStatus" $containerStatus "containerSpec" $containerSpec "podImagePullSecrets" $pod.Spec.imagePullSecrets "podPullSecretsBroken" $.podPullSecretsBroken) | nindent 4 }}
+            {{- $pod.Include "container_status_summary" (dict "pod" $pod "containerStatus" $containerStatus "containerSpec" $containerSpec "podImagePullSecrets" $pod.Spec.imagePullSecrets "podPullSecretsBroken" $.podPullSecretsBroken) | nindent 4 }}
             {{- with $containerSpec.targetContainerName }}
                 {{- "targeting:" | bold | nindent 6 }} {{ . | cyan }}
             {{- end }}

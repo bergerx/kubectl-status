@@ -364,6 +364,25 @@ func (r RenderableObject) KubeGetNodeMetrics(name string) RenderableObject {
 	return r.newRenderableObject(nil)
 }
 
+// KubeGetContainerLogs returns up to tailLines lines of log output for the named container in the
+// named pod. When previous is true it fetches logs from the container's previous (terminated)
+// instance, equivalent to `kubectl logs --previous`. Returns an empty string if there are no logs
+// or the fetch fails.
+func (r RenderableObject) KubeGetContainerLogs(namespace, podName, containerName string, previous bool, tailLines int) string {
+	if viper.GetBool("shallow") {
+		return ""
+	}
+	klog.V(5).InfoS("called KubeGetContainerLogs",
+		"namespace", namespace, "podName", podName, "containerName", containerName, "previous", previous)
+	logs, err := r.repo.PodContainerLogs(namespace, podName, containerName, previous, int64(tailLines))
+	if err != nil {
+		klog.V(3).ErrorS(err, "failed to get container logs",
+			"namespace", namespace, "podName", podName, "containerName", containerName, "previous", previous)
+		return ""
+	}
+	return strings.TrimRight(logs, "\n")
+}
+
 // KubeGetNonTerminatedPodsOnNode returns details of all pods which are not in terminal status
 func (r RenderableObject) KubeGetNonTerminatedPodsOnNode(nodeName string) (podList []RenderableObject) {
 	if viper.GetBool("shallow") {
