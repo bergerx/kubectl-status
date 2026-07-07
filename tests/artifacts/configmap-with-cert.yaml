@@ -1,0 +1,32 @@
+apiVersion: v1
+data:
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIDEzCCAfugAwIBAgIUJK9TbxnGrUNyo2HJEDUfJLr2ww8wDQYJKoZIhvcNAQEL
+    BQAwGTEXMBUGA1UEAwwOdGxzLWJhY2tlbmQtY2EwHhcNMjYwNzA3MjIwMDMwWhcN
+    MjcwNzA3MjIwMDMwWjAZMRcwFQYDVQQDDA50bHMtYmFja2VuZC1jYTCCASIwDQYJ
+    KoZIhvcNAQEBBQADggEPADCCAQoCggEBAKYp21ZpHHai1JiISmhwBHe5sICA8mTa
+    UWaOs2cAxGRiX0C0Ln8uBeyB6kkHkdXkhCq9sKKkGy0sICQ5PSGAzuhkpd/5OezJ
+    zo2yfBY0FKgoKI3sVlN7Mf1YFZLQxJgHS2RPfNuB1E0GvIPok84up7JA6R87EdRU
+    KUCia9i+yA+APojPQeczkzz1EbkTtT+Y6h7Av/n4xoaF/3mxM5amZvcXjDHsup/M
+    oW5l1jPfQNTyV83RCPb48DRGyUY4r/0zbPdRfnWz7Z64XDt3L0BDJ40J27li5S6V
+    FG8V67G54nMnlJziUuCH4663N5T+HVsZBb70ptiupfB9QJt0eyOVrl8CAwEAAaNT
+    MFEwHQYDVR0OBBYEFJTGCAEk5dXbUpw4W5sGwqzbc68BMB8GA1UdIwQYMBaAFJTG
+    CAEk5dXbUpw4W5sGwqzbc68BMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEL
+    BQADggEBAI8podF6dSVr6MsPmrDDnhj9JL6tYq9QJGe23TkOv1/m5QTwUXE7h5Er
+    ZIdulW5Tdy77dYOdOFtuNtS+0P7HwpCvF4uN6vAiFJPqYqs7AcN8k2/LuOWuDc4F
+    opO3zZlPZnmpZCg5+R9yzaens9SMZjvMYB5d5qzTY+8acG9unZ8Db/r70gh4tC3G
+    rzEdwusa8Zb2c+4/vtyAVLreZt3IKgmJbpu3prxqPEbup6ta7Cx4dYeDXzTioh6a
+    d3iitoQRL/3p0CFRdYwNnrJMfkTFyke1md+05hAKF2njFT1tpeNTg4toMKKtAwHq
+    GfXN+ntx4pYiTHq4kJP6obHk5ctsc6w=
+    -----END CERTIFICATE-----
+kind: ConfigMap
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","data":{"ca.crt":"-----BEGIN CERTIFICATE-----\nMIIDEzCCAfugAwIBAgIUJK9TbxnGrUNyo2HJEDUfJLr2ww8wDQYJKoZIhvcNAQEL\nBQAwGTEXMBUGA1UEAwwOdGxzLWJhY2tlbmQtY2EwHhcNMjYwNzA3MjIwMDMwWhcN\nMjcwNzA3MjIwMDMwWjAZMRcwFQYDVQQDDA50bHMtYmFja2VuZC1jYTCCASIwDQYJ\nKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKYp21ZpHHai1JiISmhwBHe5sICA8mTa\nUWaOs2cAxGRiX0C0Ln8uBeyB6kkHkdXkhCq9sKKkGy0sICQ5PSGAzuhkpd/5OezJ\nzo2yfBY0FKgoKI3sVlN7Mf1YFZLQxJgHS2RPfNuB1E0GvIPok84up7JA6R87EdRU\nKUCia9i+yA+APojPQeczkzz1EbkTtT+Y6h7Av/n4xoaF/3mxM5amZvcXjDHsup/M\noW5l1jPfQNTyV83RCPb48DRGyUY4r/0zbPdRfnWz7Z64XDt3L0BDJ40J27li5S6V\nFG8V67G54nMnlJziUuCH4663N5T+HVsZBb70ptiupfB9QJt0eyOVrl8CAwEAAaNT\nMFEwHQYDVR0OBBYEFJTGCAEk5dXbUpw4W5sGwqzbc68BMB8GA1UdIwQYMBaAFJTG\nCAEk5dXbUpw4W5sGwqzbc68BMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEL\nBQADggEBAI8podF6dSVr6MsPmrDDnhj9JL6tYq9QJGe23TkOv1/m5QTwUXE7h5Er\nZIdulW5Tdy77dYOdOFtuNtS+0P7HwpCvF4uN6vAiFJPqYqs7AcN8k2/LuOWuDc4F\nopO3zZlPZnmpZCg5+R9yzaens9SMZjvMYB5d5qzTY+8acG9unZ8Db/r70gh4tC3G\nrzEdwusa8Zb2c+4/vtyAVLreZt3IKgmJbpu3prxqPEbup6ta7Cx4dYeDXzTioh6a\nd3iitoQRL/3p0CFRdYwNnrJMfkTFyke1md+05hAKF2njFT1tpeNTg4toMKKtAwHq\nGfXN+ntx4pYiTHq4kJP6obHk5ctsc6w=\n-----END CERTIFICATE-----\n"},"kind":"ConfigMap","metadata":{"annotations":{},"name":"backend-ca-cert","namespace":"default"}}
+  creationTimestamp: "2026-07-07T22:00:30Z"
+  name: backend-ca-cert
+  namespace: default
+  resourceVersion: "1017"
+  uid: 010b7760-1d5c-478f-afae-dd0ac56233f3

@@ -1,0 +1,6 @@
+
+CertificateSigningRequest/my-svc3.default, created 1m ago
+  Signer: example.com/serving · requested by minikube-user
+  Usages: digital signature, key encipherment, server auth
+  Requested for CN=my-pod2.default.pod.cluster.local
+    Key: RSA

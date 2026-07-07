@@ -88,6 +88,9 @@ func funcMap() template.FuncMap {
 		"withinLastHour":            withinLastHour,
 		"parseTLSSecretCertificate": parseTLSSecretCertificate,
 		"certificatesInSecret":      certificatesInSecret,
+		"certificatesInConfigMap":   certificatesInConfigMap,
+		"certificateInCSR":          certificateInCSR,
+		"certificateRequestInCSR":   certificateRequestInCSR,
 	}
 }
 
@@ -649,6 +652,65 @@ func parseTLSSecretCertificate(secret RenderableObject, hostname string) map[str
 	return result
 }
 
+// newCertificateEntry returns the zero-value result map for a single ".crt" entry, keyed the
+// same way regardless of which resource (Secret or ConfigMap) it was scanned from.
+func newCertificateEntry(name string) map[string]interface{} {
+	return map[string]interface{}{
+		"Name":         name,
+		"ParseError":   "",
+		"Subject":      "",
+		"Issuer":       "",
+		"SerialNumber": "",
+		"NotBefore":    time.Time{},
+		"NotAfter":     time.Time{},
+		"AltDNSNames":  []string{},
+		"IPAddresses":  []string{},
+		"KeyAlgorithm": "",
+		"SelfSigned":   false,
+	}
+}
+
+// parseCertificateBytesInto PEM-decodes and parses decoded as an X.509 certificate, filling
+// entry's fields in place, or setting entry["ParseError"] on failure. name is only used to
+// identify the source key in error messages.
+func parseCertificateBytesInto(entry map[string]interface{}, name string, decoded []byte) {
+	block, _ := pem.Decode(decoded)
+	if block == nil {
+		entry["ParseError"] = fmt.Sprintf("failed to PEM-decode %s", name)
+		return
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		entry["ParseError"] = fmt.Sprintf("failed to parse certificate in %s: %v", name, err)
+		return
+	}
+
+	var ipAddresses []string
+	for _, ip := range cert.IPAddresses {
+		ipAddresses = append(ipAddresses, ip.String())
+	}
+	var altDNSNames []string
+	for _, dns := range cert.DNSNames {
+		if dns != cert.Subject.CommonName {
+			altDNSNames = append(altDNSNames, dns)
+		}
+	}
+
+	entry["Subject"] = cert.Subject.String()
+	entry["Issuer"] = cert.Issuer.String()
+	entry["SerialNumber"] = cert.SerialNumber.String()
+	entry["NotBefore"] = cert.NotBefore
+	entry["NotAfter"] = cert.NotAfter
+	if len(altDNSNames) > 0 {
+		entry["AltDNSNames"] = altDNSNames
+	}
+	if len(ipAddresses) > 0 {
+		entry["IPAddresses"] = ipAddresses
+	}
+	entry["KeyAlgorithm"] = cert.PublicKeyAlgorithm.String()
+	entry["SelfSigned"] = bytes.Equal(cert.RawIssuer, cert.RawSubject)
+}
+
 // certificatesInSecret scans a Secret's data for keys ending in ".crt", regardless of the
 // Secret's declared type, and parses each as an X.509 certificate. This covers secrets that
 // don't use the standard kubernetes.io/tls layout, e.g. cert-manager's internal CA secrets,
@@ -672,19 +734,7 @@ func certificatesInSecret(secret RenderableObject) []map[string]interface{} {
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		entry := map[string]interface{}{
-			"Name":         key,
-			"ParseError":   "",
-			"Subject":      "",
-			"Issuer":       "",
-			"SerialNumber": "",
-			"NotBefore":    time.Time{},
-			"NotAfter":     time.Time{},
-			"AltDNSNames":  []string{},
-			"IPAddresses":  []string{},
-			"KeyAlgorithm": "",
-			"SelfSigned":   false,
-		}
+		entry := newCertificateEntry(key)
 		results = append(results, entry)
 
 		encoded, ok := data[key].(string)
@@ -697,38 +747,148 @@ func certificatesInSecret(secret RenderableObject) []map[string]interface{} {
 			entry["ParseError"] = fmt.Sprintf("failed to base64-decode %s: %v", key, err)
 			continue
 		}
-		block, _ := pem.Decode(decoded)
-		if block == nil {
-			entry["ParseError"] = fmt.Sprintf("failed to PEM-decode %s", key)
-			continue
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			entry["ParseError"] = fmt.Sprintf("failed to parse certificate in %s: %v", key, err)
-			continue
-		}
-
-		var ipAddresses []string
-		for _, ip := range cert.IPAddresses {
-			ipAddresses = append(ipAddresses, ip.String())
-		}
-		var altDNSNames []string
-		for _, dns := range cert.DNSNames {
-			if dns != cert.Subject.CommonName {
-				altDNSNames = append(altDNSNames, dns)
-			}
-		}
-
-		entry["Subject"] = cert.Subject.String()
-		entry["Issuer"] = cert.Issuer.String()
-		entry["SerialNumber"] = cert.SerialNumber.String()
-		entry["NotBefore"] = cert.NotBefore
-		entry["NotAfter"] = cert.NotAfter
-		entry["AltDNSNames"] = altDNSNames
-		entry["IPAddresses"] = ipAddresses
-		entry["KeyAlgorithm"] = cert.PublicKeyAlgorithm.String()
-		entry["SelfSigned"] = bytes.Equal(cert.RawIssuer, cert.RawSubject)
+		parseCertificateBytesInto(entry, key, decoded)
 	}
 
 	return results
+}
+
+// certificatesInConfigMap scans a ConfigMap's data and binaryData for keys ending in ".crt"
+// and parses each as an X.509 certificate. Unlike Secret, ConfigMap.data values are plain
+// text (not base64) while ConfigMap.binaryData values are base64, matching the Kubernetes API
+// convention for the two fields.
+func certificatesInConfigMap(configMap RenderableObject) []map[string]interface{} {
+	var results []map[string]interface{}
+	if configMap.Object == nil {
+		return results
+	}
+
+	type source struct {
+		key     string
+		decoded []byte
+		err     error
+	}
+	var sources []source
+
+	if data, ok := configMap.Object["data"].(map[string]interface{}); ok {
+		for key, v := range data {
+			if !strings.HasSuffix(key, ".crt") {
+				continue
+			}
+			s, ok := v.(string)
+			if !ok {
+				sources = append(sources, source{key: key, err: fmt.Errorf("%s is not a string", key)})
+				continue
+			}
+			sources = append(sources, source{key: key, decoded: []byte(s)})
+		}
+	}
+	if binaryData, ok := configMap.Object["binaryData"].(map[string]interface{}); ok {
+		for key, v := range binaryData {
+			if !strings.HasSuffix(key, ".crt") {
+				continue
+			}
+			s, ok := v.(string)
+			if !ok {
+				sources = append(sources, source{key: key, err: fmt.Errorf("%s is not a string", key)})
+				continue
+			}
+			decoded, err := base64.StdEncoding.DecodeString(s)
+			if err != nil {
+				sources = append(sources, source{key: key, err: fmt.Errorf("failed to base64-decode %s: %v", key, err)})
+				continue
+			}
+			sources = append(sources, source{key: key, decoded: decoded})
+		}
+	}
+	sort.Slice(sources, func(i, j int) bool { return sources[i].key < sources[j].key })
+
+	for _, s := range sources {
+		entry := newCertificateEntry(s.key)
+		results = append(results, entry)
+		if s.err != nil {
+			entry["ParseError"] = s.err.Error()
+			continue
+		}
+		parseCertificateBytesInto(entry, s.key, s.decoded)
+	}
+
+	return results
+}
+
+// certificateInCSR parses a CertificateSigningRequest's status.certificate (base64-encoded PEM,
+// populated once a signer issues the certificate) as an X.509 certificate. Returns nil if the
+// CSR hasn't been issued yet.
+func certificateInCSR(csr RenderableObject) map[string]interface{} {
+	certEncoded, ok := csr.Status()["certificate"].(string)
+	if !ok || certEncoded == "" {
+		return nil
+	}
+
+	entry := newCertificateEntry("certificate")
+	decoded, err := base64.StdEncoding.DecodeString(certEncoded)
+	if err != nil {
+		entry["ParseError"] = fmt.Sprintf("failed to base64-decode certificate: %v", err)
+		return entry
+	}
+	parseCertificateBytesInto(entry, "certificate", decoded)
+	return entry
+}
+
+// certificateRequestInCSR parses a CertificateSigningRequest's spec.request (a base64-encoded
+// PKCS#10 CSR) to surface what's actually being requested -- the subject, SANs, and key
+// algorithm -- which is available for Pending and Denied requests too, unlike
+// certificateInCSR's status.certificate.
+func certificateRequestInCSR(csr RenderableObject) map[string]interface{} {
+	result := map[string]interface{}{
+		"ParseError":   "",
+		"Subject":      "",
+		"AltDNSNames":  []string{},
+		"IPAddresses":  []string{},
+		"KeyAlgorithm": "",
+	}
+
+	encoded, ok := csr.Spec()["request"].(string)
+	if !ok || encoded == "" {
+		result["ParseError"] = "spec.request is empty"
+		return result
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to base64-decode request: %v", err)
+		return result
+	}
+	block, _ := pem.Decode(decoded)
+	if block == nil {
+		result["ParseError"] = "failed to PEM-decode request"
+		return result
+	}
+	csrRequest, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to parse certificate request: %v", err)
+		return result
+	}
+
+	var ipAddresses []string
+	for _, ip := range csrRequest.IPAddresses {
+		ipAddresses = append(ipAddresses, ip.String())
+	}
+	var altDNSNames []string
+	for _, dns := range csrRequest.DNSNames {
+		if dns != csrRequest.Subject.CommonName {
+			altDNSNames = append(altDNSNames, dns)
+		}
+	}
+	if altDNSNames == nil {
+		altDNSNames = []string{}
+	}
+	if ipAddresses == nil {
+		ipAddresses = []string{}
+	}
+
+	result["Subject"] = csrRequest.Subject.String()
+	result["AltDNSNames"] = altDNSNames
+	result["IPAddresses"] = ipAddresses
+	result["KeyAlgorithm"] = csrRequest.PublicKeyAlgorithm.String()
+	return result
 }
