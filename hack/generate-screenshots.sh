@@ -20,26 +20,58 @@ if ! command -v freeze >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! fc-list 2>/dev/null | grep -qi "jetbrains mono"; then
-  echo "'${font_family}' not found by fontconfig; downloading and registering it for the current user..."
-  font_dir="${HOME}/.local/share/fonts"
-  mkdir -p "${font_dir}"
-  curl -sSL -o "${font_dir}/JetBrainsMono-Regular.ttf" \
-    "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Regular.ttf"
-  fc-cache -f "${font_dir}"
-  if ! fc-list 2>/dev/null | grep -qi "jetbrains mono"; then
-    echo "Failed to register '${font_family}' with fontconfig; freeze would silently render blank/tofu images. Aborting." >&2
-    exit 1
+if [ "$(uname)" = "Darwin" ]; then
+  # macOS has no fontconfig; dropping a .ttf into ~/Library/Fonts is enough,
+  # no cache step needed.
+  font_dir="${HOME}/Library/Fonts"
+  if ! find /System/Library/Fonts /Library/Fonts "${font_dir}" -iname "JetBrainsMono-Regular.ttf" 2>/dev/null | grep -q .; then
+    echo "'${font_family}' not found; downloading it for the current user..."
+    mkdir -p "${font_dir}"
+    curl -sSL -o "${font_dir}/JetBrainsMono-Regular.ttf" \
+      "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Regular.ttf"
   fi
+elif command -v fc-list >/dev/null 2>&1; then
+  if ! fc-list 2>/dev/null | grep -qi "jetbrains mono"; then
+    echo "'${font_family}' not found by fontconfig; downloading and registering it for the current user..."
+    font_dir="${HOME}/.local/share/fonts"
+    mkdir -p "${font_dir}"
+    curl -sSL -o "${font_dir}/JetBrainsMono-Regular.ttf" \
+      "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Regular.ttf"
+    if command -v fc-cache >/dev/null 2>&1; then
+      fc-cache -f "${font_dir}"
+    fi
+    if ! fc-list 2>/dev/null | grep -qi "jetbrains mono"; then
+      echo "Failed to register '${font_family}' with fontconfig; freeze would silently render blank/tofu images. Aborting." >&2
+      exit 1
+    fi
+  fi
+else
+  echo "fontconfig (fc-list) not found; skipping the font check -- freeze will silently render tofu boxes instead of text if '${font_family}' isn't already installed." >&2
 fi
 
 context="$(kubectl config current-context)"
+
+is_minikube=false
+metrics_server_already_enabled=false
+if command -v minikube >/dev/null 2>&1 && [ "${context}" = "minikube" ]; then
+  is_minikube=true
+  if minikube addons list 2>/dev/null | grep -q "metrics-server.*enabled"; then
+    metrics_server_already_enabled=true
+  fi
+fi
+
 if [ "${ASSUME_KUBECONFIG_IS_DISPOSABLE:-}" != "true" ]; then
   cat <<EOF
 This will, on kubectl context '${context}':
   - create and delete a namespace
+EOF
+  if [ "${is_minikube}" = "true" ] && [ "${metrics_server_already_enabled}" = "false" ]; then
+    cat <<EOF
   - enable the minikube 'metrics-server' addon, then disable it again when done
     (cluster-wide, affects other workloads using it in the meantime)
+EOF
+  fi
+  cat <<EOF
   - inject a made-up "RebootScheduled" status condition onto whatever node the
     demo pod lands on, to demonstrate the node-problem flag (no taint or
     cordon -- doesn't affect scheduling), and remove it again in cleanup
@@ -55,7 +87,8 @@ fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ns="kubectl-status-screenshots"
-bin="$(mktemp -d)/kubectl-status"
+tmp_dir="$(mktemp -d)"
+bin="${tmp_dir}/kubectl-status"
 assets="${repo_root}/assets"
 
 echo "Building kubectl-status..."
@@ -64,6 +97,7 @@ go build -o "${bin}" "${repo_root}/cmd"
 node_name=""
 
 cleanup() {
+  rm -rf "${tmp_dir}"
   if [ -n "${node_name}" ]; then
     echo "Removing the injected RebootScheduled condition from Node/${node_name}..."
     # $patch: delete is the strategic-merge-patch directive for removing a
@@ -72,15 +106,23 @@ cleanup() {
       '{"status": {"conditions": [{"$patch": "delete", "type": "RebootScheduled"}]}}' \
       >/dev/null 2>&1 || true
   fi
-  echo "Disabling metrics-server addon..."
-  minikube addons disable metrics-server >/dev/null 2>&1 || true
+  if [ "${is_minikube}" = "true" ] && [ "${metrics_server_already_enabled}" = "false" ]; then
+    echo "Disabling metrics-server addon..."
+    minikube addons disable metrics-server >/dev/null 2>&1 || true
+  fi
   echo "Deleting namespace ${ns}..."
   kubectl delete namespace "${ns}" --ignore-not-found --wait=false >/dev/null
 }
 trap cleanup EXIT
 
-echo "Enabling minikube metrics-server addon..."
-minikube addons enable metrics-server >/dev/null
+if [ "${is_minikube}" = "true" ] && [ "${metrics_server_already_enabled}" = "false" ]; then
+  echo "Enabling minikube metrics-server addon..."
+  minikube addons enable metrics-server >/dev/null
+elif [ "${is_minikube}" = "true" ]; then
+  echo "minikube metrics-server addon is already enabled; leaving it as-is."
+else
+  echo "Not running against minikube (context: ${context}); skipping metrics-server addon management. Resource-usage data in the pod screenshot will only appear if metrics-server is already installed." >&2
+fi
 
 echo "Creating namespace ${ns}..."
 kubectl create namespace "${ns}"
