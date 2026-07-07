@@ -85,6 +85,7 @@ func funcMap() template.FuncMap {
 		"labelSelector":             labelSelector,
 		"taintsNotToleratedByPod":   taintsNotToleratedByPod,
 		"cronNextTime":              cronNextTime,
+		"withinLastHour":            withinLastHour,
 		"parseTLSSecretCertificate": parseTLSSecretCertificate,
 		"certificatesInSecret":      certificatesInSecret,
 	}
@@ -408,6 +409,19 @@ func forOrSince() string {
 		return "since"
 	}
 	return "for"
+}
+
+func withinLastHour(kubeDate interface{}) bool {
+	s, ok := kubeDate.(string)
+	if !ok || s == "" {
+		return false
+	}
+	t, err := time.ParseInLocation("2006-01-02T15:04:05Z", s, time.UTC)
+	if err != nil {
+		return false
+	}
+	d := nowFunc().Sub(t)
+	return d >= 0 && d < time.Hour
 }
 
 func relativeTime(kubeDate string) string {

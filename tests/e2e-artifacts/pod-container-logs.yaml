@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: e2e-pod-container-logs
+  namespace: default
+spec:
+  restartPolicy: Always
+  initContainers:
+    - name: init-setup
+      image: busybox
+      command: ["sh", "-c", "echo init-setup-log-line"]
+    - name: init-silent
+      image: busybox
+      command: ["true"]
+  containers:
+    - name: sidecar
+      image: busybox
+      restartPolicy: Always
+      command: ["sh", "-c", "echo sidecar-log-line; sleep infinity"]
+    - name: healthy
+      image: busybox
+      command: ["sh", "-c", "echo healthy-log-line; sleep infinity"]
+    - name: crasher
+      image: busybox
+      command: ["sh", "-c", "echo crasher-log-line; sleep 1; exit 1"]

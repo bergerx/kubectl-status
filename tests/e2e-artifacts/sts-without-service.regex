@@ -6,5 +6,7 @@ StatefulSet/sts-without-service -n default, created 1m ago, gen:1
     Pod/sts-without-service-0 -n default Running, 1/1 ready
   desired:1, existing:1, ready:1, current:1, updated:1, available:1
   Known/recorded manage events:
-    (?:1m ago Updated by kubectl-client-side-apply \(metadata, spec\)\n    1m ago Updated by kube-controller-manager \(status\)|1m ago Updated by kube-controller-manager \(status\)\n    1m ago Updated by kubectl-client-side-apply \(metadata, spec\))
+    (?:1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
+    1m ago Updated by kube-controller-manager \(status\)|1m ago Updated by kube-controller-manager \(status\)
+    1m ago Updated by kubectl-client-side-apply \(metadata, spec\))
 \z
