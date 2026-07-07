@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"reflect"
 	"testing"
 	"time"
@@ -328,6 +329,25 @@ func generateTestCert(t *testing.T, opts genCertOptions) (certPEM []byte, cert *
 	return certPEM, cert, key
 }
 
+// generateTestCSR generates an in-memory PKCS#10 certificate signing request PEM block.
+func generateTestCSR(t *testing.T, subjectCN string, dnsNames []string, ipAddresses []net.IP) []byte {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate rsa key: %v", err)
+	}
+	template := &x509.CertificateRequest{
+		Subject:     pkix.Name{CommonName: subjectCN},
+		DNSNames:    dnsNames,
+		IPAddresses: ipAddresses,
+	}
+	derBytes, err := x509.CreateCertificateRequest(rand.Reader, template, key)
+	if err != nil {
+		t.Fatalf("failed to create certificate request: %v", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: derBytes})
+}
+
 // keyPEM PEM-encodes an RSA private key in PKCS1 form (content is irrelevant to
 // parseTLSSecretCertificate, which never inspects tls.key, only checks for its presence).
 func keyPEMBytes(key *rsa.PrivateKey) []byte {
@@ -642,4 +662,206 @@ func TestCertificatesInSecret(t *testing.T) {
 	if got := certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: nil}}); len(got) != 0 {
 		t.Errorf("expected nil Object to yield no certificates, got %#v", got)
 	}
+}
+
+func TestCertificatesInConfigMap(t *testing.T) {
+	caPEM, caCert, caKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "Test CA",
+		isCA:       true,
+		selfSigned: true,
+	})
+	leafPEM, _, _ := generateTestCert(t, genCertOptions{
+		subjectCN: "leaf.example.com",
+		dnsNames:  []string{"leaf.example.com"},
+		parent:    caCert,
+		parentKey: caKey,
+	})
+
+	t.Run("data holds plain-text PEM, not base64", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"data": map[string]interface{}{
+				"ca.crt": string(caPEM),
+			},
+		}
+		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if len(got) != 1 {
+			t.Fatalf("expected 1 certificate, got %d: %#v", len(got), got)
+		}
+		if got[0]["Name"] != "ca.crt" || got[0]["SelfSigned"] != true || got[0]["ParseError"] != "" {
+			t.Errorf("got[0] = %#v, want ca.crt/self-signed with no error", got[0])
+		}
+	})
+
+	t.Run("binaryData holds base64-encoded PEM", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"binaryData": map[string]interface{}{
+				"tls.crt": base64.StdEncoding.EncodeToString(leafPEM),
+			},
+		}
+		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if len(got) != 1 {
+			t.Fatalf("expected 1 certificate, got %d: %#v", len(got), got)
+		}
+		if got[0]["Name"] != "tls.crt" || got[0]["Issuer"] != caCert.Subject.String() {
+			t.Errorf("got[0] = %#v, want tls.crt issued by %v", got[0], caCert.Subject.String())
+		}
+	})
+
+	t.Run("combines data and binaryData, sorted by key", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"data": map[string]interface{}{
+				"ca.crt": string(caPEM),
+			},
+			"binaryData": map[string]interface{}{
+				"tls.crt": base64.StdEncoding.EncodeToString(leafPEM),
+			},
+		}
+		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if len(got) != 2 {
+			t.Fatalf("expected 2 certificates, got %d: %#v", len(got), got)
+		}
+		if got[0]["Name"] != "ca.crt" || got[1]["Name"] != "tls.crt" {
+			t.Errorf("expected ca.crt before tls.crt, got %#v", got)
+		}
+	})
+
+	t.Run("configmap with no .crt fields", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"data": map[string]interface{}{
+				"application.properties": "foo=bar",
+			},
+		}
+		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if len(got) != 0 {
+			t.Errorf("expected no certificates, got %#v", got)
+		}
+	})
+
+	t.Run("malformed PEM in data reports ParseError", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"data": map[string]interface{}{
+				"ca.crt": "not a certificate",
+			},
+		}
+		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if len(got) != 1 || got[0]["ParseError"] == "" {
+			t.Errorf("expected 1 entry with non-empty ParseError, got %#v", got)
+		}
+	})
+
+	t.Run("malformed base64 in binaryData reports ParseError", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"binaryData": map[string]interface{}{
+				"ca.crt": "not-valid-base64!!!",
+			},
+		}
+		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if len(got) != 1 || got[0]["ParseError"] == "" {
+			t.Errorf("expected 1 entry with non-empty ParseError, got %#v", got)
+		}
+	})
+
+	if got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: nil}}); len(got) != 0 {
+		t.Errorf("expected nil Object to yield no certificates, got %#v", got)
+	}
+}
+
+func TestCertificateInCSR(t *testing.T) {
+	_, caCert, caKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "Test CA",
+		isCA:       true,
+		selfSigned: true,
+	})
+	leafPEM, _, _ := generateTestCert(t, genCertOptions{
+		subjectCN: "leaf.example.com",
+		dnsNames:  []string{"leaf.example.com"},
+		parent:    caCert,
+		parentKey: caKey,
+	})
+
+	t.Run("not yet issued", func(t *testing.T) {
+		obj := map[string]interface{}{"status": map[string]interface{}{}}
+		got := certificateInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if got != nil {
+			t.Errorf("expected nil for unissued CSR, got %#v", got)
+		}
+	})
+
+	t.Run("issued certificate parses", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"status": map[string]interface{}{
+				"certificate": base64.StdEncoding.EncodeToString(leafPEM),
+			},
+		}
+		got := certificateInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if got == nil {
+			t.Fatal("expected non-nil result for issued CSR")
+		}
+		if got["ParseError"] != "" {
+			t.Errorf("unexpected ParseError: %v", got["ParseError"])
+		}
+		if got["Issuer"] != caCert.Subject.String() {
+			t.Errorf("Issuer = %v, want %v", got["Issuer"], caCert.Subject.String())
+		}
+	})
+
+	t.Run("malformed base64 reports ParseError", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"status": map[string]interface{}{
+				"certificate": "not-valid-base64!!!",
+			},
+		}
+		got := certificateInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if got == nil || got["ParseError"] == "" {
+			t.Errorf("expected non-nil result with ParseError, got %#v", got)
+		}
+	})
+}
+
+func TestCertificateRequestInCSR(t *testing.T) {
+	t.Run("parses subject, SANs and key algorithm", func(t *testing.T) {
+		csrPEM := generateTestCSR(t, "my-pod.default.pod.cluster.local",
+			[]string{"my-pod.default.pod.cluster.local", "my-svc.default.svc.cluster.local"},
+			[]net.IP{net.ParseIP("10.0.0.1")})
+		obj := map[string]interface{}{
+			"spec": map[string]interface{}{
+				"request": base64.StdEncoding.EncodeToString(csrPEM),
+			},
+		}
+		got := certificateRequestInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if got["ParseError"] != "" {
+			t.Fatalf("unexpected ParseError: %v", got["ParseError"])
+		}
+		if got["Subject"] != "CN=my-pod.default.pod.cluster.local" {
+			t.Errorf("Subject = %v", got["Subject"])
+		}
+		altDNSNames, _ := got["AltDNSNames"].([]string)
+		if len(altDNSNames) != 1 || altDNSNames[0] != "my-svc.default.svc.cluster.local" {
+			t.Errorf("AltDNSNames = %#v, want [my-svc.default.svc.cluster.local]", altDNSNames)
+		}
+		ipAddresses, _ := got["IPAddresses"].([]string)
+		if len(ipAddresses) != 1 || ipAddresses[0] != "10.0.0.1" {
+			t.Errorf("IPAddresses = %#v, want [10.0.0.1]", ipAddresses)
+		}
+	})
+
+	t.Run("missing spec.request reports ParseError", func(t *testing.T) {
+		obj := map[string]interface{}{"spec": map[string]interface{}{}}
+		got := certificateRequestInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if got["ParseError"] == "" {
+			t.Errorf("expected ParseError for missing request, got %#v", got)
+		}
+	})
+
+	t.Run("malformed base64 reports ParseError", func(t *testing.T) {
+		obj := map[string]interface{}{
+			"spec": map[string]interface{}{
+				"request": "not-valid-base64!!!",
+			},
+		}
+		got := certificateRequestInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		if got["ParseError"] == "" {
+			t.Errorf("expected ParseError for malformed base64, got %#v", got)
+		}
+	})
 }

@@ -1,0 +1,50 @@
+{{- define "CertificateSigningRequest" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: certificates.k8s.io/v1, Kind=CertificateSigningRequest */ -}}
+    {{- /* kstatus_summary omitted: kstatus always reports "Current: Resource is current" for
+           CertificateSigningRequest regardless of Pending/Approved/Denied state, so it carries
+           no signal here; conditions_summary below already surfaces Approved/Denied/Failed. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- "Signer" | bold | nindent 2 }}: {{ .Spec.signerName | cyan }}
+    {{- with .Spec.username }} · requested by {{ . | cyan }}{{ end }}
+    {{- with .Spec.usages }}
+        {{- "Usages" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- with .Spec.expirationSeconds }}
+        {{- "Requested duration" | bold | nindent 2 }}: {{ . | duration | cyan }}
+    {{- end }}
+    {{- with certificateRequestInCSR . }}
+        {{- $req := . }}
+        {{- with $req.ParseError }}
+            {{- "Certificate request" | red | bold | nindent 2 }}: {{ . | red }}
+        {{- else }}
+            {{- "Requested for" | bold | nindent 2 }} {{ $req.Subject | cyan }}
+            {{- with $req.AltDNSNames }}
+                {{- "Also valid for" | bold | nindent 4 }}: {{ join ", " . | cyan }}
+            {{- end }}
+            {{- with $req.IPAddresses }}
+                {{- "IPs" | bold | nindent 4 }}: {{ join ", " . | cyan }}
+            {{- end }}
+            {{- "Key" | bold | nindent 4 }}: {{ $req.KeyAlgorithm | cyan }}
+        {{- end }}
+    {{- end }}
+    {{- with certificateInCSR . }}
+        {{- $cert := . }}
+        {{- with $cert.ParseError }}
+            {{- "Issued certificate" | red | bold | nindent 2 }}: {{ . | red }}
+        {{- else }}
+            {{- "Issued by" | bold | nindent 2 }} {{ $cert.Issuer | cyan }}
+            {{- if $cert.SelfSigned }}
+                {{- "Self-signed" | yellow | bold | nindent 4 }}: issuer and subject match, not issued by a separate CA
+            {{- end }}
+            {{- "Valid" | bold | nindent 4 }} {{ $cert.NotBefore.UTC.Format "2006-01-02T15:04:05Z" | colorAgo }}{{ agoSuffix }}, expires {{ $cert.NotAfter.Format "2006-01-02" | cyan }}
+            {{- with $cert.SerialNumber }} · serial {{ . | cyan }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

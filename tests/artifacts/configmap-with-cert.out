@@ -1,0 +1,6 @@
+
+ConfigMap/backend-ca-cert -n default, created 1m ago
+  Certificate (ca.crt) for CN=tls-backend-ca · issued by CN=tls-backend-ca
+    Self-signed: issuer and subject match, not issued by a separate CA
+    Valid 1m ago, expires 2027-07-07
+    Key: RSA · serial 209433566284738435120042965211161867944298201871
