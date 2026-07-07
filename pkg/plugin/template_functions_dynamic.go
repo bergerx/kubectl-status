@@ -326,6 +326,44 @@ func (r RenderableObject) KubeGetNodeStatsSummary(nodeName string) map[string]in
 	return nodeStatsSummary
 }
 
+// KubeGetPodMetrics returns the PodMetrics for the named pod. It first tries a single cluster-wide
+// PodMetrics list, reused for every pod/node in the render (see AllNamespacesPodMetrics). If that's
+// not available (e.g. RBAC only allows namespace-scoped access), it falls back to fetching
+// PodMetrics for the whole namespace once per render, so that rendering multiple pods in the same
+// namespace still only requires a single metrics.k8s.io request instead of one per pod.
+func (r RenderableObject) KubeGetPodMetrics(namespace, name string) RenderableObject {
+	if viper.GetBool("shallow") {
+		return r.newRenderableObject(nil)
+	}
+	if allPodMetrics, err := r.repo.AllNamespacesPodMetrics(); err == nil {
+		for _, obj := range allPodMetrics {
+			u := unstructured.Unstructured{Object: obj}
+			if u.GetNamespace() == namespace && u.GetName() == name {
+				return r.newRenderableObject(obj)
+			}
+		}
+		return r.newRenderableObject(nil)
+	}
+	for _, obj := range r.KubeGet(namespace, "PodMetrics") {
+		if obj.Name() == name {
+			return obj
+		}
+	}
+	return r.newRenderableObject(nil)
+}
+
+// KubeGetNodeMetrics returns the NodeMetrics for the named node. It fetches NodeMetrics for the
+// whole cluster once per render (via the KubeGet cache) so that rendering multiple nodes only
+// requires a single metrics.k8s.io request instead of one per node.
+func (r RenderableObject) KubeGetNodeMetrics(name string) RenderableObject {
+	for _, obj := range r.KubeGet("", "NodeMetrics") {
+		if obj.Name() == name {
+			return obj
+		}
+	}
+	return r.newRenderableObject(nil)
+}
+
 // KubeGetNonTerminatedPodsOnNode returns details of all pods which are not in terminal status
 func (r RenderableObject) KubeGetNonTerminatedPodsOnNode(nodeName string) (podList []RenderableObject) {
 	if viper.GetBool("shallow") {

@@ -94,7 +94,7 @@
                     {{- $podsTotalMemLimits = $podsTotalMemLimits | addFloat64 ($containerSpec.resources.limits.memory | quantityToFloat64) }}
                 {{- end }}
                 {{- if eq $pod.Status.phase "Running" }}
-                    {{- $podMetrics := $.KubeGetFirst $pod.Namespace "PodMetrics" $pod.Name }}
+                    {{- $podMetrics := $.KubeGetPodMetrics $pod.Namespace $pod.Name }}
                     {{- if $podMetrics.Object }}{{- if $podMetrics.Object.containers }}
                         {{- $containerMetrics := $podMetrics.Object.containers | getMatchingItemInMapList (dict "name" .name) }}
                         {{- if $containerMetrics }}
@@ -108,7 +108,7 @@
         {{- $inferredBurstableMemLimit := .Status.allocatable.memory | quantityToFloat64 | subFloat64 $podsTotalMemRequestsGuaranteed }}
         {{- $inferredBestEffortMemLimit := $inferredBurstableMemLimit | subFloat64 $podsTotalMemRequestsBurstable }}
         {{- "Inferred memory limits" | nindent 2 }} for BestEffort: {{ $inferredBestEffortMemLimit | humanizeSI "B" }}, for Burstable: {{ $inferredBurstableMemLimit | humanizeSI "B" }}
-        {{- $nodeMetrics := $.KubeGetFirst "" "NodeMetrics" .Name }}
+        {{- $nodeMetrics := $.KubeGetNodeMetrics .Name }}
         {{- if ($nodeMetrics.Object | default dict).usage }}
             {{- "pods" | bold | nindent 2 }}: usage/allocatable:{{ $podCount }}/
             {{- .Status.allocatable.pods | quantityToFloat64 | printf "%g" }}(

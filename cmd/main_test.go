@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -331,8 +332,10 @@ func startMinikube(t *testing.T) {
 	kubeconfig := path.Join(dir, "minikube.kubeconfig")
 	t.Setenv("KUBECONFIG", kubeconfig)
 	t.Logf("Starting Minikube cluster %s with %s ...", clusterName, kubeconfig)
-	startMinikube := exec.Command("minikube", "start", "-p", clusterName)
+	startMinikube := exec.Command("minikube", "start", "-p", clusterName, "--addons=metrics-server")
 	require.NoError(t, startMinikube.Run())
+	require.NoError(t, exec.Command("kubectl", "-n", "kube-system", "rollout", "status",
+		"deployment/metrics-server", "--timeout=120s").Run())
 	t.Cleanup(func() {
 		cmd := exec.Command("minikube", "delete", "-p", clusterName)
 		t.Logf("Deleting Minikube cluster %s...", clusterName)
@@ -785,6 +788,44 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			}
 		})
 	})
+	t.Run("node correctly resolves pod metrics for pods in multiple namespaces via the batched PodMetrics lookup", func(t *testing.T) {
+		// Node.tmpl loops over every pod on the node (KubeGetNonTerminatedPodsOnNode) and looks
+		// up each one's PodMetrics via KubeGetPodMetrics, which fetches metrics.k8s.io once for
+		// the whole render (cluster-wide, or per-namespace as a fallback) instead of once per
+		// pod. Pods in two distinct namespaces exercise the namespace-aware lookup within that
+		// shared result: only --shallow-free live runs touch this path at all (see
+		// TestAllArtifactsLocal), so this is the only place it's covered.
+		viperTestHack(t)
+		nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+		require.NoError(t, err)
+		require.NotEmpty(t, nodes.Items)
+		nodeName := nodes.Items[0].Name
+
+		for _, ns := range []string{"e2e-node-metrics-a", "e2e-node-metrics-b"} {
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
+			_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "e2e-metrics-pod", Namespace: ns},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "app", Image: "busybox", Command: []string{"sleep", "infinity"}}},
+				},
+			}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
+				"pod/e2e-metrics-pod", "-n", ns, "--timeout=2m").Run())
+			waitForPodMetrics(t, ns, "e2e-metrics-pod")
+		}
+
+		stdout, _, err := executeCMD(t, []string{"node/" + nodeName, "--include-events=false", "--v", "5"})
+		require.NoError(t, err)
+		assert.Regexp(t, `(?m)^\s+pods:\s+usage/allocatable:\d+/`, stdout)
+		assert.Regexp(t, `(?m)^\s+cpu:\s+usage/allocatable:[\d.]+/[\d.]+\(\s*\d+%\)`, stdout)
+		assert.Regexp(t, `(?m)^\s+mem:\s+usage/allocatable:`, stdout)
+	})
 }
 
 func applyManifest(t *testing.T, filepath string) {
@@ -833,4 +874,21 @@ func waitForImagePullBackoff(t *testing.T, resource string) {
 		time.Sleep(2 * time.Second)
 	}
 	t.Fatalf("timed out waiting for %s to report ImagePullBackOff/ErrImagePull", resource)
+}
+
+// waitForPodMetrics polls the metrics.k8s.io API directly until it has scraped data for the
+// given pod. metrics-server's scrape interval means a freshly-created pod's metrics aren't
+// available immediately after it goes Ready.
+func waitForPodMetrics(t *testing.T, namespace, name string) {
+	t.Helper()
+	rawPath := fmt.Sprintf("/apis/metrics.k8s.io/v1beta1/namespaces/%s/pods/%s", namespace, name)
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		if err := exec.Command("kubectl", "get", "--raw", rawPath).Run(); err == nil {
+			t.Logf("metrics available for pod %s/%s", namespace, name)
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for metrics.k8s.io data for pod %s/%s", namespace, name)
 }

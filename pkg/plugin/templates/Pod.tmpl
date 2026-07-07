@@ -128,7 +128,7 @@
     {{- with $pod.Status.containerStatuses }}
         {{- $single := eq (len .) 1 }}
         {{- "Containers:" | nindent 2 }}
-        {{- $podMetrics := $pod.KubeGetFirst $pod.Namespace "PodMetrics" $pod.Name }}
+        {{- $podMetrics := $pod.KubeGetPodMetrics $pod.Namespace $pod.Name }}
         {{- $containerStatusSummaryDict := dict }}
         {{- range $containerStatus := . }}
             {{- $containerSpec := $pod.Spec.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
