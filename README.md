@@ -1,20 +1,67 @@
 # kubectl status
 
-A `kubectl` plugin to print a human-friendly output that focuses on the status fields of the resources in kubernetes.
+Checking whether a Pod or Deployment is actually healthy usually means bouncing between `kubectl get`, `kubectl describe`,
+`kubectl get pods -l ...`, and `kubectl describe pod ...` — then piecing the answer together yourself. `kubectl status`
+gives you that answer in one familiar, drop-in command: same `kubectl` usage you already know, no new mental model,
+read-only, no external dependencies.
 
-Just a different representation of the kubernetes resources (next to `get` and `describe`).
+Use it when `kubectl get` is too shallow and `kubectl describe` is too much.
 
-This plugin uses templates for well-known API conventions and has support for hardcoded resources. Not all resources are
-fully supported.
-
-- [Installation](#installation)
-    * [Upgrade](#upgrade)
+- [Before and After](#before-and-after)
 - [Demo](#demo)
 - [Features](#features)
+- [Installation](#installation)
+    * [Upgrade](#upgrade)
 - [Usage](#usage)
+- [Scope and extending it](#scope-and-extending-it)
 - [Development](#development)
     * [Conventions](./CONVENTIONS.md)
 - [License](#license)
+
+## Before and After
+
+Instead of:
+
+```bash
+kubectl get deployment my-app
+kubectl describe deployment my-app
+kubectl get pods -l app=my-app
+kubectl describe pod my-app-xxxxx
+```
+
+Run one command:
+
+```bash
+kubectl status deployment my-app
+```
+
+## Demo
+
+Example Pod — a healthy Pod alongside a couple of unhealthy ones, and why:
+![pod](assets/pod.png)
+
+Example Deployment and ReplicaSet, including an ongoing rollout:
+![deployment-replicaset](assets/deployment-replicaset.png)
+
+Example StatefulSet:
+![statefulset](assets/statefulset.png)
+
+Example Service:
+![service](assets/service.png)
+
+## Features
+
+* spot unhealthy or in-progress resources without hopping through multiple `kubectl` views,
+* opinionated about what matters: e.g. a Service with no endpoints is called out as a likely outage instead of leaving
+  you to infer it from raw fields,
+* aligned with other kubectl cli subcommand usages (just like `kubectl get` or `kubectl describe`),
+* colors carry meaning, not decoration: white-ish means everything is ok, red-ish strongly indicates something's wrong
+  — and it's never color-only, the words say it too,
+* explicit messages for not-so-easy-to-understand status (e.g., ongoing rollout),
+* goes further where it's warranted (e.g., shows a spec diff for ongoing rollouts),
+* compact, non-extensive output to keep it sharp,
+* no external dependencies, doesn't shell out, and so doesn't depend on client/workstation configuration,
+* optionally show absolute timestamps with `--absolute-time` for building timelines
 
 ## Installation
 
@@ -36,36 +83,10 @@ Assuming you installed using [Krew](https://github.com/kubernetes-sigs/krew):
 kubectl krew upgrade status
 ```
 
-## Demo
-
-Example Pod:
-![pod](assets/pod.png)
-
-Example StatefulSet:
-![statefulset](assets/statefulset.png)
-
-Example Deployment and ReplicaSet
-![deployment-replicaset](assets/deployment-replicaset.png)
-
-Example Service:
-![service](assets/service.png)
-
-## Features
-
-* aims for ease of understanding the status of a given resource,
-* aligned with other kubectl cli subcommand usages (just like `kubectl get` or `kubectl describe`),
-* uses colors extensively for a better look and feel experience, while a white-ish output means everything is ok,
-  red-ish output strongly indicates something wrong,
-* erroneous/impacting states are explicit and obvious,
-* explicit messages for not-so-easy-to-understand status (e.g., ongoing rollout),
-* goes the extra mile for better expressing the status (e.g., show spec diff for ongoing rollouts),
-* compact, non-extensive output to keep it sharp,
-* no external dependencies, doesn't shell out, and so doesn't depend on client/workstation configuration,
-* optionally show absolute timestamps with `--absolute-time` for building timelines
-
 ## Usage
 
-In most cases, replacing a `kubectl get ...` with a `kubectl status ...` would be sufficient.
+In most cases, replacing a `kubectl get ...` with a `kubectl status ...` is all it takes — one command instead of the
+usual `get`/`describe` back-and-forth.
 
 Examples:
 
@@ -82,12 +103,21 @@ kubectl status deployments.v1.apps      # Show deployments in the "v1" version o
 kubectl status node -l node-role.kubernetes.io/master  # Show status of nodes marked as master
 ```
 
+## Scope and extending it
+
+Out of the box, `kubectl status` has dedicated templates for ~40 resource kinds: core workloads (Pods, Deployments,
+ReplicaSets, DaemonSets, StatefulSets, Jobs, CronJobs), Nodes, Services, Ingress, and more — plus Gateway API,
+cert-manager, external-secrets, and Prometheus Operator resources. Anything without a template falls back to a
+generic view.
+
+For your own CRDs, drop a template into `~/.kubectl-status/templates/<Kind>.tmpl`, or let the paired
+[Claude Code](https://claude.ai/code) skill (`/generate-template`) generate one from your CRD schema in seconds — see
+[Claude Code Integration](./CONTRIBUTING.md#claude-code-integration) in CONTRIBUTING.md.
+
 ## Development
 
 - [CONVENTIONS.md](./CONVENTIONS.md) — output philosophy, color rules, and template patterns
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — how to build, test, and submit changes
-
-The project includes a [Claude Code](https://claude.ai/code) skill (`/generate-template`) that can scaffold kubectl-status templates for any CRD in your current context. See [Claude Code Integration](./CONTRIBUTING.md#claude-code-integration) in CONTRIBUTING.md.
 
 ## License
 

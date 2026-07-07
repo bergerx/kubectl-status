@@ -41,7 +41,7 @@ spec:
     - from: LICENSE
       to: "."
     bin: "status.exe"
-  shortDescription: Show status details of a given resource.
+  shortDescription: Show status of Kubernetes resources at a glance.
   homepage: https://github.com/bergerx/kubectl-status
   caveats: |
     Usage:
@@ -49,7 +49,8 @@ spec:
 
     For additional options:
       $ kubectl status --help
-      or https://github.com/bergerx/kubectl-status/blob/master/doc/USAGE.md
 
   description: |
-    Show status details of a given resource. Most useful when debugging Pod issues.
+    Shows the status of any Kubernetes resource in one command, in place of
+    separate get/describe calls. Most useful when debugging why a resource
+    isn't healthy.
