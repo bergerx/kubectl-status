@@ -232,6 +232,21 @@ since there's no live cluster to query either way), which makes `KubeGetFirst` a
 can't exercise the "found the related object" or `--deep` include branches, so the live e2e suite
 is the only place that covers them.
 
+Prefer a whole-output `.regex` fixture (`stdoutRegexPath`) over ad hoc `assert.Contains`/
+`assert.Regexp` calls scattered through the subtest, unless you're only asserting on a couple of
+one-off lines. A single regex covering the full rendered output, matched with `\A`...`\z` anchors
+(see the existing `tests/e2e-artifacts/*.regex` files for the pattern), lets a reviewer diff the
+expected output like a golden `.out` file and catches regressions anywhere in the render, not just
+in the specific substrings an inline assertion happens to check. Use `[0-9.]+[A-Za-z]+` and similar
+tolerant patterns for the non-deterministic parts (log/volume usage bytes, backoff windows, restart
+counts, container/pod UIDs); `viperTestHack(t)`/`testHack(t)` freeze relative durations to `1m` so
+those can stay literal. Prefer real line breaks over literal `\n` escapes when a pattern needs to
+match across multiple output lines (e.g. inside a `(?:...|...)` alternation) — a raw newline in the
+fixture file matches a newline in the output just as well and keeps the file readable as plain
+text. One gotcha: the regex file must not have a trailing newline after the final `\z` — `\z`
+asserts absolute end-of-text, so a trailing newline in the fixture file makes the pattern
+impossible to satisfy.
+
 ### Improving The Documentation
 
 We don't yet have a comprehensive documentation, we maintain just a few Markdown files in the repo. We aim to keep the
