@@ -43,6 +43,9 @@ test: vet staticcheck
 
 .PHONY: install-e2e-deps
 install-e2e-deps:
+	# metrics-server is needed by e2e scenarios exercising pod/node metrics rendering.
+	minikube addons enable metrics-server
+	kubectl -n kube-system rollout status deployment/metrics-server --timeout=120s
 	# cert-manager and Gateway API CRDs are needed by e2e TLS-validation test scenarios.
 	# Pinned to latest stable at time of writing; bump these tags periodically.
 	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.20.3/cert-manager.yaml

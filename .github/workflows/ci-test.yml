@@ -21,4 +21,6 @@ jobs:
       - run: make test
       - name: Start minikube
         uses: medyagh/setup-minikube@latest
+        with:
+          addons: metrics-server
       - run: ASSUME_MINIKUBE_IS_CONFIGURED=true make test-e2e

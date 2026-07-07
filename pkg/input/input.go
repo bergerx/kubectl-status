@@ -75,12 +75,13 @@ func NewResourceRepo(factory util.Factory) (*ResourceRepo, error) {
 }
 
 type ResourceRepo struct {
-	f                     util.Factory
-	dynamicClient         dynamic.Interface
-	kubernetesClientSet   *kubernetes.Clientset
-	nodeStatsSummaryCache map[string]nodeStatsSummaryCacheEntry
-	objectsCache          map[string]objectsCacheEntry
-	endpointSlicesCache   map[string]endpointSlicesCacheEntry
+	f                            util.Factory
+	dynamicClient                dynamic.Interface
+	kubernetesClientSet          *kubernetes.Clientset
+	nodeStatsSummaryCache        map[string]nodeStatsSummaryCacheEntry
+	objectsCache                 map[string]objectsCacheEntry
+	endpointSlicesCache          map[string]endpointSlicesCacheEntry
+	allNamespacesPodMetricsCache *objectsCacheEntry
 }
 
 type nodeStatsSummaryCacheEntry struct {
@@ -161,6 +162,37 @@ func (r *ResourceRepo) objectsUncached(namespace string, args []string, labelSel
 	}
 	sort.Sort(unstructuredObjects)
 	return unstructuredObjects, err
+}
+
+// AllNamespacesPodMetrics attempts a single cluster-wide list of PodMetrics (across every
+// namespace), so that a render touching many namespaces/nodes only needs one metrics.k8s.io
+// request instead of one per namespace. The attempt, and its outcome, is cached for the whole
+// render (including across multiple nodes in the same query) so callers never retry it. If the
+// cluster-wide list is denied (e.g. RBAC only grants namespace-scoped access), a warning is
+// printed once and callers should fall back to per-namespace fetches, which may in turn be
+// incomplete for namespaces the user also can't access.
+func (r *ResourceRepo) AllNamespacesPodMetrics() (Objects, error) {
+	if r.allNamespacesPodMetricsCache != nil {
+		return r.allNamespacesPodMetricsCache.objects, r.allNamespacesPodMetricsCache.err
+	}
+	builder := r.newBaseBuilder().
+		NamespaceParam("").
+		AllNamespaces(true).
+		ResourceTypeOrNameArgs(true, "PodMetrics")
+	infos, err := builder.Do().Infos()
+	var objects Objects
+	if err != nil {
+		klog.Warningf("kubectl-status: could not list pod metrics across all namespaces (%v); "+
+			"falling back to per-namespace metrics queries, output may be partial if namespace-scoped access is also restricted", err)
+	} else {
+		for _, info := range infos {
+			unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(info.Object) // TODO: handle error
+			objects = append(objects, unstructuredObj)
+		}
+		sort.Sort(objects)
+	}
+	r.allNamespacesPodMetricsCache = &objectsCacheEntry{objects: objects, err: err}
+	return objects, err
 }
 
 func (r *ResourceRepo) Owners(obj Object) (out Objects, err error) {
