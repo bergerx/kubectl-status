@@ -701,8 +701,12 @@ func parseCertificateBytesInto(entry map[string]interface{}, name string, decode
 	entry["SerialNumber"] = cert.SerialNumber.String()
 	entry["NotBefore"] = cert.NotBefore
 	entry["NotAfter"] = cert.NotAfter
-	entry["AltDNSNames"] = altDNSNames
-	entry["IPAddresses"] = ipAddresses
+	if len(altDNSNames) > 0 {
+		entry["AltDNSNames"] = altDNSNames
+	}
+	if len(ipAddresses) > 0 {
+		entry["IPAddresses"] = ipAddresses
+	}
 	entry["KeyAlgorithm"] = cert.PublicKeyAlgorithm.String()
 	entry["SelfSigned"] = bytes.Equal(cert.RawIssuer, cert.RawSubject)
 }
