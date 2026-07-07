@@ -286,10 +286,11 @@ func (r *ResourceRepo) PodContainerLogs(namespace, podName, containerName string
 	// as the body (instead of a proper HTTP error) when the requested container instance's
 	// logs are no longer available (e.g. garbage collected). Surface that as an error rather
 	// than as log content.
-	if strings.HasPrefix(string(data), "unable to retrieve container logs for ") {
-		return "", fmt.Errorf("%s", strings.TrimSpace(string(data)))
+	logs := string(data)
+	if strings.HasPrefix(logs, "unable to retrieve container logs for ") {
+		return "", fmt.Errorf("%s", strings.TrimSpace(logs))
 	}
-	return string(data), nil
+	return logs, nil
 }
 
 func (r *ResourceRepo) DynamicObject(gvr schema.GroupVersionResource, namespace string, name string) (Object, error) {

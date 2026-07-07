@@ -416,7 +416,7 @@ func withinLastHour(kubeDate interface{}) bool {
 	if !ok || s == "" {
 		return false
 	}
-	t, err := time.ParseInLocation("2006-01-02T15:04:05Z", s, time.UTC)
+	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		return false
 	}
