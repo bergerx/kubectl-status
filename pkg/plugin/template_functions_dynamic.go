@@ -336,9 +336,10 @@ func (r RenderableObject) KubeGetPodMetrics(namespace, name string) RenderableOb
 		return r.newRenderableObject(nil)
 	}
 	if allPodMetrics, err := r.repo.AllNamespacesPodMetrics(); err == nil {
-		for _, obj := range r.objectsToRenderableObjects(allPodMetrics) {
-			if obj.Namespace() == namespace && obj.Name() == name {
-				return obj
+		for _, obj := range allPodMetrics {
+			u := unstructured.Unstructured{Object: obj}
+			if u.GetNamespace() == namespace && u.GetName() == name {
+				return r.newRenderableObject(obj)
 			}
 		}
 		return r.newRenderableObject(nil)
