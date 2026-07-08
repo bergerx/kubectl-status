@@ -325,7 +325,18 @@ func executeCMD(t *testing.T, args []string) (string, string, error) {
 
 func startMinikube(t *testing.T) {
 	t.Helper()
-	clusterName := t.Name()
+	// `make test-e2e` computes an isolated profile name (branch + Claude Code session
+	// hash, see Makefile) and passes ASSUME_MINIKUBE_IS_CONFIGURED=true, so it never
+	// reaches this function. This fallback only matters for ad hoc
+	// `go test -run TestE2E...` invocations that bypass the Makefile: set E2E_PROFILE
+	// yourself (`make print-e2e-profile` prints the same name the Makefile would use)
+	// to avoid colliding with other worktrees/sessions on a shared t.Name() profile.
+	// TODO: derive branch+session identity here directly instead of relying on the
+	// caller to export E2E_PROFILE, so ad hoc runs are isolated automatically too.
+	clusterName := os.Getenv("E2E_PROFILE")
+	if clusterName == "" {
+		clusterName = t.Name()
+	}
 	t.Logf("Creating temp folder for minikube.kubeconfig for minikube %s ...", clusterName)
 	dir, err := os.MkdirTemp("", clusterName)
 	require.NoError(t, err)
