@@ -597,6 +597,10 @@ func TestE2EDynamicManifests(t *testing.T) {
 			args:            []string{"pdb/sts-with-nodeport", "--include-events=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pdb.regex",
 		}.assert(t, nodeNameModifier)
+		cmdTest{
+			args:        []string{"sts/sts-with-nodeport", "--include-events=false", "--v", "5"},
+			stdoutRegex: `(?m)^  Selector: app=sts-with-nodeport\n    Service/sts-with-nodeport -n default, NodePort, 1 ready, http\(80/TCP\)→30081\n    Pod/sts-with-nodeport-0 -n default Running, 1/1 ready\n    PodDisruptionBudget/sts-with-nodeport -n default, min available=1, evictions/drains currently blocked$`,
+		}.assert(t, nil)
 	})
 	t.Run("tcproute-with-gateway", func(t *testing.T) {
 		viperTestHack(t)

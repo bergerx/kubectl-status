@@ -15,6 +15,7 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
@@ -246,6 +247,46 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 			svc.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Service"))
 			svcUnstructured, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&svc)
 			out = append(out, r.newRenderableObject(svcUnstructured))
+		}
+	}
+	return out
+}
+
+// KubeGetPodDisruptionBudgetsMatchingLabels returns all PodDisruptionBudgets in namespace whose
+// spec.selector matches the given label set. PDB spec.selector is a full metav1.LabelSelector
+// (matchLabels + matchExpressions), unlike Service selectors, so this uses real
+// LabelSelectorAsSelector/.Matches semantics rather than the isSubset helper.
+func (r RenderableObject) KubeGetPodDisruptionBudgetsMatchingLabels(namespace string, labels_ map[string]interface{}) (out []RenderableObject) {
+	out = make([]RenderableObject, 0)
+	if viper.GetBool("shallow") {
+		return
+	}
+	klog.V(5).InfoS("called KubeGetPodDisruptionBudgetsMatchingLabels", "r", r, "namespace", namespace, "labels", labels_)
+	castedLabels := make(map[string]string, len(labels_))
+	for k, v := range labels_ {
+		castedLabels[k] = fmt.Sprintf("%v", v)
+	}
+	targetSet := labels.Set(castedLabels)
+	pdbs, err := r.repo.Objects(namespace, []string{"poddisruptionbudgets"}, "")
+	if err != nil {
+		klog.V(3).ErrorS(err, "error listing poddisruptionbudgets", "r", r, "namespace", namespace)
+		return
+	}
+	for _, obj := range pdbs {
+		selMap, found, err := unstructured.NestedMap(obj, "spec", "selector")
+		if err != nil || !found {
+			continue
+		}
+		ls := &metav1.LabelSelector{}
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(selMap, ls); err != nil {
+			continue
+		}
+		sel, err := metav1.LabelSelectorAsSelector(ls)
+		if err != nil || sel.Empty() {
+			continue
+		}
+		if sel.Matches(targetSet) {
+			out = append(out, r.newRenderableObject(obj))
 		}
 	}
 	return out
