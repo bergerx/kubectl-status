@@ -241,6 +241,22 @@ func TestOwnersTemplate(t *testing.T) {
 				},
 			},
 			want: "",
+		}, {
+			name: "owner reference points to an object that no longer exists",
+			obj: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"namespace": "test",
+					"ownerReferences": []interface{}{
+						map[string]interface{}{
+							"apiVersion": "apps/v1",
+							"controller": true,
+							"kind":       "ReplicaSet",
+							"name":       "coredns-558bd4d5db",
+						},
+					},
+				},
+			},
+			want: "Orphan",
 		},
 	}
 	for _, tt := range tests {

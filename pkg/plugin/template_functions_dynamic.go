@@ -99,17 +99,27 @@ func (r RenderableObject) KubeGetEvents() RenderableObject {
 	return nr
 }
 
-// KubeGetOwners returns the list of objects which are listed in the Owner references of an object.
-func (r RenderableObject) KubeGetOwners() (out []RenderableObject) {
+// OwnersResult is the result of resolving an object's ownerReferences: the owner objects that
+// could be found, plus any ownerReferences whose owner no longer exists (orphans).
+type OwnersResult struct {
+	Owners  []RenderableObject
+	Orphans []metav1.OwnerReference
+}
+
+// KubeGetOwners resolves the Owner references of an object, returning both the owners that
+// could be found and any ownerReferences left dangling because their owner no longer exists.
+func (r RenderableObject) KubeGetOwners() (out OwnersResult) {
 	if viper.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("KubeGetOwners called KubeGetOwners", "r", r)
-	owners, err := r.repo.Owners(r.Object)
+	owners, orphans, err := r.repo.Owners(r.Object)
 	if err != nil {
 		klog.V(3).ErrorS(err, "error getting owners", "r", r)
 	}
-	return r.objectsToRenderableObjects(owners)
+	out.Owners = r.objectsToRenderableObjects(owners)
+	out.Orphans = orphans
+	return out
 }
 
 func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName string) (out []RenderableObject) {
