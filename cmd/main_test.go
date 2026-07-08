@@ -31,7 +31,6 @@ type cmdTest struct {
 	name            string
 	args            []string
 	stdoutRegexPath string // Regex match against file contents under test folder
-	stdoutEqual     string // Exact
 	stdoutEqualPath string // Exact match with file contents under test folder
 	stderrRegex     string // Regex
 	stderrEqual     string // Exact
@@ -101,10 +100,8 @@ func (c cmdTest) assert(t *testing.T, stdoutModifier func(string) string) {
 		stdout = nodeNameModifier(stdout)
 	}
 	switch {
-	case c.stdoutEqual == "" && c.stdoutRegexPath == "" && c.stdoutEqualPath == "":
+	case c.stdoutRegexPath == "" && c.stdoutEqualPath == "":
 		assert.Empty(t, stdout)
-	case c.stdoutEqual != "":
-		assert.Equal(t, c.stdoutEqual, stdout)
 	case c.stdoutEqualPath != "":
 		outFile := path.Join("..", "tests", c.stdoutEqualPath)
 		out, err := os.ReadFile(outFile)
