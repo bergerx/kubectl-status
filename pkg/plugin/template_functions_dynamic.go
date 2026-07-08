@@ -255,7 +255,10 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 // KubeGetPodDisruptionBudgetsMatchingLabels returns all PodDisruptionBudgets in namespace whose
 // spec.selector matches the given label set. PDB spec.selector is a full metav1.LabelSelector
 // (matchLabels + matchExpressions), unlike Service selectors, so this uses real
-// LabelSelectorAsSelector/.Matches semantics rather than the isSubset helper.
+// LabelSelectorAsSelector/.Matches semantics rather than the isSubset helper. An empty selector
+// (spec.selector: {}) is valid in policy/v1 and matches every pod in the namespace, unlike the
+// removed policy/v1beta1 where it matched none -- policy/v1beta1 is no longer served as of
+// Kubernetes 1.25, so that legacy case isn't handled here.
 func (r RenderableObject) KubeGetPodDisruptionBudgetsMatchingLabels(namespace string, labels_ map[string]interface{}) (out []RenderableObject) {
 	out = make([]RenderableObject, 0)
 	if viper.GetBool("shallow") {
@@ -282,7 +285,7 @@ func (r RenderableObject) KubeGetPodDisruptionBudgetsMatchingLabels(namespace st
 			continue
 		}
 		sel, err := metav1.LabelSelectorAsSelector(ls)
-		if err != nil || sel.Empty() {
+		if err != nil {
 			continue
 		}
 		if sel.Matches(targetSet) {

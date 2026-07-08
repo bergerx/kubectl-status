@@ -331,14 +331,27 @@
     {{- $noOp := and (hasKey .Status "expectedPods") (eq (.Status.expectedPods | int) 0) }}
     {{- with .Spec.minAvailable }}, min available={{ . | toString | cyan }}{{ end }}
     {{- with .Spec.maxUnavailable }}, max unavailable={{ . | toString | cyan }}{{ end }}
-    {{- if $noOp }}
-        {{- ", selector matches no pods (no-op)" | yellow }}
-    {{- else if $budgetViolated }}
-        {{- printf ", budget violated (%d/%d healthy, %d required)" (.Status.currentHealthy | int) (.Status.expectedPods | int) (.Status.desiredHealthy | int) | red | bold }}
-    {{- else if $noDisruptions }}
-        {{- ", evictions/drains currently blocked" | yellow }}
-    {{- else }}
-        {{- ", " }}{{ "disruptions allowed" | green }}
+    {{- if hasKey .Status "currentHealthy" }}
+        {{- if $noOp }}
+            {{- ", selector matches no pods (no-op)" | yellow }}
+        {{- else if $budgetViolated }}
+            {{- printf ", budget violated (%d/%d healthy, %d required)" (.Status.currentHealthy | int) (.Status.expectedPods | int) (.Status.desiredHealthy | int) | red | bold }}
+        {{- else if $noDisruptions }}
+            {{- ", evictions/drains currently blocked" | yellow }}
+        {{- else }}
+            {{- ", " }}{{ "disruptions allowed" | green }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "pdb_conflict_warning" }}
+    {{- /* Expects a slice of matched PodDisruptionBudget RenderableObjects. Kubernetes doesn't
+           support a pod being covered by more than one PDB -- eviction requests for such pods
+           fail with 500 (not merged into a stricter/looser combined budget), so this is a
+           misconfiguration worth flagging explicitly rather than just listing budgets as if they
+           stack. See https://kubernetes.io/docs/concepts/scheduling-eviction/api-eviction/ */ -}}
+    {{- if gt (len .) 1 }}
+        {{- printf "%d PodDisruptionBudgets match — evictions of these pods will fail (Kubernetes doesn't support a pod covered by multiple PDBs)" (len .) | red | bold }}
     {{- end }}
 {{- end -}}
 
@@ -354,11 +367,13 @@
             {{- if and (not $svcs) (not ($.Config.GetBool "local")) }}
                 {{- "Not matched by any Service" | yellow | bold | nindent 4 }}
             {{- end }}
+            {{- $pdbs := $.KubeGetPodDisruptionBudgetsMatchingLabels $.Namespace $matchLabels }}
+            {{- with $.Include "pdb_conflict_warning" $pdbs }}{{ . | nindent 4 }}{{ end }}
             {{- if $.Config.GetBool "deep" }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}
                 {{- end }}
-                {{- range $.KubeGetPodDisruptionBudgetsMatchingLabels $.Namespace $matchLabels }}
+                {{- range $pdbs }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}
                 {{- end }}
             {{- else }}
@@ -370,7 +385,7 @@
                 {{- end }}
                 {{- $rolloutInProgress := false }}
                 {{- with $.RolloutStatus $ }}{{ if not .done }}{{ $rolloutInProgress = true }}{{ end }}{{ end }}
-                {{- range $.KubeGetPodDisruptionBudgetsMatchingLabels $.Namespace $matchLabels }}
+                {{- range $pdbs }}
                     {{- $.Include "pdb_health_summary" . | nindent 4 }}
                     {{- if $rolloutInProgress }} {{ "(rollout in progress)" | yellow }}{{ end }}
                 {{- end }}

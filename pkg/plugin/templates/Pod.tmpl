@@ -330,6 +330,7 @@
     {{- if not ($.Config.GetBool "shallow") }}
         {{- $pdbs := $.KubeGetPodDisruptionBudgetsMatchingLabels $.Namespace $.Labels }}
         {{- if $pdbs }}
+            {{- with $.Include "pdb_conflict_warning" $pdbs }}{{ . | nindent 2 }}{{ end }}
             {{- if $.Config.GetBool "deep" }}
                 {{- "PodDisruptionBudgets:" | bold | nindent 2 }}
                 {{- range $pdbs }}
