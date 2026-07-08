@@ -4,4 +4,4 @@
 # hack/git-hooks/reference-transaction). Shared so both places stay in sync.
 set -euo pipefail
 
-echo "$1" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-' | sed 's/-\{1,\}/-/g;s/^-//;s/-$//' | cut -c1-20 | sed 's/-$//'
+printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-' | sed 's/-\{1,\}/-/g;s/^-//;s/-$//' | cut -c1-20 | sed 's/-$//'

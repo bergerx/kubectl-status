@@ -58,7 +58,7 @@ ifeq ($(E2E_GIT_BRANCH),)
 E2E_GIT_BRANCH := local
 endif
 E2E_BRANCH_SLUG := $(shell ./hack/e2e-branch-slug.sh '$(E2E_GIT_BRANCH)')
-E2E_IDENTITY_HASH := $(shell echo -n '$(E2E_GIT_BRANCH):$(CLAUDE_CODE_SESSION_ID)' | sha1sum | cut -c1-8)
+E2E_IDENTITY_HASH := $(shell printf '%s' '$(E2E_GIT_BRANCH):$(CLAUDE_CODE_SESSION_ID)' | (sha1sum 2>/dev/null || shasum) | cut -c1-8)
 E2E_PROFILE := kstat-e2e-$(E2E_BRANCH_SLUG)-$(E2E_IDENTITY_HASH)
 E2E_KUBECONFIG := $(CURDIR)/.e2e/$(E2E_PROFILE).kubeconfig
 
@@ -82,6 +82,7 @@ print-e2e-profile:
 .PHONY: install-hooks
 install-hooks:
 	@hooks_dir="$$(git rev-parse --git-path hooks)"; \
+	mkdir -p "$$hooks_dir"; \
 	install -m 755 hack/git-hooks/reference-transaction "$$hooks_dir/reference-transaction"; \
 	echo "Installed hack/git-hooks/reference-transaction -> $$hooks_dir/reference-transaction"; \
 	echo "(shared by all worktrees of this clone; deletes a branch's e2e minikube profile when the branch is deleted)"

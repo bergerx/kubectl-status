@@ -39,9 +39,9 @@ while read -r old_oid new_oid ref_name; do
 	[ -n "$slug" ] || continue
 
 	profiles="$(minikube profile list -o json 2>/dev/null \
-		| grep -o "\"Name\":\"kstat-e2e-${slug}-[a-f0-9]\{8\}\"" \
+		| grep -o "\"Name\"[[:space:]]*:[[:space:]]*\"kstat-e2e-${slug}-[a-f0-9]\{8\}\"" \
 		| cut -d'"' -f4 \
-		| sort -u)"
+		| sort -u || true)"
 	for profile in $profiles; do
 		echo "reference-transaction: branch '$branch' deleted, removing its e2e minikube profile '$profile'" >&2
 		minikube delete -p "$profile" >/dev/null 2>&1 || true
