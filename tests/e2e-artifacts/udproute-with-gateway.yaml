@@ -1,0 +1,32 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: e2e-udp-gw
+spec:
+  gatewayClassName: e2e-unused-gwc
+  listeners:
+  - name: udp
+    port: 9090
+    protocol: UDP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: e2e-udp-svc
+spec:
+  ports:
+  - port: 9090
+    protocol: UDP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: UDPRoute
+metadata:
+  name: e2e-udproute
+spec:
+  parentRefs:
+  - name: e2e-udp-gw
+    sectionName: udp
+  rules:
+  - backendRefs:
+    - name: e2e-udp-svc
+      port: 9090

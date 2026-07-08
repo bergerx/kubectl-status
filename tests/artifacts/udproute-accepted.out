@@ -1,0 +1,11 @@
+
+UDPRoute/udp-backend-route -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Parents:
+    Gateway/multi-proto-gw [udp]
+  Rules:
+    → Service/udp-backend:9090
+  Status:
+    Gateway/multi-proto-gw [udp] (gateway.envoyproxy.io/gatewayclass-controller)
+      Accepted Accepted, Route is accepted for 1m
+      ResolvedRefs ResolvedRefs, Resolved all the Object references for the Route for 1m

@@ -595,6 +595,54 @@ Secret\/child -n default, created 1m ago by Secret/owner
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pdb.regex",
 		}.assert(t, nodeNameModifier)
 	})
+	t.Run("tcproute-with-gateway", func(t *testing.T) {
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/tcproute-with-gateway.yaml")
+		cmdTest{
+			args:            []string{"tcproute/e2e-tcproute", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/tcproute-with-gateway.regex",
+		}.assert(t, nil)
+		cmdTest{
+			args:            []string{"tcproute/e2e-tcproute", "--include-events=false", "--deep", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/tcproute-with-gateway.deep.regex",
+		}.assert(t, nil)
+	})
+	t.Run("udproute-with-gateway", func(t *testing.T) {
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/udproute-with-gateway.yaml")
+		cmdTest{
+			args:            []string{"udproute/e2e-udproute", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/udproute-with-gateway.regex",
+		}.assert(t, nil)
+		cmdTest{
+			args:            []string{"udproute/e2e-udproute", "--include-events=false", "--deep", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/udproute-with-gateway.deep.regex",
+		}.assert(t, nil)
+	})
+	t.Run("listenerset-with-gateway", func(t *testing.T) {
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/listenerset-with-gateway.yaml")
+		cmdTest{
+			args:            []string{"listenerset/e2e-listenerset", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/listenerset-with-gateway.regex",
+		}.assert(t, nil)
+		cmdTest{
+			args:            []string{"listenerset/e2e-listenerset", "--include-events=false", "--deep", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/listenerset-with-gateway.deep.regex",
+		}.assert(t, nil)
+	})
+	t.Run("backendtlspolicy-with-target", func(t *testing.T) {
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/backendtlspolicy-with-target.yaml")
+		cmdTest{
+			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/backendtlspolicy-with-target.regex",
+		}.assert(t, nil)
+		cmdTest{
+			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--deep", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/backendtlspolicy-with-target.deep.regex",
+		}.assert(t, nil)
+	})
 	t.Run("sts-without-service", func(t *testing.T) {
 		viperTestHack(t)
 		applyManifest(t, "e2e-artifacts/sts-without-service.yaml")

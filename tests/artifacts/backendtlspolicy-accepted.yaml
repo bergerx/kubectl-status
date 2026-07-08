@@ -1,0 +1,38 @@
+apiVersion: gateway.networking.k8s.io/v1alpha3
+kind: BackendTLSPolicy
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"gateway.networking.k8s.io/v1alpha3","kind":"BackendTLSPolicy","metadata":{"annotations":{},"name":"tls-backend-policy","namespace":"default"},"spec":{"targetRefs":[{"group":"","kind":"Service","name":"tls-backend"}],"validation":{"caCertificateRefs":[{"group":"","kind":"ConfigMap","name":"backend-ca-cert"}],"hostname":"tls-backend.default.svc.cluster.local"}}}
+  creationTimestamp: "2026-07-07T22:02:36Z"
+  generation: 1
+  name: tls-backend-policy
+  namespace: default
+  resourceVersion: "1194"
+  uid: 4b997f4a-a2a4-4297-a9f4-1f069c4e6c8f
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: tls-backend
+  validation:
+    caCertificateRefs:
+    - group: ""
+      kind: ConfigMap
+      name: backend-ca-cert
+    hostname: tls-backend.default.svc.cluster.local
+status:
+  ancestors:
+  - ancestorRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: multi-proto-gw
+      sectionName: http
+    conditions:
+    - lastTransitionTime: "2026-07-07T22:02:36Z"
+      message: Policy has been accepted.
+      observedGeneration: 1
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    controllerName: gateway.envoyproxy.io/gatewayclass-controller

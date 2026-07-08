@@ -49,11 +49,12 @@ install-e2e-deps:
 	# cert-manager and Gateway API CRDs are needed by e2e TLS-validation test scenarios.
 	# Pinned to latest stable at time of writing; bump these tags periodically.
 	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.20.3/cert-manager.yaml
-	kubectl wait --for=condition=Available --timeout=180s deployment --all -n cert-manager
-	# CRDs only (standard channel, no controller needed): e2e tests only exercise
-	# kubectl-status's own read-only rendering of Gateway/HTTPRoute objects, they don't
-	# need a controller reconciling them.
-	kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/standard-install.yaml
+	kubectl wait --for=condition=Available --timeout=300s deployment --all -n cert-manager
+	# CRDs only (no controller needed): e2e tests only exercise kubectl-status's own
+	# read-only rendering of these objects, they don't need a controller reconciling them.
+	# Experimental channel is a superset of standard and adds TCPRoute/UDPRoute/
+	# BackendTLSPolicy/ListenerSet, which some e2e scenarios also render.
+	kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml
 
 .PHONY: test-e2e
 test-e2e: vet staticcheck install-e2e-deps

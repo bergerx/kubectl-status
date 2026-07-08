@@ -1,0 +1,7 @@
+
+ReferenceGrant/allow-route-ns-to-default -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Allows:
+    HTTPRoute/route-ns (gateway.networking.k8s.io)
+  To access:
+    Service/tls-backend

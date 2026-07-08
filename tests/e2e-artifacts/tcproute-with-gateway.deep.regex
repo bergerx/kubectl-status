@@ -1,0 +1,17 @@
+\A
+TCPRoute/e2e-tcproute -n default, created 1m ago, gen:1
+  Current: Resource is current
+  Parents:
+    Gateway/e2e-tcp-gw -n default, created 1m ago, gen:1
+      Current: Resource is current
+      Accepted Pending, Waiting for controller for 1m
+      Programmed Pending, Waiting for controller for 1m
+      Listeners:
+        tcp: port=8080/TCP, namespaces=Same
+      Known/recorded manage events:
+        1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
+  Rules:
+    → Service/e2e-tcp-svc:8080
+  Known/recorded manage events:
+    1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
+\z

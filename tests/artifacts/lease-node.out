@@ -1,0 +1,3 @@
+
+Lease/minikube -n kube-node-lease, created 1m ago by Node/minikube
+  Lease renewed 1m ago being hold for 40s by minikube
