@@ -428,6 +428,19 @@ Secret\/child -n default, created 1m ago by Secret/owner
 		}
 		test.assert(t, nil) // to update the out files check /tests/artifacts/README.md
 	})
+	t.Run("ownerReference pointing at a deleted owner is flagged as orphan", func(t *testing.T) {
+		viperTestHack(t)
+		// The child is rendered with --local straight from a manifest rather than created on
+		// the cluster: a live Secret with a dangling ownerReference gets swept up by the
+		// built-in garbage collector almost immediately (it treats a missing owner as a signal
+		// to cascade-delete the dependent), which would make this test flaky. --local still
+		// resolves the ownerReference against the real API server (only the child object itself
+		// is local), so the orphan check is exercised the same way, without the race.
+		cmdTest{
+			args:            []string{"-f", "../tests/e2e-artifacts/secret-orphan-owner-reference.yaml", "--local", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/secret-orphan-owner-reference.regex",
+		}.assert(t, nil)
+	})
 	t.Run("pod on a cordoned node with an untolerated taint and a bad condition", func(t *testing.T) {
 		viperTestHack(t)
 		nodeName := createBadNode(t, clientset)

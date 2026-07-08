@@ -158,12 +158,15 @@
 
 {{- define "owners" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject */ -}}
-    {{- if .Config.GetBool "include-owners" }}
-        {{- with .KubeGetOwners }}
+    {{- with .KubeGetOwners }}
+        {{- if and ($.Config.GetBool "include-owners") .Owners }}
             {{- "Owners:" | nindent 2 }}
-            {{- range . }}{{ if .Object }}
+            {{- range .Owners }}{{ if .Object }}
                 {{- $.IncludeRenderableObject . | nindent 4 }}
             {{- end }}{{ end }}
+        {{- end }}
+        {{- range .Orphans }}
+            {{- "Orphan" | red | bold | nindent 2 }}: owner {{ .Kind | bold }}/{{ .Name }} referenced in ownerReferences no longer exists
         {{- end }}
     {{- end }}
 {{- end }}

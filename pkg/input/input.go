@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	netv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -71,6 +72,7 @@ func NewResourceRepo(factory util.Factory) (*ResourceRepo, error) {
 		nodeStatsSummaryCache: make(map[string]nodeStatsSummaryCacheEntry),
 		objectsCache:          make(map[string]objectsCacheEntry),
 		endpointSlicesCache:   make(map[string]endpointSlicesCacheEntry),
+		ownerCache:            make(map[string]ownerCacheEntry),
 	}, nil
 }
 
@@ -82,6 +84,7 @@ type ResourceRepo struct {
 	objectsCache                 map[string]objectsCacheEntry
 	endpointSlicesCache          map[string]endpointSlicesCacheEntry
 	allNamespacesPodMetricsCache *objectsCacheEntry
+	ownerCache                   map[string]ownerCacheEntry
 }
 
 type nodeStatsSummaryCacheEntry struct {
@@ -97,6 +100,11 @@ type objectsCacheEntry struct {
 type endpointSlicesCacheEntry struct {
 	list *discoveryv1.EndpointSliceList
 	err  error
+}
+
+type ownerCacheEntry struct {
+	object Object
+	err    error
 }
 
 func (r *ResourceRepo) newBaseBuilder() *resource.Builder {
@@ -195,57 +203,70 @@ func (r *ResourceRepo) AllNamespacesPodMetrics() (Objects, error) {
 	return objects, err
 }
 
-func (r *ResourceRepo) Owners(obj Object) (out Objects, err error) {
+// Owners resolves the ownerReferences of obj to the objects they point at. References whose
+// owner no longer exists are reported back as orphans, so callers can warn about them, rather
+// than being silently dropped. Owners that can't be resolved for other reasons (e.g. missing
+// permissions, unknown kind) are silently skipped, since that's not evidence the owner is gone.
+func (r *ResourceRepo) Owners(obj Object) (owners Objects, orphans []metav1.OwnerReference, err error) {
 	uobj := obj.Unstructured()
 	namespace := uobj.GetNamespace()
-	owners := uobj.GetOwnerReferences()
-	if len(owners) == 0 {
-		klog.V(4).InfoS("KubeGetOwners Object has no owners", "r", r)
-		return nil, fmt.Errorf("Object has no owners: %s", obj)
-	}
-	for _, owner := range owners {
-		gv, err := schema.ParseGroupVersion(owner.APIVersion)
-		var kindVersionGroup string
+	for _, owner := range uobj.GetOwnerReferences() {
+		object, err := r.resolveOwner(namespace, owner)
 		if err != nil {
-			klog.V(3).InfoS("repo.Owners failed parsing apiVersion", "apiVersion", owner.APIVersion)
-			kindVersionGroup = owner.Kind
-			object, err := r.FirstObject(namespace, []string{kindVersionGroup}, owner.Name)
-			if err != nil {
-				klog.V(3).InfoS("repo.Owners failed to get owner using Kind", "apiVersion", owner.APIVersion)
-				continue
+			if apierrors.IsNotFound(err) {
+				orphans = append(orphans, owner)
+			} else {
+				klog.V(3).InfoS("repo.Owners failed to resolve owner", "apiVersion", owner.APIVersion, "kind", owner.Kind, "name", owner.Name, "err", err)
 			}
-			out = append(out, object)
 			continue
 		}
-		if gv.Group == "" && gv.Version != "v1" {
-			kindVersionGroup = fmt.Sprintf("%s.%s", owner.Kind, gv.Version)
-			klog.V(5).InfoS("repo.Owners", "kindVersionGroup", kindVersionGroup, "gv", gv)
-			ownerWithVersion, err := r.FirstObject(namespace, []string{kindVersionGroup, owner.Name}, "")
-			if err != nil {
-				klog.V(3).InfoS("repo.Owners failed to get owner using kind+version", "apiVersion", owner.APIVersion)
-				continue
-			}
-			if ownerWithVersion == nil {
-				// it's likely the ownerReference.apiVersion field doesn't have the group prefix, so we'll try without the version
-				ownerWithVersion, err = r.FirstObject(namespace, []string{owner.Kind, owner.Name}, "")
-				if err != nil {
-					klog.V(3).InfoS("repo.Owners failed to get owner using kind+version", "apiVersion", owner.APIVersion)
-					continue
-				}
-			}
-			out = append(out, ownerWithVersion)
-			continue
-		}
-		kindVersionGroup = fmt.Sprintf("%s.%s.%s", owner.Kind, gv.Version, gv.Group)
-		klog.V(5).InfoS("repo.Owners", "kindVersionGroup", kindVersionGroup)
-		object, err := r.FirstObject(namespace, []string{kindVersionGroup, owner.Name}, "")
-		if err != nil {
-			klog.V(3).InfoS("repo.Owners failed to get owner using kind+version+group", "apiVersion", owner.APIVersion)
-			continue
-		}
-		out = append(out, object)
+		owners = append(owners, object)
 	}
-	return out, nil
+	return owners, orphans, nil
+}
+
+// resolveOwner fetches the object referenced by an ownerReference, using the dynamic client
+// directly so that Kubernetes API errors (e.g. NotFound) reach the caller unwrapped. Cluster-scoped
+// owners are looked up without a namespace, since the dynamic client is not scope-aware and would
+// otherwise build a namespaced request URL for them and wrongly get back a NotFound.
+func (r *ResourceRepo) resolveOwner(namespace string, owner metav1.OwnerReference) (Object, error) {
+	mapping, err := r.ownerReferenceMapping(owner)
+	if err != nil {
+		return nil, err
+	}
+	if mapping.Scope.Name() != meta.RESTScopeNameNamespace {
+		namespace = ""
+	}
+	cacheKey := strings.Join([]string{namespace, mapping.Resource.String(), owner.Name}, "\x1e")
+	if entry, ok := r.ownerCache[cacheKey]; ok {
+		return entry.object, entry.err
+	}
+	object, err := r.DynamicObject(mapping.Resource, namespace, owner.Name)
+	if r.ownerCache == nil {
+		r.ownerCache = make(map[string]ownerCacheEntry)
+	}
+	r.ownerCache[cacheKey] = ownerCacheEntry{object: object, err: err}
+	return object, err
+}
+
+func (r *ResourceRepo) ownerReferenceMapping(owner metav1.OwnerReference) (*meta.RESTMapping, error) {
+	gv, err := schema.ParseGroupVersion(owner.APIVersion)
+	if err != nil {
+		klog.V(3).InfoS("repo.ownerReferenceMapping failed parsing apiVersion", "apiVersion", owner.APIVersion)
+		return r.mappingFor(owner.Kind)
+	}
+	if gv.Group == "" && gv.Version != "v1" {
+		kindVersionGroup := fmt.Sprintf("%s.%s", owner.Kind, gv.Version)
+		klog.V(5).InfoS("repo.ownerReferenceMapping", "kindVersionGroup", kindVersionGroup, "gv", gv)
+		if mapping, err := r.mappingFor(kindVersionGroup); err == nil {
+			return mapping, nil
+		}
+		// it's likely the ownerReference.apiVersion field doesn't have the group prefix, so we'll try without the version
+		return r.mappingFor(owner.Kind)
+	}
+	kindVersionGroup := fmt.Sprintf("%s.%s.%s", owner.Kind, gv.Version, gv.Group)
+	klog.V(5).InfoS("repo.ownerReferenceMapping", "kindVersionGroup", kindVersionGroup)
+	return r.mappingFor(kindVersionGroup)
 }
 
 func (r *ResourceRepo) FirstObject(namespace string, args []string, labelSelector string) (Object, error) {
