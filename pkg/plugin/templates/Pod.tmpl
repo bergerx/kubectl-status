@@ -47,6 +47,7 @@
     {{- template "pod_ephemeral_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
     {{- template "pod_volumes" . }}
     {{- template "matching_services" . }}
+    {{- template "matching_pdbs" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
@@ -318,6 +319,29 @@
                 {{- "Services:" | bold | nindent 2 }}
                 {{- range $svcs }}
                     {{- $.Include "service_health_summary" . | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_pdbs" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- if not ($.Config.GetBool "shallow") }}
+        {{- $pdbs := $.KubeGetPodDisruptionBudgetsMatchingLabels $.Namespace $.Labels }}
+        {{- if $pdbs }}
+            {{- with $.Include "pdb_conflict_warning" $pdbs }}{{ . | nindent 2 }}{{ end }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- "PodDisruptionBudgets:" | bold | nindent 2 }}
+                {{- range $pdbs }}
+                    {{- $.Include "PodDisruptionBudget" . | nindent 4 }}
+                {{- end }}
+            {{- else if eq (len $pdbs) 1 }}
+                {{- "PodDisruptionBudgets:" | bold | nindent 2 }} {{ $.Include "pdb_health_summary" (index $pdbs 0) }}
+            {{- else }}
+                {{- "PodDisruptionBudgets:" | bold | nindent 2 }}
+                {{- range $pdbs }}
+                    {{- $.Include "pdb_health_summary" . | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}

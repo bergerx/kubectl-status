@@ -1,0 +1,13 @@
+\A
+Pod/pdb-conflict-test-0 -n default, created 1m ago by StatefulSet/pdb-conflict-test, gen:1(, started after [0-9.]+[A-Za-z]+)? Running BestEffort
+  Current: Pod is Ready
+  Managed by pdb-conflict-test application
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Containers: pdb-conflict-test \(registry\.k8s\.io/pause:3\.9\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  2 PodDisruptionBudgets match — evictions of these pods will fail \(Kubernetes doesn't support a pod covered by multiple PDBs\)
+  PodDisruptionBudgets:
+    (?:PodDisruptionBudget/pdb-conflict-test -n default, min available=1, (?:evictions/drains currently blocked|budget violated \(0/1 healthy, 1 required\))\n    PodDisruptionBudget/pdb-conflict-test-catch-all -n default, min available=1, (?:evictions/drains currently blocked|budget violated \(0/1 healthy, 1 required\))|PodDisruptionBudget/pdb-conflict-test-catch-all -n default, min available=1, (?:evictions/drains currently blocked|budget violated \(0/1 healthy, 1 required\))\n    PodDisruptionBudget/pdb-conflict-test -n default, min available=1, (?:evictions/drains currently blocked|budget violated \(0/1 healthy, 1 required\)))
+  Known/recorded manage events:
+    (?:1m ago Updated by kube-controller-manager \(metadata, spec\)\n    1m ago Updated by kubelet \(status\)|1m ago Updated by kubelet \(status\)\n    1m ago Updated by kube-controller-manager \(metadata, spec\))
+\z
