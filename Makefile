@@ -54,7 +54,10 @@ install-e2e-deps:
 	# read-only rendering of these objects, they don't need a controller reconciling them.
 	# Experimental channel is a superset of standard and adds TCPRoute/UDPRoute/
 	# BackendTLSPolicy/ListenerSet, which some e2e scenarios also render.
-	kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml
+	# --server-side: the experimental bundle's CRDs (e.g. HTTPRoute) are large enough that
+	# client-side apply's kubectl.kubernetes.io/last-applied-configuration annotation trips
+	# the 262144-byte annotation limit; server-side apply doesn't need that annotation.
+	kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml
 
 .PHONY: test-e2e
 test-e2e: vet staticcheck install-e2e-deps
