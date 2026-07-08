@@ -14,6 +14,7 @@ cover.html
 
 bin/
 dist/
+.e2e/
 
 .DS_Store
 .idea/

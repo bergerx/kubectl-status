@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Installed via `make install-hooks`. `make test-e2e` names its minikube profile
+# after the current branch (see E2E_* in the Makefile); this hook deletes any such
+# profile once the branch that owned it is deleted locally, so leftover clusters
+# don't pile up as worktrees/branches churn.
+#
+# git invokes every "reference-transaction" hook with a stage argument
+# (prepared/committed/aborted) and feeds "<old-oid> <new-oid> <ref>" triples for
+# every ref touched by the transaction on stdin. This fires for far more than
+# branch deletion (checkouts, merges, fetches...), so we filter down to
+# refs/heads/* transitioning to the all-zero oid, which is how git represents a
+# deleted ref.
+set -euo pipefail
+
+stage="${1:-}"
+[ "$stage" = "committed" ] || exit 0
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+slug_script="$repo_root/hack/e2e-branch-slug.sh"
+[ -x "$slug_script" ] || exit 0
+command -v minikube >/dev/null 2>&1 || exit 0
+
+is_zero_oid() {
+	case "$1" in
+	0000000000000000000000000000000000000000|0000000000000000000000000000000000000000000000000000000000000000000000) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+while read -r old_oid new_oid ref_name; do
+	case "$ref_name" in
+	refs/heads/*) ;;
+	*) continue ;;
+	esac
+	is_zero_oid "$new_oid" || continue
+
+	branch="${ref_name#refs/heads/}"
+	slug="$("$slug_script" "$branch")"
+	[ -n "$slug" ] || continue
+
+	profiles="$(minikube profile list -o json 2>/dev/null \
+		| grep -o "\"Name\"[[:space:]]*:[[:space:]]*\"kstat-e2e-${slug}-[a-f0-9]\{8\}\"" \
+		| cut -d'"' -f4 \
+		| sort -u || true)"
+	for profile in $profiles; do
+		echo "reference-transaction: branch '$branch' deleted, removing its e2e minikube profile '$profile'" >&2
+		minikube delete -p "$profile" >/dev/null 2>&1 || true
+	done
+done
+
+exit 0

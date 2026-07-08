@@ -213,16 +213,33 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
 
 ### Running e2e Tests Locally
 
-`make test-e2e` runs the `TestE2E*` suite against a real cluster (see `cmd/main_test.go`). By
-default it starts its own minikube cluster; set `ASSUME_MINIKUBE_IS_CONFIGURED=true` if your
-current kubeconfig context already points at a suitable cluster (this is what CI does).
+`make test-e2e` runs the `TestE2E*` suite against a real cluster (see `cmd/main_test.go`). It
+manages its own minikube cluster, named and isolated by an `E2E_PROFILE` the Makefile computes
+from your current git branch (plus, when running under Claude Code, `CLAUDE_CODE_SESSION_ID`) —
+so parallel worktrees/branches, and even multiple sessions working the same branch, never share a
+profile or step on each other's cluster. Run `make print-e2e-profile` to see the profile name and
+kubeconfig path (`.e2e/<profile>.kubeconfig`, gitignored) it'll use. `install-e2e-deps` (cert-manager,
+Gateway API CRDs) runs against that same cluster right after it's created, so deps always land on
+the cluster the tests actually use. The cluster is left running after the tests finish, for fast
+reruns; delete it explicitly with `make e2e-minikube-down` when you're done with the branch, or
+run `make install-hooks` once (installs a `reference-transaction` git hook, shared across all
+worktrees of the clone) to have it deleted automatically whenever you delete the local branch.
+
+CI instead sets `ASSUME_MINIKUBE_IS_CONFIGURED=true`, which makes `make test-e2e` skip all of the
+above and use whatever cluster your current kubeconfig context already points at (that's what
+`medyagh/setup-minikube` in `ci-test.yml` provisions) — set the same var locally if you'd rather
+manage the cluster yourself.
 
 Some e2e scenarios exercise cert-manager-issued TLS `Secret`s and Gateway API objects.
 `make test-e2e` installs both automatically (via its `install-e2e-deps` prerequisite target
-in the `Makefile`) against whatever cluster is configured before running the test suite — no
-separate manual setup needed. Bump the pinned versions in that target periodically to track
-upstream stable releases; CI uses the same `make test-e2e` target, so it stays in sync
-automatically.
+in the `Makefile`) — no separate manual setup needed. Bump the pinned versions in that target
+periodically to track upstream stable releases; CI uses the same `make test-e2e` target, so it
+stays in sync automatically.
+
+Note: `TestE2E*` functions invoked directly via `go test -run TestE2E...` (bypassing the
+Makefile) fall back to using the bare test function name as the minikube profile if `E2E_PROFILE`
+isn't set in the environment, so ad hoc runs across worktrees can still collide — export
+`E2E_PROFILE` yourself (e.g. from `make print-e2e-profile`) to isolate those too.
 
 When a template change adds or touches `$.KubeGetFirst`, `$.IncludeRenderableObject`/`$.Include`,
 or any other interaction with a live cluster, add or extend a case in `TestE2EDynamicManifests`
