@@ -1,0 +1,21 @@
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"gateway.networking.k8s.io/v1beta1","kind":"ReferenceGrant","metadata":{"annotations":{},"name":"allow-route-ns-to-default","namespace":"default"},"spec":{"from":[{"group":"gateway.networking.k8s.io","kind":"HTTPRoute","namespace":"route-ns"}],"to":[{"group":"","kind":"Service","name":"tls-backend"}]}}
+  creationTimestamp: "2026-07-07T22:03:37Z"
+  generation: 1
+  name: allow-route-ns-to-default
+  namespace: default
+  resourceVersion: "1275"
+  uid: ce01cc79-6f14-40fb-a590-d0ea0c81f459
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: route-ns
+  to:
+  - group: ""
+    kind: Service
+    name: tls-backend

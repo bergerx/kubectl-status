@@ -1,0 +1,22 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: e2e-lset-gw
+spec:
+  gatewayClassName: e2e-unused-gwc
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: e2e-listenerset
+spec:
+  parentRef:
+    name: e2e-lset-gw
+  listeners:
+  - name: extra-http
+    port: 8081
+    protocol: HTTP

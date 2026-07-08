@@ -1,0 +1,31 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: e2e-tcp-gw
+spec:
+  gatewayClassName: e2e-unused-gwc
+  listeners:
+  - name: tcp
+    port: 8080
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: e2e-tcp-svc
+spec:
+  ports:
+  - port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TCPRoute
+metadata:
+  name: e2e-tcproute
+spec:
+  parentRefs:
+  - name: e2e-tcp-gw
+    sectionName: tcp
+  rules:
+  - backendRefs:
+    - name: e2e-tcp-svc
+      port: 8080

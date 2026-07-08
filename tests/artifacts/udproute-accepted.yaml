@@ -1,0 +1,46 @@
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: UDPRoute
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"gateway.networking.k8s.io/v1alpha2","kind":"UDPRoute","metadata":{"annotations":{},"name":"udp-backend-route","namespace":"default"},"spec":{"parentRefs":[{"name":"multi-proto-gw","sectionName":"udp"}],"rules":[{"backendRefs":[{"name":"udp-backend","port":9090}]}]}}
+  creationTimestamp: "2026-07-07T22:00:04Z"
+  generation: 1
+  name: udp-backend-route
+  namespace: default
+  resourceVersion: "983"
+  uid: acd69dc9-bce2-40b7-b7b7-91634b8f8597
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: multi-proto-gw
+    sectionName: udp
+  rules:
+  - backendRefs:
+    - group: ""
+      kind: Service
+      name: udp-backend
+      port: 9090
+      weight: 1
+status:
+  parents:
+  - conditions:
+    - lastTransitionTime: "2026-07-07T22:00:04Z"
+      message: Route is accepted
+      observedGeneration: 1
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: "2026-07-07T22:00:04Z"
+      message: Resolved all the Object references for the Route
+      observedGeneration: 1
+      reason: ResolvedRefs
+      status: "True"
+      type: ResolvedRefs
+    controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    parentRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: multi-proto-gw
+      sectionName: udp
