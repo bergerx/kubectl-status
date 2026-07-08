@@ -55,7 +55,9 @@
             {{- $replicaSets = append $replicaSets . }}
         {{- end }}
     {{- end }}
-    {{- if ge (len $replicaSets) 2 }}
+    {{- $rolloutStatus := .RolloutStatus . }}
+    {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.replicas | default 0 | int) (.Status.readyReplicas | default 0 | int)) }}
+    {{- if or (gt (len $replicaSets) 1) (and (eq (len $replicaSets) 1) $rolloutProblem) }}
         {{- "Rollouts:" | nindent 2}}
         {{- template "rollout_diffs_flag_help" $ }}
         {{- $previousReplicaSet := "" }}
