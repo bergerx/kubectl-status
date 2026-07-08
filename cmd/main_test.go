@@ -30,7 +30,6 @@ import (
 type cmdTest struct {
 	name            string
 	args            []string
-	stdoutRegex     string // Regex
 	stdoutRegexPath string // Regex match against file contents under test folder
 	stdoutEqual     string // Exact
 	stdoutEqualPath string // Exact match with file contents under test folder
@@ -102,10 +101,8 @@ func (c cmdTest) assert(t *testing.T, stdoutModifier func(string) string) {
 		stdout = nodeNameModifier(stdout)
 	}
 	switch {
-	case c.stdoutRegex == "" && c.stdoutEqual == "" && c.stdoutRegexPath == "" && c.stdoutEqualPath == "":
+	case c.stdoutEqual == "" && c.stdoutRegexPath == "" && c.stdoutEqualPath == "":
 		assert.Empty(t, stdout)
-	case c.stdoutRegex != "":
-		assert.Regexp(t, c.stdoutRegex, stdout)
 	case c.stdoutEqual != "":
 		assert.Equal(t, c.stdoutEqual, stdout)
 	case c.stdoutEqualPath != "":
@@ -157,29 +154,25 @@ func TestRootCmdWithoutACluster(t *testing.T) {
 			stderrRegex: `the server rejected our request for an unknown reason|connect: connection refused`,
 		},
 		{
-			name:        "file with local should succeed",
-			args:        []string{"-f", "../tests/artifacts/deployment-healthy.yaml", "--local"},
-			stdoutRegex: `^\nDeployment/httpbin-deployment`,
+			name:            "file with local should succeed",
+			args:            []string{"-f", "../tests/artifacts/deployment-healthy.yaml", "--local"},
+			stdoutRegexPath: "artifacts/deployment-healthy.local.regex",
 		},
 		{
-			name: "cr file with local with status should render ready conditions",
-			args: []string{"-f", "../tests/artifacts/cr-dbconn-mymysql.yaml", "--local"},
-			stdoutRegex: `^
-DatabaseConnection/mymysql -n default, created 1m ago
-  Current: Resource is Ready
-  Ready ConnectionEstablished, Database connection successfully established. for 1m
-$`,
+			name:            "cr file with local with status should render ready conditions",
+			args:            []string{"-f", "../tests/artifacts/cr-dbconn-mymysql.yaml", "--local"},
+			stdoutRegexPath: "artifacts/cr-dbconn-mymysql.local.regex",
 		},
 		{
-			name:        "file with 'kind: List' should list all resources",
-			args:        []string{"-f", "../tests/artifacts/multiple-2-pods-list.yaml", "--local"},
-			stdoutRegex: `(?ms)Pod/etcd-minikube.*Pod/storage-provisioner`,
+			name:            "file with 'kind: List' should list all resources",
+			args:            []string{"-f", "../tests/artifacts/multiple-2-pods-list.yaml", "--local"},
+			stdoutRegexPath: "artifacts/multiple-2-pods-list.local.regex",
 			// TODO: logs `couldn't get current server API group list: Get "http://localhost:8080/api?timeout=32s": dial tcp [::1]:8080: connect: connection refused`
 		},
 		{
-			name:        "file with multiple yaml documents should list all resources",
-			args:        []string{"-f", "../tests/artifacts/multiple-2-pods-docs.yaml", "--local"},
-			stdoutRegex: `(?ms)Pod/etcd-minikube.*Pod/storage-provisioner`,
+			name:            "file with multiple yaml documents should list all resources",
+			args:            []string{"-f", "../tests/artifacts/multiple-2-pods-docs.yaml", "--local"},
+			stdoutRegexPath: "artifacts/multiple-2-pods-docs.local.regex",
 			// TODO: logs `couldn't get current server API group list: Get "http://localhost:8080/api?timeout=32s": dial tcp [::1]:8080: connect: connection refused`
 		},
 	}
@@ -206,14 +199,14 @@ func TestE2EAgainstVanillaMinikube(t *testing.T) {
 			stderrRegex: `error: no resources found\n$`,
 		},
 		{
-			name:        "pods on kube-system ns should return storage-provisioner",
-			args:        []string{"pods", "-n", "kube-system"},
-			stdoutRegex: `^\nPod/[a-z0-9-]+ -n kube-system`,
+			name:            "pods on kube-system ns should return storage-provisioner",
+			args:            []string{"pods", "-n", "kube-system"},
+			stdoutRegexPath: "e2e-artifacts/pods-kube-system.regex",
 		},
 		{
-			name:        "node query should return at least a node",
-			args:        []string{"node"},
-			stdoutRegex: `^\nNode/`,
+			name:            "node query should return at least a node",
+			args:            []string{"node"},
+			stdoutRegexPath: "e2e-artifacts/node-query.regex",
 		},
 		{
 			name:        "cr file without a crd should fail",
@@ -427,15 +420,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 			// "Resource is always ready" by kstatus, so the "Current:" line is redundant
 			// noise) -- see tests/artifacts/secret-tls-healthy.out for the same committed
 			// expectation.
-			stdoutRegex: `(?ms)
-Secret\/child -n default, created 1m ago by Secret/owner
-  Known\/recorded manage events:
-    1m ago Updated by [^ ]+ \(metadata, type\)
-  Owners:
-    Secret\/owner -n default, created 1m ago
-      Known\/recorded manage events:
-        1m ago Updated by [^ ]+ \(type\)
-`,
+			stdoutRegexPath: "e2e-artifacts/secret-child-with-owner.regex",
 		}
 		test.assert(t, nil) // to update the out files check /tests/artifacts/README.md
 	})
@@ -471,12 +456,8 @@ Secret\/child -n default, created 1m ago by Secret/owner
 		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 
 		cmdTest{
-			args: []string{"pod/pod-on-bad-node", "--include-events=false", "--v", "5"},
-			stdoutRegex: `(?ms)` +
-				`Node/` + nodeName + ` cordoned \(unschedulable\)\n` +
-				`.*Ready KubeletNotReady, kubelet is not ready.*\n` +
-				`.*MemoryPressure KubeletHasInsufficientMemory, kubelet has insufficient memory available.*\n` +
-				`.*taint dedicated=gpu:NoSchedule \(not tolerated\)`,
+			args:            []string{"pod/pod-on-bad-node", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node.regex",
 		}.assert(t, nil)
 	})
 	t.Run("workload's matching pod on a cordoned node surfaces a compact node-problem flag", func(t *testing.T) {
@@ -521,10 +502,8 @@ Secret\/child -n default, created 1m ago by Secret/owner
 		defer clientset.AppsV1().ReplicaSets("default").Delete(context.TODO(), rs.Name, metav1.DeleteOptions{})
 
 		cmdTest{
-			args: []string{"rs/bad-rs", "--include-events=false", "--v", "5"},
-			stdoutRegex: `(?ms)` +
-				`Pod/pod-on-bad-node-for-rs -n default[^\n]*, node cordoned, node NotReady, ` +
-				`node MemoryPressure, untolerated node taint`,
+			args:            []string{"rs/bad-rs", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node-for-rs.regex",
 		}.assert(t, nil)
 	})
 	t.Run("deployment rollout with --include-rollout-diffs shows the diff between revisions", func(t *testing.T) {

@@ -1,0 +1,1 @@
+Pod/pod-on-bad-node-for-rs -n default[^\n]*, node cordoned, node NotReady, node MemoryPressure, untolerated node taint
