@@ -1,0 +1,36 @@
+\A
+Deployment/rollout-diff-test -n default, created \d+[a-z]+ ago, gen:\d+ rev:\d+
+  Current: Deployment is available\. Replicas: 1
+  desired:1, existing:1, ready:1, updated:1, available:1
+  Selector: app=rollout-diff-test
+    Not matched by any Service
+(?:    Pod/rollout-diff-test-[a-z0-9]+-[a-z0-9]+ -n default Running, 1/1 ready
+)+  Available MinimumReplicasAvailable, Deployment has minimum availability\. for \d+[a-z]+
+  Progressing NewReplicaSetAvailable, ReplicaSet "rollout-diff-test-7cf6c88cf8" has successfully progressed\. for \d+[a-z]+
+  Rollouts:
+    \d+[a-z]+ ago, managed by ReplicaSet/rollout-diff-test-7cf6c88cf8, has 1 replicas
+    \d+[a-z]+ ago, managed by ReplicaSet/rollout-diff-test-f96b445cf
+      Diff:
+      (?:--- a ReplicaSet/rollout-diff-test-7cf6c88cf8\t\S.*\(\d+[a-z]+ ago\)
+      \+\+\+ b ReplicaSet/rollout-diff-test-f96b445cf\t\S.*\(\d+[a-z]+ ago\)
+      @@ -36,7 \+36,7 @@
+             "spec": \{
+               "containers": \[
+                 \{
+      -            "image": "nginx:1\.26",
+      \+            "image": "nginx:1\.25",|--- a ReplicaSet/rollout-diff-test-f96b445cf\t\S.*\(\d+[a-z]+ ago\)
+      \+\+\+ b ReplicaSet/rollout-diff-test-7cf6c88cf8\t\S.*\(\d+[a-z]+ ago\)
+      @@ -36,7 \+36,7 @@
+             "spec": \{
+               "containers": \[
+                 \{
+      -            "image": "nginx:1\.25",
+      \+            "image": "nginx:1\.26",)
+                   "imagePullPolicy": "IfNotPresent",
+                   "name": "nginx",
+                   "resources": \{\},
+      
+  Known/recorded manage events:
+    \d+[a-z]+ ago Updated by cmd\.test \(spec\)
+    \d+[a-z]+ ago Updated by kube-controller-manager \(metadata, status\)
+\z
