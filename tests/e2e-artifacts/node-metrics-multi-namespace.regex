@@ -23,4 +23,4 @@ Node/[a-z0-9.-]+, created \d+[a-z]+ ago
     (?:pods: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+
     kubelet: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+|kubelet: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+
     pods: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+)
-  Known/recorded manage events:
+\z

@@ -916,7 +916,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}
 
 		cmdTest{
-			args:            []string{"node/" + nodeName, "--include-events=false", "--v", "5"},
+			args:            []string{"node/" + nodeName, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/node-metrics-multi-namespace.regex",
 		}.assert(t, nil)
 	})
