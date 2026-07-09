@@ -31,11 +31,12 @@ import (
 type Object map[string]interface{}
 
 func (u Object) creationTimestamp() string {
-	m, ok := u["metadata"].(map[string]string)
+	m, ok := u["metadata"].(map[string]interface{})
 	if !ok {
 		return ""
 	}
-	return m["creationTimestamp"]
+	ts, _ := m["creationTimestamp"].(string)
+	return ts
 }
 
 func (u Object) Unstructured() *unstructured.Unstructured {

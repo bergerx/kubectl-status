@@ -61,6 +61,9 @@
         {{- "Rollouts:" | nindent 2}}
         {{- template "rollout_diffs_flag_help" $ }}
         {{- $previousReplicaSet := "" }}
+        {{- $activeReplicaSetObj := "" }}
+        {{- $previousReplicaSetByRevision := "" }}
+        {{- $previousRevisionNumber := -1 }}
         {{- range $replicaSets }}
             {{- with .Metadata.creationTimestamp }}{{ . | colorAgo | nindent 4 }}{{ agoSuffix }}{{ end }}, managed by {{ .Kind | bold }}/{{ .Name }}
             {{- $replicationSetRevision := index .Annotations "deployment.kubernetes.io/revision" }}
@@ -80,7 +83,25 @@
                     {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 6 }}
                 {{- end }}
             {{- end }}
+            {{- if $activeReplicaSet }}
+                {{- $activeReplicaSetObj = . }}
+            {{- else }}
+                {{- $revisionNumber := $replicationSetRevision | default "0" | int }}
+                {{- if gt $revisionNumber $previousRevisionNumber }}
+                    {{- $previousRevisionNumber = $revisionNumber }}
+                    {{- $previousReplicaSetByRevision = . }}
+                {{- end }}
+            {{- end }}
             {{- $previousReplicaSet = . }}
+        {{- end }}
+        {{- /* KubeGet/KubeGetUnifiedDiffString results are cached, list order is otherwise
+              unreliable, so the active rollout's diff is looked up by revision number rather
+              than by position in $replicaSets. */ -}}
+        {{- if and (not $rolloutStatus.done) $activeReplicaSetObj $previousReplicaSetByRevision (not ($.Config.GetBool "include-rollout-diffs")) }}
+            {{- with $.KubeGetUnifiedDiffString "ReplicaSet" $.Namespace $previousReplicaSetByRevision.Name $activeReplicaSetObj.Name }}
+                {{- "Active Rollout Diff" | bold | nindent 4 }}:
+                {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 6 }}
+            {{- end }}
         {{- end }}
     {{- end }}
 {{- end }}

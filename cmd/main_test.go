@@ -545,6 +545,142 @@ func TestE2EDynamicManifests(t *testing.T) {
 			stdoutRegexPath: "e2e-artifacts/rollout-diff.regex",
 		}.assert(t, nil)
 	})
+	t.Run("Rollouts section shows a single blocked rollout even without a second one to compare against", func(t *testing.T) {
+		// #213: the Rollouts list used to be suppressed unless there were 2+ rollouts to
+		// compare, hiding a stuck or unhealthy first/only rollout. It should now also show up
+		// for a single rollout that isn't done yet.
+		badImage := "kubectl-status-e2e-this-image-does-not-exist"
+
+		t.Run("deployment", func(t *testing.T) {
+			viperTestHack(t)
+			name := "e2e-rollouts-blocked-deployment"
+			one := int32(1)
+			dep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &one,
+					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
+						Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: badImage}}},
+					},
+				},
+			}
+			_, err := clientset.AppsV1().Deployments("default").Create(context.TODO(), dep, metav1.CreateOptions{})
+			require.NoError(t, err)
+			defer clientset.AppsV1().Deployments("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
+			podName := waitForPodByLabel(t, "default", "app="+name)
+			waitForContainerWaitingReason(t, "pod/"+podName, "app", "ImagePullBackOff")
+
+			cmdTest{
+				args:            []string{"deployment/" + name, "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-deployment.regex",
+			}.assert(t, nil)
+		})
+		t.Run("statefulset", func(t *testing.T) {
+			viperTestHack(t)
+			name := "e2e-rollouts-blocked-statefulset"
+			one := int32(1)
+			sts := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas:    &one,
+					ServiceName: name,
+					Selector:    &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
+						Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: badImage}}},
+					},
+				},
+			}
+			_, err := clientset.AppsV1().StatefulSets("default").Create(context.TODO(), sts, metav1.CreateOptions{})
+			require.NoError(t, err)
+			defer clientset.AppsV1().StatefulSets("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
+			waitForContainerWaitingReason(t, "pod/"+name+"-0", "app", "ImagePullBackOff")
+
+			cmdTest{
+				args:            []string{"statefulset/" + name, "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-statefulset.regex",
+			}.assert(t, nil)
+		})
+		t.Run("daemonset", func(t *testing.T) {
+			viperTestHack(t)
+			name := "e2e-rollouts-blocked-daemonset"
+			ds := &appsv1.DaemonSet{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				Spec: appsv1.DaemonSetSpec{
+					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
+						Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: badImage}}},
+					},
+				},
+			}
+			_, err := clientset.AppsV1().DaemonSets("default").Create(context.TODO(), ds, metav1.CreateOptions{})
+			require.NoError(t, err)
+			defer clientset.AppsV1().DaemonSets("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
+			podName := waitForPodByLabel(t, "default", "app="+name)
+			waitForContainerWaitingReason(t, "pod/"+podName, "app", "ImagePullBackOff")
+
+			cmdTest{
+				args:            []string{"daemonset/" + name, "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-daemonset.regex",
+			}.assert(t, nil)
+		})
+		t.Run("healthy single rollout stays suppressed", func(t *testing.T) {
+			viperTestHack(t)
+			name := "e2e-rollouts-healthy-deployment"
+			one := int32(1)
+			dep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &one,
+					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
+						Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: "nginx:1.27"}}},
+					},
+				},
+			}
+			_, err := clientset.AppsV1().Deployments("default").Create(context.TODO(), dep, metav1.CreateOptions{})
+			require.NoError(t, err)
+			defer clientset.AppsV1().Deployments("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
+			waitFor(t, "deployment/"+name, "condition=Available")
+
+			cmdTest{
+				args:            []string{"deployment/" + name, "--include-events=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/rollouts-single-healthy-deployment.regex",
+			}.assert(t, nil)
+		})
+		t.Run("three healthy revisions with --include-rollout-diffs shows both consecutive diffs", func(t *testing.T) {
+			// Needs two distinct spec changes (three revisions total) before the check, so
+			// there are two consecutive pairs to diff, not just the one covered by the
+			// "--include-rollout-diffs shows the diff between revisions" test above.
+			viperTestHack(t)
+			name := "e2e-rollouts-three-revisions"
+			applyManifest(t, "e2e-artifacts/rollouts-three-revisions.yaml")
+			waitFor(t, "deployment/"+name, "condition=Available")
+
+			require.NoError(t, exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.26", "-n", "default").Run())
+			rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", "default", "--timeout=2m")
+			output, err := rolloutCmd.CombinedOutput()
+			t.Logf("rollout status for %s (nginx:1.26): %s", name, output)
+			require.NoError(t, err)
+			waitForSinglePod(t, "default", "app="+name)
+
+			require.NoError(t, exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.27", "-n", "default").Run())
+			rolloutCmd = exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", "default", "--timeout=2m")
+			output, err = rolloutCmd.CombinedOutput()
+			t.Logf("rollout status for %s (nginx:1.27): %s", name, output)
+			require.NoError(t, err)
+			waitForSinglePod(t, "default", "app="+name)
+
+			cmdTest{
+				args:            []string{"deployment/" + name, "--include-events=false", "--include-rollout-diffs", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/rollouts-three-revisions-with-diffs.regex",
+			}.assert(t, nil)
+		})
+	})
 	t.Run("sts-with-ingress", func(t *testing.T) {
 		viperTestHack(t)
 		// using sts here as the pod name is predictable in that case, not true for deployments and ds
@@ -982,10 +1118,55 @@ func waitFor(t *testing.T, resource, forParam string) {
 
 // waitForContainerRestart polls until the named container in the resource reports a
 // restartCount greater than zero.
+// waitForSinglePod polls until exactly one pod matches the given label selector. Used after a
+// rollout to make sure the previous revision's pod has actually finished terminating: `kubectl
+// rollout status` and the Deployment's `.status.replicas` field can both report the rollout as
+// done slightly before the old pod object is removed, which otherwise makes the rendered output
+// briefly list two Pods instead of one.
+func waitForSinglePod(t *testing.T, namespace, labelSelector string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
+			"-o", "jsonpath={.items[*].metadata.name}")
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			names := strings.Fields(string(output))
+			if len(names) == 1 {
+				t.Logf("exactly one pod %s matches selector %s in namespace %s", names[0], labelSelector, namespace)
+				return
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for exactly one pod matching selector %s in namespace %s", labelSelector, namespace)
+}
+
 // waitForContainerWaitingReason polls until the named container in the resource reports the
 // given waiting-state reason. Used instead of a plain restart-count check because a crashlooping
 // container's current state flips between Waiting(CrashLoopBackOff) and Terminated(Error) as the
 // kubelet retries, so waiting for a stable, specific state avoids a flaky render.
+// waitForPodByLabel polls until exactly one pod matches the given label selector and returns
+// its name. Used for Deployment/DaemonSet, whose pod names include a random suffix that isn't
+// known ahead of time (unlike StatefulSet, where pod names are predictable).
+func waitForPodByLabel(t *testing.T, namespace, labelSelector string) string {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
+			"-o", "jsonpath={.items[0].metadata.name}")
+		output, err := cmd.CombinedOutput()
+		if err == nil && strings.TrimSpace(string(output)) != "" {
+			name := strings.TrimSpace(string(output))
+			t.Logf("found pod %s matching selector %s in namespace %s", name, labelSelector, namespace)
+			return name
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for a pod matching selector %s in namespace %s", labelSelector, namespace)
+	return ""
+}
+
 func waitForContainerWaitingReason(t *testing.T, resource, containerName, reason string) {
 	t.Helper()
 	jsonpath := fmt.Sprintf(`{.status.containerStatuses[?(@.name=="%s")].state.waiting.reason}`, containerName)
