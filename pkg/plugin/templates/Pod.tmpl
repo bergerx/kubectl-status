@@ -488,7 +488,7 @@
     {{- end }}
     {{- if .containerMetrics }}
         {{- if .containerMetrics.usage.cpu }}{{ "usage" | nindent 2 }} {{ template "container_usage" . }}{{ end }}
-    {{- else if .metricsUnavailableReason }}
+    {{- else if and .metricsUnavailableReason .containerStatus.state.running }}
         {{- "" | nindent 2 }}{{ template "container_requests_limits" . }}, ({{ .metricsUnavailableReason | yellow }})
     {{- end }}
     {{- with .containerStatus.lastState }}
