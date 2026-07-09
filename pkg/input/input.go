@@ -228,9 +228,10 @@ func (r *ResourceRepo) MetricsUnavailableReason() string {
 	obj, err := r.DynamicObject(metricsAPIServiceGVR, "", "v1beta1.metrics.k8s.io")
 	switch {
 	case apierrors.IsNotFound(err):
-		reason = "metrics-server is not installed (no v1beta1.metrics.k8s.io APIService found)"
+		reason = "metrics-server is not installed"
 	case err != nil:
 		klog.V(3).ErrorS(err, "failed to check metrics-server APIService availability")
+		reason = fmt.Sprintf("failed to check metrics-server availability: %v", err)
 	default:
 		reason = unavailableReasonFromAPIServiceConditions(obj)
 	}

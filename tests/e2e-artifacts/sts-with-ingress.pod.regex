@@ -3,10 +3,9 @@ Pod/sts-with-ingress-0 -n default, created 1m ago by StatefulSet/sts-with-ingres
   Current: Pod is Ready
   Managed by sts-with-ingress application
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
-  Containers: sts-with-ingress \(registry\.k8s\.io/pause:3\.9\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)(
-  usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\])?
-(    no metrics yet: metrics-server hasn't reported cpu/memory usage for this Pod's containers yet\.
-)?  Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  Containers: sts-with-ingress \(registry\.k8s\.io/pause:3\.9\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
+  Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
   Services: Service/sts-with-ingress -n default, ClusterIP, 1 ready, 80/TCP
   Known/recorded manage events:
     (?:1m ago Updated by kube-controller-manager \(metadata, spec\)

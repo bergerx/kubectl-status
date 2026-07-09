@@ -142,12 +142,9 @@
             {{- end }}
             {{- with index .Status.allocatable "ephemeral-storage" }}{{ "ephemeral-storage" | bold | nindent 2 }}: {{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
         {{- else if not (.Config.GetBool "shallow") }}
-            {{- $metricsUnavailableReason := $.KubeMetricsUnavailableReason }}
-            {{- if $metricsUnavailableReason }}
-                {{- $metricsUnavailableReason | yellow | nindent 2 }}: cpu/memory usage for this Node and its Pods can't be shown.
-            {{- else }}
-                {{- "no metrics yet" | yellow | nindent 2 }}: metrics-server hasn't reported cpu/memory usage for this Node yet.
-            {{- end }}
+            {{- $metricsUnavailableReason := $.KubeMetricsUnavailableReason | default "no metrics yet" }}
+            {{- "cpu" | bold | nindent 2 }}: [req:{{ $podsTotalCpuRequests | printf "%.3g" }}, lim:{{ $podsTotalCpuLimits | printf "%.3g" }}]
+            {{- ", " }}{{ "mem" | bold }}: [req:{{ $podsTotalMemRequests | humanizeSI "B" }}, lim:{{ $podsTotalMemLimits | humanizeSI "B" }}], ({{ $metricsUnavailableReason | yellow }})
         {{- end }}
     {{- end }}
 {{- end }}
