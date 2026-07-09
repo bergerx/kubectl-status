@@ -43,10 +43,30 @@
             {{- $revisions = append $revisions . }}
         {{- end }}
     {{- end }}
-    {{- if ge (len $revisions) 2 }}
+    {{- $rolloutStatus := .RolloutStatus . }}
+    {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.desiredNumberScheduled | default 0 | int) (.Status.numberReady | default 0 | int)) (ne (.Status.desiredNumberScheduled | default 0 | int) (.Status.updatedNumberScheduled | default 0 | int)) (ne (.Status.numberMisscheduled | default 0 | int) 0) }}
+    {{- if or (gt (len $revisions) 1) (and (eq (len $revisions) 1) $rolloutProblem) }}
         {{- "Rollouts:" | nindent 2 }}
         {{- template "rollout_diffs_flag_help" $ }}
         {{- $previousRevision := "" }}
+        {{- $activeRevisionObj := "" }}
+        {{- $maxRevisionNumber := -1 }}
+        {{- $previousRevisionObj := "" }}
+        {{- $previousRevisionNumber := -1 }}
+        {{- range $revisions }}
+            {{- $revisionNumber := .Object.revision | int }}
+            {{- if gt $revisionNumber $maxRevisionNumber }}
+                {{- $maxRevisionNumber = $revisionNumber }}
+                {{- $activeRevisionObj = . }}
+            {{- end }}
+        {{- end }}
+        {{- range $revisions }}
+            {{- $revisionNumber := .Object.revision | int }}
+            {{- if and (ne $revisionNumber $maxRevisionNumber) (gt $revisionNumber $previousRevisionNumber) }}
+                {{- $previousRevisionNumber = $revisionNumber }}
+                {{- $previousRevisionObj = . }}
+            {{- end }}
+        {{- end }}
         {{- range $revisions }}
             {{- "" | nindent 4 }}
             {{- with .Metadata.creationTimestamp }}{{ . | colorAgo }}{{ agoSuffix }}{{ end }} used {{ .Kind | bold }}/{{ .Name }}.
@@ -56,6 +76,14 @@
                 {{- end }}
             {{- end }}
             {{- $previousRevision = . }}
+        {{- end }}
+        {{- /* KubeGet results are cached but list order is otherwise unreliable, so the active
+              rollout's diff is looked up by revision number rather than by position in $revisions. */ -}}
+        {{- if and (not $rolloutStatus.done) $activeRevisionObj $previousRevisionObj (not ($.Config.GetBool "include-rollout-diffs")) }}
+            {{- with $.KubeGetUnifiedDiffString "ControllerRevision" $.Namespace $previousRevisionObj.Name $activeRevisionObj.Name }}
+                {{- "Active Rollout Diff" | bold | nindent 4 }}:
+                {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 6 }}
+            {{- end }}
         {{- end }}
     {{- end }}
 {{- end }}
