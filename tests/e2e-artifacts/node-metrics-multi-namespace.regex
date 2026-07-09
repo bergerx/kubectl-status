@@ -1,0 +1,26 @@
+\A
+Node/[a-z0-9.-]+, created \d+[a-z]+ ago
+  linux .+, kernel \S+, kubelet v[\d.]+, kube-proxy ?\S*
+  images \d+
+  Current: Resource is Ready
+  MemoryPressure KubeletHasSufficientMemory, kubelet has sufficient memory available for \d+[a-z]+
+  DiskPressure KubeletHasNoDiskPressure, kubelet has no disk pressure for \d+[a-z]+
+  PIDPressure KubeletHasSufficientPID, kubelet has sufficient PID available for \d+[a-z]+
+  Ready KubeletReady, kubelet is posting ready status for \d+[a-z]+
+  addresses: InternalIP=[\d.]+ Hostname=[a-z0-9.-]+
+  allocatable: pods:\d+, cpu:\d+, mem:[\d.]+[A-Za-z]+, ephemeral-storage:[\d.]+[A-Za-z]+
+  capacity: pods:\d+, cpu:\d+, mem:[\d.]+[A-Za-z]+, ephemeral-storage:[\d.]+[A-Za-z]+
+  Inferred memory limits for BestEffort: [\d.]+[A-Za-z]+, for Burstable: [\d.]+[A-Za-z]+
+  pods: usage/allocatable:\d+/\d+\(\d+%\)
+  cpu: usage/allocatable:[\d.]+/\d+\(\d+%\), allocated usage:[\d.]+\(\d+% of allocatable\)/\[req:[\d.]+\(\d+% of allocatable\), lim:[\d.]+\(\d+% of allocatable\)\]
+  mem: usage/allocatable:[\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+\(\d+%\), allocated usage:[\d.]+[A-Za-z]+\(\d+% of allocatable\)/\[req:[\d.]+[A-Za-z]+\(\d+% of allocatable\), lim:[\d.]+[A-Za-z]+\(\d+% of allocatable\)\]
+  ephemeral-storage: [\d.]+[A-Za-z]+
+  kubelet-api/stats/summary:
+    node overall: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+, processes \S+/\S+ \(rlimit\)
+      network: rx/tx [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, rx/tx errors \d+/\d+
+      rootfs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free; \S+/\S+ inode, \S+ inode still free
+      imagefs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free; \S+/\S+ inode, \S+ inode still free
+    (?:pods: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+
+    kubelet: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+|kubelet: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+
+    pods: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+)
+  Known/recorded manage events:

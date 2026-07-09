@@ -538,14 +538,12 @@ func TestE2EDynamicManifests(t *testing.T) {
 		t.Logf("rollout status for %s: %s", name, output)
 		require.NoError(t, err)
 
-		stdout, _, err := executeCMD(t, []string{"deployment/" + name, "--include-rollout-diffs", "--include-events=false", "--v", "5"})
-		require.NoError(t, err)
 		// The order in which the two ReplicaSet revisions are diffed (and so which side
-		// gets "-" vs "+") isn't guaranteed, so just assert both images show up as changed
-		// lines rather than pinning down a direction.
-		assert.Contains(t, stdout, "Diff:")
-		assert.Regexp(t, `(?m)^\s*[-+]\s+"image": "nginx:1\.25",\s*$`, stdout)
-		assert.Regexp(t, `(?m)^\s*[-+]\s+"image": "nginx:1\.26",\s*$`, stdout)
+		// gets "-" vs "+") isn't guaranteed, so the fixture alternates both directions.
+		cmdTest{
+			args:            []string{"deployment/" + name, "--include-rollout-diffs", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/rollout-diff.regex",
+		}.assert(t, nil)
 	})
 	t.Run("sts-with-ingress", func(t *testing.T) {
 		viperTestHack(t)
@@ -917,11 +915,10 @@ func TestE2EDynamicManifests(t *testing.T) {
 			waitForPodMetrics(t, ns, "e2e-metrics-pod")
 		}
 
-		stdout, _, err := executeCMD(t, []string{"node/" + nodeName, "--include-events=false", "--v", "5"})
-		require.NoError(t, err)
-		assert.Regexp(t, `(?m)^\s+pods:\s+usage/allocatable:\d+/`, stdout)
-		assert.Regexp(t, `(?m)^\s+cpu:\s+usage/allocatable:[\d.]+/[\d.]+\(\s*\d+%\)`, stdout)
-		assert.Regexp(t, `(?m)^\s+mem:\s+usage/allocatable:`, stdout)
+		cmdTest{
+			args:            []string{"node/" + nodeName, "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/node-metrics-multi-namespace.regex",
+		}.assert(t, nil)
 	})
 }
 
