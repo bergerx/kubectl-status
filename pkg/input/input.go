@@ -170,7 +170,7 @@ func (r *ResourceRepo) objectsUncached(namespace string, args []string, labelSel
 		unstructuredObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(info.Object) // TODO: handle error
 		unstructuredObjects = append(unstructuredObjects, unstructuredObj)
 	}
-	sort.Sort(unstructuredObjects)
+	sort.Stable(unstructuredObjects)
 	return unstructuredObjects, err
 }
 
