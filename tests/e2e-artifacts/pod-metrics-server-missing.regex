@@ -1,0 +1,12 @@
+\A
+Pod/e2e-pod-metrics-server-missing -n default, created 1m ago, gen:1(, started after [0-9.]+[A-Za-z]+)? Running BestEffort
+  Current: Pod is Ready
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Standalone POD\.
+  Containers: main \(busybox:latest\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+    metrics-server is not installed \(no v1beta1\.metrics\.k8s\.io APIService found\): cpu/memory usage for containers can't be shown\.
+  Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  Known/recorded manage events:
+    1m ago Updated by cmd\.test \(spec\)
+    1m ago Updated by kubelet \(status\)
+\z

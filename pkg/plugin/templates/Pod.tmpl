@@ -164,6 +164,14 @@
                 {{- $pod.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
             {{- end }}
         {{- end }}
+        {{- if and (not ($pod.Config.GetBool "shallow")) (eq $pod.Status.phase "Running") (not ($podMetrics.Object | default dict).containers) }}
+            {{- $metricsUnavailableReason := $pod.KubeMetricsUnavailableReason }}
+            {{- if $metricsUnavailableReason }}
+                {{- $metricsUnavailableReason | yellow | nindent 4 }}: cpu/memory usage for containers can't be shown.
+            {{- else }}
+                {{- "no metrics yet" | yellow | nindent 4 }}: metrics-server hasn't reported cpu/memory usage for this Pod's containers yet.
+            {{- end }}
+        {{- end }}
     {{- end }}
 {{- end }}
 

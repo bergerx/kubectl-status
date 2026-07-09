@@ -141,6 +141,13 @@
                 {{- "Memory overcommitted" | red | bold | nindent 4 }}: Application may be OOMKilled. Expect BestEffort and then Burstable pods to have OOMKill due to overcommitted memory on the node.
             {{- end }}
             {{- with index .Status.allocatable "ephemeral-storage" }}{{ "ephemeral-storage" | bold | nindent 2 }}: {{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
+        {{- else if not (.Config.GetBool "shallow") }}
+            {{- $metricsUnavailableReason := $.KubeMetricsUnavailableReason }}
+            {{- if $metricsUnavailableReason }}
+                {{- $metricsUnavailableReason | yellow | nindent 2 }}: cpu/memory usage for this Node and its Pods can't be shown.
+            {{- else }}
+                {{- "no metrics yet" | yellow | nindent 2 }}: metrics-server hasn't reported cpu/memory usage for this Node yet.
+            {{- end }}
         {{- end }}
     {{- end }}
 {{- end }}

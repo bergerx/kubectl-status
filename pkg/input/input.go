@@ -77,14 +77,15 @@ func NewResourceRepo(factory util.Factory) (*ResourceRepo, error) {
 }
 
 type ResourceRepo struct {
-	f                            util.Factory
-	dynamicClient                dynamic.Interface
-	kubernetesClientSet          *kubernetes.Clientset
-	nodeStatsSummaryCache        map[string]nodeStatsSummaryCacheEntry
-	objectsCache                 map[string]objectsCacheEntry
-	endpointSlicesCache          map[string]endpointSlicesCacheEntry
-	allNamespacesPodMetricsCache *objectsCacheEntry
-	ownerCache                   map[string]ownerCacheEntry
+	f                             util.Factory
+	dynamicClient                 dynamic.Interface
+	kubernetesClientSet           *kubernetes.Clientset
+	nodeStatsSummaryCache         map[string]nodeStatsSummaryCacheEntry
+	objectsCache                  map[string]objectsCacheEntry
+	endpointSlicesCache           map[string]endpointSlicesCacheEntry
+	allNamespacesPodMetricsCache  *objectsCacheEntry
+	ownerCache                    map[string]ownerCacheEntry
+	metricsUnavailableReasonCache *string
 }
 
 type nodeStatsSummaryCacheEntry struct {
@@ -201,6 +202,58 @@ func (r *ResourceRepo) AllNamespacesPodMetrics() (Objects, error) {
 	}
 	r.allNamespacesPodMetricsCache = &objectsCacheEntry{objects: objects, err: err}
 	return objects, err
+}
+
+// metricsAPIServiceGVR is the apiregistration.k8s.io APIService that fronts metrics-server,
+// equivalent to `kubectl get apiservice v1beta1.metrics.k8s.io`.
+var metricsAPIServiceGVR = schema.GroupVersionResource{Group: "apiregistration.k8s.io", Version: "v1", Resource: "apiservices"}
+
+// MetricsUnavailableReason reports why the metrics.k8s.io API (served by metrics-server) can't be
+// used, or "" if it's healthy. It checks the APIService's Available condition directly -- the same
+// signal `kubectl top` relies on to report "Metrics API not available" -- rather than a
+// RESTMapper/discovery-based check, since discovery listings may still show a stale/cached group
+// version while the backing service is down. This distinguishes two different problems a caller
+// should word differently:
+//   - the APIService object doesn't exist at all: metrics-server was never installed.
+//   - the APIService exists but its Available condition is False: metrics-server is installed but
+//     currently unhealthy (e.g. crashed, unreachable); the condition's own message/reason is
+//     surfaced since it usually names the concrete problem (e.g. "no endpoints available").
+//
+// The result is cached since Pod/Node rendering checks this repeatedly.
+func (r *ResourceRepo) MetricsUnavailableReason() string {
+	if r.metricsUnavailableReasonCache != nil {
+		return *r.metricsUnavailableReasonCache
+	}
+	reason := ""
+	obj, err := r.DynamicObject(metricsAPIServiceGVR, "", "v1beta1.metrics.k8s.io")
+	switch {
+	case apierrors.IsNotFound(err):
+		reason = "metrics-server is not installed (no v1beta1.metrics.k8s.io APIService found)"
+	case err != nil:
+		klog.V(3).ErrorS(err, "failed to check metrics-server APIService availability")
+	default:
+		reason = unavailableReasonFromAPIServiceConditions(obj)
+	}
+	r.metricsUnavailableReasonCache = &reason
+	return reason
+}
+
+func unavailableReasonFromAPIServiceConditions(apiService Object) string {
+	conditions, _, _ := unstructured.NestedSlice(apiService, "status", "conditions")
+	for _, c := range conditions {
+		condition, ok := c.(map[string]interface{})
+		if !ok || condition["type"] != "Available" {
+			continue
+		}
+		if condition["status"] == "True" {
+			return ""
+		}
+		if detail, _ := condition["message"].(string); detail != "" {
+			return fmt.Sprintf("metrics-server is not available: %s", detail)
+		}
+		return "metrics-server is not available"
+	}
+	return "metrics-server is not available"
 }
 
 // Owners resolves the ownerReferences of obj to the objects they point at. References whose
