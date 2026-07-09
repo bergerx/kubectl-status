@@ -1154,16 +1154,19 @@ func waitForPodByLabel(t *testing.T, namespace, labelSelector string) string {
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
 		cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
-			"-o", "jsonpath={.items[0].metadata.name}")
+			"-o", "jsonpath={.items[*].metadata.name}")
 		output, err := cmd.CombinedOutput()
-		if err == nil && strings.TrimSpace(string(output)) != "" {
-			name := strings.TrimSpace(string(output))
-			t.Logf("found pod %s matching selector %s in namespace %s", name, labelSelector, namespace)
-			return name
+		if err == nil {
+			names := strings.Fields(string(output))
+			if len(names) == 1 {
+				name := names[0]
+				t.Logf("found pod %s matching selector %s in namespace %s", name, labelSelector, namespace)
+				return name
+			}
 		}
 		time.Sleep(2 * time.Second)
 	}
-	t.Fatalf("timed out waiting for a pod matching selector %s in namespace %s", labelSelector, namespace)
+	t.Fatalf("timed out waiting for exactly one pod matching selector %s in namespace %s", labelSelector, namespace)
 	return ""
 }
 

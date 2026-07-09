@@ -44,7 +44,7 @@
         {{- end }}
     {{- end }}
     {{- $rolloutStatus := .RolloutStatus . }}
-    {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.desiredNumberScheduled | default 0 | int) (.Status.numberReady | default 0 | int)) (ne (.Status.desiredNumberScheduled | default 0 | int) (.Status.updatedNumberScheduled | default 0 | int)) (.Status.numberMisscheduled) }}
+    {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.desiredNumberScheduled | default 0 | int) (.Status.numberReady | default 0 | int)) (ne (.Status.desiredNumberScheduled | default 0 | int) (.Status.updatedNumberScheduled | default 0 | int)) (ne (.Status.numberMisscheduled | default 0 | int) 0) }}
     {{- if or (gt (len $revisions) 1) (and (eq (len $revisions) 1) $rolloutProblem) }}
         {{- "Rollouts:" | nindent 2 }}
         {{- template "rollout_diffs_flag_help" $ }}
