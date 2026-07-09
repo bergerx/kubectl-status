@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pdb-conflict-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pdb-conflict-test
+  template:
+    metadata:
+      labels:
+        app: pdb-conflict-test
+    spec:
+      containers:
+      - name: pdb-conflict-test
+        image: registry.k8s.io/pause:3.9
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-conflict-test
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: pdb-conflict-test
+---
+# Empty selector: valid in policy/v1 and matches every pod in the namespace (unlike the
+# removed policy/v1beta1, where it matched none). This deliberately overlaps with the PDB
+# above -- Kubernetes' disruption controller picks one of the two arbitrarily for the pod
+# ("MultiplePodDisruptionBudgets ... Chose X arbitrarily" event) and leaves the other's
+# currentHealthy permanently at 0, so this also exercises the multiple-PDBs-match-one-pod
+# conflict warning. Kept in its own fixture (not merged into sts-with-nodeport) so that
+# non-determinism doesn't make the already-stable single-PDB sts-with-nodeport tests flaky.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-conflict-test-catch-all
+spec:
+  minAvailable: 1
+  selector: {}

@@ -17,10 +17,18 @@
     {{- with .Spec.maxUnavailable }}
         {{- "Budget" | bold | nindent 2 }}: max unavailable={{ . | toString | cyan }}, {{ $budgetStatus }}
     {{- end }}
-    {{- with .Spec.selector }}
-        {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
-        {{- $matchLabels := .matchLabels }}
-        {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
+    {{- if hasKey .Spec "selector" }}
+        {{- $selector := .Spec.selector }}
+        {{- "Selector" | bold | nindent 2 }}: {{ $selector | labelSelector | cyan }}
+        {{- $matchLabels := $selector.matchLabels }}
+        {{- /* An empty selector ({} — no matchLabels, no matchExpressions) is valid in policy/v1
+             and matches every pod in the namespace, unlike the removed policy/v1beta1 where it
+             matched none. Fall back to an empty map so KubeGetByLabelsMap lists all pods for
+             that case; a selector using only matchExpressions is left unmatched here, same
+             documented gap as selector_with_health_summary in common.tmpl. */ -}}
+        {{- $isEmptySelector := and (not $matchLabels) (not $selector.matchExpressions) }}
+        {{- if $isEmptySelector }}{{ $matchLabels = dict }}{{ end }}
+        {{- if and (or $matchLabels $isEmptySelector) (not ($.Config.GetBool "shallow")) }}
             {{- if $.Config.GetBool "deep" }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}

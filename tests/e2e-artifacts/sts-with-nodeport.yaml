@@ -40,3 +40,13 @@ spec:
   selector:
     matchLabels:
       app: sts-with-nodeport
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sts-with-nodeport-unrelated
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: sts-with-nodeport-unrelated-does-not-exist

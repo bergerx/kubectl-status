@@ -31,7 +31,6 @@ type cmdTest struct {
 	name            string
 	args            []string
 	stdoutRegexPath string // Regex match against file contents under test folder
-	stdoutEqual     string // Exact
 	stdoutEqualPath string // Exact match with file contents under test folder
 	stderrRegex     string // Regex
 	stderrEqual     string // Exact
@@ -101,10 +100,8 @@ func (c cmdTest) assert(t *testing.T, stdoutModifier func(string) string) {
 		stdout = nodeNameModifier(stdout)
 	}
 	switch {
-	case c.stdoutEqual == "" && c.stdoutRegexPath == "" && c.stdoutEqualPath == "":
+	case c.stdoutRegexPath == "" && c.stdoutEqualPath == "":
 		assert.Empty(t, stdout)
-	case c.stdoutEqual != "":
-		assert.Equal(t, c.stdoutEqual, stdout)
 	case c.stdoutEqualPath != "":
 		outFile := path.Join("..", "tests", c.stdoutEqualPath)
 		out, err := os.ReadFile(outFile)
@@ -587,6 +584,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// using sts here as the pod name is predictable in that case, not true for deployments and ds
 		applyManifest(t, "e2e-artifacts/sts-with-nodeport.yaml")
 		waitFor(t, "sts/sts-with-nodeport", "jsonpath={.status.readyReplicas}=1")
+		waitFor(t, "pdb/sts-with-nodeport", "jsonpath={.status.currentHealthy}=1")
 		cmdTest{
 			// Log/volume usage bytes come from live kubelet stats and aren't reproducible
 			// across runs, so this is matched as a regex rather than exact text.
@@ -596,6 +594,25 @@ func TestE2EDynamicManifests(t *testing.T) {
 		cmdTest{
 			args:            []string{"pdb/sts-with-nodeport", "--include-events=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pdb.regex",
+		}.assert(t, nodeNameModifier)
+		cmdTest{
+			args:            []string{"sts/sts-with-nodeport", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.sts.regex",
+		}.assert(t, nil)
+	})
+	t.Run("pdb-empty-selector-conflict", func(t *testing.T) {
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/pdb-empty-selector-conflict.yaml")
+		waitFor(t, "sts/pdb-conflict-test", "jsonpath={.status.readyReplicas}=1")
+		// Kubernetes' disruption controller picks one of the two overlapping PDBs arbitrarily
+		// and leaves the other's currentHealthy permanently at 0 -- observedGeneration is the
+		// reliable "controller has made its (possibly permanent) decision" signal here, not
+		// currentHealthy, which may never reach 1 for the non-chosen budget.
+		waitFor(t, "pdb/pdb-conflict-test", "jsonpath={.status.observedGeneration}=1")
+		waitFor(t, "pdb/pdb-conflict-test-catch-all", "jsonpath={.status.observedGeneration}=1")
+		cmdTest{
+			args:            []string{"pod/pdb-conflict-test-0", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pdb-empty-selector-conflict.pod.regex",
 		}.assert(t, nodeNameModifier)
 	})
 	t.Run("tcproute-with-gateway", func(t *testing.T) {
