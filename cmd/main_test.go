@@ -923,6 +923,40 @@ func TestE2EDynamicManifests(t *testing.T) {
 		assert.Regexp(t, `(?m)^\s+cpu:\s+usage/allocatable:[\d.]+/[\d.]+\(\s*\d+%\)`, stdout)
 		assert.Regexp(t, `(?m)^\s+mem:\s+usage/allocatable:`, stdout)
 	})
+	t.Run("pod containers section warns when metrics-server's APIService is missing", func(t *testing.T) {
+		// Issue #165 case 1: metrics-server was never installed. We simulate that by removing
+		// just the APIService object that fronts it (not the Deployment/Service), which is
+		// exactly what KubeMetricsUnavailableReason checks -- so the round trip is near-instant
+		// and doesn't disturb metrics-server's actual health for other subtests.
+		viperTestHack(t)
+		apiServiceYAML, err := exec.Command("kubectl", "get", "apiservice", "v1beta1.metrics.k8s.io", "-o", "yaml").Output()
+		require.NoError(t, err)
+		require.NoError(t, exec.Command("kubectl", "delete", "apiservice", "v1beta1.metrics.k8s.io").Run())
+		t.Cleanup(func() {
+			applyCmd := exec.Command("kubectl", "apply", "-f", "-")
+			applyCmd.Stdin = bytes.NewReader(apiServiceYAML)
+			require.NoError(t, applyCmd.Run())
+			waitForMetricsAPIServiceAvailable(t)
+		})
+
+		_, err = clientset.CoreV1().Pods("default").Create(context.TODO(), &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "e2e-pod-metrics-server-missing"},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "main", Image: "busybox", Command: []string{"sleep", "infinity"}}},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Pods("default").Delete(context.TODO(), "e2e-pod-metrics-server-missing", metav1.DeleteOptions{})
+		})
+		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
+			"pod/e2e-pod-metrics-server-missing", "--timeout=2m").Run())
+
+		cmdTest{
+			args:            []string{"pod/e2e-pod-metrics-server-missing", "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-metrics-server-missing.regex",
+		}.assert(t, nil)
+	})
 }
 
 func applyManifest(t *testing.T, filepath string) {
@@ -986,4 +1020,23 @@ func waitForPodMetrics(t *testing.T, namespace, name string) {
 		time.Sleep(2 * time.Second)
 	}
 	t.Fatalf("timed out waiting for metrics.k8s.io data for pod %s/%s", namespace, name)
+}
+
+// waitForMetricsAPIServiceAvailable polls until the metrics-server APIService reports
+// Available=True. Used after recreating it post-deletion: the backing Deployment/Service were
+// never touched, so this is a quick re-sync, not the ~1 minute metrics-server itself needs to
+// scrape fresh data.
+func waitForMetricsAPIServiceAvailable(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		output, err := exec.Command("kubectl", "get", "apiservice", "v1beta1.metrics.k8s.io",
+			"-o", `jsonpath={.status.conditions[?(@.type=="Available")].status}`).Output()
+		if err == nil && strings.TrimSpace(string(output)) == "True" {
+			t.Log("metrics-server APIService is Available again")
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for metrics-server APIService to become Available again")
 }

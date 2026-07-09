@@ -4,7 +4,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
+	fakedynamic "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest/fake"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 
@@ -381,4 +386,159 @@ func TestPodImagePullSecretMissingTemplate(t *testing.T) {
 		"status": map[string]interface{}{},
 	}
 	checkTemplate(t, "Pod", obj, "Secret/does-not-exist doesn't exist, but it's referenced in Pod's imagePullSecrets.", true)
+}
+
+func runningPodWithNoMetricsObj() map[string]interface{} {
+	return map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"name":      "some-pod",
+			"namespace": "test",
+		},
+		"spec": map[string]interface{}{
+			"containers": []interface{}{
+				map[string]interface{}{"name": "main", "image": "some-image"},
+			},
+		},
+		"status": map[string]interface{}{
+			"phase": "Running",
+			"containerStatuses": []interface{}{
+				map[string]interface{}{
+					"name":  "main",
+					"image": "some-image",
+					"state": map[string]interface{}{"running": map[string]interface{}{"startedAt": "2024-01-01T00:00:00Z"}},
+				},
+			},
+		},
+	}
+}
+
+// metricsAPIServiceGVR mirrors the unexported schema.GroupVersionResource of the same name in
+// pkg/input -- the apiregistration.k8s.io APIService that fronts metrics-server.
+var metricsAPIServiceGVR = schema.GroupVersionResource{Group: "apiregistration.k8s.io", Version: "v1", Resource: "apiservices"}
+
+// factoryWithHealthyMetricsServer builds a test factory whose dynamic client reports
+// metrics-server's APIService as installed and Available, so KubeMetricsUnavailableReason
+// returns "" -- letting tests exercise the "healthy but no data recorded for this object yet"
+// case (#165 case 3) distinctly from "metrics-server itself is missing/unhealthy" (cases 1-2).
+func factoryWithHealthyMetricsServer(t *testing.T) *cmdtesting.TestFactory {
+	t.Helper()
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	apiService := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "apiregistration.k8s.io/v1",
+		"kind":       "APIService",
+		"metadata":   map[string]interface{}{"name": "v1beta1.metrics.k8s.io"},
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "Available", "status": "True"},
+			},
+		},
+	}}
+	f.FakeDynamicClient = fakedynamic.NewSimpleDynamicClientWithCustomListKinds(
+		scheme.Scheme,
+		map[schema.GroupVersionResource]string{metricsAPIServiceGVR: "APIServiceList"},
+		apiService,
+	)
+	return f
+}
+
+func renderPodTemplate(t *testing.T, f *cmdtesting.TestFactory, obj map[string]interface{}) string {
+	t.Helper()
+	tmpl, _ := getTemplate()
+	t.Cleanup(func() { f.Cleanup() })
+	repo, err := input.NewResourceRepo(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard())
+	e.Template = *tmpl
+	r := newRenderableObject(obj, e, repo)
+	got, err := r.renderTemplate("Pod", r)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	return got
+}
+
+// TestPodContainersMetricsNotInstalledWarningTemplate covers issue #165 case 1: when
+// metrics-server was never installed (the default fake test client has no APIService for it), a
+// Running pod's Containers section should say so instead of silently omitting cpu/memory usage.
+func TestPodContainersMetricsNotInstalledWarningTemplate(t *testing.T) {
+	checkTemplate(t, "Pod", runningPodWithNoMetricsObj(), "not installed", true)
+}
+
+// TestPodContainersMetricsUnhealthyWarningTemplate covers issue #165 case 2: metrics-server is
+// installed but its APIService reports Available=False, surfacing the condition's own message.
+func TestPodContainersMetricsUnhealthyWarningTemplate(t *testing.T) {
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	apiService := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "apiregistration.k8s.io/v1",
+		"kind":       "APIService",
+		"metadata":   map[string]interface{}{"name": "v1beta1.metrics.k8s.io"},
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "Available", "status": "False", "message": "endpoints for service/metrics-server in \"kube-system\" have no addresses"},
+			},
+		},
+	}}
+	f.FakeDynamicClient = fakedynamic.NewSimpleDynamicClientWithCustomListKinds(
+		scheme.Scheme,
+		map[schema.GroupVersionResource]string{metricsAPIServiceGVR: "APIServiceList"},
+		apiService,
+	)
+	got := renderPodTemplate(t, f, runningPodWithNoMetricsObj())
+	if !strings.Contains(got, "endpoints for service/metrics-server") {
+		t.Errorf("expected the APIService condition's message to be surfaced, got = %q", got)
+	}
+}
+
+// TestPodContainersMetricsNoDataYetTemplate covers issue #165 case 3: metrics-server is healthy,
+// but this specific Pod has no recorded usage yet (e.g. it was just created and hasn't been
+// scraped). This should say so explicitly rather than staying silent or claiming metrics-server
+// itself is unavailable.
+func TestPodContainersMetricsNoDataYetTemplate(t *testing.T) {
+	got := renderPodTemplate(t, factoryWithHealthyMetricsServer(t), runningPodWithNoMetricsObj())
+	if !strings.Contains(got, "no metrics yet") {
+		t.Errorf("expected a \"no metrics yet\" note, got = %q", got)
+	}
+	if strings.Contains(got, "not installed") || strings.Contains(got, "not available") {
+		t.Errorf("expected no metrics-server-unavailable wording when metrics-server is healthy, got = %q", got)
+	}
+}
+
+// TestPodContainersMetricsWarningSuppressedInShallowMode verifies that --shallow, which never
+// queries the cluster for enrichment, doesn't misreport an unchecked metrics-server as missing.
+func TestPodContainersMetricsWarningSuppressedInShallowMode(t *testing.T) {
+	viper.Set("shallow", true)
+	t.Cleanup(func() { viper.Set("shallow", false) })
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	got := renderPodTemplate(t, f, runningPodWithNoMetricsObj())
+	if strings.Contains(got, "not installed") || strings.Contains(got, "not available") || strings.Contains(got, "no metrics yet") {
+		t.Errorf("expected no metrics-related note in shallow mode, got = %q", got)
+	}
+}
+
+// TestNodePodDetailsMetricsNotInstalledWarningTemplate covers issue #165 case 1 for Node's
+// detailed usage section: with metrics-server not installed (the default fake test client has no
+// APIService for it), enabling the opt-in "include-node-detailed-usage" section should surface a
+// warning instead of silently skipping cpu/mem/pods usage.
+func TestNodePodDetailsMetricsNotInstalledWarningTemplate(t *testing.T) {
+	viper.Set("include-node-detailed-usage", true)
+	t.Cleanup(func() { viper.Set("include-node-detailed-usage", false) })
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "some-node"},
+		"status": map[string]interface{}{
+			"allocatable": map[string]interface{}{
+				"cpu":    "4",
+				"memory": "16Gi",
+				"pods":   "110",
+			},
+		},
+	}
+	checkTemplate(t, "node_pod_details", obj, "not installed", true)
 }

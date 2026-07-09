@@ -2,11 +2,15 @@ package input
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	fakedynamic "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest/fake"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 )
@@ -143,6 +147,108 @@ func TestOwnersClusterScopedOwner(t *testing.T) {
 	if len(owners) != 1 {
 		t.Fatalf("expected the cluster-scoped owner to resolve, got %d owners", len(owners))
 	}
+}
+
+// newAPIServiceFactory builds a test factory whose dynamic client can Get/Create
+// apiregistration.k8s.io APIService objects -- a group client-go's own scheme doesn't know about,
+// so the fake dynamic client needs an explicit List-kind mapping for it.
+func newAPIServiceFactory(t *testing.T, apiService *unstructured.Unstructured) *cmdtesting.TestFactory {
+	t.Helper()
+	f := newTestFactory()
+	objs := []runtime.Object{}
+	if apiService != nil {
+		objs = append(objs, apiService)
+	}
+	f.FakeDynamicClient = fakedynamic.NewSimpleDynamicClientWithCustomListKinds(
+		scheme.Scheme,
+		map[schema.GroupVersionResource]string{metricsAPIServiceGVR: "APIServiceList"},
+		objs...,
+	)
+	return f
+}
+
+func apiServiceObj(available bool, message string) *unstructured.Unstructured {
+	status := "False"
+	if available {
+		status = "True"
+	}
+	condition := map[string]interface{}{"type": "Available", "status": status}
+	if message != "" {
+		condition["message"] = message
+	}
+	return &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "apiregistration.k8s.io/v1",
+		"kind":       "APIService",
+		"metadata": map[string]interface{}{
+			"name": "v1beta1.metrics.k8s.io",
+		},
+		"status": map[string]interface{}{
+			"conditions": []interface{}{condition},
+		},
+	}}
+}
+
+// TestMetricsUnavailableReason verifies that ResourceRepo.MetricsUnavailableReason distinguishes
+// three cluster states -- metrics-server's APIService missing entirely (not installed), present
+// but unhealthy (Available=False, surfacing the condition's own diagnostic message), and healthy
+// (Available=True) -- and that the result is cached rather than re-checked on every call.
+func TestMetricsUnavailableReason(t *testing.T) {
+	t.Run("not installed when the APIService doesn't exist", func(t *testing.T) {
+		f := newAPIServiceFactory(t, nil)
+		t.Cleanup(func() { f.Cleanup() })
+		repo, err := NewResourceRepo(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reason := repo.MetricsUnavailableReason()
+		if !strings.Contains(reason, "not installed") {
+			t.Errorf("expected reason to mention metrics-server isn't installed, got %q", reason)
+		}
+	})
+
+	t.Run("unavailable, surfacing the condition's message, when the APIService exists but isn't Available", func(t *testing.T) {
+		f := newAPIServiceFactory(t, apiServiceObj(false, "no endpoints available for service \"metrics-server\""))
+		t.Cleanup(func() { f.Cleanup() })
+		repo, err := NewResourceRepo(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reason := repo.MetricsUnavailableReason()
+		if !strings.Contains(reason, "no endpoints available for service \"metrics-server\"") {
+			t.Errorf("expected reason to surface the Available condition's message, got %q", reason)
+		}
+	})
+
+	t.Run("empty when the APIService is Available", func(t *testing.T) {
+		f := newAPIServiceFactory(t, apiServiceObj(true, ""))
+		t.Cleanup(func() { f.Cleanup() })
+		repo, err := NewResourceRepo(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reason := repo.MetricsUnavailableReason(); reason != "" {
+			t.Errorf("expected empty reason when the APIService's Available condition is True, got %q", reason)
+		}
+	})
+
+	t.Run("result is cached", func(t *testing.T) {
+		f := newAPIServiceFactory(t, apiServiceObj(true, ""))
+		t.Cleanup(func() { f.Cleanup() })
+		repo, err := NewResourceRepo(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reason := repo.MetricsUnavailableReason(); reason != "" {
+			t.Fatalf("expected empty reason, got %q", reason)
+		}
+		// Deleting the APIService out from under the repo must not change the cached result.
+		if err := f.FakeDynamicClient.Resource(metricsAPIServiceGVR).Delete(context.TODO(), "v1beta1.metrics.k8s.io", metav1.DeleteOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		if reason := repo.MetricsUnavailableReason(); reason != "" {
+			t.Errorf("expected cached empty reason to stick even after the underlying APIService changed, got %q", reason)
+		}
+	})
 }
 
 // TestOwnersResolutionIsCached verifies that resolving the same ownerReference for two different

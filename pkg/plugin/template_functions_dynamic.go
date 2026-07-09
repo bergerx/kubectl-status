@@ -418,6 +418,18 @@ func (r RenderableObject) KubeGetNodeMetrics(name string) RenderableObject {
 	return r.newRenderableObject(nil)
 }
 
+// KubeMetricsUnavailableReason reports why the metrics.k8s.io API (metrics-server) can't be used
+// right now, or "" if it's healthy, so templates can tell users specifically whether it was never
+// installed or is installed but unhealthy, instead of silently omitting the usage section either
+// way. In shallow mode no cluster call is made (per this file's convention) and "" (available) is
+// assumed, so callers don't spuriously warn about something that was never checked.
+func (r RenderableObject) KubeMetricsUnavailableReason() string {
+	if viper.GetBool("shallow") {
+		return ""
+	}
+	return r.repo.MetricsUnavailableReason()
+}
+
 // KubeGetContainerLogs returns up to tailLines lines of log output for the named container in the
 // named pod. When previous is true it fetches logs from the container's previous (terminated)
 // instance, equivalent to `kubectl logs --previous`. Returns an empty string if there are no logs

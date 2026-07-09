@@ -130,6 +130,10 @@
         {{- $single := eq (len .) 1 }}
         {{- "Containers:" | nindent 2 }}
         {{- $podMetrics := $pod.KubeGetPodMetrics $pod.Namespace $pod.Name }}
+        {{- $metricsUnavailableReason := "" }}
+        {{- if and (not ($pod.Config.GetBool "shallow")) (eq $pod.Status.phase "Running") (not ($podMetrics.Object | default dict).containers) }}
+            {{- $metricsUnavailableReason = $pod.KubeMetricsUnavailableReason | default "no metrics yet" }}
+        {{- end }}
         {{- $containerStatusSummaryDict := dict }}
         {{- range $containerStatus := . }}
             {{- $containerSpec := $pod.Spec.containers | getMatchingItemInMapList (dict "name" $containerStatus.name) }}
@@ -157,6 +161,7 @@
                                                        "includeAllVolumes" ($pod.Config.GetBool "include-all-volumes")
                                                        "podImagePullSecrets" $pod.Spec.imagePullSecrets
                                                        "podPullSecretsBroken" $.podPullSecretsBroken
+                                                       "metricsUnavailableReason" $metricsUnavailableReason
                 }}
             {{- end }}
             {{- if $single }}
@@ -443,6 +448,16 @@
     ]
 {{- end -}}
 
+{{- define "container_requests_limits" -}}
+    {{- /* Expects to get a map with the key "containerSpec" (required): Pod.spec.containers[name=container].
+           Used in place of container_usage when there's no metrics data to show usage against. */ -}}
+    cpu: [{{ if .containerSpec.resources.requests.cpu }}req:{{ .containerSpec.resources.requests.cpu | quantityToFloat64 | printf "%.1g" }}{{ else }}{{ "no-req" | yellow }}{{ end -}}
+    , {{ if .containerSpec.resources.limits.cpu }}lim:{{ .containerSpec.resources.limits.cpu | quantityToFloat64 | printf "%.1g" }}{{ else }}{{ "no-lim" | yellow }}{{ end -}}
+    ], mem: [{{ if .containerSpec.resources.requests.memory }}req:{{ .containerSpec.resources.requests.memory | quantityToFloat64 | humanizeSI "B" }}{{ else }}{{ "no-req" | yellow }}{{ end -}}
+    , {{ if .containerSpec.resources.limits.memory }}lim:{{ .containerSpec.resources.limits.memory | quantityToFloat64 | humanizeSI "B" }}{{ else }}{{ "no-lim" | yellow }}{{ end -}}
+    ]
+{{- end -}}
+
 {{- define "container_status_summary" }}
     {{- /* Expects to get a map with these keys (and also their initContainer counterparts):
            * pod (required): Pod RenderableObject, used to fetch logs
@@ -453,6 +468,7 @@
            * defaultLogsContainer (optional): Boolean
            * podImagePullSecrets (optional): Pod.spec.imagePullSecrets
            * podPullSecretsBroken (optional): Boolean, true if any podImagePullSecrets entry doesn't resolve to a usable Secret
+           * metricsUnavailableReason (optional): non-empty string explaining why there's no containerMetrics
         */ -}}
     {{- .containerStatus.name | bold }}{{ if .sidecar }}{{ " [sidecar]" | cyan }}{{ end }} ({{ .containerStatus.image | markYellow "latest" }}) {{ template "container_state_summary" .containerStatus.state }}
     {{- if .containerStatus.state.running }}{{ if .containerStatus.ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
@@ -470,7 +486,11 @@
             {{- end }}
         {{- end }}
     {{- end }}
-    {{- if .containerMetrics }}{{ if .containerMetrics.usage.cpu }}{{ "usage" | nindent 2 }} {{ template "container_usage" . }}{{ end }}{{ end }}
+    {{- if .containerMetrics }}
+        {{- if .containerMetrics.usage.cpu }}{{ "usage" | nindent 2 }} {{ template "container_usage" . }}{{ end }}
+    {{- else if and .metricsUnavailableReason .containerStatus.state.running }}
+        {{- "" | nindent 2 }}{{ template "container_requests_limits" . }}, ({{ .metricsUnavailableReason | yellow }})
+    {{- end }}
     {{- with .containerStatus.lastState }}
         {{- "previously:" | yellow | nindent 2 }} {{ template "container_state_summary" . }}
     {{- end }}
