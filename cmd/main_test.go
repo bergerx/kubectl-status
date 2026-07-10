@@ -542,6 +542,11 @@ func TestE2EDynamicManifests(t *testing.T) {
 		require.NoError(t, err)
 		defer clientset.NetworkingV1().NetworkPolicies(ns).Delete(context.TODO(), netpol.Name, metav1.DeleteOptions{})
 
+		// The full-output regex fixture below pins the Pod to a Running/Ready state, so this
+		// must wait rather than race the kubelet -- otherwise the render can catch it Pending.
+		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
+			"pod/netpol-selected-pod", "-n", ns, "--timeout=2m").Run())
+
 		cmdTest{
 			args:            []string{"pod/netpol-selected-pod", "-n", ns, "--include-events=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-selected-by-network-policy.regex",
@@ -615,6 +620,11 @@ func TestE2EDynamicManifests(t *testing.T) {
 		_, err = clientset.NetworkingV1().NetworkPolicies(ns).Create(context.TODO(), ingressOnly, metav1.CreateOptions{})
 		require.NoError(t, err)
 		defer clientset.NetworkingV1().NetworkPolicies(ns).Delete(context.TODO(), ingressOnly.Name, metav1.DeleteOptions{})
+
+		// The full-output regex fixture below pins the Pod to a Running/Ready state, so this
+		// must wait rather than race the kubelet -- otherwise the render can catch it Pending.
+		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
+			"pod/netpol-multi-selected-pod", "-n", ns, "--timeout=2m").Run())
 
 		cmdTest{
 			args:            []string{"pod/netpol-multi-selected-pod", "-n", ns, "--include-events=false", "--v", "5"},
