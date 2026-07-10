@@ -24,6 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
+
+	"github.com/bergerx/kubectl-status/pkg/plugin/calicoselector"
 )
 
 var durationRound = DefaultDurationRound()
@@ -87,6 +89,8 @@ func funcMap() template.FuncMap {
 		"labelSelector":             labelSelector,
 		"taintsNotToleratedByPod":   taintsNotToleratedByPod,
 		"networkPolicyPolicyTypes":  networkPolicyPolicyTypes,
+		"calicoPolicyTypes":         calicoPolicyTypes,
+		"ciliumPolicyDirections":    ciliumPolicyDirectionsForTemplate,
 		"cronNextTime":              cronNextTime,
 		"withinLastHour":            withinLastHour,
 		"parseTLSSecretCertificate": parseTLSSecretCertificate,
@@ -605,7 +609,24 @@ func networkPolicySelectsPod(policySpec map[string]interface{}, podLabels map[st
 // the policy also defines an egress rule set. See
 // https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#networkpolicyspec-v1-networking-k8s-io
 func networkPolicyPolicyTypes(spec map[string]interface{}) []string {
-	if rawTypes, ok := spec["policyTypes"].([]interface{}); ok && len(rawTypes) > 0 {
+	return policyTypesWithDefault(spec, "policyTypes")
+}
+
+// calicoPolicyTypes normalizes a Calico NetworkPolicy/GlobalNetworkPolicy's spec.types, applying
+// the same defaulting rule documented for upstream NetworkPolicy (Ingress always applies, Egress
+// only when the policy also defines egress rules) -- Calico's spec.types field mirrors
+// spec.policyTypes here, just under a different name. See
+// https://docs.tigera.io/calico/latest/reference/resources/networkpolicy.
+func calicoPolicyTypes(spec map[string]interface{}) []string {
+	return policyTypesWithDefault(spec, "types")
+}
+
+// policyTypesWithDefault is shared by networkPolicyPolicyTypes and calicoPolicyTypes -- both
+// upstream NetworkPolicy and Calico's NetworkPolicy/GlobalNetworkPolicy apply the identical
+// default (Ingress implied; Egress only if egress rules are present) under a differently-named
+// spec field.
+func policyTypesWithDefault(spec map[string]interface{}, typesKey string) []string {
+	if rawTypes, ok := spec[typesKey].([]interface{}); ok && len(rawTypes) > 0 {
 		types := make([]string, 0, len(rawTypes))
 		for _, t := range rawTypes {
 			if s, ok := t.(string); ok {
@@ -619,6 +640,147 @@ func networkPolicyPolicyTypes(spec map[string]interface{}) []string {
 		types = append(types, "Egress")
 	}
 	return types
+}
+
+// calicoPolicySelectsPod reports whether a Calico NetworkPolicy/GlobalNetworkPolicy's spec.selector
+// matches podLabels. Unlike Kubernetes LabelSelectors, Calico's selector is a small boolean
+// expression language (see pkg/plugin/calicoselector), evaluated against Calico's own
+// workload-endpoint label set -- which is the Pod's labels plus a synthetic
+// "projectcalico.org/namespace" label -- not the Pod's bare labels. See
+// https://docs.tigera.io/calico-cloud/network-policy/policy-tiers/tiered-policy. An empty
+// selector matches everything, same as an absent podSelector for upstream NetworkPolicy.
+// Unparseable selectors are conservatively treated as non-matching (logged at V(3)) rather than
+// risking a false match.
+func calicoPolicySelectsPod(spec map[string]interface{}, podLabels map[string]string, namespace string) bool {
+	selectorStr, _ := spec["selector"].(string)
+	sel, err := calicoselector.Parse(selectorStr)
+	if err != nil {
+		klog.V(3).ErrorS(err, "failed to parse Calico selector", "selector", selectorStr)
+		return false
+	}
+	return sel.Evaluate(withCalicoNamespaceLabel(podLabels, namespace))
+}
+
+// calicoNamespaceSelectorMatches reports whether a Calico GlobalNetworkPolicy's
+// spec.namespaceSelector accepts a namespace, given that namespace's labels. An empty
+// namespaceSelector matches every namespace (GlobalNetworkPolicy is cluster-scoped, so unlike the
+// namespaced NetworkPolicy case there's no implicit namespace restriction to fall back on). See
+// https://docs.tigera.io/calico-cloud/network-policy/policy-tiers/tiered-policy. Calico adds a
+// synthetic "projectcalico.org/name" label to namespaces for use in such selectors.
+func calicoNamespaceSelectorMatches(spec map[string]interface{}, namespace string, namespaceLabels map[string]string) bool {
+	selectorStr, _ := spec["namespaceSelector"].(string)
+	if selectorStr == "" {
+		return true
+	}
+	sel, err := calicoselector.Parse(selectorStr)
+	if err != nil {
+		klog.V(3).ErrorS(err, "failed to parse Calico namespaceSelector", "selector", selectorStr)
+		return false
+	}
+	augmented := make(map[string]string, len(namespaceLabels)+1)
+	for k, v := range namespaceLabels {
+		augmented[k] = v
+	}
+	augmented["projectcalico.org/name"] = namespace
+	return sel.Evaluate(augmented)
+}
+
+func withCalicoNamespaceLabel(podLabels map[string]string, namespace string) map[string]string {
+	augmented := make(map[string]string, len(podLabels)+1)
+	for k, v := range podLabels {
+		augmented[k] = v
+	}
+	augmented["projectcalico.org/namespace"] = namespace
+	return augmented
+}
+
+// ciliumRuleSpecs returns the individual Cilium Rule objects making up a CiliumNetworkPolicy or
+// CiliumClusterwideNetworkPolicy -- its spec is either a single Rule (spec.endpointSelector,
+// spec.ingress, ...) or, for multi-rule policies, a list of Rules under specs. See
+// https://docs.cilium.io/en/stable/network/kubernetes/policy/.
+func ciliumRuleSpecs(obj map[string]interface{}) (rules []map[string]interface{}) {
+	if spec, ok := obj["spec"].(map[string]interface{}); ok {
+		rules = append(rules, spec)
+	}
+	if specs, ok := obj["specs"].([]interface{}); ok {
+		for _, s := range specs {
+			if m, ok := s.(map[string]interface{}); ok {
+				rules = append(rules, m)
+			}
+		}
+	}
+	return rules
+}
+
+// ciliumEndpointSelectorMatchesPod reports whether a Cilium Rule's endpointSelector matches
+// podLabels. endpointSelector uses the same matchLabels/matchExpressions shape as a Kubernetes
+// LabelSelector (https://docs.cilium.io/en/latest/security/policy/kubernetes/), and a
+// missing/empty selector targets every endpoint, same as networkPolicySelectsPod's handling of an
+// empty podSelector. Note: a policy authored against Cilium's own reserved label prefixes (e.g.
+// "k8s:app") won't match here since podLabels are the Pod's bare labels -- acceptable for this
+// compact signal, see the package doc.
+func ciliumEndpointSelectorMatchesPod(rule map[string]interface{}, podLabels map[string]string) bool {
+	selMap, _ := rule["endpointSelector"].(map[string]interface{})
+	ls := &metav1.LabelSelector{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(selMap, ls); err != nil {
+		return false
+	}
+	sel, err := metav1.LabelSelectorAsSelector(ls)
+	if err != nil {
+		return false
+	}
+	return sel.Matches(labels.Set(podLabels))
+}
+
+// ciliumPolicySelectsPod reports whether any Rule in a CiliumNetworkPolicy/
+// CiliumClusterwideNetworkPolicy object selects podLabels, and the union of restricted
+// directions across the matching Rule(s). Unlike upstream NetworkPolicy, Cilium has no implied
+// default direction: a Rule only restricts ingress when it carries an ingress or ingressDeny rule
+// list, and only restricts egress when it carries egress or egressDeny -- a bare endpointSelector
+// with no rule lists selects the endpoint but enforces nothing.
+func ciliumPolicySelectsPod(obj map[string]interface{}, podLabels map[string]string) (matches bool, directions []string) {
+	ingress, egress := false, false
+	for _, rule := range ciliumRuleSpecs(obj) {
+		if !ciliumEndpointSelectorMatchesPod(rule, podLabels) {
+			continue
+		}
+		matches = true
+		if _, ok := rule["ingress"]; ok {
+			ingress = true
+		}
+		if _, ok := rule["ingressDeny"]; ok {
+			ingress = true
+		}
+		if _, ok := rule["egress"]; ok {
+			egress = true
+		}
+		if _, ok := rule["egressDeny"]; ok {
+			egress = true
+		}
+	}
+	if ingress {
+		directions = append(directions, "ingress")
+	}
+	if egress {
+		directions = append(directions, "egress")
+	}
+	return matches, directions
+}
+
+// ciliumPolicyDirectionsForTemplate is the template-callable wrapper for ciliumPolicySelectsPod,
+// used to render the restricted directions for a CiliumNetworkPolicy/CiliumClusterwideNetworkPolicy
+// already known to select the Pod (see KubeGetCiliumNetworkPoliciesMatchingPod).
+func ciliumPolicyDirectionsForTemplate(obj map[string]interface{}, podLabels map[string]interface{}) []string {
+	_, directions := ciliumPolicySelectsPod(obj, stringifyLabels(podLabels))
+	return directions
+}
+
+func stringifyLabels(labels map[string]interface{}) map[string]string {
+	out := make(map[string]string, len(labels))
+	for k, v := range labels {
+		out[k] = fmt.Sprintf("%v", v)
+	}
+	return out
 }
 
 // parseTLSSecretCertificate inspects a Secret expected to be type kubernetes.io/tls and

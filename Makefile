@@ -114,6 +114,20 @@ install-e2e-deps:
 	# client-side apply's kubectl.kubernetes.io/last-applied-configuration annotation trips
 	# the 262144-byte annotation limit; server-side apply doesn't need that annotation.
 	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml
+	# CiliumNetworkPolicy/CiliumClusterwideNetworkPolicy and Calico NetworkPolicy/
+	# GlobalNetworkPolicy CRDs: kubectl-status only reads and matches these objects
+	# client-side (selector-vs-Pod-labels), it never relies on Cilium/Calico actually
+	# enforcing traffic, so the CRDs alone (no Cilium/Calico installed as CNI) are enough
+	# to exercise the e2e scenarios -- same "CRDs only" reasoning as cert-manager/Gateway
+	# API above. Calico's own NetworkPolicy/GlobalNetworkPolicy are served under
+	# crd.projectcalico.org/v1 (the Kubernetes-datastore storage CRDs), not the
+	# projectcalico.org/v3 API calicoctl/the Calico API server present -- that's the group
+	# kubectl-status's KubeGetCalico*MatchingPod helpers query.
+	# --server-side: these CRDs' embedded OpenAPI schemas are large enough to trip the same
+	# client-side last-applied-configuration annotation limit as HTTPRoute above.
+	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://raw.githubusercontent.com/cilium/cilium/v1.19.5/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumnetworkpolicies.yaml
+	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://raw.githubusercontent.com/cilium/cilium/v1.19.5/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwidenetworkpolicies.yaml
+	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/crds.yaml
 
 .PHONY: test-e2e
 ifeq ($(ASSUME_MINIKUBE_IS_CONFIGURED),true)
