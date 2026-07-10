@@ -4,7 +4,7 @@ StatefulSet/e2e-rollouts-blocked-statefulset -n default, created 1m ago, gen:1
     Reconciling: LessReady, Ready: 0/1
   Selector: app=e2e-rollouts-blocked-statefulset
     Not matched by any Service
-    Pod/e2e-rollouts-blocked-statefulset-0 -n default Pending, 0/1 ready
+    Pod/e2e-rollouts-blocked-statefulset-0 -n default, created 1m ago Pending, 0/1 ready
   desired:1, existing:1, ready:0, current:1, updated:1, available:0
   Outage: StatefulSet has no Ready replicas\.
   Stuck Initial Rollout\? First rollout not yet progressed\.
