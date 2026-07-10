@@ -18,8 +18,10 @@
 set -euo pipefail
 
 font_family="JetBrains Mono"
-gateway_api_version="v1.6.0"
-cert_manager_version="v1.21.0"
+# shellcheck source=hack/versions.env
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/versions.env"
+gateway_api_version="${GATEWAY_API_VERSION}"
+cert_manager_version="${CERT_MANAGER_VERSION}"
 
 if [ "$(uname)" = "Darwin" ]; then
   # macOS has no fontconfig; dropping a .ttf into ~/Library/Fonts is enough,

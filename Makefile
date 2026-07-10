@@ -1,6 +1,8 @@
 
 export GO111MODULE=on
 
+include hack/versions.env
+
 .DEFAULT_GOAL := bin
 
 #--------------------------
@@ -103,8 +105,9 @@ install-e2e-deps:
 	$(E2E_KUBECONFIG_ENV) minikube addons enable metrics-server $(E2E_PROFILE_FLAG)
 	$(E2E_KUBECONFIG_ENV) kubectl -n kube-system rollout status deployment/metrics-server --timeout=120s
 	# cert-manager and Gateway API CRDs are needed by e2e TLS-validation test scenarios.
-	# Pinned to latest stable at time of writing; bump these tags periodically.
-	$(E2E_KUBECONFIG_ENV) kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.20.3/cert-manager.yaml
+	# Versions are pinned in hack/versions.env (shared with hack/generate-screenshots.sh);
+	# bump them there periodically.
+	$(E2E_KUBECONFIG_ENV) kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml
 	$(E2E_KUBECONFIG_ENV) kubectl wait --for=condition=Available --timeout=300s deployment --all -n cert-manager
 	# CRDs only (no controller needed): e2e tests only exercise kubectl-status's own
 	# read-only rendering of these objects, they don't need a controller reconciling them.
@@ -113,7 +116,7 @@ install-e2e-deps:
 	# --server-side: the experimental bundle's CRDs (e.g. HTTPRoute) are large enough that
 	# client-side apply's kubectl.kubernetes.io/last-applied-configuration annotation trips
 	# the 262144-byte annotation limit; server-side apply doesn't need that annotation.
-	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/experimental-install.yaml
+	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/$(GATEWAY_API_VERSION)/experimental-install.yaml
 	# CiliumNetworkPolicy/CiliumClusterwideNetworkPolicy and Calico NetworkPolicy/
 	# GlobalNetworkPolicy CRDs: kubectl-status only reads and matches these objects
 	# client-side (selector-vs-Pod-labels), it never relies on Cilium/Calico actually
