@@ -1,4 +1,4 @@
   Selector: app=sts-with-nodeport
-    Service/sts-with-nodeport -n default, NodePort, 1 ready, http\(80/TCP\)→30081
-    Pod/sts-with-nodeport-0 -n default Running, 1/1 ready
-    PodDisruptionBudget/sts-with-nodeport -n default, min available=1, evictions/drains currently blocked
+    Service/sts-with-nodeport -n default, created 1m ago, NodePort, 1 ready, http\(80/TCP\)→30081
+    Pod/sts-with-nodeport-0 -n default, created 1m ago Running, 1/1 ready
+    PodDisruptionBudget/sts-with-nodeport -n default, created 1m ago, min available=1, evictions/drains currently blocked

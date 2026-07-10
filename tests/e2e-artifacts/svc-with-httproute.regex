@@ -3,5 +3,5 @@ Service/svc-with-httproute -n default, created 1m ago
   Current: Service is ready
   Missing Endpoint: Service has no matching endpoint.
   Routes matching this Service:
-    HTTPRoute/svc-with-httproute -n default, svc-with-httproute\.example\.com, Current
+    HTTPRoute/svc-with-httproute -n default, created 1m ago, svc-with-httproute\.example\.com, Current
 \z

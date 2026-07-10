@@ -6,5 +6,5 @@ Pod/sts-with-ingress-0 -n default, created 1m ago by StatefulSet/sts-with-ingres
   Containers: sts-with-ingress \(registry\.k8s\.io/pause:3\.9\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
   (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
   Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
-  Services: Service/sts-with-ingress -n default, ClusterIP, 1 ready, 80/TCP
+  Services: Service/sts-with-ingress -n default, created 1m ago, ClusterIP, 1 ready, 80/TCP
 \z
