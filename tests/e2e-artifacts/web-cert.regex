@@ -1,0 +1,11 @@
+\A
+Secret/web-tls -n default, created 1m ago
+  Managed by Certificate/web-tls -n default via Issuer/web-ca-issuer -n default \(cert-manager\.io\)
+  Certificate for CN=web\.ks-demo\.svc · issued by CN=kubectl-status-demo-ca
+    Valid 1m ago, expires \d{4}-\d{2}-\d{2}
+    Key: RSA · serial [0-9]+
+  Certificate \(ca\.crt\) for CN=kubectl-status-demo-ca · issued by CN=kubectl-status-demo-ca
+    Self-signed: issuer and subject match, not issued by a separate CA
+    Valid 1m ago, expires \d{4}-\d{2}-\d{2}
+    Key: RSA · serial [0-9]+
+\z
