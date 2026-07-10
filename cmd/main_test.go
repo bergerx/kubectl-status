@@ -21,6 +21,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
@@ -439,6 +442,10 @@ func TestE2EDynamicManifests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Run("owners should be included with deep", func(t *testing.T) {
 		viperTestHack(t)
 		owner := &corev1.Secret{
@@ -689,6 +696,102 @@ func TestE2EDynamicManifests(t *testing.T) {
 		cmdTest{
 			args:            []string{"pod/netpol-multi-selected-pod", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-selected-by-multiple-network-policies.regex",
+		}.assert(t, nil)
+	})
+	t.Run("pod selected by CiliumNetworkPolicy/CiliumClusterwideNetworkPolicy and Calico NetworkPolicy/GlobalNetworkPolicy surfaces each compact signal", func(t *testing.T) {
+		// These CRDs are only installed standalone (via install-e2e-deps), without Cilium or
+		// Calico actually running as the cluster's CNI -- kubectl-status only ever matches these
+		// objects' selectors against the Pod's own labels client-side, it never depends on either
+		// CNI actually enforcing traffic, so the CRDs alone are enough to exercise this.
+		viperTestHack(t)
+		ns := "e2e-cni-policy-pod"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		appLabel := "kubectl-status-test-cni-policy-target"
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cni-policy-selected-pod",
+				Namespace: ns,
+				Labels:    map[string]string{"app": appLabel},
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "app", Image: "busybox", Command: []string{"sleep", "infinity"}}},
+			},
+		}
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+
+		cnpGVR := schema.GroupVersionResource{Group: "cilium.io", Version: "v2", Resource: "ciliumnetworkpolicies"}
+		cnp := &unstructured.Unstructured{Object: map[string]interface{}{
+			"apiVersion": "cilium.io/v2",
+			"kind":       "CiliumNetworkPolicy",
+			"metadata":   map[string]interface{}{"name": "cnp-ingress", "namespace": ns},
+			"spec": map[string]interface{}{
+				"endpointSelector": map[string]interface{}{"matchLabels": map[string]interface{}{"app": appLabel}},
+				"ingress":          []interface{}{map[string]interface{}{}},
+			},
+		}}
+		_, err = dynamicClient.Resource(cnpGVR).Namespace(ns).Create(context.TODO(), cnp, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer dynamicClient.Resource(cnpGVR).Namespace(ns).Delete(context.TODO(), cnp.GetName(), metav1.DeleteOptions{})
+
+		ccnpGVR := schema.GroupVersionResource{Group: "cilium.io", Version: "v2", Resource: "ciliumclusterwidenetworkpolicies"}
+		ccnp := &unstructured.Unstructured{Object: map[string]interface{}{
+			"apiVersion": "cilium.io/v2",
+			"kind":       "CiliumClusterwideNetworkPolicy",
+			"metadata":   map[string]interface{}{"name": "ccnp-egress-" + ns},
+			"spec": map[string]interface{}{
+				"endpointSelector": map[string]interface{}{"matchLabels": map[string]interface{}{"app": appLabel}},
+				"egress":           []interface{}{map[string]interface{}{}},
+			},
+		}}
+		_, err = dynamicClient.Resource(ccnpGVR).Create(context.TODO(), ccnp, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer dynamicClient.Resource(ccnpGVR).Delete(context.TODO(), ccnp.GetName(), metav1.DeleteOptions{})
+
+		calicoNpGVR := schema.GroupVersionResource{Group: "crd.projectcalico.org", Version: "v1", Resource: "networkpolicies"}
+		calicoNp := &unstructured.Unstructured{Object: map[string]interface{}{
+			"apiVersion": "crd.projectcalico.org/v1",
+			"kind":       "NetworkPolicy",
+			"metadata":   map[string]interface{}{"name": "calico-np-ingress", "namespace": ns},
+			"spec": map[string]interface{}{
+				"selector": fmt.Sprintf("app == '%s'", appLabel),
+				"types":    []interface{}{"Ingress"},
+			},
+		}}
+		_, err = dynamicClient.Resource(calicoNpGVR).Namespace(ns).Create(context.TODO(), calicoNp, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer dynamicClient.Resource(calicoNpGVR).Namespace(ns).Delete(context.TODO(), calicoNp.GetName(), metav1.DeleteOptions{})
+
+		calicoGnpGVR := schema.GroupVersionResource{Group: "crd.projectcalico.org", Version: "v1", Resource: "globalnetworkpolicies"}
+		calicoGnp := &unstructured.Unstructured{Object: map[string]interface{}{
+			"apiVersion": "crd.projectcalico.org/v1",
+			"kind":       "GlobalNetworkPolicy",
+			"metadata":   map[string]interface{}{"name": "calico-gnp-egress-" + ns},
+			"spec": map[string]interface{}{
+				"selector":          fmt.Sprintf("app == '%s'", appLabel),
+				"namespaceSelector": fmt.Sprintf("projectcalico.org/name == '%s'", ns),
+				"types":             []interface{}{"Egress"},
+			},
+		}}
+		_, err = dynamicClient.Resource(calicoGnpGVR).Create(context.TODO(), calicoGnp, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer dynamicClient.Resource(calicoGnpGVR).Delete(context.TODO(), calicoGnp.GetName(), metav1.DeleteOptions{})
+
+		// The full-output regex fixture below pins the Pod to a Running/Ready state, so this
+		// must wait rather than race the kubelet -- otherwise the render can catch it Pending.
+		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
+			"pod/cni-policy-selected-pod", "-n", ns, "--timeout=2m").Run())
+
+		cmdTest{
+			args:            []string{"pod/cni-policy-selected-pod", "-n", ns, "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-selected-by-cilium-and-calico-network-policies.regex",
 		}.assert(t, nil)
 	})
 	t.Run("deployment rollout with --include-rollout-diffs shows the diff between revisions", func(t *testing.T) {

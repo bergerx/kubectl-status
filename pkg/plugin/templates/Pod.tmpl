@@ -49,6 +49,8 @@
     {{- template "matching_services" . }}
     {{- template "matching_pdbs" . }}
     {{- template "matching_network_policies" . }}
+    {{- template "matching_cilium_network_policies" . }}
+    {{- template "matching_calico_network_policies" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
@@ -375,6 +377,86 @@
                 {{- end }}
             {{- else }}
                 {{- "NetworkPolicy:" | bold | nindent 2 }} {{ $.Include "network_policy_selection_summary" $policies }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_cilium_network_policies" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects the Pod RenderableObject. Same "no back-reference, list and match client-side"
+           approach as matching_network_policies, extended to Cilium's own CRDs: CiliumNetworkPolicy
+           (namespaced, matched against Pods in the Pod's namespace) and
+           CiliumClusterwideNetworkPolicy (cluster-scoped, so it can select Pods across
+           namespaces). Both CRDs are optional -- only present when Cilium is the CNI -- and the
+           KubeGet* helpers already degrade to an empty result rather than erroring when the CRD
+           isn't registered. Only the compact endpointSelector-match + restricted-direction signal
+           is shown here, not Cilium's L3-L7/DNS rule content -- see
+           cilium_policy_selection_summary in common.tmpl. Full policy content is only shown
+           under --deep (falls back to DefaultResource; there's no dedicated
+           CiliumNetworkPolicy.tmpl). */ -}}
+    {{- if not ($.Config.GetBool "shallow") }}
+        {{- $cnp := $.KubeGetCiliumNetworkPoliciesMatchingPod $.Namespace $.Labels }}
+        {{- if $cnp }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- "CiliumNetworkPolicies:" | bold | nindent 2 }}
+                {{- range $cnp }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- "CiliumNetworkPolicy:" | bold | nindent 2 }} {{ $.Include "cilium_policy_selection_summary" (dict "policies" $cnp "labels" $.Labels "kindSingular" "CiliumNetworkPolicy" "kindPlural" "CiliumNetworkPolicies") }}
+            {{- end }}
+        {{- end }}
+        {{- $ccnp := $.KubeGetCiliumClusterwideNetworkPoliciesMatchingPod $.Labels }}
+        {{- if $ccnp }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- "CiliumClusterwideNetworkPolicies:" | bold | nindent 2 }}
+                {{- range $ccnp }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- "CiliumClusterwideNetworkPolicy:" | bold | nindent 2 }} {{ $.Include "cilium_policy_selection_summary" (dict "policies" $ccnp "labels" $.Labels "kindSingular" "CiliumClusterwideNetworkPolicy" "kindPlural" "CiliumClusterwideNetworkPolicies") }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_calico_network_policies" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects the Pod RenderableObject. Same approach again for Calico's own NetworkPolicy
+           (namespaced -- served under crd.projectcalico.org/v1, a different API group than both
+           upstream networking.k8s.io/v1 NetworkPolicy and the projectcalico.org/v3 API
+           calicoctl/the Calico API server present, despite the identical kind name) and
+           GlobalNetworkPolicy (cluster-scoped, additionally gated by spec.namespaceSelector
+           against the Pod's namespace). Both CRDs are optional -- only present when Calico is the
+           CNI -- and degrade to an empty result when not registered, same as the Cilium/upstream
+           helpers. Calico's selector is its own boolean expression language, evaluated via
+           pkg/plugin/calicoselector -- see calicoPolicySelectsPod for why. This intentionally
+           doesn't attempt Calico's order/tier/deny-vs-allow resolution -- see
+           calico_policy_selection_summary in common.tmpl. Full policy content is only shown
+           under --deep (falls back to DefaultResource; there's no dedicated
+           NetworkPolicy.tmpl for the Calico kind). */ -}}
+    {{- if not ($.Config.GetBool "shallow") }}
+        {{- $np := $.KubeGetCalicoNetworkPoliciesMatchingPod $.Namespace $.Labels }}
+        {{- if $np }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- "Calico NetworkPolicies:" | bold | nindent 2 }}
+                {{- range $np }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- "Calico NetworkPolicy:" | bold | nindent 2 }} {{ $.Include "calico_policy_selection_summary" (dict "policies" $np "kindSingular" "Calico NetworkPolicy" "kindPlural" "Calico NetworkPolicies") }}
+            {{- end }}
+        {{- end }}
+        {{- $gnp := $.KubeGetCalicoGlobalNetworkPoliciesMatchingPod $.Namespace $.Labels }}
+        {{- if $gnp }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- "Calico GlobalNetworkPolicies:" | bold | nindent 2 }}
+                {{- range $gnp }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- "Calico GlobalNetworkPolicy:" | bold | nindent 2 }} {{ $.Include "calico_policy_selection_summary" (dict "policies" $gnp "kindSingular" "Calico GlobalNetworkPolicy" "kindPlural" "Calico GlobalNetworkPolicies") }}
             {{- end }}
         {{- end }}
     {{- end }}

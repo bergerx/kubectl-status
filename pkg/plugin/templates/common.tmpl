@@ -282,11 +282,14 @@
 
 {{- define "pod_network_policy_flags" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- /* Expects the Pod RenderableObject. Returns a compact inline fragment (no leading
-           separator) naming NetworkPolicy-restricted directions, or "" when no NetworkPolicy
-           selects this Pod. Used where a single-line-per-pod summary is needed; see
-           "matching_network_policies" in Pod.tmpl for the fuller per-policy render. */ -}}
+    {{- /* Expects the Pod RenderableObject. Returns a compact, comma-joined inline fragment (no
+           leading separator) naming NetworkPolicy/CiliumNetworkPolicy/Calico-restricted
+           directions, or "" when none of these select this Pod. Used where a
+           single-line-per-pod summary is needed; see "matching_network_policies",
+           "matching_cilium_network_policies" and "matching_calico_network_policies" in Pod.tmpl
+           for the fuller per-policy render. */ -}}
     {{- if not (.Config.GetBool "shallow") }}
+        {{- $flags := list }}
         {{- $policies := .KubeGetNetworkPoliciesMatchingPod .Namespace .Labels }}
         {{- if $policies }}
             {{- $ingress := false }}{{- $egress := false }}
@@ -298,9 +301,84 @@
             {{- $directions := list }}
             {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
             {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
-            {{- printf "netpol: %s restricted" (join "+" $directions) }}
+            {{- $flags = append $flags (printf "netpol: %s restricted" (join "+" $directions)) }}
         {{- end }}
+        {{- $ciliumPolicies := concat (.KubeGetCiliumNetworkPoliciesMatchingPod .Namespace .Labels) (.KubeGetCiliumClusterwideNetworkPoliciesMatchingPod .Labels) }}
+        {{- if $ciliumPolicies }}
+            {{- $ingress := false }}{{- $egress := false }}
+            {{- range $ciliumPolicies }}
+                {{- $directions := ciliumPolicyDirections .Object $.Labels }}
+                {{- if has "ingress" $directions }}{{ $ingress = true }}{{ end }}
+                {{- if has "egress" $directions }}{{ $egress = true }}{{ end }}
+            {{- end }}
+            {{- $directions := list }}
+            {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
+            {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
+            {{- if $directions }}{{ $flags = append $flags (printf "cnp: %s restricted" (join "+" $directions)) }}{{ end }}
+        {{- end }}
+        {{- $calicoPolicies := concat (.KubeGetCalicoNetworkPoliciesMatchingPod .Namespace .Labels) (.KubeGetCalicoGlobalNetworkPoliciesMatchingPod .Namespace .Labels) }}
+        {{- if $calicoPolicies }}
+            {{- $ingress := false }}{{- $egress := false }}
+            {{- range $calicoPolicies }}
+                {{- $types := calicoPolicyTypes .Spec }}
+                {{- if has "Ingress" $types }}{{ $ingress = true }}{{ end }}
+                {{- if has "Egress" $types }}{{ $egress = true }}{{ end }}
+            {{- end }}
+            {{- $directions := list }}
+            {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
+            {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
+            {{- $flags = append $flags (printf "calico: %s restricted" (join "+" $directions)) }}
+        {{- end }}
+        {{- join ", " $flags }}
     {{- end }}
+{{- end }}
+
+{{- define "cilium_policy_selection_summary" }}
+    {{- /* Expects a dict{policies: non-empty []RenderableObject, labels: Pod labels,
+           kindSingular/kindPlural: display name}. Returns "selected by CiliumNetworkPolic{y,ies}
+           X[, Y] (ingress/egress restricted)", or without the parenthetical when the matching
+           Rule(s) carry no ingress/egress/ingressDeny/egressDeny list (Cilium, unlike upstream
+           NetworkPolicy, has no implied default direction -- see ciliumPolicySelectsPod). */ -}}
+    {{- $names := list }}
+    {{- $ingress := false }}{{- $egress := false }}
+    {{- range .policies }}
+        {{- $names = append $names .Name }}
+        {{- $directions := ciliumPolicyDirections .Object $.labels }}
+        {{- if has "ingress" $directions }}{{ $ingress = true }}{{ end }}
+        {{- if has "egress" $directions }}{{ $egress = true }}{{ end }}
+    {{- end }}
+    {{- $directions := list }}
+    {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
+    {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
+    {{- $label := .kindSingular }}{{ if gt (len .policies) 1 }}{{ $label = .kindPlural }}{{ end }}
+    {{- if $directions }}
+        {{- printf "selected by %s %s (%s restricted)" $label (join ", " $names | cyan) (join ", " $directions) }}
+    {{- else }}
+        {{- printf "selected by %s %s" $label (join ", " $names | cyan) }}
+    {{- end }}
+{{- end }}
+
+{{- define "calico_policy_selection_summary" }}
+    {{- /* Expects a dict{policies: non-empty []RenderableObject, kindSingular/kindPlural: display
+           name}. Returns "selected by Calico NetworkPolic{y,ies} X[, Y] (ingress/egress
+           restricted)". Calico's spec.types field applies the same implicit-Ingress default as
+           upstream NetworkPolicy (see calicoPolicyTypes), so unlike Cilium, directions here are
+           never empty. This intentionally omits Calico's order/tier/deny-vs-allow semantics --
+           see calicoPolicySelectsPod's doc comment for why this can only say "worth checking",
+           not resolve an effective allow/deny. */ -}}
+    {{- $names := list }}
+    {{- $ingress := false }}{{- $egress := false }}
+    {{- range .policies }}
+        {{- $names = append $names .Name }}
+        {{- $types := calicoPolicyTypes .Spec }}
+        {{- if has "Ingress" $types }}{{ $ingress = true }}{{ end }}
+        {{- if has "Egress" $types }}{{ $egress = true }}{{ end }}
+    {{- end }}
+    {{- $directions := list }}
+    {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
+    {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
+    {{- $label := .kindSingular }}{{ if gt (len .policies) 1 }}{{ $label = .kindPlural }}{{ end }}
+    {{- printf "selected by %s %s (%s restricted)" $label (join ", " $names | cyan) (join ", " $directions) }}
 {{- end }}
 
 {{- define "service_health_summary" }}

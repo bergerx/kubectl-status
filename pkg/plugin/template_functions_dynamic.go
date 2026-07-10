@@ -359,10 +359,7 @@ func (r RenderableObject) KubeGetNetworkPoliciesMatchingPod(namespace string, po
 		return
 	}
 	klog.V(5).InfoS("called KubeGetNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
-	castedLabels := make(map[string]string, len(podLabels))
-	for k, v := range podLabels {
-		castedLabels[k] = fmt.Sprintf("%v", v)
-	}
+	castedLabels := stringifyLabels(podLabels)
 	policies, err := r.repo.Objects(namespace, []string{"networkpolicies"}, "")
 	if err != nil {
 		klog.V(3).ErrorS(err, "error listing networkpolicies", "r", r, "namespace", namespace)
@@ -376,6 +373,133 @@ func (r RenderableObject) KubeGetNetworkPoliciesMatchingPod(namespace string, po
 		if networkPolicySelectsPod(spec, castedLabels) {
 			out = append(out, r.newRenderableObject(obj))
 		}
+	}
+	return out
+}
+
+// KubeGetCiliumNetworkPoliciesMatchingPod returns all CiliumNetworkPolicies in namespace whose
+// spec/specs endpointSelector matches podLabels -- same client-side matching approach as
+// KubeGetNetworkPoliciesMatchingPod, since CiliumNetworkPolicy has no back-reference to the Pods
+// it covers either. CiliumNetworkPolicy is an optional CRD (only present when Cilium is the CNI);
+// when it's not registered, r.repo.Objects returns an error (unknown resource type), which is
+// swallowed the same way as any other listing error below -- this degrades to "no policies found"
+// rather than failing the render, exactly like the upstream NetworkPolicy helper already does when
+// e.g. RBAC denies the list.
+func (r RenderableObject) KubeGetCiliumNetworkPoliciesMatchingPod(namespace string, podLabels map[string]interface{}) (out []RenderableObject) {
+	out = make([]RenderableObject, 0)
+	if viper.GetBool("shallow") {
+		return
+	}
+	klog.V(5).InfoS("called KubeGetCiliumNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
+	castedLabels := stringifyLabels(podLabels)
+	policies, err := r.repo.Objects(namespace, []string{"ciliumnetworkpolicies.cilium.io"}, "")
+	if err != nil {
+		klog.V(3).ErrorS(err, "error listing ciliumnetworkpolicies", "r", r, "namespace", namespace)
+		return
+	}
+	for _, obj := range policies {
+		if matches, _ := ciliumPolicySelectsPod(obj, castedLabels); matches {
+			out = append(out, r.newRenderableObject(obj))
+		}
+	}
+	return out
+}
+
+// KubeGetCiliumClusterwideNetworkPoliciesMatchingPod returns all CiliumClusterwideNetworkPolicies
+// whose endpointSelector matches podLabels. CiliumClusterwideNetworkPolicy is cluster-scoped, so
+// unlike CiliumNetworkPolicy it can select Pods in any namespace -- there's no namespace filter on
+// the list, only the label match. See KubeGetCiliumNetworkPoliciesMatchingPod for the missing-CRD
+// handling, which applies here identically.
+func (r RenderableObject) KubeGetCiliumClusterwideNetworkPoliciesMatchingPod(podLabels map[string]interface{}) (out []RenderableObject) {
+	out = make([]RenderableObject, 0)
+	if viper.GetBool("shallow") {
+		return
+	}
+	klog.V(5).InfoS("called KubeGetCiliumClusterwideNetworkPoliciesMatchingPod", "r", r, "podLabels", podLabels)
+	castedLabels := stringifyLabels(podLabels)
+	policies, err := r.repo.Objects("", []string{"ciliumclusterwidenetworkpolicies.cilium.io"}, "")
+	if err != nil {
+		klog.V(3).ErrorS(err, "error listing ciliumclusterwidenetworkpolicies", "r", r)
+		return
+	}
+	for _, obj := range policies {
+		if matches, _ := ciliumPolicySelectsPod(obj, castedLabels); matches {
+			out = append(out, r.newRenderableObject(obj))
+		}
+	}
+	return out
+}
+
+// KubeGetCalicoNetworkPoliciesMatchingPod returns all Calico NetworkPolicies in namespace whose
+// spec.selector matches podLabels. Calico's own NetworkPolicy kind is served under the
+// crd.projectcalico.org/v1 group -- a different API group than both upstream
+// networking.k8s.io/v1 NetworkPolicy and the projectcalico.org/v3 API calicoctl/the optional
+// Calico API server present -- because kubectl-status only ever talks to the Kubernetes API
+// server directly, and crd.projectcalico.org/v1 is what the CRD-backed ("Kubernetes datastore")
+// storage actually serves there; "networkpolicies.crd.projectcalico.org" disambiguates the kind
+// so the resource builder resolves the right CRD. See calicoPolicySelectsPod for why this
+// evaluates Calico's own selector expression language rather than treating spec.selector as a
+// Kubernetes LabelSelector. Degrades to "no policies found" the same way as
+// KubeGetCiliumNetworkPoliciesMatchingPod when the CRD isn't registered.
+func (r RenderableObject) KubeGetCalicoNetworkPoliciesMatchingPod(namespace string, podLabels map[string]interface{}) (out []RenderableObject) {
+	out = make([]RenderableObject, 0)
+	if viper.GetBool("shallow") {
+		return
+	}
+	klog.V(5).InfoS("called KubeGetCalicoNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
+	castedLabels := stringifyLabels(podLabels)
+	policies, err := r.repo.Objects(namespace, []string{"networkpolicies.crd.projectcalico.org"}, "")
+	if err != nil {
+		klog.V(3).ErrorS(err, "error listing calico networkpolicies", "r", r, "namespace", namespace)
+		return
+	}
+	for _, obj := range policies {
+		spec, found, err := unstructured.NestedMap(obj, "spec")
+		if err != nil || !found {
+			continue
+		}
+		if calicoPolicySelectsPod(spec, castedLabels, namespace) {
+			out = append(out, r.newRenderableObject(obj))
+		}
+	}
+	return out
+}
+
+// KubeGetCalicoGlobalNetworkPoliciesMatchingPod returns all Calico GlobalNetworkPolicies whose
+// spec.selector matches podLabels and whose spec.namespaceSelector (if any) accepts the Pod's
+// namespace. GlobalNetworkPolicy is cluster-scoped -- an empty namespaceSelector matches every
+// namespace rather than being confined to the Pod's own namespace, unlike the namespaced Calico
+// NetworkPolicy case -- so the Namespace object is fetched once to evaluate namespaceSelector
+// against its labels (via calicoNamespaceSelectorMatches).
+func (r RenderableObject) KubeGetCalicoGlobalNetworkPoliciesMatchingPod(namespace string, podLabels map[string]interface{}) (out []RenderableObject) {
+	out = make([]RenderableObject, 0)
+	if viper.GetBool("shallow") {
+		return
+	}
+	klog.V(5).InfoS("called KubeGetCalicoGlobalNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
+	castedLabels := stringifyLabels(podLabels)
+	policies, err := r.repo.Objects("", []string{"globalnetworkpolicies.crd.projectcalico.org"}, "")
+	if err != nil {
+		klog.V(3).ErrorS(err, "error listing calico globalnetworkpolicies", "r", r)
+		return
+	}
+	if len(policies) == 0 {
+		return
+	}
+	ns := r.KubeGetFirst("", "Namespace", namespace)
+	nsLabels := stringifyLabels(ns.Labels())
+	for _, obj := range policies {
+		spec, found, err := unstructured.NestedMap(obj, "spec")
+		if err != nil || !found {
+			continue
+		}
+		if !calicoPolicySelectsPod(spec, castedLabels, namespace) {
+			continue
+		}
+		if !calicoNamespaceSelectorMatches(spec, namespace, nsLabels) {
+			continue
+		}
+		out = append(out, r.newRenderableObject(obj))
 	}
 	return out
 }

@@ -1,0 +1,17 @@
+\A
+Pod/cni-policy-selected-pod -n e2e-cni-policy-pod, created 1m ago, gen:1(, started after [0-9.]+[A-Za-z]+)? Running BestEffort
+  Current: Pod is Ready
+  Managed by kubectl-status-test-cni-policy-target application
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Standalone POD\.
+  Containers: app \(busybox:latest\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
+  Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  CiliumNetworkPolicy: selected by CiliumNetworkPolicy cnp-ingress \(ingress restricted\)
+  CiliumClusterwideNetworkPolicy: selected by CiliumClusterwideNetworkPolicy ccnp-egress-e2e-cni-policy-pod \(egress restricted\)
+  Calico NetworkPolicy: selected by Calico NetworkPolicy calico-np-ingress \(ingress restricted\)
+  Calico GlobalNetworkPolicy: selected by Calico GlobalNetworkPolicy calico-gnp-egress-e2e-cni-policy-pod \(egress restricted\)
+  Known/recorded manage events:
+    1m ago Updated by cmd\.test \(metadata, spec\)
+    1m ago Updated by kubelet \(status\)
+\z
