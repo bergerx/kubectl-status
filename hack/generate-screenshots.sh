@@ -4,8 +4,12 @@
 # Requires:
 #   - kubectl pointed at a disposable/dev cluster (e.g. minikube) -- this script
 #     creates and deletes its own namespace, but does not touch any other
-#     namespace or cluster-scoped state. Set ASSUME_KUBECONFIG_IS_DISPOSABLE=true
-#     to skip the confirmation prompt (e.g. in CI).
+#     namespace or cluster-scoped state, EXCEPT: it installs the Gateway API
+#     CRDs and cert-manager cluster-wide if they aren't already present (needed
+#     for the HTTPRoute/TCPRoute and cert-manager-issued-Secret screenshots),
+#     and removes them again in cleanup if this run is what installed them. Set
+#     ASSUME_KUBECONFIG_IS_DISPOSABLE=true to skip the confirmation prompt (e.g.
+#     in CI).
 #   - freeze (https://github.com/charmbracelet/freeze): go install github.com/charmbracelet/freeze@latest
 #
 # freeze renders with the "JetBrains Mono" font and exits 0 even when that font
@@ -14,11 +18,10 @@
 set -euo pipefail
 
 font_family="JetBrains Mono"
-
-if ! command -v freeze >/dev/null 2>&1; then
-  echo "freeze not found on PATH. Install it with: go install github.com/charmbracelet/freeze@latest" >&2
-  exit 1
-fi
+# shellcheck source=hack/versions.env
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/versions.env"
+gateway_api_version="${GATEWAY_API_VERSION}"
+cert_manager_version="${CERT_MANAGER_VERSION}"
 
 if [ "$(uname)" = "Darwin" ]; then
   # macOS has no fontconfig; dropping a .ttf into ~/Library/Fonts is enough,
@@ -60,6 +63,16 @@ if command -v minikube >/dev/null 2>&1 && [ "${context}" = "minikube" ]; then
   fi
 fi
 
+gateway_api_already_installed=false
+if kubectl get crd httproutes.gateway.networking.k8s.io >/dev/null 2>&1; then
+  gateway_api_already_installed=true
+fi
+
+cert_manager_already_installed=false
+if kubectl get crd certificates.cert-manager.io >/dev/null 2>&1; then
+  cert_manager_already_installed=true
+fi
+
 if [ "${ASSUME_KUBECONFIG_IS_DISPOSABLE:-}" != "true" ]; then
   cat <<EOF
 This will, on kubectl context '${context}':
@@ -69,6 +82,18 @@ EOF
     cat <<EOF
   - enable the minikube 'metrics-server' addon, then disable it again when done
     (cluster-wide, affects other workloads using it in the meantime)
+EOF
+  fi
+  if [ "${gateway_api_already_installed}" = "false" ]; then
+    cat <<EOF
+  - install the Gateway API CRDs (${gateway_api_version}), then remove them again when done
+    (cluster-wide, needed for the HTTPRoute/TCPRoute-on-Service screenshot)
+EOF
+  fi
+  if [ "${cert_manager_already_installed}" = "false" ]; then
+    cat <<EOF
+  - install cert-manager (${cert_manager_version}) into its own 'cert-manager' namespace, then
+    remove it again when done (cluster-wide, needed for the cert-manager-issued-Secret screenshot)
 EOF
   fi
   cat <<EOF
@@ -86,7 +111,7 @@ EOF
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ns="kubectl-status-screenshots"
+ns="ks-demo"
 tmp_dir="$(mktemp -d)"
 bin="${tmp_dir}/kubectl-status"
 assets="${repo_root}/assets"
@@ -112,6 +137,16 @@ cleanup() {
   fi
   echo "Deleting namespace ${ns}..."
   kubectl delete namespace "${ns}" --ignore-not-found --wait=false >/dev/null
+  if [ "${cert_manager_already_installed}" = "false" ]; then
+    echo "Removing cert-manager..."
+    kubectl delete -f "https://github.com/cert-manager/cert-manager/releases/download/${cert_manager_version}/cert-manager.yaml" \
+      --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  fi
+  if [ "${gateway_api_already_installed}" = "false" ]; then
+    echo "Removing Gateway API CRDs..."
+    kubectl delete -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/${gateway_api_version}/experimental-install.yaml" \
+      --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -124,26 +159,63 @@ else
   echo "Not running against minikube (context: ${context}); skipping metrics-server addon management. Resource-usage data in the pod screenshot will only appear if metrics-server is already installed." >&2
 fi
 
+if [ "${gateway_api_already_installed}" = "false" ]; then
+  echo "Installing Gateway API CRDs (${gateway_api_version}, experimental channel)..."
+  # --server-side: these CRDs are too large for the client-side last-applied-configuration
+  # annotation ("metadata.annotations: Too long"); server-side apply is upstream's documented
+  # workaround.
+  kubectl apply --server-side -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/${gateway_api_version}/experimental-install.yaml" >/dev/null
+else
+  echo "Gateway API CRDs already installed; leaving them as-is."
+fi
+
+if [ "${cert_manager_already_installed}" = "false" ]; then
+  echo "Installing cert-manager (${cert_manager_version})..."
+  kubectl apply -f "https://github.com/cert-manager/cert-manager/releases/download/${cert_manager_version}/cert-manager.yaml" >/dev/null
+  echo "Waiting for cert-manager to become ready..."
+  kubectl wait -n cert-manager --for=condition=Available deployment --all --timeout=2m
+else
+  echo "cert-manager already installed; leaving it as-is."
+fi
+
 echo "Creating namespace ${ns}..."
 kubectl create namespace "${ns}"
 
 echo "Applying demo manifests..."
-kubectl apply -n "${ns}" -f "${repo_root}/tests/e2e-artifacts/deployment-demo.yaml"
+kubectl apply -n "${ns}" -f "${repo_root}/tests/e2e-artifacts/web.yaml"
+kubectl apply -n "${ns}" -f "${repo_root}/tests/e2e-artifacts/web-policies.yaml"
+kubectl apply -n "${ns}" -f "${repo_root}/tests/e2e-artifacts/web-cert.yaml"
 kubectl apply -n "${ns}" -f "${repo_root}/tests/e2e-artifacts/sts-with-ingress.yaml"
+kubectl apply -n "${ns}" -f "${repo_root}/tests/e2e-artifacts/sts-with-ingress-routes.yaml"
 kubectl apply -n "${ns}" -f "${repo_root}/tests/e2e-artifacts/pod-demo.yaml"
 
 echo "Waiting for resources to become ready..."
-kubectl wait -n "${ns}" --for=condition=Available deployment/deployment-demo --timeout=2m
+kubectl wait -n "${ns}" --for=condition=Available deployment/web --timeout=2m
 kubectl wait -n "${ns}" --for=jsonpath='{.status.readyReplicas}'=1 statefulset/sts-with-ingress --timeout=2m
+kubectl wait -n "${ns}" --for=condition=Ready certificate/web-tls --timeout=2m
 # pod-demo's readinessProbe is deliberately broken (see tests/e2e-artifacts/pod-demo.yaml),
 # so the Deployment never reports condition=Available; wait for the container to
 # actually be running instead.
 kubectl wait -n "${ns}" --for=jsonpath='{.status.phase}'=Running pod -l app=pod-demo --timeout=2m
 kubectl wait -n "${ns}" --for=jsonpath='{.status.phase}'=Bound pvc/pod-demo-data --timeout=2m
 
-echo "Triggering a second Deployment revision for the rollout/diff screenshot..."
-kubectl set image -n "${ns}" deployment/deployment-demo nginx=nginx:1.28
-kubectl rollout status -n "${ns}" deployment/deployment-demo --timeout=2m
+echo "Triggering a failing second Deployment revision (bad image tag) for the rollout/diff screenshot..."
+# A nonexistent tag makes the new ReplicaSet's Pods stick in ImagePullBackOff, so the rollout
+# never completes and kubectl-status auto-shows the diff between revisions without needing
+# --include-rollout-diffs. Deliberately not using `kubectl rollout status` here -- it would just
+# time out and, under `set -euo pipefail`, abort the script.
+kubectl set image -n "${ns}" deployment/web nginx=nginx:this-tag-does-not-exist
+echo "Waiting for the new revision's Pods to report an image pull failure..."
+rollout_deadline=$((SECONDS + 60))
+until kubectl get pods -n "${ns}" -l app=web \
+    -o jsonpath='{.items[*].status.containerStatuses[*].state.waiting.reason}' 2>/dev/null \
+    | grep -qE 'ErrImagePull|ImagePullBackOff'; do
+  if [ "${SECONDS}" -ge "${rollout_deadline}" ]; then
+    echo "Timed out waiting for the image pull failure; continuing anyway." >&2
+    break
+  fi
+  sleep 2
+done
 
 pod_name="$(kubectl get pods -n "${ns}" -l app=pod-demo -o jsonpath='{.items[0].metadata.name}')"
 node_name="$(kubectl get pod -n "${ns}" "${pod_name}" -o jsonpath='{.spec.nodeName}')"
@@ -187,15 +259,16 @@ shot() {
   # fixed offset on top of that for --window's traffic-light dots, so even a
   # small --padding value leaves a visible gap above/below the text; 0 for
   # top/bottom keeps that gap to the unavoidable minimum.
-  freeze --execute "${bin} $* --color always" \
+  go run github.com/charmbracelet/freeze@latest --execute "${bin} $* --color always" \
     --window --show-line-numbers=false --font.family "${font_family}" --wrap 120 \
     --padding 0,10,0,10 \
     -o "${assets}/${out}" </dev/null
 }
 
 shot pod.png pod "${pod_name}" -n "${ns}" --include-owners --include-events=false
-shot deployment-replicaset.png deployment deployment-demo -n "${ns}" --include-rollout-diffs
+shot deployment-replicaset.png deployment web -n "${ns}"
 shot statefulset.png statefulset sts-with-ingress -n "${ns}"
 shot service.png service sts-with-ingress -n "${ns}"
+shot secret.png secret web-tls -n "${ns}"
 
 echo "Done. Review the updated images under assets/ before committing."

@@ -1,0 +1,10 @@
+\A
+Service/sts-with-ingress -n default, created 1m ago, last endpoint change was 1m ago
+  Current: Service is ready
+  Ready: Pod/sts-with-ingress-0 -n default on Node/minikube, [0-9.]+:80/TCP
+  Ingresses matching this Service:
+    Ingress/sts-with-ingress -n default, created 1m ago, sts-with-ingress\.com, Pending LoadBalancer, Current
+  Routes matching this Service:
+    HTTPRoute/sts-http -n default, created 1m ago, sts\.example\.com, Current
+    TCPRoute/sts-tcp -n default, created 1m ago, Current
+\z

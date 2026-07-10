@@ -40,14 +40,18 @@ kubectl status deployment my-app
 Example Pod — a healthy Pod alongside a couple of unhealthy ones, and why:
 ![pod](assets/pod.png)
 
-Example Deployment and ReplicaSet, including an ongoing rollout:
+Example Deployment and ReplicaSet — a stuck rollout (bad image) with its diff shown automatically,
+plus the matching PodDisruptionBudget and NetworkPolicy:
 ![deployment-replicaset](assets/deployment-replicaset.png)
 
 Example StatefulSet:
 ![statefulset](assets/statefulset.png)
 
-Example Service:
+Example Service — matching Ingress plus Gateway API HTTPRoute and TCPRoute:
 ![service](assets/service.png)
+
+Example Secret — a TLS certificate issued by a local cert-manager-generated CA:
+![secret](assets/secret.png)
 
 ## Features
 

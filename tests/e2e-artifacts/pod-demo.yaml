@@ -20,7 +20,7 @@ metadata:
     helm.sh/chart: nginx-15.5.1
   annotations:
     meta.helm.sh/release-name: pod-demo
-    meta.helm.sh/release-namespace: kubectl-status-screenshots
+    meta.helm.sh/release-namespace: ks-demo
 spec:
   replicas: 1
   selector:
@@ -36,7 +36,7 @@ spec:
         helm.sh/chart: nginx-15.5.1
       annotations:
         meta.helm.sh/release-name: pod-demo
-        meta.helm.sh/release-namespace: kubectl-status-screenshots
+        meta.helm.sh/release-namespace: ks-demo
     spec:
       initContainers:
       - name: init-config

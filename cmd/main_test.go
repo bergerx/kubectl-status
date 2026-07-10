@@ -992,6 +992,23 @@ func TestE2EDynamicManifests(t *testing.T) {
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.service-deep.regex",
 		}.assert(t, nil)
 	})
+	t.Run("sts-with-ingress-routes", func(t *testing.T) {
+		// Builds on sts-with-ingress above: adds a Gateway/HTTPRoute/TCPRoute targeting the
+		// same Service, so its "Routes matching this Service" section shows up alongside the
+		// Ingress already covered there.
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/sts-with-ingress.yaml")
+		applyManifest(t, "e2e-artifacts/sts-with-ingress-routes.yaml")
+		waitFor(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1")
+		cmdTest{
+			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/sts-with-ingress-routes.regex",
+		}.assert(t, nodeNameModifier)
+		cmdTest{
+			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/sts-with-ingress-routes.deep.regex",
+		}.assert(t, nodeNameModifier)
+	})
 	t.Run("svc-with-httproute", func(t *testing.T) {
 		viperTestHack(t)
 		applyManifest(t, "e2e-artifacts/svc-with-httproute.yaml")
@@ -1086,6 +1103,36 @@ func TestE2EDynamicManifests(t *testing.T) {
 		cmdTest{
 			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/backendtlspolicy-with-target.deep.regex",
+		}.assert(t, nil)
+	})
+	t.Run("web-cert", func(t *testing.T) {
+		// A self-signed local CA issuing a leaf certificate, so the leaf's Secret shows
+		// "issued by <CA>" rather than "Self-signed" -- the same cert-manager chain used for
+		// the demo screenshot's Secret example, but exercised here as a regular e2e fixture.
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/web-cert.yaml")
+		waitFor(t, "certificate/web-ca", "condition=Ready")
+		waitFor(t, "certificate/web-tls", "condition=Ready")
+		cmdTest{
+			args:            []string{"secret/web-tls", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/web-cert.regex",
+		}.assert(t, nil)
+		cmdTest{
+			args:            []string{"secret/web-tls", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/web-cert.deep.regex",
+		}.assert(t, nil)
+	})
+	t.Run("web-policies", func(t *testing.T) {
+		// A PodDisruptionBudget and NetworkPolicy both selecting the same Deployment's Pods --
+		// the same fixture used for the demo screenshot's matching-PDB/NetworkPolicy example.
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/web.yaml")
+		applyManifest(t, "e2e-artifacts/web-policies.yaml")
+		waitFor(t, "deployment/web", "condition=Available")
+		waitFor(t, "pdb/web", "jsonpath={.status.observedGeneration}=1")
+		cmdTest{
+			args:            []string{"deployment/web", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/web-policies.regex",
 		}.assert(t, nil)
 	})
 	t.Run("sts-without-service", func(t *testing.T) {
