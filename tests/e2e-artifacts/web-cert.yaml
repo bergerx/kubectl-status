@@ -1,0 +1,43 @@
+# cert-manager chain demoing a Secret screenshot: a self-signed local CA issues a leaf
+# certificate, so the resulting TLS Secret shows "issued by <CA>" rather than "Self-signed".
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: web-selfsigned-issuer
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: web-ca
+spec:
+  isCA: true
+  commonName: kubectl-status-demo-ca
+  secretName: web-ca-secret
+  issuerRef:
+    name: web-selfsigned-issuer
+    kind: Issuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: web-ca-issuer
+spec:
+  ca:
+    secretName: web-ca-secret
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: web-tls
+spec:
+  commonName: web.ks-demo.svc
+  dnsNames:
+  - web.ks-demo.svc
+  secretName: web-tls
+  issuerRef:
+    name: web-ca-issuer
+    kind: Issuer
+    group: cert-manager.io

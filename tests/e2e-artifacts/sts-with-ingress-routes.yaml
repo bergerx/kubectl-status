@@ -1,0 +1,45 @@
+# Gateway API resources demoing the "Routes matching this Service" section on the Service
+# screenshot, alongside the plain Ingress from sts-with-ingress.yaml. The Gateway's class is
+# deliberately unused/unreconciled (same convention as tcproute-with-gateway.yaml) -- no real
+# Gateway controller is required for kubectl-status to list matching routes.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: sts-gw
+spec:
+  gatewayClassName: unused-gwc
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+  - name: tcp
+    port: 8080
+    protocol: TCP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: sts-http
+spec:
+  parentRefs:
+  - name: sts-gw
+    sectionName: http
+  hostnames:
+  - sts.example.com
+  rules:
+  - backendRefs:
+    - name: sts-with-ingress
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TCPRoute
+metadata:
+  name: sts-tcp
+spec:
+  parentRefs:
+  - name: sts-gw
+    sectionName: tcp
+  rules:
+  - backendRefs:
+    - name: sts-with-ingress
+      port: 80
