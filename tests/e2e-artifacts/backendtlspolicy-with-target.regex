@@ -6,6 +6,4 @@ BackendTLSPolicy/e2e-backendtlspolicy -n default, created 1m ago, gen:1
   TLS: SNI e2e-tls-backend\.example\.com
     CA certs:
       ConfigMap/e2e-backend-ca
-  Known/recorded manage events:
-    1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
 \z

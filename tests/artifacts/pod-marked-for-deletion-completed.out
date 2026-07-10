@@ -1,5 +1,5 @@
 
-Pod/hello-1584492660-d2c6p -n default, created 1m ago by Job/hello-1584492660 Succeeded BestEffort
+Pod/hello-1584492660-d2c6p -n default, created 1m ago by Job/hello-1584492660, started after 1m Succeeded BestEffort
   Terminating: Resource scheduled for deletion
   PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
     Ready PodCompleted for 1m

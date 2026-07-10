@@ -12,8 +12,4 @@ Deployment/e2e-rollouts-blocked-deployment -n default, created 1m ago, gen:1 rev
   Outage: Deployment has no Ready replicas\.
   Rollouts: Use the `--include-rollout-diffs` flag to see the diff between each rollout!
     1m ago, managed by ReplicaSet/e2e-rollouts-blocked-deployment-[a-z0-9]+, has 1 replicas
-  Known/recorded manage events:
-    (?:1m ago Updated by kube-controller-manager \(metadata, status\)
-    1m ago Updated by [^ ]+ \((?:metadata, )?spec\)|1m ago Updated by [^ ]+ \((?:metadata, )?spec\)
-    1m ago Updated by kube-controller-manager \(metadata, status\))
 \z

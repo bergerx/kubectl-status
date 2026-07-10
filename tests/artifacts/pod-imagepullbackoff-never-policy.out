@@ -1,5 +1,5 @@
 
-Pod/backoff-never-policy -n test1, created 1m ago Pending BestEffort
+Pod/backoff-never-policy -n test1, created 1m ago, started after 1m Pending BestEffort
   InProgress: Pod is in the Pending phase
     Reconciling: PodPending, Pod is in the Pending phase
   PodScheduled -> Initialized -> Not ContainersReady -> Not Ready

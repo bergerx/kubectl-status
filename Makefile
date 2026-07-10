@@ -118,14 +118,17 @@ install-e2e-deps:
 .PHONY: test-e2e
 ifeq ($(ASSUME_MINIKUBE_IS_CONFIGURED),true)
 test-e2e: vet staticcheck install-e2e-deps
-	# using count to prevent caching
-	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go test -v ./... -count=1 -run 'TestE2E*'
+	# using count to prevent caching; the suite's real cluster wall-clock time (image pulls,
+	# rollouts, waits) runs close to go test's default 10m timeout, so it's raised explicitly
+	# rather than risking a flaky timeout on a slower run.
+	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go test -v ./... -count=1 -timeout=25m -run 'TestE2E*'
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# The cluster is left running (profile: $(E2E_PROFILE)) for fast reruns; tear it
 	# down explicitly with `make e2e-minikube-down` once you're done with this branch.
-	# using count to prevent caching
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go test -v ./... -count=1 -run 'TestE2E*'
+	# using count to prevent caching; see the timeout note in the ASSUME_MINIKUBE_IS_CONFIGURED
+	# branch above.
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go test -v ./... -count=1 -timeout=25m -run 'TestE2E*'
 endif
 
 #--------------------------

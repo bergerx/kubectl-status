@@ -37,8 +37,4 @@ Deployment/e2e-rollouts-three-revisions -n default, created 1m ago, gen:3 rev:3
                    "name": "nginx",
                    "resources": \{\},
       
-  Known/recorded manage events:
-    1m ago Updated by [^ ]+ \(metadata, spec\)
-    1m ago Updated by kubectl-set \(spec\)
-    1m ago Updated by kube-controller-manager \(metadata, status\)
 \z

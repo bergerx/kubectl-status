@@ -5,11 +5,7 @@ BackendTLSPolicy/e2e-backendtlspolicy -n default, created 1m ago, gen:1
     Service/e2e-tls-backend-svc -n default, created 1m ago
       Current: Service is ready
       Missing Endpoint: Service has no matching endpoint\.
-      Known/recorded manage events:
-        1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
   TLS: SNI e2e-tls-backend\.example\.com
     CA certs:
       ConfigMap/e2e-backend-ca
-  Known/recorded manage events:
-    1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
 \z

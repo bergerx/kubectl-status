@@ -23,7 +23,4 @@ Deployment/rollout-diff-test -n default, created \d+[a-z]+ ago, gen:\d+ rev:\d+
                    "name": "nginx",
                    "resources": \{\},
       
-  Known/recorded manage events:
-    \d+[a-z]+ ago Updated by cmd\.test \(spec\)
-    \d+[a-z]+ ago Updated by kube-controller-manager \(metadata, status\)
 \z

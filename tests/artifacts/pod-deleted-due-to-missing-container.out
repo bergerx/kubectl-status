@@ -1,5 +1,5 @@
 
-Pod/prometheus-operator-5c5784bc5f-4h65z -n prometheus, created 1m ago by ReplicaSet/prometheus-operator-5c5784bc5f Failed Evicted BestEffort, message: The node was low on resource: ephemeral-storage. Container kube-prometheus-stack was using 19212Ki, which exceeds its request of 0.
+Pod/prometheus-operator-5c5784bc5f-4h65z -n prometheus, created 1m ago by ReplicaSet/prometheus-operator-5c5784bc5f, started after 1m Failed Evicted BestEffort, message: The node was low on resource: ephemeral-storage. Container kube-prometheus-stack was using 19212Ki, which exceeds its request of 0.
   Current: Pod has completed, but not successfully
   PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
     Ready PodFailed for 1m

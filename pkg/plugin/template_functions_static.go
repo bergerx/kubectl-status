@@ -60,6 +60,7 @@ func funcMap() template.FuncMap {
 		"bold":                      color.New(color.Bold).SprintfFunc(),
 		"colorAgo":                  colorAgo,
 		"colorDuration":             colorDuration,
+		"startedAfterClause":        startedAfterClause,
 		"colorBool":                 colorBool,
 		"colorKeyword":              colorKeyword,
 		"markRed":                   markRed,
@@ -381,6 +382,42 @@ func colorAgo(kubeDate string) string {
 	}
 	duration := time.Since(t).Round(time.Second)
 	return colorDuration(duration)
+}
+
+var startedAfterClauseFunc = defaultStartedAfterClause
+
+// defaultStartedAfterClause renders the ", started after <duration>" suffix of the status
+// summary line. Both timestamps come off the wire at 1-second resolution, so on a live cluster
+// whether this clause appears at all hinges on whether the pod's creation and kubelet-acknowledge
+// timestamps land in the same wall-clock second -- a coin flip e2e tests can't control. Tests
+// replace this func (see SetStartedAfterClause) so the clause is deterministic instead of tied to
+// that real scheduling latency.
+func defaultStartedAfterClause(createdKubeDate, startedKubeDate string) string {
+	created, err := time.ParseInLocation("2006-01-02T15:04:05Z", createdKubeDate, time.UTC)
+	if err != nil {
+		return ""
+	}
+	started, err := time.ParseInLocation("2006-01-02T15:04:05Z", startedKubeDate, time.UTC)
+	if err != nil {
+		return ""
+	}
+	duration := started.Sub(created)
+	if duration <= 0 {
+		return ""
+	}
+	return ", started after " + colorDuration(duration)
+}
+
+// SetStartedAfterClause is a helper method for tests
+func SetStartedAfterClause(f func(createdKubeDate, startedKubeDate string) string) (revertFunc func()) {
+	startedAfterClauseFunc = f
+	return func() {
+		startedAfterClauseFunc = defaultStartedAfterClause
+	}
+}
+
+func startedAfterClause(createdKubeDate, startedKubeDate string) string {
+	return startedAfterClauseFunc(createdKubeDate, startedKubeDate)
 }
 
 func ago(t time.Time) string {

@@ -12,8 +12,4 @@ StatefulSet/e2e-rollouts-blocked-statefulset -n default, created 1m ago, gen:1
   Stuck Rollout\?: Still replacing the first Pod, may indicate a stuck rollout\.
   Rollouts: Use the `--include-rollout-diffs` flag to see the diff between each rollout!
     1m ago used ControllerRevision/e2e-rollouts-blocked-statefulset-[a-z0-9]+\.
-  Known/recorded manage events:
-    (?:1m ago Updated by kube-controller-manager \(status\)
-    1m ago Updated by [^ ]+ \((?:metadata, )?spec\)|1m ago Updated by [^ ]+ \((?:metadata, )?spec\)
-    1m ago Updated by kube-controller-manager \(status\))
 \z

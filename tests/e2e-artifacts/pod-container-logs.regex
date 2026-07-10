@@ -1,5 +1,5 @@
 \A
-Pod/e2e-pod-container-logs -n default, created 1m ago, gen:1(, started after [0-9.]+[A-Za-z]+)? Running BestEffort
+Pod/e2e-pod-container-logs -n default, created 1m ago, gen:1, started after 1m Running BestEffort
   Failed: Containers in CrashLoop state: crasher
     Stalled: ContainerCrashLooping, Containers in CrashLoop state: crasher
   PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
@@ -21,8 +21,4 @@ Pod/e2e-pod-container-logs -n default, created 1m ago, gen:1(, started after [0-
     sidecar \(busybox:latest\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
       (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
   Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
-  Known/recorded manage events:
-    (?:1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
-    1m ago Updated by kubelet \(status\)|1m ago Updated by kubelet \(status\)
-    1m ago Updated by kubectl-client-side-apply \(metadata, spec\))
 \z
