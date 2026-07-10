@@ -1,5 +1,5 @@
 
-Pod/test-pod -n test1, created 1m ago Running BestEffort
+Pod/test-pod -n test1, created 1m ago, started after 1m Running BestEffort
   Current: Pod is Ready
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
   Standalone POD.

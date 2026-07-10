@@ -68,10 +68,7 @@
     {{- end }}{{ end }}
     {{- with .Metadata.generation }}, gen:{{ . }}{{ end }}
     {{- if and .Status.startTime (ne .Kind "Job") }}
-        {{- $created := .Metadata.creationTimestamp | toDate "2006-01-02T15:04:05Z" }}
-        {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" }}
-        {{- $startedIn := $started.Sub $created}}
-        {{- if gt ($startedIn.Seconds | int) 0 }}, started after {{ $startedIn | colorDuration }}{{ end }}
+        {{- startedAfterClause .Metadata.creationTimestamp .Status.startTime }}
     {{- end }}
     {{- if and .Status.startTime .Status.completionTime (ne .Kind "Job") }}
         {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" -}}

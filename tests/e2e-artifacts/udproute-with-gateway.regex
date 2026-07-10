@@ -5,6 +5,4 @@ UDPRoute/e2e-udproute -n default, created 1m ago, gen:1
     Gateway/e2e-udp-gw \[udp\]
   Rules:
     → Service/e2e-udp-svc:9090
-  Known/recorded manage events:
-    1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
 \z

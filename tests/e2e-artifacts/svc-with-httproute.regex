@@ -2,8 +2,6 @@
 Service/svc-with-httproute -n default, created 1m ago
   Current: Service is ready
   Missing Endpoint: Service has no matching endpoint.
-  Known/recorded manage events:
-    1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
   Routes matching this Service:
     HTTPRoute/svc-with-httproute -n default, svc-with-httproute\.example\.com, Current
 \z

@@ -8,10 +8,6 @@ UDPRoute/e2e-udproute -n default, created 1m ago, gen:1
       Programmed Pending, Waiting for controller for 1m
       Listeners:
         udp: port=9090/UDP, namespaces=Same
-      Known/recorded manage events:
-        1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
   Rules:
     → Service/e2e-udp-svc:9090
-  Known/recorded manage events:
-    1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
 \z

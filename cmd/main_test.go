@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -181,6 +182,58 @@ func TestRootCmdWithoutACluster(t *testing.T) {
 	}
 }
 
+// TestDeepRespectsExplicitIncludeFalse guards a fix to --deep: it used to force every
+// --include-* flag to true unconditionally (enableAllIncludes), silently overriding an explicit
+// --include-events=false/--include-managed-fields=false passed alongside it on the same command
+// line -- exactly the flags the e2e "--deep" test cases rely on to keep their fixtures
+// deterministic. --deep now only fills in flags the user didn't set explicitly, mirroring how
+// --shallow already respects an explicit --include-*=true. This is a pure viper/pflag check, no
+// live cluster or even a real render involved, so it runs unconditionally.
+func TestDeepRespectsExplicitIncludeFalse(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	addRenderFlags(flags)
+	require.NoError(t, viper.BindPFlags(flags))
+	require.NoError(t, flags.Parse([]string{"--deep", "--include-events=false", "--include-managed-fields=false"}))
+
+	require.True(t, viper.GetBool("deep"))
+	enableAllIncludes()
+
+	assert.False(t, viper.GetBool("include-events"), "explicit --include-events=false must survive --deep")
+	assert.False(t, viper.GetBool("include-managed-fields"), "explicit --include-managed-fields=false must survive --deep")
+	assert.True(t, viper.GetBool("include-owners"), "--deep must still enable flags the user didn't set explicitly")
+}
+
+// TestE2ERegexFixturesAreAnchored guards the whole-output convention documented in
+// CONTRIBUTING.md: a fixture under tests/e2e-artifacts/ either pins the full rendered output,
+// anchored at both ends with `\A`...`\z`, or is a deliberately partial one-off-lines match with
+// neither anchor. A fixture with only one of the two anchors is neither -- almost always a fixture
+// that was meant to be anchored but lost its `\z` (or gained a stray `\A`) while being edited, so
+// it silently stopped verifying the parts of the output past/before the missing anchor. This
+// doesn't require a live cluster, so it runs unconditionally.
+func TestE2ERegexFixturesAreAnchored(t *testing.T) {
+	fixtures, err := filepath.Glob("../tests/e2e-artifacts/*.regex")
+	require.NoError(t, err)
+	require.NotEmpty(t, fixtures)
+	for _, fixture := range fixtures {
+		fixture := fixture
+		t.Run(filepath.Base(fixture), func(t *testing.T) {
+			content, err := os.ReadFile(fixture)
+			require.NoError(t, err)
+			startsAnchored := bytes.HasPrefix(content, []byte(`\A`))
+			endsAnchored := bytes.HasSuffix(content, []byte(`\z`))
+			if startsAnchored != endsAnchored {
+				t.Errorf("%s: has `\\A` at the start=%v but `\\z` at the end=%v -- a whole-output "+
+					"fixture needs both anchors (see CONTRIBUTING.md), a partial one-off-lines "+
+					"fixture needs neither; use the --include-* flags to trim sections you don't "+
+					"want to pin instead of matching only part of the output",
+					fixture, startsAnchored, endsAnchored)
+			}
+		})
+	}
+}
+
 func TestE2EAgainstVanillaMinikube(t *testing.T) {
 	e2eMinikubeTest(t)
 	testHack(t)
@@ -198,12 +251,12 @@ func TestE2EAgainstVanillaMinikube(t *testing.T) {
 		},
 		{
 			name:            "pods on kube-system ns should return storage-provisioner",
-			args:            []string{"pods", "-n", "kube-system"},
+			args:            []string{"pods", "-n", "kube-system", "--include-events=false", "--include-managed-fields=false"},
 			stdoutRegexPath: "e2e-artifacts/pods-kube-system.regex",
 		},
 		{
 			name:            "node query should return at least a node",
-			args:            []string{"node"},
+			args:            []string{"node", "--include-events=false", "--include-managed-fields=false"},
 			stdoutRegexPath: "e2e-artifacts/node-query.regex",
 		},
 		{
@@ -225,9 +278,16 @@ func testHack(t *testing.T) {
 	durationRevert := plugin.SetDurationRound(func(_ interface{}) string { return "1m" })
 	fixedNow := time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC)
 	nowRevert := plugin.SetNowFunc(func() time.Time { return fixedNow })
+	// Whether a live pod's creation and kubelet-acknowledge timestamps land in the same
+	// wall-clock second (hiding the "started after" clause) or not (showing it) is a coin flip
+	// e2e tests can't control -- both timestamps only carry 1-second resolution over the wire.
+	// Force the clause present whenever Status.startTime is set, so fixtures can pin it literally
+	// instead of making it optional.
+	startedAfterRevert := plugin.SetStartedAfterClause(func(_, _ string) string { return ", started after 1m" })
 	t.Cleanup(func() {
 		durationRevert()
 		nowRevert()
+		startedAfterRevert()
 	})
 }
 
@@ -413,7 +473,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		require.NoError(t, err)
 
 		test := cmdTest{
-			args: []string{"secret/child", "--deep", "--v", "7"},
+			args: []string{"secret/child", "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "7"},
 			// Secret.tmpl intentionally omits kstatus_summary (Secret is always reported
 			// "Resource is always ready" by kstatus, so the "Current:" line is redundant
 			// noise) -- see tests/artifacts/secret-tls-healthy.out for the same committed
@@ -431,7 +491,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// resolves the ownerReference against the real API server (only the child object itself
 		// is local), so the orphan check is exercised the same way, without the race.
 		cmdTest{
-			args:            []string{"-f", "../tests/e2e-artifacts/secret-orphan-owner-reference.yaml", "--local", "--include-events=false", "--v", "5"},
+			args:            []string{"-f", "../tests/e2e-artifacts/secret-orphan-owner-reference.yaml", "--local", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/secret-orphan-owner-reference.regex",
 		}.assert(t, nil)
 	})
@@ -454,7 +514,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 
 		cmdTest{
-			args:            []string{"pod/pod-on-bad-node", "--include-events=false", "--v", "5"},
+			args:            []string{"pod/pod-on-bad-node", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node.regex",
 		}.assert(t, nil)
 	})
@@ -500,7 +560,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		defer clientset.AppsV1().ReplicaSets("default").Delete(context.TODO(), rs.Name, metav1.DeleteOptions{})
 
 		cmdTest{
-			args:            []string{"rs/bad-rs", "--include-events=false", "--v", "5"},
+			args:            []string{"rs/bad-rs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node-for-rs.regex",
 		}.assert(t, nil)
 	})
@@ -548,7 +608,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 			"pod/netpol-selected-pod", "-n", ns, "--timeout=2m").Run())
 
 		cmdTest{
-			args:            []string{"pod/netpol-selected-pod", "-n", ns, "--include-events=false", "--v", "5"},
+			args:            []string{"pod/netpol-selected-pod", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-selected-by-network-policy.regex",
 		}.assert(t, nil)
 	})
@@ -627,7 +687,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 			"pod/netpol-multi-selected-pod", "-n", ns, "--timeout=2m").Run())
 
 		cmdTest{
-			args:            []string{"pod/netpol-multi-selected-pod", "-n", ns, "--include-events=false", "--v", "5"},
+			args:            []string{"pod/netpol-multi-selected-pod", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-selected-by-multiple-network-policies.regex",
 		}.assert(t, nil)
 	})
@@ -669,7 +729,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// The order in which the two ReplicaSet revisions are diffed (and so which side
 		// gets "-" vs "+") isn't guaranteed, so the fixture alternates both directions.
 		cmdTest{
-			args:            []string{"deployment/" + name, "--include-rollout-diffs", "--include-events=false", "--v", "5"},
+			args:            []string{"deployment/" + name, "--include-rollout-diffs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/rollout-diff.regex",
 		}.assert(t, nil)
 	})
@@ -701,7 +761,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 			waitForContainerWaitingReason(t, "pod/"+podName, "app", "ImagePullBackOff")
 
 			cmdTest{
-				args:            []string{"deployment/" + name, "--include-events=false", "--v", "5"},
+				args:            []string{"deployment/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-deployment.regex",
 			}.assert(t, nil)
 		})
@@ -727,7 +787,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 			waitForContainerWaitingReason(t, "pod/"+name+"-0", "app", "ImagePullBackOff")
 
 			cmdTest{
-				args:            []string{"statefulset/" + name, "--include-events=false", "--v", "5"},
+				args:            []string{"statefulset/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-statefulset.regex",
 			}.assert(t, nil)
 		})
@@ -751,7 +811,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 			waitForContainerWaitingReason(t, "pod/"+podName, "app", "ImagePullBackOff")
 
 			cmdTest{
-				args:            []string{"daemonset/" + name, "--include-events=false", "--v", "5"},
+				args:            []string{"daemonset/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-daemonset.regex",
 			}.assert(t, nil)
 		})
@@ -776,7 +836,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 			waitFor(t, "deployment/"+name, "condition=Available")
 
 			cmdTest{
-				args:            []string{"deployment/" + name, "--include-events=false", "--v", "5"},
+				args:            []string{"deployment/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-healthy-deployment.regex",
 			}.assert(t, nil)
 		})
@@ -804,7 +864,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 			waitForSinglePod(t, "default", "app="+name)
 
 			cmdTest{
-				args:            []string{"deployment/" + name, "--include-events=false", "--include-rollout-diffs", "--v", "5"},
+				args:            []string{"deployment/" + name, "--include-events=false", "--include-managed-fields=false", "--include-rollout-diffs", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-three-revisions-with-diffs.regex",
 			}.assert(t, nil)
 		})
@@ -817,15 +877,15 @@ func TestE2EDynamicManifests(t *testing.T) {
 		cmdTest{
 			// Log/volume usage bytes come from live kubelet stats and aren't reproducible
 			// across runs, so this is matched as a regex rather than exact text.
-			args:            []string{"pod/sts-with-ingress-0", "--include-events=false", "--v", "5"},
+			args:            []string{"pod/sts-with-ingress-0", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.pod.regex",
 		}.assert(t, nodeNameModifier)
 		cmdTest{
-			args:            []string{"service/sts-with-ingress", "--include-events=false", "--v", "5"},
+			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.service.regex",
 		}.assert(t, nil)
 		cmdTest{
-			args:            []string{"service/sts-with-ingress", "--include-events=false", "--deep", "--v", "5"},
+			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.service-deep.regex",
 		}.assert(t, nil)
 	})
@@ -833,11 +893,11 @@ func TestE2EDynamicManifests(t *testing.T) {
 		viperTestHack(t)
 		applyManifest(t, "e2e-artifacts/svc-with-httproute.yaml")
 		cmdTest{
-			args:            []string{"service/svc-with-httproute", "--include-events=false", "--v", "5"},
+			args:            []string{"service/svc-with-httproute", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/svc-with-httproute.regex",
 		}.assert(t, nil)
 		cmdTest{
-			args:            []string{"service/svc-with-httproute", "--include-events=false", "--deep", "--v", "5"},
+			args:            []string{"service/svc-with-httproute", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/svc-with-httproute.deep.regex",
 		}.assert(t, nil)
 	})
@@ -850,15 +910,15 @@ func TestE2EDynamicManifests(t *testing.T) {
 		cmdTest{
 			// Log/volume usage bytes come from live kubelet stats and aren't reproducible
 			// across runs, so this is matched as a regex rather than exact text.
-			args:            []string{"pod/sts-with-nodeport-0", "--include-events=false", "--v", "5"},
+			args:            []string{"pod/sts-with-nodeport-0", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pod.regex",
 		}.assert(t, nodeNameModifier)
 		cmdTest{
-			args:            []string{"pdb/sts-with-nodeport", "--include-events=false", "--v", "5"},
+			args:            []string{"pdb/sts-with-nodeport", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pdb.regex",
 		}.assert(t, nodeNameModifier)
 		cmdTest{
-			args:            []string{"sts/sts-with-nodeport", "--include-events=false", "--v", "5"},
+			args:            []string{"sts/sts-with-nodeport", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.sts.regex",
 		}.assert(t, nil)
 	})
@@ -873,7 +933,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		waitFor(t, "pdb/pdb-conflict-test", "jsonpath={.status.observedGeneration}=1")
 		waitFor(t, "pdb/pdb-conflict-test-catch-all", "jsonpath={.status.observedGeneration}=1")
 		cmdTest{
-			args:            []string{"pod/pdb-conflict-test-0", "--include-events=false", "--v", "5"},
+			args:            []string{"pod/pdb-conflict-test-0", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pdb-empty-selector-conflict.pod.regex",
 		}.assert(t, nodeNameModifier)
 	})
@@ -881,11 +941,11 @@ func TestE2EDynamicManifests(t *testing.T) {
 		viperTestHack(t)
 		applyManifest(t, "e2e-artifacts/tcproute-with-gateway.yaml")
 		cmdTest{
-			args:            []string{"tcproute/e2e-tcproute", "--include-events=false", "--v", "5"},
+			args:            []string{"tcproute/e2e-tcproute", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/tcproute-with-gateway.regex",
 		}.assert(t, nil)
 		cmdTest{
-			args:            []string{"tcproute/e2e-tcproute", "--include-events=false", "--deep", "--v", "5"},
+			args:            []string{"tcproute/e2e-tcproute", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/tcproute-with-gateway.deep.regex",
 		}.assert(t, nil)
 	})
@@ -893,11 +953,11 @@ func TestE2EDynamicManifests(t *testing.T) {
 		viperTestHack(t)
 		applyManifest(t, "e2e-artifacts/udproute-with-gateway.yaml")
 		cmdTest{
-			args:            []string{"udproute/e2e-udproute", "--include-events=false", "--v", "5"},
+			args:            []string{"udproute/e2e-udproute", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/udproute-with-gateway.regex",
 		}.assert(t, nil)
 		cmdTest{
-			args:            []string{"udproute/e2e-udproute", "--include-events=false", "--deep", "--v", "5"},
+			args:            []string{"udproute/e2e-udproute", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/udproute-with-gateway.deep.regex",
 		}.assert(t, nil)
 	})
@@ -905,11 +965,11 @@ func TestE2EDynamicManifests(t *testing.T) {
 		viperTestHack(t)
 		applyManifest(t, "e2e-artifacts/listenerset-with-gateway.yaml")
 		cmdTest{
-			args:            []string{"listenerset/e2e-listenerset", "--include-events=false", "--v", "5"},
+			args:            []string{"listenerset/e2e-listenerset", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/listenerset-with-gateway.regex",
 		}.assert(t, nil)
 		cmdTest{
-			args:            []string{"listenerset/e2e-listenerset", "--include-events=false", "--deep", "--v", "5"},
+			args:            []string{"listenerset/e2e-listenerset", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/listenerset-with-gateway.deep.regex",
 		}.assert(t, nil)
 	})
@@ -917,11 +977,11 @@ func TestE2EDynamicManifests(t *testing.T) {
 		viperTestHack(t)
 		applyManifest(t, "e2e-artifacts/backendtlspolicy-with-target.yaml")
 		cmdTest{
-			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--v", "5"},
+			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/backendtlspolicy-with-target.regex",
 		}.assert(t, nil)
 		cmdTest{
-			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--deep", "--v", "5"},
+			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/backendtlspolicy-with-target.deep.regex",
 		}.assert(t, nil)
 	})
@@ -930,7 +990,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		applyManifest(t, "e2e-artifacts/sts-without-service.yaml")
 		waitFor(t, "sts/sts-without-service", "jsonpath={.status.readyReplicas}=1")
 		cmdTest{
-			args:            []string{"sts/sts-without-service", "--include-events=false", "--v", "5"},
+			args:            []string{"sts/sts-without-service", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-without-service.regex",
 		}.assert(t, nil)
 	})
@@ -949,7 +1009,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		waitFor(t, "certificate/e2e-tls-leaf", "condition=Ready")
 
 		t.Run("secret/leaf shows full non-self-signed certificate detail", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"secret/e2e-tls-leaf-tls", "--include-events=false", "--v", "5"})
+			stdout, _, err := executeCMD(t, []string{"secret/e2e-tls-leaf-tls", "--include-events=false", "--include-managed-fields=false", "--v", "5"})
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-secret-leaf.regex"))
 			require.NoError(t, rerr)
@@ -962,18 +1022,18 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("secret/leaf with --deep inlines the full Certificate and Issuer detail", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"secret/e2e-tls-leaf-tls", "--deep", "--include-events=false", "--v", "5"},
+				args:            []string{"secret/e2e-tls-leaf-tls", "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-secret-leaf-deep.regex",
 			}.assert(t, nil)
 		})
 		t.Run("secret/root-ca is flagged self-signed", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"secret/e2e-tls-root-ca-secret", "--include-events=false", "--v", "5"},
+				args:            []string{"secret/e2e-tls-root-ca-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-secret-root.regex",
 			}.assert(t, nil)
 		})
 		t.Run("ingress with matching hostname is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"ingress/e2e-tls-ingress-healthy", "--include-events=false", "--v", "5"})
+			stdout, _, err := executeCMD(t, []string{"ingress/e2e-tls-ingress-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"})
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-ingress-healthy.regex"))
 			require.NoError(t, rerr)
@@ -991,24 +1051,24 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("ingress with mismatched hostname flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"ingress/e2e-tls-ingress-mismatch", "--include-events=false", "--v", "5"},
+				args:            []string{"ingress/e2e-tls-ingress-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-mismatch.regex",
 			}.assert(t, nil)
 		})
 		t.Run("ingress referencing the root CA secret flags self-signed", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"ingress/e2e-tls-ingress-selfsigned", "--include-events=false", "--v", "5"},
+				args:            []string{"ingress/e2e-tls-ingress-selfsigned", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-selfsigned.regex",
 			}.assert(t, nil)
 		})
 		t.Run("ingress with --deep inlines the full Secret detail", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"ingress/e2e-tls-ingress-healthy", "--deep", "--include-events=false", "--v", "5"},
+				args:            []string{"ingress/e2e-tls-ingress-healthy", "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-deep.regex",
 			}.assert(t, nil)
 		})
 		t.Run("gateway with matching hostname is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"gateway/e2e-tls-gw-healthy", "--include-events=false", "--v", "5"})
+			stdout, _, err := executeCMD(t, []string{"gateway/e2e-tls-gw-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"})
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-gateway-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1019,13 +1079,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("gateway with mismatched hostname flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"gateway/e2e-tls-gw-mismatch", "--include-events=false", "--v", "5"},
+				args:            []string{"gateway/e2e-tls-gw-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-gateway-mismatch.regex",
 			}.assert(t, nil)
 		})
 		applyManifest(t, "e2e-artifacts/tls-validation-grpcroute.yaml")
 		t.Run("grpcroute attached to healthy gateway listener shows no cert flags", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"grpcroute/e2e-tls-grpcroute-healthy", "--include-events=false", "--v", "5"})
+			stdout, _, err := executeCMD(t, []string{"grpcroute/e2e-tls-grpcroute-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"})
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-grpcroute-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1036,13 +1096,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("grpcroute with its own hostname mismatching the cert SANs flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"grpcroute/e2e-tls-grpcroute-mismatch", "--include-events=false", "--v", "5"},
+				args:            []string{"grpcroute/e2e-tls-grpcroute-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-grpcroute-mismatch.regex",
 			}.assert(t, nil)
 		})
 		applyManifest(t, "e2e-artifacts/tls-validation-tlsroute.yaml")
 		t.Run("tlsroute attached to Terminate listener with matching hostname is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-healthy", "--include-events=false", "--v", "5"})
+			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"})
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-tlsroute-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1053,12 +1113,12 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("tlsroute with its own hostname mismatching the cert SANs flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"tlsroute/e2e-tlsroute-mismatch", "--include-events=false", "--v", "5"},
+				args:            []string{"tlsroute/e2e-tlsroute-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-tlsroute-mismatch.regex",
 			}.assert(t, nil)
 		})
 		t.Run("tlsroute attached to a Passthrough listener shows no cert flags", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-passthrough", "--include-events=false", "--v", "5"})
+			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-passthrough", "--include-events=false", "--include-managed-fields=false", "--v", "5"})
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-tlsroute-passthrough.regex"))
 			require.NoError(t, rerr)
@@ -1069,7 +1129,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		applyManifest(t, "e2e-artifacts/tls-validation-httproute.yaml")
 		t.Run("httproute attached to a healthy listener is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-healthy", "--include-events=false", "--v", "5"})
+			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"})
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-httproute-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1080,7 +1140,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("httproute attached to a mismatched-hostname listener flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"httproute/e2e-tls-httproute-mismatch", "--include-events=false", "--v", "5"},
+				args:            []string{"httproute/e2e-tls-httproute-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-httproute-mismatch.regex",
 			}.assert(t, nil)
 		})
@@ -1102,19 +1162,19 @@ func TestE2EDynamicManifests(t *testing.T) {
 
 		t.Run("pod referencing a non-existent Secret flags it and correlates with the pull failure", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-missing-pull-secret", "--include-events=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-missing-pull-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-missing.regex",
 			}.assert(t, nil)
 		})
 		t.Run("pod referencing a wrong-type Secret flags it and correlates with the pull failure", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-wrong-type-pull-secret", "--include-events=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-wrong-type-pull-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-wrong-type.regex",
 			}.assert(t, nil)
 		})
 		t.Run("pod referencing a healthy Secret shows no warnings", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-healthy-pull-secret", "--include-events=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-healthy-pull-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-healthy.regex",
 			}.assert(t, nil)
 		})
@@ -1143,7 +1203,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		waitForContainerWaitingReason(t, "pod/e2e-pod-container-logs", "crasher", "CrashLoopBackOff")
 
 		cmdTest{
-			args:            []string{"pod/e2e-pod-container-logs", "--include-events=false", "--v", "5"},
+			args:            []string{"pod/e2e-pod-container-logs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-container-logs.regex",
 		}.assert(t, nil)
 	})
@@ -1214,7 +1274,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 			"pod/e2e-pod-metrics-server-missing", "--timeout=2m").Run())
 
 		cmdTest{
-			args:            []string{"pod/e2e-pod-metrics-server-missing", "--include-events=false", "--v", "5"},
+			args:            []string{"pod/e2e-pod-metrics-server-missing", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-metrics-server-missing.regex",
 		}.assert(t, nil)
 	})

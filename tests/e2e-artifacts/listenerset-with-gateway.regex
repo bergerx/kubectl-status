@@ -7,6 +7,4 @@ ListenerSet/e2e-listenerset -n default, created 1m ago, gen:1
     extra-http: port=8081/HTTP, namespaces=Same
   Accepted Pending, Waiting for controller for 1m
   Programmed Pending, Waiting for controller for 1m
-  Known/recorded manage events:
-    1m ago Updated by kubectl-client-side-apply \(metadata, spec\)
 \z

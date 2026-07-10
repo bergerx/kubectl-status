@@ -1,5 +1,5 @@
 \A
-Pod/netpol-multi-selected-pod -n e2e-netpol-multi-pod, created 1m ago, gen:1(, started after [0-9.]+[A-Za-z]+)? Running BestEffort
+Pod/netpol-multi-selected-pod -n e2e-netpol-multi-pod, created 1m ago, gen:1, started after 1m Running BestEffort
   Current: Pod is Ready
   Managed by kubectl-status-test-netpol-multi-target application
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
@@ -8,7 +8,4 @@ Pod/netpol-multi-selected-pod -n e2e-netpol-multi-pod, created 1m ago, gen:1(, s
   (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
   Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
   NetworkPolicy: selected by NetworkPolicies default-deny-both, egress-only, ingress-only \(ingress, egress restricted\)
-  Known/recorded manage events:
-    1m ago Updated by cmd\.test \(metadata, spec\)
-    1m ago Updated by kubelet \(status\)
 \z

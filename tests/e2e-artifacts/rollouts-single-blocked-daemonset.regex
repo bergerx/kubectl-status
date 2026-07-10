@@ -9,8 +9,4 @@ DaemonSet/e2e-rollouts-blocked-daemonset -n default, created 1m ago, gen:1
   Ongoing Rollout: Waiting for daemon set "e2e-rollouts-blocked-daemonset" rollout to finish: 0 of 1 updated pods are available\.\.\.
   Rollouts: Use the `--include-rollout-diffs` flag to see the diff between each rollout!
     1m ago used ControllerRevision/e2e-rollouts-blocked-daemonset-[a-z0-9]+\.
-  Known/recorded manage events:
-    (?:1m ago Updated by kube-controller-manager \(status\)
-    1m ago Updated by [^ ]+ \((?:metadata, )?spec\)|1m ago Updated by [^ ]+ \((?:metadata, )?spec\)
-    1m ago Updated by kube-controller-manager \(status\))
 \z

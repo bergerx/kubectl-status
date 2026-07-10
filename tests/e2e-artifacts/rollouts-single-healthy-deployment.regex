@@ -7,8 +7,4 @@ Deployment/e2e-rollouts-healthy-deployment -n default, created 1m ago, gen:1 rev
     Pod/e2e-rollouts-healthy-deployment-[a-z0-9]+-[a-z0-9]+ -n default Running, 1/1 ready
   Available MinimumReplicasAvailable, Deployment has minimum availability\. for 1m
   Progressing NewReplicaSetAvailable, ReplicaSet "e2e-rollouts-healthy-deployment-[a-z0-9]+" has successfully progressed\. for 1m
-  Known/recorded manage events:
-    (?:1m ago Updated by [^ ]+ \((?:metadata, )?spec\)
-    1m ago Updated by kube-controller-manager \(metadata, status\)|1m ago Updated by kube-controller-manager \(metadata, status\)
-    1m ago Updated by [^ ]+ \((?:metadata, )?spec\))
 \z

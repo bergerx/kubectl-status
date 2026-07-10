@@ -219,6 +219,10 @@ func isBoolConfigExplicitlySetToTrue(key string) bool {
 	return viper.IsSet(key) && viper.GetBool(key)
 }
 
+func isBoolConfigExplicitlySetToFalse(key string) bool {
+	return viper.IsSet(key) && !viper.GetBool(key)
+}
+
 func complete(f cmdutil.Factory) error {
 	klog.V(5).InfoS("Complete options...")
 	err := setNamespace(f)
@@ -265,7 +269,9 @@ func enableAllIncludes() {
 		if strings.HasPrefix(key, "include") {
 			switch val.(type) {
 			case bool:
-				viper.Set(key, true)
+				if !isBoolConfigExplicitlySetToFalse(key) {
+					viper.Set(key, true)
+				}
 			}
 		}
 	}

@@ -264,6 +264,34 @@ text. One gotcha: the regex file must not have a trailing newline after the fina
 asserts absolute end-of-text, so a trailing newline in the fixture file makes the pattern
 impossible to satisfy.
 
+A fixture is either a whole-output match, anchored at both ends with `\A`...`\z`, or a deliberately
+partial one-off-lines match, anchored at neither end — never just one of the two anchors. A lone
+`\A` (or a lone `\z`) almost always means the fixture was meant to be a whole-output match but lost
+its other anchor while being edited, silently stopped verifying whatever now falls outside the
+anchored end, and started rendering the file misleading to read as "full output" when it isn't.
+`TestE2ERegexFixturesAreAnchored` in `cmd/main_test.go` enforces this pairing across every fixture
+under `tests/e2e-artifacts/`; it doesn't need a live cluster, so it also runs in `make test`/CI.
+If some part of an object's output is noisy or not worth pinning, don't drop to a partial fixture
+to dodge it — trim that section from the render instead with the relevant `--include-*` flag
+(`--include-events=false`, `--include-managed-fields=false`, etc.) and keep the fixture anchored
+and whole.
+
+Pass `--include-events=false --include-managed-fields=false` on every e2e `cmdTest` unless the
+subtest is specifically exercising events or managed fields. Both sections list real cluster data
+whose relative order isn't guaranteed to be stable across runs — Events by nature, and
+`managedFields` because two updates that land in the same wall-clock second sort as ties (`recent_updates`
+in `pkg/plugin/templates/common.tmpl` sorts by `time`, which only has 1-second resolution) — so
+leaving them enabled makes an otherwise-pinned fixture flaky. Real-usage default for both flags is
+`true`; the tests opt out per-invocation rather than the CLI changing its default.
+
+Similarly, the status summary line's `, started after <duration>` clause (also in `common.tmpl`)
+measures live scheduling latency between a Pod's `creationTimestamp` and `status.startTime` — both
+1-second-resolution timestamps, so on a real cluster whether the clause clears the "at least 1s
+apart" threshold, and therefore whether it renders at all, is a coin flip e2e tests can't control.
+`testHack(t)` overrides `plugin.SetStartedAfterClause` to force the clause present (as `, started
+after 1m`) whenever `status.startTime` is set, so fixtures can pin it as a literal instead of
+wrapping it in an optional group.
+
 ### Improving The Documentation
 
 We don't yet have a comprehensive documentation, we maintain just a few Markdown files in the repo. We aim to keep the
