@@ -227,6 +227,8 @@
     {{- if $total }}, {{ if lt $ready $total }}{{ printf "%d/%d" $ready $total | red | bold }}{{ else }}{{ printf "%d/%d" $ready $total | green }}{{ end }} ready{{ end }}
     {{- $nodeProblems := .Include "pod_node_problem_flags" . }}
     {{- with $nodeProblems }}, {{ . }}{{ end }}
+    {{- $netpolFlag := .Include "pod_network_policy_flags" . }}
+    {{- with $netpolFlag }}, {{ . }}{{ end }}
 {{- end }}
 
 {{- define "pod_node_problem_flags" }}
@@ -256,6 +258,50 @@
                 {{- $flags = append $flags ("untolerated node taint" | red | bold) }}
             {{- end }}
             {{- join ", " $flags }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "network_policy_selection_summary" }}
+    {{- /* Expects a non-empty slice of NetworkPolicy RenderableObjects that select a Pod. Returns
+           "selected by NetworkPolic{y,ies} X[, Y] (ingress/egress restricted)". A Pod matched by
+           any policy is "restricted" in that direction per the NetworkPolicy spec, regardless of
+           whether the policy's rules actually allow all traffic -- this can't say whether traffic
+           is really blocked, only that these policies are worth checking. */ -}}
+    {{- $names := list }}
+    {{- $ingress := false }}{{- $egress := false }}
+    {{- range . }}
+        {{- $names = append $names .Name }}
+        {{- $types := networkPolicyPolicyTypes .Spec }}
+        {{- if has "Ingress" $types }}{{ $ingress = true }}{{ end }}
+        {{- if has "Egress" $types }}{{ $egress = true }}{{ end }}
+    {{- end }}
+    {{- $directions := list }}
+    {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
+    {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
+    {{- $label := "NetworkPolicy" }}{{ if gt (len .) 1 }}{{ $label = "NetworkPolicies" }}{{ end }}
+    {{- printf "selected by %s %s (%s restricted)" $label (join ", " $names | cyan) (join ", " $directions) }}
+{{- end }}
+
+{{- define "pod_network_policy_flags" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects the Pod RenderableObject. Returns a compact inline fragment (no leading
+           separator) naming NetworkPolicy-restricted directions, or "" when no NetworkPolicy
+           selects this Pod. Used where a single-line-per-pod summary is needed; see
+           "matching_network_policies" in Pod.tmpl for the fuller per-policy render. */ -}}
+    {{- if not (.Config.GetBool "shallow") }}
+        {{- $policies := .KubeGetNetworkPoliciesMatchingPod .Namespace .Labels }}
+        {{- if $policies }}
+            {{- $ingress := false }}{{- $egress := false }}
+            {{- range $policies }}
+                {{- $types := networkPolicyPolicyTypes .Spec }}
+                {{- if has "Ingress" $types }}{{ $ingress = true }}{{ end }}
+                {{- if has "Egress" $types }}{{ $egress = true }}{{ end }}
+            {{- end }}
+            {{- $directions := list }}
+            {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
+            {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
+            {{- printf "netpol: %s restricted" (join "+" $directions) }}
         {{- end }}
     {{- end }}
 {{- end }}

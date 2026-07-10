@@ -48,6 +48,7 @@
     {{- template "pod_volumes" . }}
     {{- template "matching_services" . }}
     {{- template "matching_pdbs" . }}
+    {{- template "matching_network_policies" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
@@ -348,6 +349,32 @@
                 {{- range $pdbs }}
                     {{- $.Include "pdb_health_summary" . | nindent 4 }}
                 {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_network_policies" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects the Pod RenderableObject. A NetworkPolicy doesn't reference the Pods it covers
+           -- its spec.podSelector is what does the matching -- so this lists every NetworkPolicy
+           in the Pod's namespace and checks which ones select this Pod's labels. Kubernetes
+           treats a Pod matched by any policy as "isolated" for that policy's direction
+           (Ingress/Egress) regardless of whether the policy's rules actually allow all traffic,
+           so this can only say the Pod is selected and which direction(s) are restricted, not
+           whether real traffic is blocked -- see network_policy_selection_summary in
+           common.tmpl. Full policy rules are only shown under --deep (falls back to
+           DefaultResource; there's no dedicated NetworkPolicy.tmpl). */ -}}
+    {{- if not ($.Config.GetBool "shallow") }}
+        {{- $policies := $.KubeGetNetworkPoliciesMatchingPod $.Namespace $.Labels }}
+        {{- if $policies }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- "NetworkPolicies:" | bold | nindent 2 }}
+                {{- range $policies }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- "NetworkPolicy:" | bold | nindent 2 }} {{ $.Include "network_policy_selection_summary" $policies }}
             {{- end }}
         {{- end }}
     {{- end }}

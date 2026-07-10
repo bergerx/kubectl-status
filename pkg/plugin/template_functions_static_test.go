@@ -244,6 +244,97 @@ func TestTaintsNotToleratedByPod(t *testing.T) {
 	}
 }
 
+func TestNetworkPolicySelectsPod(t *testing.T) {
+	tests := []struct {
+		name      string
+		spec      map[string]interface{}
+		podLabels map[string]string
+		want      bool
+	}{
+		{
+			name:      "empty podSelector matches every pod",
+			spec:      map[string]interface{}{"podSelector": map[string]interface{}{}},
+			podLabels: map[string]string{"app": "foo"},
+			want:      true,
+		},
+		{
+			name: "matchLabels subset matches",
+			spec: map[string]interface{}{"podSelector": map[string]interface{}{
+				"matchLabels": map[string]interface{}{"app": "foo"},
+			}},
+			podLabels: map[string]string{"app": "foo", "tier": "backend"},
+			want:      true,
+		},
+		{
+			name: "matchLabels mismatch does not match",
+			spec: map[string]interface{}{"podSelector": map[string]interface{}{
+				"matchLabels": map[string]interface{}{"app": "bar"},
+			}},
+			podLabels: map[string]string{"app": "foo"},
+			want:      false,
+		},
+		{
+			name: "matchExpressions In matches",
+			spec: map[string]interface{}{"podSelector": map[string]interface{}{
+				"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "tier", "operator": "In", "values": []interface{}{"backend", "frontend"}},
+				},
+			}},
+			podLabels: map[string]string{"tier": "backend"},
+			want:      true,
+		},
+		{
+			name: "matchExpressions DoesNotExist fails when key present",
+			spec: map[string]interface{}{"podSelector": map[string]interface{}{
+				"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "tier", "operator": "DoesNotExist"},
+				},
+			}},
+			podLabels: map[string]string{"tier": "backend"},
+			want:      false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := networkPolicySelectsPod(tt.spec, tt.podLabels); got != tt.want {
+				t.Errorf("networkPolicySelectsPod() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNetworkPolicyPolicyTypes(t *testing.T) {
+	tests := []struct {
+		name string
+		spec map[string]interface{}
+		want []string
+	}{
+		{
+			name: "no policyTypes, no egress -- defaults to Ingress only",
+			spec: map[string]interface{}{},
+			want: []string{"Ingress"},
+		},
+		{
+			name: "no policyTypes, has egress -- defaults to Ingress and Egress",
+			spec: map[string]interface{}{"egress": []interface{}{map[string]interface{}{}}},
+			want: []string{"Ingress", "Egress"},
+		},
+		{
+			name: "explicit policyTypes is used as-is",
+			spec: map[string]interface{}{"policyTypes": []interface{}{"Egress"}},
+			want: []string{"Egress"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := networkPolicyPolicyTypes(tt.spec)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("networkPolicyPolicyTypes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAgoSuffix(t *testing.T) {
 	viper.Set("absolute-time", false)
 	if got := agoSuffix(); got != " ago" {

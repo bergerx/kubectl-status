@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -501,6 +502,49 @@ func TestE2EDynamicManifests(t *testing.T) {
 		cmdTest{
 			args:            []string{"rs/bad-rs", "--include-events=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node-for-rs.regex",
+		}.assert(t, nil)
+	})
+	t.Run("pod selected by a NetworkPolicy surfaces the compact isolation signal", func(t *testing.T) {
+		// A dedicated namespace keeps this test in control of exactly which NetworkPolicy
+		// objects exist -- an empty podSelector elsewhere in a shared namespace (e.g. "default")
+		// would also match this Pod and make the asserted policy name/count non-deterministic.
+		viperTestHack(t)
+		ns := "e2e-netpol-pod"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "netpol-selected-pod",
+				Namespace: ns,
+				Labels:    map[string]string{"app": "kubectl-status-test-netpol-target"},
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "app", Image: "busybox", Command: []string{"sleep", "infinity"}}},
+			},
+		}
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+
+		netpol := &networkingv1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: "deny-ingress-to-app", Namespace: ns},
+			Spec: networkingv1.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "kubectl-status-test-netpol-target"}},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			},
+		}
+		_, err = clientset.NetworkingV1().NetworkPolicies(ns).Create(context.TODO(), netpol, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.NetworkingV1().NetworkPolicies(ns).Delete(context.TODO(), netpol.Name, metav1.DeleteOptions{})
+
+		cmdTest{
+			args:            []string{"pod/netpol-selected-pod", "-n", ns, "--include-events=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-selected-by-network-policy.regex",
 		}.assert(t, nil)
 	})
 	t.Run("deployment rollout with --include-rollout-diffs shows the diff between revisions", func(t *testing.T) {

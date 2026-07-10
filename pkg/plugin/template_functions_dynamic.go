@@ -347,6 +347,39 @@ func (r RenderableObject) KubeGetEndpointSlicesForService(namespace, serviceName
 	return r.objectsToRenderableObjects(objects)
 }
 
+// KubeGetNetworkPoliciesMatchingPod returns all NetworkPolicies in namespace whose
+// spec.podSelector matches podLabels -- the mirror direction of KubeGetServicesMatchingPod: a
+// Service's selector is matched against a Pod's labels via endpoints, but a NetworkPolicy has no
+// reference back to the Pods it covers, so every policy in the Pod's namespace has to be listed
+// and its podSelector checked client-side. See networkPolicySelectsPod for the selector-matching
+// semantics.
+func (r RenderableObject) KubeGetNetworkPoliciesMatchingPod(namespace string, podLabels map[string]interface{}) (out []RenderableObject) {
+	out = make([]RenderableObject, 0)
+	if viper.GetBool("shallow") {
+		return
+	}
+	klog.V(5).InfoS("called KubeGetNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
+	castedLabels := make(map[string]string, len(podLabels))
+	for k, v := range podLabels {
+		castedLabels[k] = fmt.Sprintf("%v", v)
+	}
+	policies, err := r.repo.Objects(namespace, []string{"networkpolicies"}, "")
+	if err != nil {
+		klog.V(3).ErrorS(err, "error listing networkpolicies", "r", r, "namespace", namespace)
+		return
+	}
+	for _, obj := range policies {
+		spec, found, err := unstructured.NestedMap(obj, "spec")
+		if err != nil || !found {
+			continue
+		}
+		if networkPolicySelectsPod(spec, castedLabels) {
+			out = append(out, r.newRenderableObject(obj))
+		}
+	}
+	return out
+}
+
 func doesServiceMatchLabels(svc corev1.Service, labels map[string]string) bool {
 	if svc.Spec.Type == "ExternalName" {
 		return false
