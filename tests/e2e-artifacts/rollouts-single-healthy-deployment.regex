@@ -3,8 +3,8 @@ Deployment/e2e-rollouts-healthy-deployment -n default, created 1m ago, gen:1 rev
   Current: Deployment is available\. Replicas: 1
   desired:1, existing:1, ready:1, updated:1, available:1
   Selector: app=e2e-rollouts-healthy-deployment
-    Not matched by any Service
     Pod/e2e-rollouts-healthy-deployment-[a-z0-9]+-[a-z0-9]+ -n default, created 1m ago Running, 1/1 ready
+  Not matched by any Service
   Available MinimumReplicasAvailable, Deployment has minimum availability\. for 1m
   Progressing NewReplicaSetAvailable, ReplicaSet "e2e-rollouts-healthy-deployment-[a-z0-9]+" has successfully progressed\. for 1m
 \z

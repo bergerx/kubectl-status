@@ -6,6 +6,9 @@
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
     {{- template "selector_with_health_summary" . }}
+    {{- $podTemplate := .Spec.template | default dict }}
+    {{- $podMeta := $podTemplate.metadata | default dict }}
+    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" false "serviceExpected" true) }}
     {{- template "daemonset_replicas_status" . }}
     {{- template "conditions_summary" . }}
     {{- $rolloutStatus := .RolloutStatus . }}

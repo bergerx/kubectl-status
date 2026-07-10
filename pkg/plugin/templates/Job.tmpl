@@ -66,6 +66,9 @@
     {{- template "finalizer_details_on_termination" . }}
     {{- template "conditions_summary" . }}
     {{- template "application_details" . }}
+    {{- $podTemplate := .Spec.template | default dict }}
+    {{- $podMeta := $podTemplate.metadata | default dict }}
+    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" false "serviceExpected" false) }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
