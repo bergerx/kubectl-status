@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/viper"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 )
@@ -84,6 +85,7 @@ func funcMap() template.FuncMap {
 		"relativeTime":              relativeTime,
 		"labelSelector":             labelSelector,
 		"taintsNotToleratedByPod":   taintsNotToleratedByPod,
+		"networkPolicyPolicyTypes":  networkPolicyPolicyTypes,
 		"cronNextTime":              cronNextTime,
 		"withinLastHour":            withinLastHour,
 		"parseTLSSecretCertificate": parseTLSSecretCertificate,
@@ -539,6 +541,47 @@ func taintsNotToleratedByPod(nodeTaints, tolerations []interface{}) (result []in
 		}
 	}
 	return result
+}
+
+// networkPolicySelectsPod reports whether a NetworkPolicy's spec.podSelector matches podLabels.
+// podSelector is a full metav1.LabelSelector (matchLabels + matchExpressions), and an empty
+// selector ({} -- no matchLabels, no matchExpressions) matches every Pod in the policy's
+// namespace, per https://kubernetes.io/docs/concepts/services-networking/network-policies/ --
+// metav1.LabelSelectorAsSelector already returns labels.Everything() for that case, so this uses
+// real selector semantics rather than the isSubset helper (which is for a different direction of
+// matching, see KubeGetServicesMatchingPod).
+func networkPolicySelectsPod(policySpec map[string]interface{}, podLabels map[string]string) bool {
+	selMap, _ := policySpec["podSelector"].(map[string]interface{})
+	ls := &metav1.LabelSelector{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(selMap, ls); err != nil {
+		return false
+	}
+	sel, err := metav1.LabelSelectorAsSelector(ls)
+	if err != nil {
+		return false
+	}
+	return sel.Matches(labels.Set(podLabels))
+}
+
+// networkPolicyPolicyTypes normalizes NetworkPolicy spec.policyTypes, applying the documented
+// default used when the field is omitted: Ingress always applies, and Egress applies only when
+// the policy also defines an egress rule set. See
+// https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#networkpolicyspec-v1-networking-k8s-io
+func networkPolicyPolicyTypes(spec map[string]interface{}) []string {
+	if rawTypes, ok := spec["policyTypes"].([]interface{}); ok && len(rawTypes) > 0 {
+		types := make([]string, 0, len(rawTypes))
+		for _, t := range rawTypes {
+			if s, ok := t.(string); ok {
+				types = append(types, s)
+			}
+		}
+		return types
+	}
+	types := []string{"Ingress"}
+	if _, hasEgress := spec["egress"]; hasEgress {
+		types = append(types, "Egress")
+	}
+	return types
 }
 
 // parseTLSSecretCertificate inspects a Secret expected to be type kubernetes.io/tls and

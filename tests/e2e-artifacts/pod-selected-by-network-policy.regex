@@ -1,0 +1,14 @@
+\A
+Pod/netpol-selected-pod -n e2e-netpol-pod, created 1m ago, gen:1(, started after [0-9.]+[A-Za-z]+)? Running BestEffort
+  Current: Pod is Ready
+  Managed by kubectl-status-test-netpol-target application
+  PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
+  Standalone POD\.
+  Containers: app \(busybox:latest\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
+  Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  NetworkPolicy: selected by NetworkPolicy deny-ingress-to-app \(ingress restricted\)
+  Known/recorded manage events:
+    1m ago Updated by cmd\.test \(metadata, spec\)
+    1m ago Updated by kubelet \(status\)
+\z
