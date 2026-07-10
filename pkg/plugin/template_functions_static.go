@@ -393,11 +393,11 @@ var startedAfterClauseFunc = defaultStartedAfterClause
 // replace this func (see SetStartedAfterClause) so the clause is deterministic instead of tied to
 // that real scheduling latency.
 func defaultStartedAfterClause(createdKubeDate, startedKubeDate string) string {
-	created, err := time.ParseInLocation("2006-01-02T15:04:05Z", createdKubeDate, time.UTC)
+	created, err := time.Parse(time.RFC3339, createdKubeDate)
 	if err != nil {
 		return ""
 	}
-	started, err := time.ParseInLocation("2006-01-02T15:04:05Z", startedKubeDate, time.UTC)
+	started, err := time.Parse(time.RFC3339, startedKubeDate)
 	if err != nil {
 		return ""
 	}
