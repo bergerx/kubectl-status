@@ -174,5 +174,5 @@ new-artifact:
 .PHONY: screenshots
 screenshots:
 	# Regenerates assets/*.png from a live cluster. Requires kubectl pointed at a
-	# disposable/dev cluster (e.g. minikube) and freeze (charmbracelet/freeze) on PATH.
+	# disposable/dev cluster (e.g. minikube).
 	./hack/generate-screenshots.sh

@@ -15,11 +15,6 @@ set -euo pipefail
 
 font_family="JetBrains Mono"
 
-if ! command -v freeze >/dev/null 2>&1; then
-  echo "freeze not found on PATH. Install it with: go install github.com/charmbracelet/freeze@latest" >&2
-  exit 1
-fi
-
 if [ "$(uname)" = "Darwin" ]; then
   # macOS has no fontconfig; dropping a .ttf into ~/Library/Fonts is enough,
   # no cache step needed.
@@ -187,14 +182,14 @@ shot() {
   # fixed offset on top of that for --window's traffic-light dots, so even a
   # small --padding value leaves a visible gap above/below the text; 0 for
   # top/bottom keeps that gap to the unavoidable minimum.
-  freeze --execute "${bin} $* --color always" \
+  go run github.com/charmbracelet/freeze@latest --execute "${bin} $* --color always" \
     --window --show-line-numbers=false --font.family "${font_family}" --wrap 120 \
     --padding 0,10,0,10 \
     -o "${assets}/${out}" </dev/null
 }
 
 shot pod.png pod "${pod_name}" -n "${ns}" --include-owners --include-events=false
-shot deployment-replicaset.png deployment deployment-demo -n "${ns}" --include-rollout-diffs
+shot deployment-replicaset.png deployment deployment-demo -n "${ns}"
 shot statefulset.png statefulset sts-with-ingress -n "${ns}"
 shot service.png service sts-with-ingress -n "${ns}"
 
