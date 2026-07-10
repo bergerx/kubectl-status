@@ -3,9 +3,8 @@ Deployment/rollout-diff-test -n default, created \d+[a-z]+ ago, gen:\d+ rev:\d+
   Current: Deployment is available\. Replicas: 1
   desired:1, existing:1, ready:1, updated:1, available:1
   Selector: app=rollout-diff-test
-    Not matched by any Service
 (?:    Pod/rollout-diff-test-[a-z0-9]+-[a-z0-9]+ -n default, created \d+[a-z]+ ago Running, 1/1 ready
-)+  Available MinimumReplicasAvailable, Deployment has minimum availability\. for \d+[a-z]+
+)+  Not matched by any Service
   Progressing NewReplicaSetAvailable, ReplicaSet "rollout-diff-test-7cf6c88cf8" has successfully progressed\. for \d+[a-z]+
   Rollouts:
     \d+[a-z]+ ago, managed by ReplicaSet/rollout-diff-test-f96b445cf

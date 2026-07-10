@@ -287,7 +287,7 @@
            leading separator) naming NetworkPolicy/CiliumNetworkPolicy/Calico-restricted
            directions, or "" when none of these select this Pod. Used where a
            single-line-per-pod summary is needed; see "matching_network_policies",
-           "matching_cilium_network_policies" and "matching_calico_network_policies" in Pod.tmpl
+           "matching_cilium_network_policies" and "matching_calico_network_policies" (this file)
            for the fuller per-policy render. */ -}}
     {{- if not (.Config.GetBool "shallow") }}
         {{- $flags := list }}
@@ -484,40 +484,243 @@
 
 {{- define "selector_with_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Renders the "Selector: ..." line plus the workload's own member Pods. Matched Services,
+           PodDisruptionBudgets, NetworkPolicies and HorizontalPodAutoscalers are a separate
+           concern -- see matching_workload_resources, called independently by the workload
+           templates that use this -- kept apart so this template can stay focused on "which Pods
+           does this selector cover" for kinds (like PodDisruptionBudget) that don't want the
+           full matching_workload_resources treatment. */ -}}
     {{- with .Spec.selector }}
         {{- "Selector" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
         {{- $matchLabels := .matchLabels }}
         {{- /* $matchLabels is nil when the selector uses only matchExpressions; passing nil to
              KubeGetByLabelsMap builds an empty selector and matches every pod in the namespace. */ -}}
         {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
-            {{- $svcs := $.KubeGetServicesMatchingLabels $.Namespace $matchLabels }}
-            {{- if and (not $svcs) (not ($.Config.GetBool "local")) }}
-                {{- "Not matched by any Service" | yellow | bold | nindent 4 }}
-            {{- end }}
-            {{- $pdbs := $.KubeGetPodDisruptionBudgetsMatchingLabels $.Namespace $matchLabels }}
-            {{- with $.Include "pdb_conflict_warning" $pdbs }}{{ . | nindent 4 }}{{ end }}
             {{- if $.Config.GetBool "deep" }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}
                 {{- end }}
-                {{- range $pdbs }}
-                    {{- $.IncludeRenderableObject . | nindent 4 }}
-                {{- end }}
             {{- else }}
-                {{- range $svcs }}
-                    {{- $.Include "service_health_summary" . | nindent 4 }}
-                {{- end }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
                     {{- $.Include "pod_health_summary" . | nindent 4 }}
                 {{- end }}
-                {{- $rolloutInProgress := false }}
-                {{- with $.RolloutStatus $ }}{{ if not .done }}{{ $rolloutInProgress = true }}{{ end }}{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_services" }}
+    {{- /* Expects dict "ctx" (RenderableObject used for Include/Config) "svcs" ([]RenderableObject,
+           already resolved by the caller since Pods and workloads find their Services
+           differently: a Pod is matched by actual EndpointSlice membership
+           (KubeGetServicesMatchingPod), a workload's Pods aren't named yet so it's matched by
+           selector-subset against its Pod template labels (KubeGetServicesMatchingLabels)). */ -}}
+    {{- $ctx := .ctx }}
+    {{- with .svcs }}
+        {{- if $ctx.Config.GetBool "deep" }}
+            {{- "Services:" | bold | nindent 2 }}
+            {{- range . }}
+                {{- $ctx.Include "Service" . | nindent 4 }}
+            {{- end }}
+        {{- else if eq (len .) 1 }}
+            {{- "Services:" | bold | nindent 2 }} {{ $ctx.Include "service_health_summary" (index . 0) }}
+        {{- else }}
+            {{- "Services:" | bold | nindent 2 }}
+            {{- range . }}
+                {{- $ctx.Include "service_health_summary" . | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_pdbs" }}
+    {{- /* Expects dict "ctx" (RenderableObject) "namespace" "labels" (the labels of the Pods
+           this workload/Pod produces). */ -}}
+    {{- $ctx := .ctx }}
+    {{- if not ($ctx.Config.GetBool "shallow") }}
+        {{- $pdbs := $ctx.KubeGetPodDisruptionBudgetsMatchingLabels .namespace .labels }}
+        {{- if $pdbs }}
+            {{- with $ctx.Include "pdb_conflict_warning" $pdbs }}{{ . | nindent 2 }}{{ end }}
+            {{- if $ctx.Config.GetBool "deep" }}
+                {{- "PodDisruptionBudgets:" | bold | nindent 2 }}
                 {{- range $pdbs }}
-                    {{- $.Include "pdb_health_summary" . | nindent 4 }}
-                    {{- if $rolloutInProgress }} {{ "(rollout in progress)" | yellow }}{{ end }}
+                    {{- $ctx.Include "PodDisruptionBudget" . | nindent 4 }}
+                {{- end }}
+            {{- else if eq (len $pdbs) 1 }}
+                {{- "PodDisruptionBudgets:" | bold | nindent 2 }} {{ $ctx.Include "pdb_health_summary" (index $pdbs 0) }}
+            {{- else }}
+                {{- "PodDisruptionBudgets:" | bold | nindent 2 }}
+                {{- range $pdbs }}
+                    {{- $ctx.Include "pdb_health_summary" . | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_network_policies" }}
+    {{- /* Expects dict "ctx" (RenderableObject used for Include/Config/fetches) "namespace"
+           "labels" (the labels of the Pods this workload/Pod produces). Generic sibling of the
+           Pod-only Kube* helpers this calls -- despite the "Pod" in their Go names they only take
+           a plain label map, nothing Pod-specific -- so this renders the same
+           "NetworkPolicies matched" block for any workload's Pod template labels, not just an
+           actual Pod. See network_policy_selection_summary for the compact form used here. */ -}}
+    {{- $ctx := .ctx }}
+    {{- if not ($ctx.Config.GetBool "shallow") }}
+        {{- $policies := $ctx.KubeGetNetworkPoliciesMatchingPod .namespace .labels }}
+        {{- if $policies }}
+            {{- if $ctx.Config.GetBool "deep" }}
+                {{- "NetworkPolicies:" | bold | nindent 2 }}
+                {{- range $policies }}
+                    {{- $ctx.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- "NetworkPolicy:" | bold | nindent 2 }} {{ $ctx.Include "network_policy_selection_summary" $policies }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_cilium_network_policies" }}
+    {{- /* Expects dict "ctx" "namespace" "labels", see matching_network_policies. Covers Cilium's
+           namespaced CiliumNetworkPolicy and cluster-scoped CiliumClusterwideNetworkPolicy CRDs;
+           both degrade to an empty result when Cilium isn't the CNI. */ -}}
+    {{- $ctx := .ctx }}
+    {{- if not ($ctx.Config.GetBool "shallow") }}
+        {{- $cnp := $ctx.KubeGetCiliumNetworkPoliciesMatchingPod .namespace .labels }}
+        {{- if $cnp }}
+            {{- if $ctx.Config.GetBool "deep" }}
+                {{- "CiliumNetworkPolicies:" | bold | nindent 2 }}
+                {{- range $cnp }}
+                    {{- $ctx.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- "CiliumNetworkPolicy:" | bold | nindent 2 }} {{ $ctx.Include "cilium_policy_selection_summary" (dict "policies" $cnp "labels" .labels "kindSingular" "CiliumNetworkPolicy" "kindPlural" "CiliumNetworkPolicies") }}
+            {{- end }}
+        {{- end }}
+        {{- $ccnp := $ctx.KubeGetCiliumClusterwideNetworkPoliciesMatchingPod .labels }}
+        {{- if $ccnp }}
+            {{- if $ctx.Config.GetBool "deep" }}
+                {{- "CiliumClusterwideNetworkPolicies:" | bold | nindent 2 }}
+                {{- range $ccnp }}
+                    {{- $ctx.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- "CiliumClusterwideNetworkPolicy:" | bold | nindent 2 }} {{ $ctx.Include "cilium_policy_selection_summary" (dict "policies" $ccnp "labels" .labels "kindSingular" "CiliumClusterwideNetworkPolicy" "kindPlural" "CiliumClusterwideNetworkPolicies") }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_calico_network_policies" }}
+    {{- /* Expects dict "ctx" "namespace" "labels", see matching_network_policies. Covers Calico's
+           namespaced NetworkPolicy (crd.projectcalico.org/v1) and cluster-scoped
+           GlobalNetworkPolicy CRDs; both degrade to an empty result when Calico isn't the CNI. */ -}}
+    {{- $ctx := .ctx }}
+    {{- if not ($ctx.Config.GetBool "shallow") }}
+        {{- $np := $ctx.KubeGetCalicoNetworkPoliciesMatchingPod .namespace .labels }}
+        {{- if $np }}
+            {{- if $ctx.Config.GetBool "deep" }}
+                {{- "Calico NetworkPolicies:" | bold | nindent 2 }}
+                {{- range $np }}
+                    {{- $ctx.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- "Calico NetworkPolicy:" | bold | nindent 2 }} {{ $ctx.Include "calico_policy_selection_summary" (dict "policies" $np "kindSingular" "Calico NetworkPolicy" "kindPlural" "Calico NetworkPolicies") }}
+            {{- end }}
+        {{- end }}
+        {{- $gnp := $ctx.KubeGetCalicoGlobalNetworkPoliciesMatchingPod .namespace .labels }}
+        {{- if $gnp }}
+            {{- if $ctx.Config.GetBool "deep" }}
+                {{- "Calico GlobalNetworkPolicies:" | bold | nindent 2 }}
+                {{- range $gnp }}
+                    {{- $ctx.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- "Calico GlobalNetworkPolicy:" | bold | nindent 2 }} {{ $ctx.Include "calico_policy_selection_summary" (dict "policies" $gnp "kindSingular" "Calico GlobalNetworkPolicy" "kindPlural" "Calico GlobalNetworkPolicies") }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "hpa_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- $minReplicas := 1 }}{{- if hasKey .Spec "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | int }}{{- end }}
+    {{- $current := .Status.currentReplicas | default 0 | int }}
+    {{- $desired := .Status.desiredReplicas | default 0 | int }}
+    {{- printf ", %d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas (.Spec.maxReplicas | int) }}
+    {{- if ne $current $desired }}, {{ "desired" | yellow | bold }}: {{ printf "%d" $desired | yellow }}{{ end }}
+{{- end -}}
+
+{{- define "matching_hpas" }}
+    {{- /* Expects dict "ctx" (RenderableObject) "namespace" "kind" "name" (this workload's own
+           identity). HorizontalPodAutoscaler doesn't get discovered via labels -- it names its
+           target directly in spec.scaleTargetRef -- so unlike the other matching_* templates
+           this lists every HPA in the namespace and keeps the ones whose scaleTargetRef points
+           back at this workload, mirroring how recent_deployment_rollouts finds a Deployment's
+           ReplicaSets. Only Deployment/StatefulSet/ReplicaSet (and CRDs with a /scale
+           subresource) can be scaleTargetRef targets; callers should only invoke this for kinds
+           that can actually be autoscaled. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $namespace := .namespace }}
+    {{- $kind := .kind }}
+    {{- $name := .name }}
+    {{- if not ($ctx.Config.GetBool "shallow") }}
+        {{- $hpas := list }}
+        {{- range $ctx.KubeGet $namespace "HorizontalPodAutoscalers" }}
+            {{- $ref := .Spec.scaleTargetRef | default dict }}
+            {{- if and (eq (index $ref "kind" | default "") $kind) (eq (index $ref "name" | default "") $name) }}
+                {{- $hpas = append $hpas . }}
+            {{- end }}
+        {{- end }}
+        {{- if $hpas }}
+            {{- if $ctx.Config.GetBool "deep" }}
+                {{- "HorizontalPodAutoscalers:" | bold | nindent 2 }}
+                {{- range $hpas }}
+                    {{- $ctx.Include "HorizontalPodAutoscaler" . | nindent 4 }}
+                {{- end }}
+            {{- else if eq (len $hpas) 1 }}
+                {{- "HorizontalPodAutoscaler:" | bold | nindent 2 }} {{ $ctx.Include "hpa_health_summary" (index $hpas 0) }}
+            {{- else }}
+                {{- "HorizontalPodAutoscalers:" | bold | nindent 2 }}
+                {{- range $hpas }}
+                    {{- $ctx.Include "hpa_health_summary" . | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "matching_workload_resources" }}
+    {{- /* Expects dict "ctx" (the workload's own RenderableObject: Deployment/StatefulSet/
+           DaemonSet/ReplicaSet/Job/CronJob) "namespace" "labels" (this workload's Pod template
+           labels, already resolved by the caller since the field path to reach them differs per
+           kind -- e.g. CronJob nests an extra .spec.template under .spec.jobTemplate) "scalable"
+           (bool, whether HorizontalPodAutoscaler can target this kind -- only Deployment/
+           StatefulSet/ReplicaSet expose a /scale subresource) "serviceExpected" (bool, whether to
+           warn when no Service matches -- Job/CronJob Pods aren't normally service-fronted, so
+           that warning would just be noise for those kinds). Renders the same set of matched
+           resources Pod.tmpl shows for a single Pod -- Services, PodDisruptionBudgets,
+           NetworkPolicy family -- using $labels (selector-subset matched, mirroring how a
+           Service would select this workload's Pods), plus any HorizontalPodAutoscaler that
+           targets $namespace/$.ctx.Name when $scalable. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $namespace := .namespace }}
+    {{- $serviceExpected := .serviceExpected }}
+    {{- with .labels }}
+        {{- $svcs := $ctx.KubeGetServicesMatchingLabels $namespace . }}
+        {{- if and $serviceExpected (not $svcs) (not ($ctx.Config.GetBool "local")) (not ($ctx.Config.GetBool "shallow")) }}
+            {{- "Not matched by any Service" | yellow | bold | nindent 2 }}
+        {{- end }}
+        {{- template "matching_services" (dict "ctx" $ctx "namespace" $namespace "svcs" $svcs) }}
+        {{- template "matching_pdbs" (dict "ctx" $ctx "namespace" $namespace "labels" .) }}
+        {{- template "matching_network_policies" (dict "ctx" $ctx "namespace" $namespace "labels" .) }}
+        {{- template "matching_cilium_network_policies" (dict "ctx" $ctx "namespace" $namespace "labels" .) }}
+        {{- template "matching_calico_network_policies" (dict "ctx" $ctx "namespace" $namespace "labels" .) }}
+    {{- end }}
+    {{- if .scalable }}
+        {{- template "matching_hpas" (dict "ctx" $ctx "namespace" $namespace "kind" $ctx.Kind "name" $ctx.Name) }}
     {{- end }}
 {{- end }}
 

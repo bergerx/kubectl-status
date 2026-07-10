@@ -17,6 +17,9 @@
         {{- "Strategy" | bold | nindent 2 }}: {{ .type | yellow }}
     {{- end }}{{ end }}
     {{- template "selector_with_health_summary" . }}
+    {{- $podTemplate := .Spec.template | default dict }}
+    {{- $podMeta := $podTemplate.metadata | default dict }}
+    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" true "serviceExpected" true) }}
     {{- template "conditions_summary" . }}
     {{- template "suspended" . }}
     {{- $rolloutStatus := .RolloutStatus . }}
