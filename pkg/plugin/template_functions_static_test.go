@@ -353,6 +353,15 @@ func TestCiliumPolicySelectsPod(t *testing.T) {
 			wantDirections: nil,
 		},
 		{
+			name: "absent endpointSelector key (not just an empty map) also matches every pod",
+			obj: map[string]interface{}{"spec": map[string]interface{}{
+				"ingress": []interface{}{map[string]interface{}{}},
+			}},
+			podLabels:      map[string]string{"app": "foo"},
+			wantMatches:    true,
+			wantDirections: []string{"ingress"},
+		},
+		{
 			name: "matchLabels mismatch does not match",
 			obj: map[string]interface{}{"spec": map[string]interface{}{
 				"endpointSelector": map[string]interface{}{"matchLabels": map[string]interface{}{"app": "bar"}},
@@ -427,6 +436,11 @@ func TestCalicoPolicyTypes(t *testing.T) {
 		{
 			name: "no types, no egress -- defaults to Ingress only",
 			spec: map[string]interface{}{},
+			want: []string{"Ingress"},
+		},
+		{
+			name: "nil spec -- defaults to Ingress only (reading a nil map is safe in Go)",
+			spec: nil,
 			want: []string{"Ingress"},
 		},
 		{
