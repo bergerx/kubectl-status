@@ -1,0 +1,5 @@
+
+StorageClass/gp2, created 1m ago
+  Current: Resource is current
+  Default StorageClass
+  Provisioner: kubernetes.io/aws-ebs

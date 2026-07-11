@@ -4,7 +4,7 @@
     {{- template "status_summary_line" . }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
-    {{- if eq (index .Annotations "storageclass.kubernetes.io/is-default-class") "true" }}
+    {{- if or (eq (index .Annotations "storageclass.kubernetes.io/is-default-class") "true") (eq (index .Annotations "storageclass.beta.kubernetes.io/is-default-class") "true") }}
         {{- "Default StorageClass" | bold | green | nindent 2 }}
     {{- end }}
     {{- "Provisioner" | bold | nindent 2 }}: {{ .Object.provisioner | cyan }}
