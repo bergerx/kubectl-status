@@ -1,0 +1,23 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  creationTimestamp: "2026-07-10T14:52:59Z"
+  name: fast-ebs
+  resourceVersion: "317051"
+  uid: b2c3d4e5-f6a7-8901-bcde-f12345678901
+provisioner: ebs.csi.aws.com
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+mountOptions:
+- debug
+- discard
+parameters:
+  fsType: ext4
+  type: gp3
+allowedTopologies:
+- matchLabelExpressions:
+  - key: topology.kubernetes.io/zone
+    values:
+    - us-east-1a
+    - us-east-1b

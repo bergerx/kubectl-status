@@ -1,0 +1,8 @@
+
+StorageClass/fast-ebs, created 1m ago
+  Current: Resource is current
+  Provisioner: ebs.csi.aws.com, reclaimPolicy: Retain, volumeBindingMode: WaitForFirstConsumer, allows volume expansion
+  Parameters: fsType=ext4, type=gp3
+  Mount options: debug, discard
+  Allowed topologies
+    topology.kubernetes.io/zone in [us-east-1a, us-east-1b]
