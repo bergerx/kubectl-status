@@ -407,13 +407,50 @@
 {{- end -}}
 
 {{- define "container_requests_limits" -}}
-    {{- /* Expects to get a map with the key "containerSpec" (required): Pod.spec.containers[name=container].
+    {{- /* Expects to get a map with the keys "containerSpec" (required): Pod.spec.containers[name=container]
+           and "pod" (required): Pod RenderableObject, used to look up namespace LimitRanges.
            Used in place of container_usage when there's no metrics data to show usage against. */ -}}
     cpu: [{{ if .containerSpec.resources.requests.cpu }}req:{{ .containerSpec.resources.requests.cpu | quantityToFloat64 | printf "%.1g" }}{{ else }}{{ "no-req" | yellow }}{{ end -}}
     , {{ if .containerSpec.resources.limits.cpu }}lim:{{ .containerSpec.resources.limits.cpu | quantityToFloat64 | printf "%.1g" }}{{ else }}{{ "no-lim" | yellow }}{{ end -}}
     ], mem: [{{ if .containerSpec.resources.requests.memory }}req:{{ .containerSpec.resources.requests.memory | quantityToFloat64 | humanizeSI "B" }}{{ else }}{{ "no-req" | yellow }}{{ end -}}
     , {{ if .containerSpec.resources.limits.memory }}lim:{{ .containerSpec.resources.limits.memory | quantityToFloat64 | humanizeSI "B" }}{{ else }}{{ "no-lim" | yellow }}{{ end -}}
     ]
+    {{- template "container_limitrange_defaults_note" . }}
+{{- end -}}
+
+{{- define "container_limitrange_defaults_note" }}
+    {{- /* Expects the same map as container_requests_limits. Appends "(matches LimitRange
+           defaults)" when every requests/limits value this container has is exactly explained by
+           a single namespace LimitRange's Container-type default/defaultRequest. The stored Pod
+           spec keeps no record of which fields the API server actually defaulted, so this can
+           only report a coincidence, never real admission-time provenance -- do not strengthen
+           the wording to "defaulted by LimitRange" without direct evidence (see CONVENTIONS.md).
+        */ -}}
+    {{- if not (.pod.Config.GetBool "shallow") }}
+        {{- $requests := ((.containerSpec.resources | default dict).requests) | default dict }}
+        {{- $limits := ((.containerSpec.resources | default dict).limits) | default dict }}
+        {{- if or $requests $limits }}
+            {{- $matched := false }}
+            {{- range .pod.KubeGet .pod.Namespace "limitrange" }}
+                {{- range (.Spec.limits | default list) }}
+                    {{- if eq .type "Container" }}
+                        {{- $defaultRequest := .defaultRequest | default dict }}
+                        {{- $default := .default | default dict }}
+                        {{- $requestsExplained := eq (len $requests) (len $defaultRequest) }}
+                        {{- range $k, $v := $requests }}
+                            {{- if ne (index $defaultRequest $k) $v }}{{ $requestsExplained = false }}{{ end }}
+                        {{- end }}
+                        {{- $limitsExplained := eq (len $limits) (len $default) }}
+                        {{- range $k, $v := $limits }}
+                            {{- if ne (index $default $k) $v }}{{ $limitsExplained = false }}{{ end }}
+                        {{- end }}
+                        {{- if and $requestsExplained $limitsExplained }}{{ $matched = true }}{{ end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+            {{- if $matched }} (matches LimitRange defaults){{ end }}
+        {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "container_status_summary" }}
@@ -445,7 +482,10 @@
         {{- end }}
     {{- end }}
     {{- if .containerMetrics }}
-        {{- if .containerMetrics.usage.cpu }}{{ "usage" | nindent 2 }} {{ template "container_usage" . }}{{ end }}
+        {{- if .containerMetrics.usage.cpu }}
+            {{- "usage" | nindent 2 }} {{ template "container_usage" . }}
+            {{- template "container_limitrange_defaults_note" . }}
+        {{- end }}
     {{- else if and .metricsUnavailableReason .containerStatus.state.running }}
         {{- "" | nindent 2 }}{{ template "container_requests_limits" . }}, ({{ .metricsUnavailableReason | yellow }})
     {{- end }}

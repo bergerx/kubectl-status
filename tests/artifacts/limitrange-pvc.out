@@ -1,0 +1,6 @@
+
+LimitRange/pvc-limits -n lr-test, created 1m ago
+  Current: Resource is current
+  Limits:
+    PersistentVolumeClaim:
+      storage: min 1Gi, max 1Ti

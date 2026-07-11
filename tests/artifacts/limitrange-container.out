@@ -1,0 +1,7 @@
+
+LimitRange/container-limits -n lr-test, created 1m ago
+  Current: Resource is current
+  Limits:
+    Container:
+      cpu: min 50m, default request 100m, default limit 500m, max 2, max limit/request ratio 4
+      memory: min 64Mi, default request 256Mi, default limit 512Mi, max 2Gi

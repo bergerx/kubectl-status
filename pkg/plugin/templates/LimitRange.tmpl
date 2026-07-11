@@ -1,0 +1,47 @@
+{{- define "LimitRange" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: v1, Kind=LimitRange */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- with .Spec.limits }}
+        {{- "Limits" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- template "limit_range_item" . }}
+        {{- end }}
+    {{- end }}
+    {{- template "application_details" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "limit_range_item" }}
+    {{- /* Expects a single spec.limits[] entry (type + default/defaultRequest/max/min/
+           maxLimitRequestRatio maps keyed by resource name, e.g. cpu/memory/storage). Rather than
+           rendering each map as its own block (forcing the reader to cross-reference by resource
+           name across five separate lists), this collects the resource names once and renders one
+           line per resource name with whichever facts apply to it. */ -}}
+    {{- $default := .default | default dict }}
+    {{- $defaultRequest := .defaultRequest | default dict }}
+    {{- $max := .max | default dict }}
+    {{- $min := .min | default dict }}
+    {{- $ratio := .maxLimitRequestRatio | default dict }}
+    {{- $resourceNames := list }}
+    {{- range $m := list $default $defaultRequest $max $min $ratio }}
+        {{- range $name, $_ := $m }}
+            {{- if not (has $name $resourceNames) }}{{ $resourceNames = append $resourceNames $name }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- .type | bold | nindent 4 }}:
+    {{- range $resourceNames | sortAlpha }}
+        {{- $name := . }}
+        {{- $facts := list }}
+        {{- with index $min $name }}{{ $facts = append $facts (printf "min %s" (. | toString | cyan)) }}{{ end }}
+        {{- with index $defaultRequest $name }}{{ $facts = append $facts (printf "default request %s" (. | toString | cyan)) }}{{ end }}
+        {{- with index $default $name }}{{ $facts = append $facts (printf "default limit %s" (. | toString | cyan)) }}{{ end }}
+        {{- with index $max $name }}{{ $facts = append $facts (printf "max %s" (. | toString | cyan)) }}{{ end }}
+        {{- with index $ratio $name }}{{ $facts = append $facts (printf "max limit/request ratio %s" (. | toString | cyan)) }}{{ end }}
+        {{- printf "%s: %s" $name (join ", " $facts) | nindent 6 }}
+    {{- end }}
+{{- end -}}
