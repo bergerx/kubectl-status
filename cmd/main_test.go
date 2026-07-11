@@ -20,6 +20,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -1428,6 +1429,91 @@ func TestE2EDynamicManifests(t *testing.T) {
 			stdoutRegexPath: "e2e-artifacts/pod-metrics-server-missing.regex",
 		}.assert(t, nil)
 	})
+	t.Run("VerticalPodAutoscaler reverse-matches its target workload and shows an applied recommendation", func(t *testing.T) {
+		// Unlike the CRD-only e2e scenarios above, this needs the real VPA controllers
+		// (recommender/updater, installed by `make install-e2e-deps` via Helm) to actually
+		// compute and apply a recommendation -- the point is to exercise VPA "acting" (evicting
+		// and recreating the Pod), not just render a static object. The container burns real CPU
+		// against a deliberately low initial request so the recommender has a reason to raise it.
+		viperTestHack(t)
+		ns := "e2e-vpa"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		name := "vpa-burner"
+		one := int32(1)
+		dep := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &one,
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
+					Spec: corev1.PodSpec{Containers: []corev1.Container{{
+						Name:    "burner",
+						Image:   "busybox",
+						Command: []string{"sh", "-c", "yes > /dev/null"},
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("10m"),
+								corev1.ResourceMemory: resource.MustParse("16Mi"),
+							},
+						},
+					}}},
+				},
+			},
+		}
+		_, err = clientset.AppsV1().Deployments(ns).Create(context.TODO(), dep, metav1.CreateOptions{})
+		require.NoError(t, err)
+		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Available",
+			"deployment/"+name, "-n", ns, "--timeout=2m").Run())
+		originalPod := waitForPodByLabel(t, ns, "app="+name)
+
+		vpaGVR := schema.GroupVersionResource{Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"}
+		vpa := &unstructured.Unstructured{Object: map[string]interface{}{
+			"apiVersion": "autoscaling.k8s.io/v1",
+			"kind":       "VerticalPodAutoscaler",
+			"metadata":   map[string]interface{}{"name": name, "namespace": ns},
+			"spec": map[string]interface{}{
+				"targetRef": map[string]interface{}{"apiVersion": "apps/v1", "kind": "Deployment", "name": name},
+				"updatePolicy": map[string]interface{}{
+					"updateMode":  "Recreate",
+					"minReplicas": int64(1),
+				},
+				"resourcePolicy": map[string]interface{}{
+					"containerPolicies": []interface{}{
+						map[string]interface{}{
+							"containerName": "burner",
+							"minAllowed":    map[string]interface{}{"cpu": "10m", "memory": "16Mi"},
+							"maxAllowed":    map[string]interface{}{"cpu": "500m", "memory": "128Mi"},
+						},
+					},
+				},
+			},
+		}}
+		_, err = dynamicClient.Resource(vpaGVR).Namespace(ns).Create(context.TODO(), vpa, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer dynamicClient.Resource(vpaGVR).Namespace(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+
+		waitForVPARecommendation(t, ns, name)
+		waitForPodRecreated(t, ns, "app="+name, originalPod)
+		// The evicted Pod can briefly still be listed (Terminating) alongside the replacement --
+		// wait for exactly one to remain so the fixture below can pin a single Pod line.
+		waitForSinglePod(t, ns, "app="+name)
+
+		cmdTest{
+			args:            []string{"deployment/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/vpa-workload-reverse-match.regex",
+		}.assert(t, nil)
+		cmdTest{
+			args:            []string{"vpa/" + name, "-n", ns, "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/vpa-standalone.regex",
+		}.assert(t, nil)
+	})
 }
 
 func applyManifest(t *testing.T, filepath string) {
@@ -1558,4 +1644,45 @@ func waitForMetricsAPIServiceAvailable(t *testing.T) {
 		time.Sleep(2 * time.Second)
 	}
 	t.Fatalf("timed out waiting for metrics-server APIService to become Available again")
+}
+
+// waitForVPARecommendation polls until a VerticalPodAutoscaler's status.recommendation is
+// populated. The recommender needs a window of real usage samples before it computes a first
+// recommendation, so this can take roughly a minute after the VPA and its target Pod both exist.
+func waitForVPARecommendation(t *testing.T, namespace, name string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Minute)
+	for time.Now().Before(deadline) {
+		output, err := exec.Command("kubectl", "get", "vpa", name, "-n", namespace,
+			"-o", "jsonpath={.status.recommendation.containerRecommendations[0].target.cpu}").CombinedOutput()
+		if err == nil && strings.TrimSpace(string(output)) != "" {
+			t.Logf("VPA %s/%s has a recommendation: %s", namespace, name, strings.TrimSpace(string(output)))
+			return
+		}
+		time.Sleep(3 * time.Second)
+	}
+	t.Fatalf("timed out waiting for VPA %s/%s to compute a recommendation", namespace, name)
+}
+
+// waitForPodRecreated polls until the Pod matching labelSelector is no longer originalPodName --
+// evidence the VPA updater actually evicted/recreated it to apply the recommendation, not just
+// computed one that nobody applied.
+func waitForPodRecreated(t *testing.T, namespace, labelSelector, originalPodName string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Minute)
+	for time.Now().Before(deadline) {
+		output, err := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
+			"-o", "jsonpath={.items[*].metadata.name}").CombinedOutput()
+		if err == nil {
+			for _, name := range strings.Fields(string(output)) {
+				if name != originalPodName {
+					t.Logf("VPA updater recreated the pod: %s -> %s", originalPodName, name)
+					return
+				}
+			}
+		}
+		time.Sleep(3 * time.Second)
+	}
+	t.Fatalf("timed out waiting for pod matching %s in namespace %s to be recreated (still %s)",
+		labelSelector, namespace, originalPodName)
 }

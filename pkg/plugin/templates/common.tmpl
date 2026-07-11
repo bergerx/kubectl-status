@@ -692,19 +692,72 @@
     {{- end }}
 {{- end }}
 
+{{- define "vpa_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- $updateMode := (.Spec.updatePolicy | default dict).updateMode | default "Auto" }}
+    {{- if ne $updateMode "Auto" }}, {{ $updateMode | cyan }}{{ end }}
+    {{- range (.Status.recommendation | default dict).containerRecommendations }}
+        {{- $t := .target | default dict }}
+        {{- printf ", %s:" .containerName }}
+        {{- with $t.cpu }} cpu={{ . | cyan }}{{ end }}
+        {{- with $t.memory }} mem={{ . | cyan }}{{ end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "matching_vpas" }}
+    {{- /* Expects dict "ctx" (RenderableObject) "namespace" "kind" "name" (this workload's own
+           identity). Mirrors matching_hpas: VerticalPodAutoscaler names its target directly in
+           spec.targetRef rather than via labels, so this lists every VPA in the namespace and
+           keeps the ones whose targetRef points back at this workload. Unlike HorizontalPodAutoscaler
+           (scale-subresource kinds only), VerticalPodAutoscaler also targets DaemonSet directly from
+           its spec, so callers gate this separately from matching_hpas' "scalable" flag. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $namespace := .namespace }}
+    {{- $kind := .kind }}
+    {{- $name := .name }}
+    {{- if not ($ctx.Config.GetBool "shallow") }}
+        {{- $vpas := list }}
+        {{- range $ctx.KubeGet $namespace "VerticalPodAutoscalers" }}
+            {{- $ref := .Spec.targetRef | default dict }}
+            {{- if and (eq (index $ref "kind" | default "") $kind) (eq (index $ref "name" | default "") $name) }}
+                {{- $vpas = append $vpas . }}
+            {{- end }}
+        {{- end }}
+        {{- if $vpas }}
+            {{- if $ctx.Config.GetBool "deep" }}
+                {{- "VerticalPodAutoscalers:" | bold | nindent 2 }}
+                {{- range $vpas }}
+                    {{- $ctx.Include "VerticalPodAutoscaler" . | nindent 4 }}
+                {{- end }}
+            {{- else if eq (len $vpas) 1 }}
+                {{- "VerticalPodAutoscaler:" | bold | nindent 2 }} {{ $ctx.Include "vpa_health_summary" (index $vpas 0) }}
+            {{- else }}
+                {{- "VerticalPodAutoscalers:" | bold | nindent 2 }}
+                {{- range $vpas }}
+                    {{- $ctx.Include "vpa_health_summary" . | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
 {{- define "matching_workload_resources" }}
     {{- /* Expects dict "ctx" (the workload's own RenderableObject: Deployment/StatefulSet/
            DaemonSet/ReplicaSet/Job/CronJob) "namespace" "labels" (this workload's Pod template
            labels, already resolved by the caller since the field path to reach them differs per
            kind -- e.g. CronJob nests an extra .spec.template under .spec.jobTemplate) "scalable"
            (bool, whether HorizontalPodAutoscaler can target this kind -- only Deployment/
-           StatefulSet/ReplicaSet expose a /scale subresource) "serviceExpected" (bool, whether to
-           warn when no Service matches -- Job/CronJob Pods aren't normally service-fronted, so
-           that warning would just be noise for those kinds). Renders the same set of matched
-           resources Pod.tmpl shows for a single Pod -- Services, PodDisruptionBudgets,
-           NetworkPolicy family -- using $labels (selector-subset matched, mirroring how a
-           Service would select this workload's Pods), plus any HorizontalPodAutoscaler that
-           targets $namespace/$.ctx.Name when $scalable. */ -}}
+           StatefulSet/ReplicaSet expose a /scale subresource) "vpaTargetable" (bool, whether
+           VerticalPodAutoscaler can target this kind -- Deployment/StatefulSet/ReplicaSet via the
+           /scale subresource plus DaemonSet directly from its spec) "serviceExpected" (bool,
+           whether to warn when no Service matches -- Job/CronJob Pods aren't normally
+           service-fronted, so that warning would just be noise for those kinds). Renders the same
+           set of matched resources Pod.tmpl shows for a single Pod -- Services,
+           PodDisruptionBudgets, NetworkPolicy family -- using $labels (selector-subset matched,
+           mirroring how a Service would select this workload's Pods), plus any
+           HorizontalPodAutoscaler/VerticalPodAutoscaler that targets $namespace/$.ctx.Name when
+           $scalable/$vpaTargetable. */ -}}
     {{- $ctx := .ctx }}
     {{- $namespace := .namespace }}
     {{- $serviceExpected := .serviceExpected }}
@@ -721,6 +774,9 @@
     {{- end }}
     {{- if .scalable }}
         {{- template "matching_hpas" (dict "ctx" $ctx "namespace" $namespace "kind" $ctx.Kind "name" $ctx.Name) }}
+    {{- end }}
+    {{- if .vpaTargetable }}
+        {{- template "matching_vpas" (dict "ctx" $ctx "namespace" $namespace "kind" $ctx.Kind "name" $ctx.Name) }}
     {{- end }}
 {{- end }}
 

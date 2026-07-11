@@ -19,7 +19,7 @@
     {{- template "selector_with_health_summary" . }}
     {{- $podTemplate := .Spec.template | default dict }}
     {{- $podMeta := $podTemplate.metadata | default dict }}
-    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" true "serviceExpected" true) }}
+    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" true "vpaTargetable" true "serviceExpected" true) }}
     {{- template "conditions_summary" . }}
     {{- template "suspended" . }}
     {{- $rolloutStatus := .RolloutStatus . }}
@@ -58,6 +58,9 @@
             {{- $replicaSets = append $replicaSets . }}
         {{- end }}
     {{- end }}
+    {{- /* creationTimestamp only has second resolution, so ReplicaSets created within the same
+          rollout can tie; sort by revision annotation for a reliable chronological order. */ -}}
+    {{- $replicaSets = sortByRevisionAnnotation $replicaSets }}
     {{- $rolloutStatus := .RolloutStatus . }}
     {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.replicas | default 0 | int) (.Status.readyReplicas | default 0 | int)) }}
     {{- if or (gt (len $replicaSets) 1) (and (eq (len $replicaSets) 1) $rolloutProblem) }}

@@ -131,6 +131,15 @@ install-e2e-deps:
 	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://raw.githubusercontent.com/cilium/cilium/v1.19.5/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumnetworkpolicies.yaml
 	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://raw.githubusercontent.com/cilium/cilium/v1.19.5/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwidenetworkpolicies.yaml
 	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/crds.yaml
+	# VerticalPodAutoscaler: unlike the CRD-only entries above, e2e scenarios exercise it
+	# actually acting (the updater evicting/recreating a Pod to apply a recommendation), so its
+	# controllers (recommender/updater/admission-controller) need to run for real, not just the
+	# CRDs. The upstream project has no plain `kubectl apply` release bundle (its install script
+	# generates webhook certs locally), so this uses the cowboysysop community Helm chart instead.
+	helm repo add cowboysysop https://cowboysysop.github.io/charts/
+	helm repo update cowboysysop
+	$(E2E_KUBECONFIG_ENV) helm upgrade --install vpa cowboysysop/vertical-pod-autoscaler --version 11.1.1 -n kube-system --wait --timeout 5m
+	$(E2E_KUBECONFIG_ENV) kubectl wait --for=condition=Available --timeout=120s deployment -l app.kubernetes.io/instance=vpa -n kube-system
 
 .PHONY: test-e2e
 ifeq ($(ASSUME_MINIKUBE_IS_CONFIGURED),true)

@@ -8,7 +8,7 @@
     {{- template "selector_with_health_summary" . }}
     {{- $podTemplate := .Spec.template | default dict }}
     {{- $podMeta := $podTemplate.metadata | default dict }}
-    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" false "serviceExpected" true) }}
+    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" false "vpaTargetable" true "serviceExpected" true) }}
     {{- template "daemonset_replicas_status" . }}
     {{- template "conditions_summary" . }}
     {{- $rolloutStatus := .RolloutStatus . }}
@@ -46,6 +46,9 @@
             {{- $revisions = append $revisions . }}
         {{- end }}
     {{- end }}
+    {{- /* creationTimestamp only has second resolution, so ControllerRevisions created within the
+          same rollout can tie; sort by the numeric revision field for a reliable order. */ -}}
+    {{- $revisions = sortByRevisionField $revisions }}
     {{- $rolloutStatus := .RolloutStatus . }}
     {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.desiredNumberScheduled | default 0 | int) (.Status.numberReady | default 0 | int)) (ne (.Status.desiredNumberScheduled | default 0 | int) (.Status.updatedNumberScheduled | default 0 | int)) (ne (.Status.numberMisscheduled | default 0 | int) 0) }}
     {{- if or (gt (len $revisions) 1) (and (eq (len $revisions) 1) $rolloutProblem) }}

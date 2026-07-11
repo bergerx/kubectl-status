@@ -8,7 +8,7 @@
     {{- template "selector_with_health_summary" . }}
     {{- $podTemplate := .Spec.template | default dict }}
     {{- $podMeta := $podTemplate.metadata | default dict }}
-    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" true "serviceExpected" true) }}
+    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" true "vpaTargetable" true "serviceExpected" true) }}
     {{- /* When there is no readyReplicas, STS may not have related fields at all */ -}}
     {{- $status := .Status }}
     {{- $_ := set $status "readyReplicas" ($status.readyReplicas | default 0) }}
@@ -140,6 +140,9 @@
             {{- $revisions = append $revisions . }}
         {{- end }}
     {{- end }}
+    {{- /* creationTimestamp only has second resolution, so ControllerRevisions created within the
+          same rollout can tie; sort by the numeric revision field for a reliable order. */ -}}
+    {{- $revisions = sortByRevisionField $revisions }}
     {{- $rolloutStatus := .RolloutStatus . }}
     {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.currentReplicas | default 0 | int) (.Status.readyReplicas | default 0 | int)) }}
     {{- if or (gt (len $revisions) 1) (and (eq (len $revisions) 1) $rolloutProblem) }}

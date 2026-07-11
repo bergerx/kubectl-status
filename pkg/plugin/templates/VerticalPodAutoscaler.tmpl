@@ -1,0 +1,54 @@
+{{- define "VerticalPodAutoscaler" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: autoscaling.k8s.io/v1, Kind=VerticalPodAutoscaler */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- with .Spec.targetRef }}
+        {{- if $.Config.GetBool "deep" }}
+            {{- $obj := $.KubeGetFirst $.Namespace (.kind | default "Deployment") .name }}
+            {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 2 }}{{ end }}
+        {{- else }}
+            {{- "Targets" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Deployment") "name" .name "namespace" $.Namespace) }}
+        {{- end }}
+    {{- end }}
+    {{- $updateMode := (.Spec.updatePolicy | default dict).updateMode | default "Auto" }}
+    {{- if ne $updateMode "Auto" }}
+        {{- "Update mode" | bold | nindent 2 }}: {{ $updateMode | cyan }}
+    {{- end }}
+    {{- with (.Spec.updatePolicy | default dict).minReplicas }}
+        {{- "Min replicas for eviction" | bold | nindent 2 }}: {{ . | toString | cyan }}
+    {{- end }}
+    {{- range (.Spec.resourcePolicy | default dict).containerPolicies }}
+        {{- $mode := .mode | default "Auto" }}
+        {{- if or (eq $mode "Off") .minAllowed .maxAllowed }}
+            {{- printf "Policy[%s]" (.containerName | default "*") | bold | nindent 2 }}:
+            {{- if eq $mode "Off" }} {{ "Off" | yellow | bold }}
+            {{- else }}
+                {{- $parts := list }}
+                {{- with (.minAllowed | default dict).cpu }}{{ $parts = append $parts (printf "min cpu=%s" .) }}{{ end }}
+                {{- with (.minAllowed | default dict).memory }}{{ $parts = append $parts (printf "min mem=%s" .) }}{{ end }}
+                {{- with (.maxAllowed | default dict).cpu }}{{ $parts = append $parts (printf "max cpu=%s" .) }}{{ end }}
+                {{- with (.maxAllowed | default dict).memory }}{{ $parts = append $parts (printf "max mem=%s" .) }}{{ end }}
+                {{- " " }}{{ $parts | join ", " | cyan }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with (.Status.recommendation | default dict).containerRecommendations }}
+        {{- "Recommendation:" | bold | nindent 2 }}
+        {{- range . }}
+            {{- $lb := .lowerBound | default dict }}
+            {{- $ub := .upperBound | default dict }}
+            {{- $t := .target | default dict }}
+            {{- .containerName | nindent 4 }}:
+            {{- with $t.cpu }} cpu={{ . | cyan }}{{ with $lb.cpu }} (min {{ . | cyan }}{{ with $ub.cpu }}, max {{ . | cyan }}{{ end }}){{ end }}{{ end }}
+            {{- with $t.memory }}, mem={{ . | cyan }}{{ with $lb.memory }} (min {{ . | cyan }}{{ with $ub.memory }}, max {{ . | cyan }}{{ end }}){{ end }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
