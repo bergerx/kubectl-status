@@ -1,0 +1,7 @@
+
+LimitRange/pod-limits -n lr-test, created 1m ago
+  Current: Resource is current
+  Limits:
+    Pod:
+      cpu: max 4
+      memory: max 4Gi
