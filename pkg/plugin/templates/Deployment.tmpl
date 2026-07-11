@@ -58,6 +58,9 @@
             {{- $replicaSets = append $replicaSets . }}
         {{- end }}
     {{- end }}
+    {{- /* creationTimestamp only has second resolution, so ReplicaSets created within the same
+          rollout can tie; sort by revision annotation for a reliable chronological order. */ -}}
+    {{- $replicaSets = sortByRevisionAnnotation $replicaSets }}
     {{- $rolloutStatus := .RolloutStatus . }}
     {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.replicas | default 0 | int) (.Status.readyReplicas | default 0 | int)) }}
     {{- if or (gt (len $replicaSets) 1) (and (eq (len $replicaSets) 1) $rolloutProblem) }}

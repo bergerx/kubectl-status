@@ -10,7 +10,7 @@
             {{- $obj := $.KubeGetFirst $.Namespace (.kind | default "Deployment") .name }}
             {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 2 }}{{ end }}
         {{- else }}
-            {{- "Scales" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Deployment") "name" .name "namespace" $.Namespace) }}
+            {{- "Targets" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Deployment") "name" .name "namespace" $.Namespace) }}
         {{- end }}
     {{- end }}
     {{- $updateMode := (.Spec.updatePolicy | default dict).updateMode | default "Auto" }}
@@ -18,7 +18,7 @@
         {{- "Update mode" | bold | nindent 2 }}: {{ $updateMode | cyan }}
     {{- end }}
     {{- with (.Spec.updatePolicy | default dict).minReplicas }}
-        {{- "Min replicas to evict" | bold | nindent 2 }}: {{ . | toString | cyan }}
+        {{- "Min replicas for eviction" | bold | nindent 2 }}: {{ . | toString | cyan }}
     {{- end }}
     {{- range (.Spec.resourcePolicy | default dict).containerPolicies }}
         {{- $mode := .mode | default "Auto" }}

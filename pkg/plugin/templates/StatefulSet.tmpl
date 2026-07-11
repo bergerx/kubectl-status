@@ -140,6 +140,9 @@
             {{- $revisions = append $revisions . }}
         {{- end }}
     {{- end }}
+    {{- /* creationTimestamp only has second resolution, so ControllerRevisions created within the
+          same rollout can tie; sort by the numeric revision field for a reliable order. */ -}}
+    {{- $revisions = sortByRevisionField $revisions }}
     {{- $rolloutStatus := .RolloutStatus . }}
     {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.currentReplicas | default 0 | int) (.Status.readyReplicas | default 0 | int)) }}
     {{- if or (gt (len $revisions) 1) (and (eq (len $revisions) 1) $rolloutProblem) }}
