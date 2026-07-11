@@ -1,0 +1,33 @@
+{{- define "StorageClass" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: storage.k8s.io/v1, Kind=StorageClass */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- if or (eq (index .Annotations "storageclass.kubernetes.io/is-default-class") "true") (eq (index .Annotations "storageclass.beta.kubernetes.io/is-default-class") "true") }}
+        {{- "Default StorageClass" | bold | green | nindent 2 }}
+    {{- end }}
+    {{- "Provisioner" | bold | nindent 2 }}: {{ .Object.provisioner | cyan }}
+    {{- $reclaimPolicy := .Object.reclaimPolicy | default "Delete" }}
+    {{- if ne $reclaimPolicy "Delete" }}, reclaimPolicy: {{ $reclaimPolicy | colorKeyword }}{{ end }}
+    {{- $bindingMode := .Object.volumeBindingMode | default "Immediate" }}
+    {{- if ne $bindingMode "Immediate" }}, volumeBindingMode: {{ $bindingMode | colorKeyword }}{{ end }}
+    {{- with .Object.allowVolumeExpansion }}, allows volume expansion{{ end }}
+    {{- with $params := .Object.parameters }}
+        {{- "Parameters" | bold | nindent 2 }}: {{ range $i, $k := (keys $params | sortAlpha) }}{{ if $i }}, {{ end }}{{ $k }}={{ index $params $k | cyan }}{{ end }}
+    {{- end }}
+    {{- with .Object.mountOptions }}
+        {{- "Mount options" | bold | nindent 2 }}: {{ . | join ", " | cyan }}
+    {{- end }}
+    {{- with .Object.allowedTopologies }}
+        {{- "Allowed topologies" | bold | nindent 2 }}
+        {{- range . }}
+            {{- range .matchLabelExpressions }}
+                {{- "" | nindent 4 }}{{ .key }} in [{{ .values | join ", " }}]
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

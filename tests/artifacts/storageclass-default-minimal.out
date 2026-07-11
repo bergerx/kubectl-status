@@ -1,0 +1,5 @@
+
+StorageClass/standard, created 1m ago
+  Current: Resource is current
+  Default StorageClass
+  Provisioner: k8s.io/minikube-hostpath
