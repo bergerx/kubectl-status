@@ -436,13 +436,25 @@
                     {{- if eq .type "Container" }}
                         {{- $defaultRequest := .defaultRequest | default dict }}
                         {{- $default := .default | default dict }}
+                        {{- /* Compared as quantities, not raw strings -- "1000m" and "1" are the
+                               same request but wouldn't string-match. */ -}}
                         {{- $requestsExplained := eq (len $requests) (len $defaultRequest) }}
                         {{- range $k, $v := $requests }}
-                            {{- if ne (index $defaultRequest $k) $v }}{{ $requestsExplained = false }}{{ end }}
+                            {{- $defaultVal := index $defaultRequest $k }}
+                            {{- if $defaultVal }}
+                                {{- if ne ($defaultVal | toString | quantityToFloat64) ($v | toString | quantityToFloat64) }}{{ $requestsExplained = false }}{{ end }}
+                            {{- else }}
+                                {{- $requestsExplained = false }}
+                            {{- end }}
                         {{- end }}
                         {{- $limitsExplained := eq (len $limits) (len $default) }}
                         {{- range $k, $v := $limits }}
-                            {{- if ne (index $default $k) $v }}{{ $limitsExplained = false }}{{ end }}
+                            {{- $defaultVal := index $default $k }}
+                            {{- if $defaultVal }}
+                                {{- if ne ($defaultVal | toString | quantityToFloat64) ($v | toString | quantityToFloat64) }}{{ $limitsExplained = false }}{{ end }}
+                            {{- else }}
+                                {{- $limitsExplained = false }}
+                            {{- end }}
                         {{- end }}
                         {{- if and $requestsExplained $limitsExplained }}{{ $matched = true }}{{ end }}
                     {{- end }}
