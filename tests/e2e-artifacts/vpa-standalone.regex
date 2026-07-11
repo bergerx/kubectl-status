@@ -1,0 +1,13 @@
+\A
+VerticalPodAutoscaler/vpa-burner -n e2e-vpa, created 1m ago, gen:1
+  Current: Resource is current
+  Scales: Deployment/vpa-burner -n e2e-vpa
+  Update mode: Recreate
+  Min replicas to evict: 1
+  Policy\[burner\]: min cpu=10m, min mem=16Mi, max cpu=500m, max mem=128Mi
+  Recommendation:
+    burner: cpu=\d+m \(min \d+m, max \d+m\), mem=\d+Mi \(min \d+Mi, max \d+Mi\)
+  RecommendationProvided for 1m
+  Events:
+    vpa-updater EvictedPod involving VerticalPodAutoscaler/vpa-burner \(in e2e-vpa\) 1m ago VPA Updater evicted Pod vpa-burner-[a-z0-9]+-[a-z0-9]+ to apply resource recommendation\.
+\z

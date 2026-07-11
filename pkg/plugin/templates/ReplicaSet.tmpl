@@ -8,7 +8,7 @@
     {{- template "selector_with_health_summary" . }}
     {{- $podTemplate := .Spec.template | default dict }}
     {{- $podMeta := $podTemplate.metadata | default dict }}
-    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" true "serviceExpected" true) }}
+    {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" true "vpaTargetable" true "serviceExpected" true) }}
     {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
            and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
     {{- $injectedStatus := .Status }}
