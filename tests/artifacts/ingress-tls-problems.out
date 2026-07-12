@@ -8,6 +8,17 @@ Service/web -n test1
   Current: Service is ready
   Missing Endpoint: Service has no matching endpoint.
 
+Secret/opaque-secret -n test1, created 1m ago
+
+Secret/incomplete-tls -n test1, created 1m ago
+  Missing keys: tls.key
+
+Secret/selfsigned-tls -n test1, created 1m ago
+  Certificate for CN=other.example.com · issued by CN=other.example.com
+    Self-signed: issuer and subject match, not issued by a separate CA
+    Valid 1m ago, expires 2126-06-10
+    Key: RSA · serial 459417690588134963926490921750614064410865316534
+
 Secret/gateway-tls -n test1, created 1m ago
   Certificate for CN=example.com · issued by CN=Test CA
     Also valid for: gateway.example.com

@@ -18,4 +18,6 @@ dist/
 
 .DS_Store
 .idea/
-.claude/settings.local.json
+
+CLAUDE.md
+.claude/

@@ -10,10 +10,11 @@ repos:
     rev: v6.0.0
     hooks:
     -   id: trailing-whitespace
+        exclude: '\.regex$'
     -   id: mixed-line-ending
     -   id: check-yaml
         args: [--allow-multiple-documents]
-        exclude: ^.krew.yaml$
+        exclude: '^.krew.yaml$'
     -   id: check-added-large-files
 
 -   repo: local
