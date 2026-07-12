@@ -355,12 +355,11 @@ func isStatusConditionHealthy(condition map[string]interface{}) bool {
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Flapping"),
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Unhealthy"),
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Failed"), // Failed Jobs has this condition
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Warning"),
+		strings.HasPrefix(fmt.Sprint(condition["type"]), "Corrupt"),
 
 		// Conditions from "Node Problem Detector"
-		condition["type"] == "CorruptDockerImage",
-		condition["type"] == "CorruptDockerOverlay2",
 		condition["type"] == "DockerContainerStartupFailure",
-		condition["type"] == "Ext4Warning",
 		condition["type"] == "FilesystemIsReadOnly",
 		condition["type"] == "KernelDeadlock",
 		condition["type"] == "KernelOops",
