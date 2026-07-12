@@ -9,6 +9,7 @@ Use it when `kubectl get` is too shallow and `kubectl describe` is too much.
 
 - [Before and After](#before-and-after)
 - [Demo](#demo)
+- [Design principle](#design-principle)
 - [Features](#features)
 - [Installation](#installation)
     * [Upgrade](#upgrade)
@@ -52,6 +53,12 @@ Example Service — matching Ingress plus Gateway API HTTPRoute and TCPRoute:
 
 Example Secret — a TLS certificate issued by a local cert-manager-generated CA:
 ![secret](assets/secret.png)
+
+## Design principle
+
+`kubectl status` is a **health computation engine, not a formatter**: it derives "here's why this resource is unhealthy,
+and which subordinate resources are at fault" mainly from the `status` fields Kubernetes already reports — not just a
+re-shuffling of `kubectl get`/`describe` fields. Every template answers a question.
 
 ## Features
 
