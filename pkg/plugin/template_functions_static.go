@@ -347,50 +347,39 @@ func isStatusConditionHealthy(condition map[string]interface{}) bool {
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Unavailable"), // Node NetworkUnavailable condition
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Failure"),     // ReplicaSet ReplicaFailure: condition
 		strings.HasPrefix(fmt.Sprint(condition["type"]), "Non"),         // CRD NonStructuralSchema condition
-		condition["type"] == "Failed",                                   // Failed Jobs has this condition
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Problem"),
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Error"),
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Errors"),
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Hung"),
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Missing"),
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Flapping"),
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Unhealthy"),
+		condition["type"] == "Failed", // Failed Jobs has this condition
 
 		// Conditions from "Node Problem Detector"
 		condition["type"] == "CorruptDockerImage",
 		condition["type"] == "CorruptDockerOverlay2",
 		condition["type"] == "DockerContainerStartupFailure",
-		condition["type"] == "DockerHung",
-		condition["type"] == "Ext4Error",
 		condition["type"] == "Ext4Warning",
 		condition["type"] == "FilesystemIsReadOnly",
-		condition["type"] == "IOError",
-		condition["type"] == "NvmeTcpProblem",
-		condition["type"] == "EdgeDecryptionProblem",
-		condition["type"] == "IOErrorProblem",
-		condition["type"] == "NetworkProblem",
 		condition["type"] == "KernelDeadlock",
 		condition["type"] == "KernelOops",
-		condition["type"] == "MemoryReadError",
 		condition["type"] == "OOMKilling",
 		condition["type"] == "ReadonlyFilesystem",
-		condition["type"] == "TaskHung",
 		condition["type"] == "UnregisterNetDevice",
 		condition["type"] == "FrequentDockerRestart",
-		condition["type"] == "FilesystemCorruptionProblem",
 		condition["type"] == "FrequentContainerdRestart",
 		condition["type"] == "FrequentKubeletRestart",
 		condition["type"] == "RebootScheduled",
-		condition["type"] == "KubeletProblem",
 		condition["type"] == "TerminateScheduled",
-		condition["type"] == "ContainerRuntimeProblem",
 		condition["type"] == "RedeployScheduled",
 		condition["type"] == "PreemptScheduled",
 		condition["type"] == "FreezeScheduled",
 		condition["type"] == "FrequentUnregisterNetDevice",
 		condition["type"] == "VMEventScheduled",
-		condition["type"] == "GPUMissing",
 		condition["type"] == "NVLinkStatusInactive",
-		condition["type"] == "XIDErrors",
-		condition["type"] == "GPUXIDErrors",
-		condition["type"] == "IBLinkFlapping",
 		condition["type"] == "KernelDeadLock", // legacy mis-capitalized variant seen in some NPD configs
-		condition["type"] == "KubeletUnhealthy",
-		condition["type"] == "ContainerRuntimeUnhealthy",
-		condition["type"] == "OutOfDisk", // deprecated legacy Node condition, same polarity as DiskPressure
+		condition["type"] == "OutOfDisk",      // deprecated legacy Node condition, same polarity as DiskPressure
 
 		// User provided additions, see ~/.kubectl-status/abnormal-true-condition-types
 		userAbnormalTrueConditionTypeSet()[fmt.Sprint(condition["type"])]:
