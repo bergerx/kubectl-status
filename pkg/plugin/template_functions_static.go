@@ -354,7 +354,7 @@ func isStatusConditionHealthy(condition map[string]interface{}) bool {
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Missing"),
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Flapping"),
 		strings.HasSuffix(fmt.Sprint(condition["type"]), "Unhealthy"),
-		condition["type"] == "Failed", // Failed Jobs has this condition
+		strings.HasSuffix(fmt.Sprint(condition["type"]), "Failed"), // Failed Jobs has this condition
 
 		// Conditions from "Node Problem Detector"
 		condition["type"] == "CorruptDockerImage",
