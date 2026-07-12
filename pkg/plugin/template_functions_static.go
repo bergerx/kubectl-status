@@ -6,11 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -294,6 +297,40 @@ func revisionFieldInt(obj interface{}) int {
 	return n
 }
 
+var (
+	userAbnormalTrueConditionTypesOnce sync.Once
+	userAbnormalTrueConditionTypes     map[string]bool
+)
+
+// userAbnormalTrueConditionTypeSet loads condition types from
+// ~/.kubectl-status/abnormal-true-condition-types, one per line, so users can extend the
+// hardcoded list of condition types below without recompiling. Blank lines and lines starting
+// with "#" are ignored. Read once and cached for the lifetime of the process.
+func userAbnormalTrueConditionTypeSet() map[string]bool {
+	userAbnormalTrueConditionTypesOnce.Do(func() {
+		userAbnormalTrueConditionTypes = map[string]bool{}
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			klog.V(3).ErrorS(err, "error getting user home dir, ignoring")
+			return
+		}
+		path := filepath.Join(homeDir, ".kubectl-status", "abnormal-true-condition-types")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			klog.V(5).ErrorS(err, "error reading user provided abnormal-true condition types file, ignoring", "path", path)
+			return
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			userAbnormalTrueConditionTypes[line] = true
+		}
+	})
+	return userAbnormalTrueConditionTypes
+}
+
 func isStatusConditionHealthy(condition map[string]interface{}) bool {
 	switch {
 	/*
@@ -343,7 +380,20 @@ func isStatusConditionHealthy(condition map[string]interface{}) bool {
 		condition["type"] == "RedeployScheduled",
 		condition["type"] == "PreemptScheduled",
 		condition["type"] == "FreezeScheduled",
-		condition["type"] == "FrequentUnregisterNetDevice":
+		condition["type"] == "FrequentUnregisterNetDevice",
+		condition["type"] == "VMEventScheduled",
+		condition["type"] == "GPUMissing",
+		condition["type"] == "NVLinkStatusInactive",
+		condition["type"] == "XIDErrors",
+		condition["type"] == "GPUXIDErrors",
+		condition["type"] == "IBLinkFlapping",
+		condition["type"] == "KernelDeadLock", // legacy mis-capitalized variant seen in some NPD configs
+		condition["type"] == "KubeletUnhealthy",
+		condition["type"] == "ContainerRuntimeUnhealthy",
+		condition["type"] == "OutOfDisk", // deprecated legacy Node condition, same polarity as DiskPressure
+
+		// User provided additions, see ~/.kubectl-status/abnormal-true-condition-types
+		userAbnormalTrueConditionTypeSet()[fmt.Sprint(condition["type"])]:
 		switch condition["status"] {
 		case "False":
 			return true

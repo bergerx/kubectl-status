@@ -9,7 +9,10 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net"
+	"os"
+	"path/filepath"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -1181,6 +1184,46 @@ func TestCertificateRequestInCSR(t *testing.T) {
 		got := certificateRequestInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if got["ParseError"] == "" {
 			t.Errorf("expected ParseError for malformed base64, got %#v", got)
+		}
+	})
+}
+
+func TestIsStatusConditionHealthyUserProvidedTypes(t *testing.T) {
+	resetUserAbnormalTrueConditionTypes := func() {
+		userAbnormalTrueConditionTypesOnce = sync.Once{}
+		userAbnormalTrueConditionTypes = nil
+	}
+	t.Cleanup(resetUserAbnormalTrueConditionTypes)
+
+	t.Run("no user file present", func(t *testing.T) {
+		resetUserAbnormalTrueConditionTypes()
+		t.Setenv("HOME", t.TempDir())
+		condition := map[string]interface{}{"type": "CustomAbnormalTrue", "status": "True"}
+		if !isStatusConditionHealthy(condition) {
+			t.Errorf("expected condition type unknown to kubectl-status to follow the default 'True is healthy' polarity")
+		}
+	})
+
+	t.Run("user provided condition type overrides default polarity", func(t *testing.T) {
+		resetUserAbnormalTrueConditionTypes()
+		home := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(home, ".kubectl-status"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		content := "# comment\n\nCustomAbnormalTrue\nAnotherOne\n"
+		path := filepath.Join(home, ".kubectl-status", "abnormal-true-condition-types")
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("HOME", home)
+
+		trueCondition := map[string]interface{}{"type": "CustomAbnormalTrue", "status": "True"}
+		if isStatusConditionHealthy(trueCondition) {
+			t.Errorf("expected user provided abnormal-true condition type with status True to be unhealthy")
+		}
+		falseCondition := map[string]interface{}{"type": "CustomAbnormalTrue", "status": "False"}
+		if !isStatusConditionHealthy(falseCondition) {
+			t.Errorf("expected user provided abnormal-true condition type with status False to be healthy")
 		}
 	})
 }
