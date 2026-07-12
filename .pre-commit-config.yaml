@@ -7,7 +7,7 @@ repos:
     -   id: check-useless-excludes
 
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.2.0
+    rev: v6.0.0
     hooks:
     -   id: trailing-whitespace
     -   id: mixed-line-ending
@@ -37,7 +37,7 @@ repos:
 
     -   id: make-test-e2e
         name: make test-e2e
-        stages: [push]
+        stages: [pre-push]
         entry: make test-e2e
         language: system
         always_run: true
