@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/go-sprout/sprout"
+	"github.com/go-sprout/sprout/sprigin"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/klog/v2"
 )
@@ -40,7 +40,7 @@ func getTemplate() (*template.Template, error) {
 	klog.V(5).InfoS("Creating new template instance...")
 	tmpl := template.
 		New("templates").
-		Funcs(sprout.TxtFuncMap()).
+		Funcs(sprigin.TxtFuncMap()).
 		Funcs(funcMap())
 	return parseTemplates(tmpl)
 }
