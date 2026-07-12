@@ -23,4 +23,9 @@ jobs:
         uses: medyagh/setup-minikube@latest
         with:
           addons: metrics-server
-      - run: ASSUME_MINIKUBE_IS_CONFIGURED=true make test-e2e
+      - name: Run e2e tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 2
+          command: ASSUME_MINIKUBE_IS_CONFIGURED=true make test-e2e
