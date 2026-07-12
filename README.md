@@ -129,8 +129,9 @@ The [Kubernetes API conventions](https://github.com/kubernetes/community/blob/ma
 recommend condition `type`s use the "abnormal-true" polarity (e.g. `status: "True"` means something's wrong), but
 most built-in resources don't follow it — for those `kubectl status` treats `status: "True"` as healthy by default.
 A known set of exceptions that do follow abnormal-true (like `DiskPressure` or `Failed`) is hardcoded. If your
-cluster has CRDs with their own abnormal-true condition types, list them (one per line, matched exactly against
-the condition `type`) in `~/.kubectl-status/abnormal-true-condition-types` and they'll be treated the same way.
+cluster has CRDs with their own abnormal-true condition types, list them (one per line) in
+`~/.kubectl-status/abnormal-true-condition-types` and they'll be treated the same way. Each line can be an exact
+condition `type`, a suffix pattern like `*Problematic`, or a prefix pattern like `Unhealthy*`.
 
 ## Development
 

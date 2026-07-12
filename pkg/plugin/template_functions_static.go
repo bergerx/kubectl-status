@@ -299,16 +299,43 @@ func revisionFieldInt(obj interface{}) int {
 
 var (
 	userAbnormalTrueConditionTypesOnce sync.Once
-	userAbnormalTrueConditionTypes     map[string]bool
+	userAbnormalTrueConditionTypes     userAbnormalTrueConditionTypeMatcher
 )
 
-// userAbnormalTrueConditionTypeSet loads condition types from
+// userAbnormalTrueConditionTypeMatcher holds condition types loaded from the user provided
+// abnormal-true-condition-types file, split by match kind.
+type userAbnormalTrueConditionTypeMatcher struct {
+	exact    map[string]bool
+	prefixes []string // from lines like "Unhealthy*"
+	suffixes []string // from lines like "*Problematic"
+}
+
+func (m userAbnormalTrueConditionTypeMatcher) matches(conditionType string) bool {
+	if m.exact[conditionType] {
+		return true
+	}
+	for _, prefix := range m.prefixes {
+		if strings.HasPrefix(conditionType, prefix) {
+			return true
+		}
+	}
+	for _, suffix := range m.suffixes {
+		if strings.HasSuffix(conditionType, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// userAbnormalTrueConditionTypeMatchers loads condition types from
 // ~/.kubectl-status/abnormal-true-condition-types, one per line, so users can extend the
 // hardcoded list of condition types below without recompiling. Blank lines and lines starting
-// with "#" are ignored. Read once and cached for the lifetime of the process.
-func userAbnormalTrueConditionTypeSet() map[string]bool {
+// with "#" are ignored. A line may be an exact condition type, a suffix pattern like
+// "*Problematic", or a prefix pattern like "Unhealthy*". Read once and cached for the lifetime
+// of the process.
+func userAbnormalTrueConditionTypeMatchers() userAbnormalTrueConditionTypeMatcher {
 	userAbnormalTrueConditionTypesOnce.Do(func() {
-		userAbnormalTrueConditionTypes = map[string]bool{}
+		userAbnormalTrueConditionTypes = userAbnormalTrueConditionTypeMatcher{exact: map[string]bool{}}
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			klog.V(3).ErrorS(err, "error getting user home dir, ignoring")
@@ -322,10 +349,16 @@ func userAbnormalTrueConditionTypeSet() map[string]bool {
 		}
 		for _, line := range strings.Split(string(data), "\n") {
 			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") {
+			switch {
+			case line == "" || strings.HasPrefix(line, "#"):
 				continue
+			case strings.HasPrefix(line, "*"):
+				userAbnormalTrueConditionTypes.suffixes = append(userAbnormalTrueConditionTypes.suffixes, strings.TrimPrefix(line, "*"))
+			case strings.HasSuffix(line, "*"):
+				userAbnormalTrueConditionTypes.prefixes = append(userAbnormalTrueConditionTypes.prefixes, strings.TrimSuffix(line, "*"))
+			default:
+				userAbnormalTrueConditionTypes.exact[line] = true
 			}
-			userAbnormalTrueConditionTypes[line] = true
 		}
 	})
 	return userAbnormalTrueConditionTypes
@@ -381,7 +414,7 @@ func isStatusConditionHealthy(condition map[string]interface{}) bool {
 		condition["type"] == "OutOfDisk",      // deprecated legacy Node condition, same polarity as DiskPressure
 
 		// User provided additions, see ~/.kubectl-status/abnormal-true-condition-types
-		userAbnormalTrueConditionTypeSet()[fmt.Sprint(condition["type"])]:
+		userAbnormalTrueConditionTypeMatchers().matches(fmt.Sprint(condition["type"])):
 		switch condition["status"] {
 		case "False":
 			return true
