@@ -92,6 +92,10 @@ install-hooks:
 .PHONY: e2e-minikube-up
 e2e-minikube-up:
 	@mkdir -p $(dir $(E2E_KUBECONFIG))
+	# Wipe any previous cluster for this profile first: reusing one leaks resources from a
+	# prior run (e.g. killed mid-suite) into this run, causing spurious "already exists"
+	# failures and cluster-load-related flakiness unrelated to the code under test.
+	-$(E2E_KUBECONFIG_ENV) minikube delete -p $(E2E_PROFILE)
 	$(E2E_KUBECONFIG_ENV) minikube start -p $(E2E_PROFILE) --addons=metrics-server
 
 .PHONY: e2e-minikube-down
@@ -150,11 +154,15 @@ test-e2e: vet staticcheck install-e2e-deps
 	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go test -v ./... -count=1 -timeout=25m -run 'TestE2E*'
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
-	# The cluster is left running (profile: $(E2E_PROFILE)) for fast reruns; tear it
-	# down explicitly with `make e2e-minikube-down` once you're done with this branch.
+	# The isolated cluster (profile: $(E2E_PROFILE)) is torn down afterwards whether the suite
+	# passes or fails, so local/pre-push runs don't leak minikube profiles. Its exit status is
+	# preserved so a failing suite still fails the target (and blocks the push).
 	# using count to prevent caching; see the timeout note in the ASSUME_MINIKUBE_IS_CONFIGURED
 	# branch above.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go test -v ./... -count=1 -timeout=25m -run 'TestE2E*'
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go test -v ./... -count=1 -timeout=25m -run 'TestE2E*'; \
+	status=$$?; \
+	$(MAKE) e2e-minikube-down; \
+	exit $$status
 endif
 
 #--------------------------
