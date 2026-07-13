@@ -1,0 +1,55 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  creationTimestamp: "2026-07-01T10:00:00Z"
+  generation: 3
+  name: require-team-label
+  resourceVersion: "1234"
+  uid: 11111111-1111-1111-1111-111111111111
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - apps
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - deployments
+      scope: Namespaced
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: NotIn
+        values:
+        - kube-system
+    objectSelector:
+      matchLabels:
+        require-team-label: enabled
+  matchConditions:
+  - name: exclude-system-serviceaccounts
+    expression: "!request.userInfo.username.startsWith('system:serviceaccount:kube-system:')"
+  variables:
+  - name: labels
+    expression: "object.metadata.labels"
+  validations:
+  - expression: "'team' in variables.labels"
+    message: "all Deployments must carry a 'team' label"
+    reason: Invalid
+  - expression: "size(variables.labels.team) > 0"
+    messageExpression: "'team label must not be empty, got: ' + variables.labels.team"
+  auditAnnotations:
+  - key: "team"
+    valueExpression: "variables.labels.team"
+status:
+  observedGeneration: 3
+  typeChecking:
+    expressionWarnings:
+    - fieldRef: spec.validations[1].expression
+      warning: "undeclared reference to 'team' (in container 'variables')"

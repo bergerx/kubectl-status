@@ -1,0 +1,16 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  creationTimestamp: "2026-07-02T08:00:00Z"
+  generation: 1
+  name: orphan-binding
+  resourceVersion: "1300"
+  uid: 33333333-3333-3333-3333-333333333333
+spec:
+  policyName: does-not-exist
+  validationActions:
+  - Deny
+  paramRef:
+    name: my-config
+    namespace: policy-params
+    parameterNotFoundAction: Allow

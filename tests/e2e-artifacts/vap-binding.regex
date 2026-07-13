@@ -1,0 +1,5 @@
+\A
+ValidatingAdmissionPolicyBinding/e2e-require-team-label-binding, created 1m ago, gen:1
+  Policy: ValidatingAdmissionPolicy/e2e-require-team-label, failurePolicy:Fail
+  Actions: Deny
+\z

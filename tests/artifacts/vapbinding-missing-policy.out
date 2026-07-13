@@ -1,0 +1,5 @@
+
+ValidatingAdmissionPolicyBinding/orphan-binding, created 1m ago, gen:1
+  Policy: ValidatingAdmissionPolicy/does-not-exist
+  Actions: Deny
+  Params: my-config -n policy-params, if not found: Allow

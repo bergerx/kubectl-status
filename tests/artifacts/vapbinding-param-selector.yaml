@@ -1,0 +1,29 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  creationTimestamp: "2026-07-03T09:05:00Z"
+  generation: 1
+  name: warn-only-policy-binding
+  resourceVersion: "1401"
+  uid: 55555555-5555-5555-5555-555555555555
+spec:
+  policyName: warn-only-policy
+  validationActions:
+  - Warn
+  paramRef:
+    namespace: policy-params
+    selector:
+      matchLabels:
+        config: pod-limits
+    parameterNotFoundAction: Deny
+  matchResources:
+    matchPolicy: Exact
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      resources:
+      - pods

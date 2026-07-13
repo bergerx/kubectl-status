@@ -780,6 +780,42 @@
     {{- end }}
 {{- end }}
 
+{{- define "match_resources_summary" }}
+    {{- /* Expects a MatchResources object (matchPolicy/namespaceSelector/objectSelector/
+           resourceRules/excludeResourceRules). Shared by
+           ValidatingAdmissionPolicy.spec.matchConstraints and
+           ValidatingAdmissionPolicyBinding.spec.matchResources. */ -}}
+    {{- with .matchPolicy }}{{ if ne . "Equivalent" }}{{ "matchPolicy" | nindent 4 }}: {{ . | cyan }}{{ end }}{{ end }}
+    {{- range .resourceRules }}
+        {{- $ops := .operations | join "," }}
+        {{- $groups := .apiGroups | join "," | default "core" }}
+        {{- $resources := .resources | join "," }}
+        {{- $versions := .apiVersions | join "," }}
+        {{- "" | nindent 4 }}{{ $ops | bold }} {{ $groups }}/{{ $resources }}
+        {{- with $versions }}/{{ . }}{{ end }}
+        {{- with .scope }}{{ if not (eq . "*") }} scope:{{ . }}{{ end }}{{ end }}
+    {{- end }}
+    {{- range .excludeResourceRules }}
+        {{- $ops := .operations | join "," }}
+        {{- $groups := .apiGroups | join "," | default "core" }}
+        {{- $resources := .resources | join "," }}
+        {{- $versions := .apiVersions | join "," }}
+        {{- "exclude:" | nindent 4 }} {{ $ops | bold }} {{ $groups }}/{{ $resources }}
+        {{- with $versions }}/{{ . }}{{ end }}
+        {{- with .scope }}{{ if not (eq . "*") }} scope:{{ . }}{{ end }}{{ end }}
+    {{- end }}
+    {{- with .namespaceSelector }}
+        {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+            {{- "namespaceSelector" | nindent 4 }}: {{ . | labelSelector | cyan }}
+        {{- end }}
+    {{- end }}
+    {{- with .objectSelector }}
+        {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+            {{- "objectSelector" | nindent 4 }}: {{ . | labelSelector | cyan }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
 {{- define "workload_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}

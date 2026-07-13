@@ -1,0 +1,28 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  creationTimestamp: "2026-07-01T10:05:00Z"
+  generation: 1
+  name: require-team-label-binding
+  resourceVersion: "1240"
+  uid: 22222222-2222-2222-2222-222222222222
+spec:
+  policyName: require-team-label
+  validationActions:
+  - Deny
+  - Audit
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        environment: production
+    excludeResourceRules:
+    - apiGroups:
+      - apps
+      apiVersions:
+      - v1
+      operations:
+      - "*"
+      resources:
+      - deployments
+      resourceNames:
+      - legacy-app

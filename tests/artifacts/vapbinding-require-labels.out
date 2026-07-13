@@ -1,0 +1,7 @@
+
+ValidatingAdmissionPolicyBinding/require-team-label-binding, created 1m ago, gen:1
+  Policy: ValidatingAdmissionPolicy/require-team-label
+  Actions: Deny, Audit
+  Match:
+    exclude: * apps/deployments/v1
+    namespaceSelector: environment=production

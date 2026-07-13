@@ -1,0 +1,40 @@
+{{- define "ValidatingAdmissionPolicyBinding" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: admissionregistration.k8s.io/v1, Kind=ValidatingAdmissionPolicyBinding */ -}}
+    {{- /* kstatus_summary omitted: this kind has no status subresource, always reported "Resource is always ready" by kstatus, same as ConfigMap/Secret. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.policyName }}
+        {{- "Policy" | bold | nindent 2 }}: {{ template "resource_ref" (dict "kind" "ValidatingAdmissionPolicy" "name" .) }}
+        {{- if not ($.Config.GetBool "shallow") }}
+            {{- $policy := $.KubeGetFirst "" "ValidatingAdmissionPolicy" . }}
+            {{- if not $policy.Object }}
+                {{- " (not found)" | red | bold }}
+            {{- else if $.Config.GetBool "deep" }}
+                {{- $.IncludeRenderableObject $policy | nindent 4 }}
+            {{- else }}
+                {{- $isFail := eq ($policy.Spec.failurePolicy | default "Fail") "Fail" }}
+                {{- printf ", failurePolicy:%s" ($policy.Spec.failurePolicy | default "Fail") | redBoldIf $isFail }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.validationActions }}
+        {{- "Actions" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- with .Spec.paramRef }}
+        {{- $paramRef := . }}
+        {{- "Params" | bold | nindent 2 }}:
+        {{- with .name }} {{ . | cyan }}{{ end }}
+        {{- with .selector }} {{ . | labelSelector | cyan }}{{ end }}
+        {{- with $paramRef.namespace }} -n {{ . | cyan }}{{ end }}
+        {{- with .parameterNotFoundAction }}{{ if ne . "Deny" }}, if not found: {{ . | cyan }}{{ end }}{{ end }}
+    {{- end }}
+    {{- with .Spec.matchResources }}
+        {{- "Match" | bold | nindent 2 }}:
+        {{- $.Include "match_resources_summary" . }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}
