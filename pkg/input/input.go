@@ -71,6 +71,8 @@ func NewResourceRepo(factory util.Factory) (*ResourceRepo, error) {
 		dynamicClient:         dynamicClient,
 		kubernetesClientSet:   kubernetesClientSet,
 		nodeStatsSummaryCache: make(map[string]nodeStatsSummaryCacheEntry),
+		nodeConfigzCache:      make(map[string]nodeConfigzCacheEntry),
+		nodeHealthzCache:      make(map[string]nodeHealthzCacheEntry),
 		objectsCache:          make(map[string]objectsCacheEntry),
 		endpointSlicesCache:   make(map[string]endpointSlicesCacheEntry),
 		ownerCache:            make(map[string]ownerCacheEntry),
@@ -82,6 +84,8 @@ type ResourceRepo struct {
 	dynamicClient                 dynamic.Interface
 	kubernetesClientSet           *kubernetes.Clientset
 	nodeStatsSummaryCache         map[string]nodeStatsSummaryCacheEntry
+	nodeConfigzCache              map[string]nodeConfigzCacheEntry
+	nodeHealthzCache              map[string]nodeHealthzCacheEntry
 	objectsCache                  map[string]objectsCacheEntry
 	endpointSlicesCache           map[string]endpointSlicesCacheEntry
 	allNamespacesPodMetricsCache  *objectsCacheEntry
@@ -91,6 +95,16 @@ type ResourceRepo struct {
 
 type nodeStatsSummaryCacheEntry struct {
 	summary Object
+	err     error
+}
+
+type nodeConfigzCacheEntry struct {
+	configz Object
+	err     error
+}
+
+type nodeHealthzCacheEntry struct {
+	healthz string
 	err     error
 }
 
@@ -484,6 +498,68 @@ func (r *ResourceRepo) kubeGetNodeStatsSummaryUncached(nodeName string) (Object,
 	nodeStatsSummary := make(Object)
 	err = json.Unmarshal(getBytes, &nodeStatsSummary)
 	return nodeStatsSummary, err
+}
+
+// KubeGetNodeConfigz returns this structure
+// > kubectl get --raw /api/v1/nodes/{nodeName}/proxy/configz
+// This surfaces the effective KubeletConfiguration, including settings not otherwise visible on the
+// Node object (eviction thresholds, per-node QoS manager policies, pids limits, etc).
+func (r *ResourceRepo) KubeGetNodeConfigz(nodeName string) (Object, error) {
+	if entry, ok := r.nodeConfigzCache[nodeName]; ok {
+		return entry.configz, entry.err
+	}
+	nodeConfigz, err := r.kubeGetNodeConfigzUncached(nodeName)
+	if r.nodeConfigzCache == nil {
+		r.nodeConfigzCache = make(map[string]nodeConfigzCacheEntry)
+	}
+	r.nodeConfigzCache[nodeName] = nodeConfigzCacheEntry{configz: nodeConfigz, err: err}
+	return nodeConfigz, err
+}
+
+func (r *ResourceRepo) kubeGetNodeConfigzUncached(nodeName string) (Object, error) {
+	getBytes, err := r.kubernetesClientSet.CoreV1().RESTClient().Get().
+		Resource("nodes").
+		SubResource("proxy").
+		Name(nodeName).
+		Suffix("configz").
+		DoRaw(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	nodeConfigz := make(Object)
+	err = json.Unmarshal(getBytes, &nodeConfigz)
+	return nodeConfigz, err
+}
+
+// KubeGetNodeHealthz returns the raw body of
+// > kubectl get --raw /api/v1/nodes/{nodeName}/proxy/healthz
+// Unlike the Node's Ready condition (which reflects the kubelet's self-reported heartbeat to the
+// apiserver), this exercises the apiserver->kubelet proxy path directly, the same path used by
+// kubectl logs/exec/attach, metrics-server and any node-hosted admission webhooks. A Ready node can
+// still fail this check if that path is blocked (e.g. port 10250 unreachable).
+func (r *ResourceRepo) KubeGetNodeHealthz(nodeName string) (string, error) {
+	if entry, ok := r.nodeHealthzCache[nodeName]; ok {
+		return entry.healthz, entry.err
+	}
+	nodeHealthz, err := r.kubeGetNodeHealthzUncached(nodeName)
+	if r.nodeHealthzCache == nil {
+		r.nodeHealthzCache = make(map[string]nodeHealthzCacheEntry)
+	}
+	r.nodeHealthzCache[nodeName] = nodeHealthzCacheEntry{healthz: nodeHealthz, err: err}
+	return nodeHealthz, err
+}
+
+func (r *ResourceRepo) kubeGetNodeHealthzUncached(nodeName string) (string, error) {
+	getBytes, err := r.kubernetesClientSet.CoreV1().RESTClient().Get().
+		Resource("nodes").
+		SubResource("proxy").
+		Name(nodeName).
+		Suffix("healthz").
+		DoRaw(context.TODO())
+	if err != nil {
+		return "", err
+	}
+	return string(getBytes), nil
 }
 
 func (r *ResourceRepo) NonTerminatedPodsOnTheNode(nodeName string) (Objects, error) {

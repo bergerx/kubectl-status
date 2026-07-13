@@ -537,6 +537,35 @@ func (r RenderableObject) KubeGetNodeStatsSummary(nodeName string) map[string]in
 	return nodeStatsSummary
 }
 
+func (r RenderableObject) KubeGetNodeConfigz(nodeName string) map[string]interface{} {
+	if viper.GetBool("shallow") {
+		return nil
+	}
+	klog.V(5).InfoS("called KubeGetNodeConfigz", "r", r, "node", nodeName)
+	nodeConfigz, err := r.repo.KubeGetNodeConfigz(nodeName)
+	if err != nil {
+		klog.V(3).ErrorS(err, "failed to get node configz", "r", r, "node", nodeName)
+		return nil
+	}
+	return nodeConfigz
+}
+
+// KubeGetNodeHealthz returns the kubelet proxy healthz body, or a description of the failure if the
+// apiserver->kubelet proxy path is unreachable. The error is surfaced (not swallowed) since a failure
+// here is the whole point of the check.
+func (r RenderableObject) KubeGetNodeHealthz(nodeName string) string {
+	if viper.GetBool("shallow") {
+		return ""
+	}
+	klog.V(5).InfoS("called KubeGetNodeHealthz", "r", r, "node", nodeName)
+	nodeHealthz, err := r.repo.KubeGetNodeHealthz(nodeName)
+	if err != nil {
+		klog.V(3).ErrorS(err, "failed to get node healthz", "r", r, "node", nodeName)
+		return fmt.Sprintf("unreachable: %v", err)
+	}
+	return strings.TrimSpace(nodeHealthz)
+}
+
 // KubeGetPodMetrics returns the PodMetrics for the named pod. It first tries a single cluster-wide
 // PodMetrics list, reused for every pod/node in the render (see AllNamespacesPodMetrics). If that's
 // not available (e.g. RBAC only allows namespace-scoped access), it falls back to fetching

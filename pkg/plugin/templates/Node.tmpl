@@ -44,12 +44,56 @@
 
 {{- define "kubelet_api_summary" }}
     {{- if .Config.GetBool "include-node-kubelet-api-summary" }}
+        {{- with .KubeGetNodeHealthz .Name }}
+            {{- "kubelet-api/healthz" | nindent 2 }}: {{ if eq . "ok" }}{{ . }}{{ else }}{{ . | red | bold }}{{ end }}
+        {{- end }}
+        {{- with .KubeGetNodeConfigz .Name }}
+            {{- template "kubelet_configz_summary" . }}
+        {{- end }}
         {{- with .KubeGetNodeStatsSummary .Name }}
             {{- "kubelet-api/stats/summary"  | nindent 2 }}:
             {{- "node overall" | nindent 4 }}: {{ template "node_stats_summary_resources" .node }}
             {{- range .node.systemContainers }}
                 {{- .name | nindent 4 }}: {{ template "node_stats_summary_resources" . }}
             {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "kubelet_configz_summary" }}
+    {{- /* Expects kubelet-api/configz -> kubeletconfig */ -}}
+    {{- with $kc := .kubeletconfig }}
+        {{- "kubelet-api/configz" | nindent 2 }}:
+        {{- with $kc.podPidsLimit }}{{ if ge (. | float64) 0.0 }} podPidsLimit:{{ . }}{{ end }}{{ end }}
+        {{- with $kc.cpuManagerPolicy }}{{ if ne . "none" }} cpuManager:{{ . }}{{ end }}{{ end }}
+        {{- with $kc.memoryManagerPolicy }}{{ if ne . "None" }} memoryManager:{{ . }}{{ end }}{{ end }}
+        {{- with $kc.topologyManagerPolicy }}{{ if ne . "none" }} topologyManager:{{ . }}{{ end }}{{ end }}
+        {{- with $kc.shutdownGracePeriod }}{{ if ne . "0s" }} shutdownGracePeriod:{{ . }}{{ with $kc.shutdownGracePeriodCriticalPods }}/{{ . }}{{ end }}(critical){{ end }}{{ end }}
+        {{- with $kc.evictionHard }}
+            {{- "eviction-hard" | nindent 4 }}:
+            {{- if hasKey . "memory.available" }} mem.available<{{ index . "memory.available" }}{{ end }}
+            {{- if hasKey . "nodefs.available" }} nodefs.available<{{ index . "nodefs.available" }}{{ end }}
+            {{- if hasKey . "nodefs.inodesFree" }} nodefs.inodesFree<{{ index . "nodefs.inodesFree" }}{{ end }}
+            {{- if hasKey . "imagefs.available" }} imagefs.available<{{ index . "imagefs.available" }}{{ end }}
+            {{- if hasKey . "imagefs.inodesFree" }} imagefs.inodesFree<{{ index . "imagefs.inodesFree" }}{{ end }}
+            {{- if hasKey . "pid.available" }} pid.available<{{ index . "pid.available" }}{{ end }}
+        {{- end }}
+        {{- with $kc.containerLogMaxSize }}
+            {{- "container log rotation" | nindent 4 }}: {{ . }} cap, {{ $kc.containerLogMaxFiles }} files, {{ $kc.containerLogMaxWorkers }} worker, {{ $kc.containerLogMonitorInterval }} monitor
+        {{- end }}
+        {{- with $kc.systemReserved }}
+            {{- "systemReserved" | nindent 4 }}:
+            {{- with .cpu }} cpu:{{ . }}{{ end }}
+            {{- with .memory }} mem:{{ . }}{{ end }}
+            {{- with index . "ephemeral-storage" }} ephemeral-storage:{{ . }}{{ end }}
+            {{- with .pid }} pid:{{ . }}{{ end }}
+        {{- end }}
+        {{- with $kc.kubeReserved }}
+            {{- "kubeReserved" | nindent 4 }}:
+            {{- with .cpu }} cpu:{{ . }}{{ end }}
+            {{- with .memory }} mem:{{ . }}{{ end }}
+            {{- with index . "ephemeral-storage" }} ephemeral-storage:{{ . }}{{ end }}
+            {{- with .pid }} pid:{{ . }}{{ end }}
         {{- end }}
     {{- end }}
 {{- end -}}
@@ -150,14 +194,15 @@
 {{- end }}
 
 {{- define "node_capacity" }}
-    {{- "allocatable" | nindent 2 }}: pods:{{ .Status.allocatable.pods -}}
-    , cpu:{{ .Status.allocatable.cpu | quantityToFloat64 | printf "%g" -}}
-    , mem:{{ .Status.allocatable.memory | quantityToFloat64 | humanizeSI "B" }}
-    {{- with index .Status.allocatable "ephemeral-storage" }}, ephemeral-storage:{{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
-    {{- "capacity" | nindent 2 }}: pods:{{ .Status.capacity.pods -}}
-    , cpu:{{ .Status.capacity.cpu | quantityToFloat64 | printf "%g" -}}
-    , mem:{{ .Status.capacity.memory | quantityToFloat64 | humanizeSI "B" -}}
-    {{- with index .Status.capacity "ephemeral-storage" }}, ephemeral-storage:{{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
+    {{- "allocatable/capacity" | nindent 2 }}: pods {{ .Status.allocatable.pods }}/{{ .Status.capacity.pods -}}
+    , cpu {{ .Status.allocatable.cpu | quantityToFloat64 | printf "%g" }}/{{ .Status.capacity.cpu | quantityToFloat64 | printf "%g" -}}
+    , mem {{ humanizeSIPair "B" (.Status.allocatable.memory | quantityToFloat64) (.Status.capacity.memory | quantityToFloat64) }}
+    {{- with index .Status.capacity "ephemeral-storage" }}
+        {{- $capacityEphemeral := . }}
+        {{- with index $.Status.allocatable "ephemeral-storage" }}
+            {{- ", ephemeral-storage " }}{{ humanizeSIPair "B" (. | quantityToFloat64) ($capacityEphemeral | quantityToFloat64) }}
+        {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "node_stats_summary_fs" }}

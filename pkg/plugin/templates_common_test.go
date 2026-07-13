@@ -542,3 +542,94 @@ func TestNodePodDetailsMetricsNotInstalledWarningTemplate(t *testing.T) {
 	}
 	checkTemplate(t, "node_pod_details", obj, "not installed", true)
 }
+
+// aksKubeletConfigzObj mirrors a real AKS node's `kubectl get --raw
+// /api/v1/nodes/{node}/proxy/configz` response (trimmed to the fields the
+// "kubelet_configz_summary" template reads). It exercises fields that other fixtures/clusters seen
+// so far didn't have set: eviction on pid.available, and kubeReserved without ephemeral-storage.
+// The live proxy call itself isn't reachable in these offline tests, so the template is rendered
+// directly against this static payload instead of going through KubeGetNodeConfigz.
+func aksKubeletConfigzObj() map[string]interface{} {
+	return map[string]interface{}{
+		"kubeletconfig": map[string]interface{}{
+			"evictionHard": map[string]interface{}{
+				"memory.available":  "100Mi",
+				"nodefs.available":  "10%",
+				"nodefs.inodesFree": "5%",
+				"pid.available":     "2000",
+			},
+			"containerLogMaxSize":         "50M",
+			"containerLogMaxFiles":        float64(5),
+			"containerLogMaxWorkers":      float64(1),
+			"containerLogMonitorInterval": "10s",
+			"kubeReserved": map[string]interface{}{
+				"cpu":    "180m",
+				"memory": "650Mi",
+				"pid":    "1000",
+			},
+			"podPidsLimit":                    float64(-1),
+			"cpuManagerPolicy":                "none",
+			"memoryManagerPolicy":             "None",
+			"topologyManagerPolicy":           "none",
+			"shutdownGracePeriod":             "0s",
+			"shutdownGracePeriodCriticalPods": "0s",
+		},
+	}
+}
+
+func TestKubeletConfigzSummaryTemplateAKSEvictionHard(t *testing.T) {
+	got := renderConfigzSummary(t, aksKubeletConfigzObj())
+	want := "eviction-hard: mem.available<100Mi nodefs.available<10% nodefs.inodesFree<5% pid.available<2000"
+	if !strings.Contains(got, want) {
+		t.Errorf("got = %q, want substring %q", got, want)
+	}
+}
+
+func TestKubeletConfigzSummaryTemplateAKSContainerLogRotation(t *testing.T) {
+	got := renderConfigzSummary(t, aksKubeletConfigzObj())
+	want := "container log rotation: 50M cap, 5 files, 1 worker, 10s monitor"
+	if !strings.Contains(got, want) {
+		t.Errorf("got = %q, want substring %q", got, want)
+	}
+}
+
+func TestKubeletConfigzSummaryTemplateAKSKubeReservedWithoutEphemeralStorage(t *testing.T) {
+	got := renderConfigzSummary(t, aksKubeletConfigzObj())
+	want := "kubeReserved: cpu:180m mem:650Mi pid:1000"
+	if !strings.Contains(got, want) {
+		t.Errorf("got = %q, want substring %q", got, want)
+	}
+	if strings.Contains(got, "systemReserved") {
+		t.Errorf("expected no systemReserved line when absent from configz, got = %q", got)
+	}
+}
+
+// TestKubeletConfigzSummaryTemplateDefaultPoliciesHidden asserts the manager-policy/pidsLimit/
+// shutdownGracePeriod fields stay hidden when they're at their default values, matching the
+// codebase's convention of only calling out settings that deviate from the norm.
+func TestKubeletConfigzSummaryTemplateDefaultPoliciesHidden(t *testing.T) {
+	got := renderConfigzSummary(t, aksKubeletConfigzObj())
+	for _, unwanted := range []string{"podPidsLimit", "cpuManager", "memoryManager", "topologyManager", "shutdownGracePeriod"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("expected %q to stay hidden at default value, got = %q", unwanted, got)
+		}
+	}
+}
+
+func renderConfigzSummary(t *testing.T, configz map[string]interface{}) string {
+	t.Helper()
+	tmpl, _ := getTemplate()
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	t.Cleanup(func() { f.Cleanup() })
+	repo, _ := input.NewResourceRepo(f)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard())
+	e.Template = *tmpl
+	r := newRenderableObject(map[string]interface{}{}, e, repo)
+	got, err := r.renderTemplate("kubelet_configz_summary", configz)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	return got
+}
