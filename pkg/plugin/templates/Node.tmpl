@@ -68,7 +68,7 @@
         {{- with $kc.cpuManagerPolicy }}{{ if ne . "none" }} cpuManager:{{ . }}{{ end }}{{ end }}
         {{- with $kc.memoryManagerPolicy }}{{ if ne . "None" }} memoryManager:{{ . }}{{ end }}{{ end }}
         {{- with $kc.topologyManagerPolicy }}{{ if ne . "none" }} topologyManager:{{ . }}{{ end }}{{ end }}
-        {{- with $kc.shutdownGracePeriod }}{{ if ne . "0s" }} shutdownGracePeriod:{{ . }}/{{ $kc.shutdownGracePeriodCriticalPods }}(critical){{ end }}{{ end }}
+        {{- with $kc.shutdownGracePeriod }}{{ if ne . "0s" }} shutdownGracePeriod:{{ . }}{{ with $kc.shutdownGracePeriodCriticalPods }}/{{ . }}{{ end }}(critical){{ end }}{{ end }}
         {{- with $kc.evictionHard }}
             {{- "eviction-hard" | nindent 4 }}:
             {{- if hasKey . "memory.available" }} mem.available<{{ index . "memory.available" }}{{ end }}
