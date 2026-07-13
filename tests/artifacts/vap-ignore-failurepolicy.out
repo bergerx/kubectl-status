@@ -1,0 +1,7 @@
+
+ValidatingAdmissionPolicy/warn-only-policy, created 1m ago, gen:1
+  failurePolicy: Ignore
+  Match:
+    CREATE core/pods/v1
+  Validations:
+    object.spec.containers.all(c, has(c.resources.limits)) — containers should set resource limits

@@ -1106,6 +1106,25 @@ func TestE2EDynamicManifests(t *testing.T) {
 			stdoutRegexPath: "e2e-artifacts/backendtlspolicy-with-target.deep.regex",
 		}.assert(t, nil)
 	})
+	t.Run("vap-binding-resolves-policy", func(t *testing.T) {
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/vap-binding.yaml")
+		cmdTest{
+			args:            []string{"validatingadmissionpolicybinding/e2e-require-team-label-binding", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/vap-binding.regex",
+		}.assert(t, nil)
+	})
+	t.Run("vapbinding referencing a missing policy is flagged not found", func(t *testing.T) {
+		// The binding is rendered with --local straight from a manifest rather than created on
+		// the cluster, mirroring the orphan-owner-reference pattern above -- --local still
+		// resolves the policyName against the real API server (only the binding object itself is
+		// local), so the not-found check is exercised the same way.
+		viperTestHack(t)
+		cmdTest{
+			args:            []string{"-f", "../tests/e2e-artifacts/vapbinding-orphan-policy.yaml", "--local", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/vapbinding-orphan-policy.regex",
+		}.assert(t, nil)
+	})
 	t.Run("web-cert", func(t *testing.T) {
 		// A self-signed local CA issuing a leaf certificate, so the leaf's Secret shows
 		// "issued by <CA>" rather than "Self-signed" -- the same cert-manager chain used for

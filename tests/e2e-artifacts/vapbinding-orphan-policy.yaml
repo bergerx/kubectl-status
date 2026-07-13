@@ -1,0 +1,7 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: e2e-orphan-binding
+spec:
+  policyName: e2e-does-not-exist
+  validationActions: ["Deny"]

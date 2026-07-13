@@ -1,0 +1,34 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  creationTimestamp: "2026-07-13T10:00:00Z"
+  generation: 1
+  name: multiline-validations
+  resourceVersion: "1500"
+  uid: 66666666-6666-6666-6666-666666666666
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - apps
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      resources:
+      - deployments
+  matchConditions:
+  - name: multiline-condition
+    expression: |
+      !request.userInfo.username.startsWith('system:serviceaccount:') ||
+      request.userInfo.username == 'system:serviceaccount:default:admin'
+  validations:
+  - expression: |
+      object.spec.template.spec.containers.all(c,
+        has(c.resources.limits) &&
+        has(c.resources.requests)
+      )
+    message: |
+      containers must set both resource
+      limits and requests

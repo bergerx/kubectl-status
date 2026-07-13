@@ -1,0 +1,5 @@
+\A
+ValidatingAdmissionPolicyBinding/e2e-orphan-binding
+  Policy: ValidatingAdmissionPolicy/e2e-does-not-exist \(not found\)
+  Actions: Deny
+\z

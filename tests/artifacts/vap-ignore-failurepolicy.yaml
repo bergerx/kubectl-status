@@ -1,0 +1,25 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  creationTimestamp: "2026-07-03T09:00:00Z"
+  generation: 1
+  name: warn-only-policy
+  resourceVersion: "1400"
+  uid: 44444444-4444-4444-4444-444444444444
+spec:
+  failurePolicy: Ignore
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      resources:
+      - pods
+  validations:
+  - expression: "object.spec.containers.all(c, has(c.resources.limits))"
+    message: "containers should set resource limits"
+status:
+  observedGeneration: 1

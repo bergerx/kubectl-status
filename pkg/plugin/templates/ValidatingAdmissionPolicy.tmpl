@@ -1,0 +1,52 @@
+{{- define "ValidatingAdmissionPolicy" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: admissionregistration.k8s.io/v1, Kind=ValidatingAdmissionPolicy */ -}}
+    {{- /* kstatus_summary omitted: adds no signal beyond the Type-check warnings and
+           conditions_summary already shown below. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- $isFail := eq (.Spec.failurePolicy | default "Fail") "Fail" }}
+    {{- "failurePolicy" | bold | nindent 2 }}: {{ .Spec.failurePolicy | default "Fail" | redBoldIf $isFail }}
+    {{- with .Spec.paramKind }}
+        {{- ", params: " }}{{ printf "%s/%s" .apiVersion .kind | cyan }}
+    {{- end }}
+    {{- with .Spec.matchConstraints }}
+        {{- "Match" | bold | nindent 2 }}:
+        {{- $.Include "match_resources_summary" . }}
+    {{- end }}
+    {{- with .Spec.matchConditions }}
+        {{- "matchConditions" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- "" | nindent 4 }}{{ .name | bold }}: {{ .expression | trim | replace "\n" "\n    " | cyan }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.validations }}
+        {{- "Validations" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- "" | nindent 4 }}{{ .expression | trim | replace "\n" "\n    " | cyan }}
+            {{- with .messageExpression }} (message: {{ . | trim | replace "\n" "\n    " | cyan }}){{ end }}
+            {{- with .message }} — {{ . | trim | replace "\n" "\n    " }}{{ end }}
+            {{- with .reason }}{{ if ne . "Invalid" }} [{{ . | bold }}]{{ end }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.variables }}
+        {{- "Variables" | bold | nindent 2 }}: {{ len . | toString | cyan }} defined
+    {{- end }}
+    {{- with .Spec.auditAnnotations }}
+        {{- "Audit annotations" | bold | nindent 2 }}: {{ len . | toString | cyan }} defined
+    {{- end }}
+    {{- with .Status.typeChecking }}
+        {{- with .expressionWarnings }}
+            {{- "Type-check warnings" | red | bold | nindent 2 }}:
+            {{- range . }}
+                {{- printf "%s: %s" .fieldRef .warning | red | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

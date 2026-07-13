@@ -1,0 +1,16 @@
+
+ValidatingAdmissionPolicy/require-team-label, created 1m ago, gen:3
+  failurePolicy: Fail, params: v1/ConfigMap
+  Match:
+    CREATE,UPDATE apps/deployments/v1 scope:Namespaced names:frontend,backend
+    namespaceSelector: kubernetes.io/metadata.name notin (kube-system)
+    objectSelector: require-team-label=enabled
+  matchConditions:
+    exclude-system-serviceaccounts: !request.userInfo.username.startsWith('system:serviceaccount:kube-system:')
+  Validations:
+    'team' in variables.labels — all Deployments must carry a 'team' label
+    size(variables.labels.team) > 0 (message: 'team label must not be empty, got: ' + variables.labels.team)
+  Variables: 1 defined
+  Audit annotations: 1 defined
+  Type-check warnings:
+    spec.validations[1].expression: undeclared reference to 'team' (in container 'variables')

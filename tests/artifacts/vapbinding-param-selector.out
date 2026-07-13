@@ -1,0 +1,8 @@
+
+ValidatingAdmissionPolicyBinding/warn-only-policy-binding, created 1m ago, gen:1
+  Policy: ValidatingAdmissionPolicy/warn-only-policy
+  Actions: Warn
+  Params: config=pod-limits -n policy-params, if not found: Deny
+  Match:
+    matchPolicy: Exact
+    CREATE core/pods/v1
