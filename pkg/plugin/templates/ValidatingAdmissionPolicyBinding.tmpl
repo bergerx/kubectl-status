@@ -28,7 +28,7 @@
         {{- with .name }} {{ . | cyan }}{{ end }}
         {{- with .selector }} {{ . | labelSelector | cyan }}{{ end }}
         {{- with $paramRef.namespace }} -n {{ . | cyan }}{{ end }}
-        {{- with .parameterNotFoundAction }}{{ if ne . "Deny" }}, if not found: {{ . | cyan }}{{ end }}{{ end }}
+        {{- with .parameterNotFoundAction }}{{ if ne . "Allow" }}, if not found: {{ . | cyan }}{{ end }}{{ end }}
     {{- end }}
     {{- with .Spec.matchResources }}
         {{- "Match" | bold | nindent 2 }}:

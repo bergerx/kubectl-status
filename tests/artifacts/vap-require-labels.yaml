@@ -22,6 +22,9 @@ spec:
       - UPDATE
       resources:
       - deployments
+      resourceNames:
+      - frontend
+      - backend
       scope: Namespaced
     namespaceSelector:
       matchExpressions:

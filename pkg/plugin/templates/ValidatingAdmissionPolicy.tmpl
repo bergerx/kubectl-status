@@ -1,8 +1,9 @@
 {{- define "ValidatingAdmissionPolicy" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* GVK: admissionregistration.k8s.io/v1, Kind=ValidatingAdmissionPolicy */ -}}
+    {{- /* kstatus_summary omitted: adds no signal beyond the Type-check warnings and
+           conditions_summary already shown below. */ -}}
     {{- template "status_summary_line" . }}
-    {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
@@ -18,15 +19,15 @@
     {{- with .Spec.matchConditions }}
         {{- "matchConditions" | bold | nindent 2 }}:
         {{- range . }}
-            {{- "" | nindent 4 }}{{ .name | bold }}: {{ .expression | cyan }}
+            {{- "" | nindent 4 }}{{ .name | bold }}: {{ .expression | trim | replace "\n" "\n    " | cyan }}
         {{- end }}
     {{- end }}
     {{- with .Spec.validations }}
         {{- "Validations" | bold | nindent 2 }}:
         {{- range . }}
-            {{- "" | nindent 4 }}{{ .expression | cyan }}
-            {{- with .messageExpression }} (message: {{ . | cyan }}){{ end }}
-            {{- with .message }} — {{ . }}{{ end }}
+            {{- "" | nindent 4 }}{{ .expression | trim | replace "\n" "\n    " | cyan }}
+            {{- with .messageExpression }} (message: {{ . | trim | replace "\n" "\n    " | cyan }}){{ end }}
+            {{- with .message }} — {{ . | trim | replace "\n" "\n    " }}{{ end }}
             {{- with .reason }}{{ if ne . "Invalid" }} [{{ . | bold }}]{{ end }}{{ end }}
         {{- end }}
     {{- end }}

@@ -1,9 +1,8 @@
 
 ValidatingAdmissionPolicy/require-team-label, created 1m ago, gen:3
-  Current: Resource is current
   failurePolicy: Fail, params: v1/ConfigMap
   Match:
-    CREATE,UPDATE apps/deployments/v1 scope:Namespaced
+    CREATE,UPDATE apps/deployments/v1 scope:Namespaced names:frontend,backend
     namespaceSelector: kubernetes.io/metadata.name notin (kube-system)
     objectSelector: require-team-label=enabled
   matchConditions:

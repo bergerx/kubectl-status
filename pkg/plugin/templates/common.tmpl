@@ -794,6 +794,7 @@
         {{- "" | nindent 4 }}{{ $ops | bold }} {{ $groups }}/{{ $resources }}
         {{- with $versions }}/{{ . }}{{ end }}
         {{- with .scope }}{{ if not (eq . "*") }} scope:{{ . }}{{ end }}{{ end }}
+        {{- with .resourceNames }} names:{{ . | join "," }}{{ end }}
     {{- end }}
     {{- range .excludeResourceRules }}
         {{- $ops := .operations | join "," }}
@@ -803,6 +804,7 @@
         {{- "exclude:" | nindent 4 }} {{ $ops | bold }} {{ $groups }}/{{ $resources }}
         {{- with $versions }}/{{ . }}{{ end }}
         {{- with .scope }}{{ if not (eq . "*") }} scope:{{ . }}{{ end }}{{ end }}
+        {{- with .resourceNames }} names:{{ . | join "," }}{{ end }}
     {{- end }}
     {{- with .namespaceSelector }}
         {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}

@@ -1,0 +1,14 @@
+
+ValidatingAdmissionPolicy/multiline-validations, created 1m ago, gen:1
+  failurePolicy: Fail
+  Match:
+    CREATE apps/deployments/v1
+  matchConditions:
+    multiline-condition: !request.userInfo.username.startsWith('system:serviceaccount:') ||
+    request.userInfo.username == 'system:serviceaccount:default:admin'
+  Validations:
+    object.spec.template.spec.containers.all(c,
+      has(c.resources.limits) &&
+      has(c.resources.requests)
+    ) — containers must set both resource
+    limits and requests
