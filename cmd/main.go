@@ -196,7 +196,7 @@ func addRenderFlags(flags *pflag.FlagSet) {
 	flags.Bool("include-node-lease", false,
 		"Include node lease details.")
 	flags.Bool("include-node-kubelet-api-summary", true,
-		"Include Kubelet API stats/summary in the output.")
+		"Include Kubelet API healthz, configz and stats/summary in the output.")
 	flags.Bool("include-node-detailed-usage", true,
 		"Include details about Pods' resource usage on a node. Does lots of queries against API Server and causes dramatic slow down.")
 	flags.Bool("shallow", false,

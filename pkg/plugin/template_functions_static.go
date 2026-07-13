@@ -81,6 +81,7 @@ func funcMap() template.FuncMap {
 		"percent":                   percent,
 		"colorPercent":              colorPercent,
 		"humanizeSI":                humanizeSI,
+		"humanizeSIPair":            humanizeSIPair,
 		"getMatchingItemInMapList":  getMatchingItemInMapList,
 		"sortMapListByKeysValue":    sortMapListByKeysValue,
 		"sortByRevisionAnnotation":  sortByRevisionAnnotation,
@@ -132,6 +133,17 @@ func divFloat64(a, b float64) float64 {
 
 func humanizeSI(unit string, input float64) string {
 	return strings.Replace(humanize.SIWithDigits(input, 1, unit), " ", "", -1)
+}
+
+// humanizeSIPair renders two related values (e.g. allocatable/capacity) under a single shared SI
+// unit, scaled to the larger of the two, e.g. humanizeSIPair("B", 32.8e9, 33.6e9) -> "32.8/33.6GB".
+func humanizeSIPair(unit string, a, b float64) string {
+	scaledB, prefix := humanize.ComputeSI(b)
+	scale := 1.0
+	if scaledB != 0 {
+		scale = b / scaledB
+	}
+	return fmt.Sprintf("%s/%s%s", humanize.FtoaWithDigits(a/scale, 1), humanize.FtoaWithDigits(scaledB, 1), prefix+unit)
 }
 
 func quantityToFloat64(str string) float64 {

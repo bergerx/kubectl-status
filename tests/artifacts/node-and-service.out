@@ -8,8 +8,7 @@ Node/minikube, created 1m ago
   PIDPressure KubeletHasSufficientPID, kubelet has sufficient PID available for 1m
   Ready KubeletReady, kubelet is posting ready status for 1m
   addresses: InternalIP=192.168.49.2 Hostname=minikube
-  allocatable: pods:110, cpu:16, mem:33.3GB, ephemeral-storage:997.3GB
-  capacity: pods:110, cpu:16, mem:33.3GB, ephemeral-storage:997.3GB
+  allocatable/capacity: pods 110/110, cpu 16/16, mem 33.3/33.3GB, ephemeral-storage 997.3/997.3GB
 
 Service/kubernetes -n default, created 1m ago
   Current: Service is ready
