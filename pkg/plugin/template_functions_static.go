@@ -19,7 +19,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
-	"github.com/go-sprout/sprout"
+	sprouttime "github.com/go-sprout/sprout/registry/time"
 	"github.com/robfig/cron/v3"
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
@@ -45,7 +45,7 @@ func SetNowFunc(f func() time.Time) (revertFunc func()) {
 }
 
 func DefaultDurationRound() func(duration interface{}) string {
-	return (sprout.GenericFuncMap()["durationRound"]).(func(duration interface{}) string)
+	return sprouttime.NewRegistry().DurationRound
 }
 
 // SetDurationRound is a helper method for tests
