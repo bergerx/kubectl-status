@@ -1330,6 +1330,56 @@ func TestE2EDynamicManifests(t *testing.T) {
 			}.assert(t, nil)
 		})
 	})
+	t.Run("pod-volume-configmap-secret", func(t *testing.T) {
+		// --shallow (used by the offline golden-file tests) makes KubeGetFirst a no-op, so
+		// this e2e suite is the only place that exercises the configMap/secret volume
+		// existence and key-presence checks in Pod.tmpl's pod_volumes/pod_volume_line.
+		viperTestHack(t)
+		applyManifest(t, "e2e-artifacts/pod-volume-configmap-secret.yaml")
+		waitForContainerWaitingReason(t, "pod/e2e-pod-volume-missing-configmap", "main", "ContainerCreating")
+		waitForContainerWaitingReason(t, "pod/e2e-pod-volume-missing-secret", "main", "ContainerCreating")
+		waitForContainerWaitingReason(t, "pod/e2e-pod-volume-missing-key", "main", "ContainerCreating")
+		waitFor(t, "pod/e2e-pod-volume-optional-missing", "condition=Ready")
+		waitFor(t, "pod/e2e-pod-volume-optional-missing-key", "condition=Ready")
+		waitFor(t, "pod/e2e-pod-volume-healthy", "condition=Ready")
+
+		t.Run("pod referencing a non-existent ConfigMap volume flags it without --include-all-volumes", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"pod/e2e-pod-volume-missing-configmap", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-missing-configmap.regex",
+			}.assert(t, nil)
+		})
+		t.Run("pod referencing a non-existent Secret volume flags it without --include-all-volumes", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"pod/e2e-pod-volume-missing-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-missing-secret.regex",
+			}.assert(t, nil)
+		})
+		t.Run("pod referencing an existing ConfigMap but a missing key flags it", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"pod/e2e-pod-volume-missing-key", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-missing-key.regex",
+			}.assert(t, nil)
+		})
+		t.Run("optional configMap volume referencing a non-existent ConfigMap shows no warning", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"pod/e2e-pod-volume-optional-missing", "--include-events=false", "--include-managed-fields=false", "--include-all-volumes", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-optional-missing.regex",
+			}.assert(t, nil)
+		})
+		t.Run("optional configMap volume with items referencing a missing key shows no warning", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"pod/e2e-pod-volume-optional-missing-key", "--include-events=false", "--include-managed-fields=false", "--include-all-volumes", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-optional-missing-key.regex",
+			}.assert(t, nil)
+		})
+		t.Run("healthy configMap and secret volumes show no warnings", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"pod/e2e-pod-volume-healthy", "--include-events=false", "--include-managed-fields=false", "--include-all-volumes", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-healthy.regex",
+			}.assert(t, nil)
+		})
+	})
 	t.Run("pod-container-logs", func(t *testing.T) {
 		// --shallow (used by the offline golden-file tests) makes KubeGetContainerLogs a
 		// no-op, so this e2e suite is the only place that exercises real log fetching: a

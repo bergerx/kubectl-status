@@ -189,7 +189,7 @@
 {{- end }}
 
 {{- define "pod_volume_line" }}
-    {{- /* Renders a single volume spec entry. Expects dict "vol" (spec entry) "stats" (kubelet VolumeStats or nil) "pvcStorage" (optional PVC requested storage) */ -}}
+    {{- /* Renders a single volume spec entry. Expects dict "vol" (spec entry) "stats" (kubelet VolumeStats or nil) "pvcStorage" (optional PVC requested storage) "problem" (optional string, existence/key validation failure for a configMap/secret volume) */ -}}
     {{- .vol.name | bold }}
     {{- $inner := "" }}
     {{- $isPVC := false }}
@@ -227,6 +227,39 @@
         {{- end }}
     {{- end }}
     {{- if $inner }} ({{ $inner }}){{ end }}
+    {{- with .problem }} {{ . | red | bold }}{{ end }}
+{{- end }}
+
+{{- define "pod_volume_configmap_secret_problem" }}
+    {{- /* Checks a configMap/secret volume source for existence and (when items are listed) key
+           presence, returning a short problem string or "" -- the caller already renders the
+           "(ConfigMap: name)"/"(Secret: name)" part, so this only needs the tail. Expects dict
+           "kind" ("ConfigMap" or "Secret") "ctx" (Pod RenderableObject) "name" (object name)
+           "optional" (bool) "items" (list of KeyToPath, or nil). */ -}}
+    {{- $obj := $.ctx.KubeGetFirst $.ctx.Namespace $.kind $.name }}
+    {{- $problem := "" }}
+    {{- if not $obj.Object }}
+        {{- if not $.optional }}{{ $problem = "doesn't exist" }}{{ end }}
+    {{- else if not $.optional }}
+        {{- /* "optional" on the volume source governs both the object's existence and its keys
+               (https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#configmapvolumesource-v1-core)
+               -- there's no per-item override, so a missing key is only a problem when the whole
+               source isn't optional. */ -}}
+        {{- $keys := keys ($obj.Object.data | default dict) }}
+        {{- if eq $.kind "ConfigMap" }}
+            {{- $keys = concat $keys (keys ($obj.Object.binaryData | default dict)) }}
+        {{- end }}
+        {{- $missingKeys := list }}
+        {{- range $.items }}
+            {{- if not ($keys | has .key) }}
+                {{- $missingKeys = append $missingKeys (.key | quote) }}
+            {{- end }}
+        {{- end }}
+        {{- with $missingKeys }}
+            {{- $problem = printf "missing key%s %s" (ternary "s" "" (gt (len .) 1)) (join ", " .) }}
+        {{- end }}
+    {{- end }}
+    {{- $problem }}
 {{- end }}
 
 {{- define "pod_volumes" }}
@@ -237,6 +270,23 @@
         {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
     {{- end }}
     {{- $ephemeralStorage := index $podStatsSummary "ephemeral-storage" }}
+    {{- /* Check configMap/secret volumes for existence and (when items are listed) key presence.
+           Gated behind "shallow" like the imagePullSecrets check above -- offline golden tests run
+           --shallow, making KubeGetFirst a no-op there; only the live e2e suite exercises this. */ -}}
+    {{- $volProblems := dict }}
+    {{- if not ($.Config.GetBool "shallow") }}
+        {{- range $.Spec.volumes }}
+            {{- if hasKey . "configMap" }}
+                {{- $cm := .configMap }}
+                {{- $problem := $.Include "pod_volume_configmap_secret_problem" (dict "kind" "ConfigMap" "ctx" $ "name" $cm.name "optional" ($cm.optional | default false) "items" ($cm.items | default list)) }}
+                {{- if $problem }}{{ $volProblems = set $volProblems .name $problem }}{{ end }}
+            {{- else if hasKey . "secret" }}
+                {{- $sec := .secret }}
+                {{- $problem := $.Include "pod_volume_configmap_secret_problem" (dict "kind" "Secret" "ctx" $ "name" $sec.secretName "optional" ($sec.optional | default false) "items" ($sec.items | default list)) }}
+                {{- if $problem }}{{ $volProblems = set $volProblems .name $problem }}{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
     {{- /* Build the list of volumes to show by default (size-relevant) and under the gate */ -}}
     {{- $displayVols := list }}
     {{- range $.Spec.volumes }}
@@ -248,6 +298,9 @@
             {{- with $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $vol.name) }}
                 {{- $displayVols = append $displayVols $vol }}
             {{- end }}
+        {{- else if hasKey $volProblems $vol.name }}
+            {{- /* a broken configMap/secret volume must surface even without --include-all-volumes */ -}}
+            {{- $displayVols = append $displayVols . }}
         {{- else if $.Config.GetBool "include-all-volumes" }}
             {{- $displayVols = append $displayVols . }}
         {{- end }}
@@ -277,7 +330,7 @@
                         {{- $pvcStorage = index $pvcRequests "storage" | default "" }}
                     {{- end }}
                 {{- end }}
-                {{- " " }}{{ template "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage) }}
+                {{- " " }}{{ template "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage "problem" (index $volProblems $vol.name)) }}
                 {{- if and $deep $pvc.Metadata }}
                     {{- $.Include "PersistentVolumeClaim" $pvc | nindent 4 }}
                 {{- end }}
@@ -302,7 +355,7 @@
                         {{- $pvcStorage = index $pvcRequests "storage" | default "" }}
                     {{- end }}
                 {{- end }}
-                {{- $.Include "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage) | nindent 4 }}
+                {{- $.Include "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage "problem" (index $volProblems $vol.name)) | nindent 4 }}
                 {{- if and $deep $pvc.Metadata }}
                     {{- $.Include "PersistentVolumeClaim" $pvc | nindent 6 }}
                 {{- end }}
