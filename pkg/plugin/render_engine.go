@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"embed"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -16,6 +17,9 @@ import (
 //go:embed templates
 var templatesFS embed.FS
 
+// setupDeprecationFilter configures the default slog handler to drop go-sprout's
+// per-call deprecation-signature warnings, writing anything else to w.
+//
 // go-sprout (our sprig replacement) logs a WARN via slog on every call to a
 // function whose signature changed during the sprig->sprout migration (e.g.
 // get, hasKey, append). These fire once per template execution per call site,
@@ -24,13 +28,13 @@ var templatesFS embed.FS
 // https://github.com/bergerx/kubectl-status/issues/688 for migrating the
 // templates to the new signatures, at which point this filter can go away.
 //
-// The fallback handler is built fresh (not by wrapping the pre-existing
+// The handler is built fresh (not by wrapping the pre-existing
 // slog.Default().Handler()): the zero-value default handler bridges back
 // into the standard "log" package's global, mutex-protected logger, and
 // re-installing a wrapper around it as the new default causes that bridge
 // to call back into itself, deadlocking on the mutex.
-func init() {
-	slog.SetDefault(slog.New(deprecationNoticeFilter{Handler: slog.NewTextHandler(os.Stderr, nil)}))
+func setupDeprecationFilter(w io.Writer) {
+	slog.SetDefault(slog.New(deprecationNoticeFilter{Handler: slog.NewTextHandler(w, nil)}))
 }
 
 // deprecationNoticeFilter drops log records tagged with a "notice"="deprecated"
@@ -46,6 +50,13 @@ type deprecationNoticeFilter struct {
 
 func isDeprecatedNoticeAttr(a slog.Attr) bool {
 	return a.Key == "notice" && a.Value.Kind() == slog.KindString && a.Value.String() == "deprecated"
+}
+
+func (h deprecationNoticeFilter) Enabled(ctx context.Context, level slog.Level) bool {
+	if h.drop {
+		return false
+	}
+	return h.Handler.Enabled(ctx, level)
 }
 
 func (h deprecationNoticeFilter) Handle(ctx context.Context, r slog.Record) error {
@@ -89,6 +100,7 @@ type renderEngine struct {
 
 func newRenderEngine(streams genericiooptions.IOStreams) (*renderEngine, error) {
 	klog.V(5).InfoS("Creating new render engine instance...")
+	setupDeprecationFilter(streams.ErrOut)
 	tmpl, err := getTemplate()
 	if err != nil {
 		klog.V(3).ErrorS(err, "Error parsing templates")
