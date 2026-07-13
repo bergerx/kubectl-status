@@ -83,6 +83,7 @@ func funcMap() template.FuncMap {
 		"humanizeSI":                humanizeSI,
 		"getMatchingItemInMapList":  getMatchingItemInMapList,
 		"sortMapListByKeysValue":    sortMapListByKeysValue,
+		"fieldsV1Paths":             fieldsV1Paths,
 		"sortByRevisionAnnotation":  sortByRevisionAnnotation,
 		"sortByRevisionField":       sortByRevisionField,
 		"addFloat64":                addFloat64,
@@ -252,6 +253,57 @@ func sortMapListByKeysValue(key string, mapList []interface{}) (result []interfa
 		return typedMapListItemI < typedMapListItemJ
 	})
 	return
+}
+
+// fieldsV1Paths reduces a managedFields entry's FieldsV1 tree (as decoded from
+// JSON, with nested keys prefixed "f:") to the deepest common path per
+// top-level branch: it descends into a branch while every node along the way
+// has exactly one "f:"-prefixed child, and reports that node's path once it
+// hits a fork (or a leaf), so touching only spec.template yields "spec.template"
+// but touching both status.conditions and status.phase yields just "status".
+func fieldsV1Paths(fieldsV1 map[string]interface{}) []string {
+	var paths []string
+	for key, value := range fieldsV1 {
+		if !strings.HasPrefix(key, "f:") {
+			continue
+		}
+		paths = append(paths, fieldsV1DeepestPath(strings.TrimPrefix(key, "f:"), value))
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+// fieldsV1MapFields are map[string]string-like fields whose own keys are
+// arbitrary user data (e.g. individual label/annotation names), not further
+// structure to descend into, so descent stops once one of these is reached.
+var fieldsV1MapFields = map[string]bool{
+	"metadata.labels":      true,
+	"metadata.annotations": true,
+}
+
+func fieldsV1DeepestPath(path string, value interface{}) string {
+	if fieldsV1MapFields[path] {
+		return path
+	}
+	node, ok := value.(map[string]interface{})
+	if !ok {
+		return path
+	}
+	var childKey string
+	for key := range node {
+		if !strings.HasPrefix(key, "f:") {
+			continue
+		}
+		if childKey != "" {
+			// more than one field child at this level: this is as deep as we can go
+			return path
+		}
+		childKey = key
+	}
+	if childKey == "" {
+		return path
+	}
+	return fieldsV1DeepestPath(path+"."+strings.TrimPrefix(childKey, "f:"), node[childKey])
 }
 
 // sortByRevisionAnnotation returns a sorted copy of objs (RenderableObject ReplicaSets, passed as
