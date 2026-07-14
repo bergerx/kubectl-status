@@ -267,27 +267,24 @@ func fieldsV1Paths(fieldsV1 map[string]interface{}) []string {
 		if !strings.HasPrefix(key, "f:") {
 			continue
 		}
-		paths = append(paths, fieldsV1DeepestPath(strings.TrimPrefix(key, "f:"), value))
+		segments := fieldsV1DeepestPath([]string{strings.TrimPrefix(key, "f:")}, value)
+		paths = append(paths, joinFieldsV1Segments(segments))
 	}
 	sort.Strings(paths)
 	return paths
 }
 
-// fieldsV1MapFields are map[string]string-like fields whose own keys are
-// arbitrary user data (e.g. individual label/annotation names), not further
-// structure to descend into, so descent stops once one of these is reached.
-var fieldsV1MapFields = map[string]bool{
-	"metadata.labels":      true,
-	"metadata.annotations": true,
-}
-
-func fieldsV1DeepestPath(path string, value interface{}) string {
-	if fieldsV1MapFields[path] {
-		return path
-	}
+// fieldsV1DeepestPath descends into a branch of the FieldsV1 tree while every
+// node along the way has exactly one "f:"-prefixed child, returning the
+// segments collected so far once it hits a fork or a leaf. This means
+// touching only spec.template yields ["spec","template"], but touching both
+// status.conditions and status.phase yields just ["status"]. A single owned
+// label/annotation (e.g. metadata.labels.app) descends the same way, since
+// its key is just another "f:"-prefixed child.
+func fieldsV1DeepestPath(segments []string, value interface{}) []string {
 	node, ok := value.(map[string]interface{})
 	if !ok {
-		return path
+		return segments
 	}
 	var childKey string
 	for key := range node {
@@ -296,14 +293,29 @@ func fieldsV1DeepestPath(path string, value interface{}) string {
 		}
 		if childKey != "" {
 			// more than one field child at this level: this is as deep as we can go
-			return path
+			return segments
 		}
 		childKey = key
 	}
 	if childKey == "" {
-		return path
+		return segments
 	}
-	return fieldsV1DeepestPath(path+"."+strings.TrimPrefix(childKey, "f:"), node[childKey])
+	return fieldsV1DeepestPath(append(segments, strings.TrimPrefix(childKey, "f:")), node[childKey])
+}
+
+// joinFieldsV1Segments joins path segments with ".", quoting any segment that
+// itself contains a "." (e.g. the annotation key "deployment.kubernetes.io/
+// revision") so it isn't misread as further nesting.
+func joinFieldsV1Segments(segments []string) string {
+	quoted := make([]string, len(segments))
+	for i, segment := range segments {
+		if strings.Contains(segment, ".") {
+			quoted[i] = strconv.Quote(segment)
+		} else {
+			quoted[i] = segment
+		}
+	}
+	return strings.Join(quoted, ".")
 }
 
 // sortByRevisionAnnotation returns a sorted copy of objs (RenderableObject ReplicaSets, passed as

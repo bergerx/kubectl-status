@@ -201,16 +201,24 @@ func TestFieldsV1Paths(t *testing.T) {
 			want: []string{"metadata.labels", "spec.template", "status.conditions"},
 		},
 		{
-			name:     "single owned label stops at metadata.labels",
+			name:     "single owned label descends into the label key",
 			fieldsV1: map[string]interface{}{"f:metadata": map[string]interface{}{"f:labels": map[string]interface{}{"f:app": map[string]interface{}{}}}},
-			want:     []string{"metadata.labels"},
+			want:     []string{"metadata.labels.app"},
 		},
 		{
-			name: "single owned annotation stops at metadata.annotations",
+			name: "single owned annotation descends into the annotation key, quoted since it contains dots",
 			fieldsV1: map[string]interface{}{"f:metadata": map[string]interface{}{"f:annotations": map[string]interface{}{
 				"f:deployment.kubernetes.io/revision": map[string]interface{}{},
 			}}},
-			want: []string{"metadata.annotations"},
+			want: []string{`metadata.annotations."deployment.kubernetes.io/revision"`},
+		},
+		{
+			name: "multiple owned labels stop at metadata.labels",
+			fieldsV1: map[string]interface{}{"f:metadata": map[string]interface{}{"f:labels": map[string]interface{}{
+				"f:app":  map[string]interface{}{},
+				"f:tier": map[string]interface{}{},
+			}}},
+			want: []string{"metadata.labels"},
 		},
 		{
 			name:     "empty fieldsV1",
