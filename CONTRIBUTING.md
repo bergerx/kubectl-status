@@ -292,6 +292,17 @@ apart" threshold, and therefore whether it renders at all, is a coin flip e2e te
 after 1m`) whenever `status.startTime` is set, so fixtures can pin it as a literal instead of
 wrapping it in an optional group.
 
+### Parallel-Safe e2e Subtests
+
+`make test-e2e` currently runs `TestE2E*` as one sequential `go test` invocation.
+`TestE2EParallel` (`cmd/main_test.go`) is a dedicated home for subtests that are independent enough
+to run concurrently instead -- see the doc comment on that function for exactly what a subtest needs
+(a dedicated namespace or none at all, no shared cluster-scoped resource names, no dependency on the
+global `viper` singleton or `testHack`/`viperTestHack`) before it can move there with
+`t.Run(name, func(t *testing.T) { t.Parallel(); ... })`. Most existing `TestE2E*` subtests still call
+`testHack`/`viperTestHack` and can't move until that global state is threaded through as a parameter
+instead of a package-level singleton.
+
 ### Improving The Documentation
 
 We don't yet have a comprehensive documentation, we maintain just a few Markdown files in the repo. We aim to keep the
