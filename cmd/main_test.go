@@ -427,6 +427,30 @@ func e2eMinikubeTest(t *testing.T) {
 	}
 }
 
+// TestE2EParallel is a dedicated home for e2e subtests that are independent of each other and can
+// therefore run concurrently. A subtest qualifies once it:
+//   - needs no namespace, or creates/uses a namespace dedicated to that subtest (never `default`,
+//     and never a namespace another subtest might also touch)
+//   - never relies on a fixed cluster-scoped resource name (Node, CustomResourceDefinition,
+//     ClusterRole, ...) another subtest could also use -- generate one instead, e.g. with
+//     GenerateName (see createBadNode)
+//   - doesn't call testHack(t) or viperTestHack(t), and doesn't otherwise read or write the
+//     process-global viper singleton or pkg/plugin's package-level Now/DurationRound/
+//     StartedAfterClause overrides -- concurrent subtests would race each other's
+//     Set/Reset/override-revert calls against that shared state (see #694)
+//
+// Add a qualifying subtest with t.Run(name, func(t *testing.T) { t.Parallel(); ... }) so it
+// actually runs alongside its siblings instead of just living next to them; that subtest-level
+// t.Parallel() is what makes siblings run concurrently, regardless of this function's own.
+//
+// This function itself must NOT call t.Parallel(): e2eMinikubeTest below falls back to
+// startMinikube, which calls t.Setenv("KUBECONFIG", ...) for ad hoc `go test -run TestE2E...` runs
+// that don't set ASSUME_MINIKUBE_IS_CONFIGURED=true -- and t.Setenv panics if called on a test
+// already marked parallel.
+func TestE2EParallel(t *testing.T) {
+	e2eMinikubeTest(t)
+}
+
 func TestE2EDynamicManifests(t *testing.T) {
 	e2eMinikubeTest(t)
 	testHack(t)
