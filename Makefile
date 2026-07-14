@@ -151,7 +151,12 @@ test-e2e: vet staticcheck install-e2e-deps
 	# using count to prevent caching; the suite's real cluster wall-clock time (image pulls,
 	# rollouts, waits) runs close to go test's default 10m timeout, so it's raised explicitly
 	# rather than risking a flaky timeout on a slower run.
-	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go test -v ./... -count=1 -timeout=25m -run 'TestE2E*'
+	# gotestsum runs go test with -v under the hood (so full per-subtest logs are still
+	# captured) but only prints them for failing tests, collapsing a green run to one line
+	# per package (default --format=pkgname) -- the ~60 fixture/scenario subtests in
+	# cmd/main_test.go otherwise flood the terminal with "=== RUN"/"--- PASS" and t.Logf
+	# noise on every green run.
+	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -run 'TestE2E*'
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# The isolated cluster (profile: $(E2E_PROFILE)) is torn down afterwards whether the suite
@@ -159,7 +164,8 @@ test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# preserved so a failing suite still fails the target (and blocks the push).
 	# using count to prevent caching; see the timeout note in the ASSUME_MINIKUBE_IS_CONFIGURED
 	# branch above.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go test -v ./... -count=1 -timeout=25m -run 'TestE2E*'; \
+	# See the gotestsum note in the ASSUME_MINIKUBE_IS_CONFIGURED branch above.
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -run 'TestE2E*'; \
 	status=$$?; \
 	$(MAKE) e2e-minikube-down; \
 	exit $$status
