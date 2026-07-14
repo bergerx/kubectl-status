@@ -50,8 +50,13 @@ test: vet staticcheck
 # branch (worktrees can't share a branch, so this covers parallel worktrees) and,
 # when running under Claude Code, by session id too (so two sessions working the
 # same branch/worktree don't step on each other's cluster either). The branch name
-# is kept as a readable prefix; a hash carries the actual uniqueness so truncating
-# long/ULID-suffixed branch names (e.g. worktree-*-<ulid>) can't collide.
+# is kept as a readable prefix (cosmetic only, safe to truncate). Uniqueness comes
+# from two hashes: BRANCH_HASH is a function of the branch name alone, so the
+# reference-transaction hook -- which only ever sees a deleted branch name, never a
+# session id -- can recompute it and match *only* that branch's profiles, even when
+# several branches share a truncated slug (e.g. worktree-*-<ulid> branches all
+# collapse to the same 20-char prefix). SESSION_HASH additionally folds in the
+# session id so parallel sessions on the same branch still get separate clusters.
 E2E_GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
 ifeq ($(E2E_GIT_BRANCH),HEAD)
 E2E_GIT_BRANCH := $(shell git rev-parse --short HEAD 2>/dev/null)
@@ -60,8 +65,9 @@ ifeq ($(E2E_GIT_BRANCH),)
 E2E_GIT_BRANCH := local
 endif
 E2E_BRANCH_SLUG := $(shell ./hack/e2e-branch-slug.sh '$(E2E_GIT_BRANCH)')
-E2E_IDENTITY_HASH := $(shell printf '%s' '$(E2E_GIT_BRANCH):$(CLAUDE_CODE_SESSION_ID)' | (sha1sum 2>/dev/null || shasum) | cut -c1-8)
-E2E_PROFILE := kstat-e2e-$(E2E_BRANCH_SLUG)-$(E2E_IDENTITY_HASH)
+E2E_BRANCH_HASH := $(shell ./hack/e2e-hash.sh '$(E2E_GIT_BRANCH)')
+E2E_SESSION_HASH := $(shell ./hack/e2e-hash.sh '$(E2E_GIT_BRANCH):$(CLAUDE_CODE_SESSION_ID)')
+E2E_PROFILE := kstat-e2e-$(E2E_BRANCH_SLUG)-$(E2E_BRANCH_HASH)-$(E2E_SESSION_HASH)
 E2E_KUBECONFIG := $(CURDIR)/.e2e/$(E2E_PROFILE).kubeconfig
 
 # CI (and anyone else who already has a suitable cluster configured) sets
@@ -80,6 +86,14 @@ endif
 print-e2e-profile:
 	@echo "profile:   $(E2E_PROFILE)"
 	@echo "kubeconfig: $(E2E_KUBECONFIG)"
+
+.PHONY: reap
+reap:
+	./hack/reap-worktrees.sh
+
+.PHONY: reap-apply
+reap-apply:
+	./hack/reap-worktrees.sh --apply
 
 .PHONY: install-hooks
 install-hooks:
