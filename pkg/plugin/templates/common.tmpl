@@ -28,7 +28,7 @@
             {{- range . }}
                 {{- ""  | nindent 4 }}
                 {{- with .time }}{{ . | colorAgo }}{{ agoSuffix }} {{ end }}
-                {{- .operation | bold }}d by {{ .manager | bold }} ({{ .fieldsV1 | default dict | keys | sortAlpha | join ", " | replace "f:" "" }})
+                {{- .operation | bold }}d by {{ .manager | bold }} ({{ .fieldsV1 | default dict | fieldsV1Paths | join ", " }})
             {{- end }}
         {{- end }}
     {{- end }}

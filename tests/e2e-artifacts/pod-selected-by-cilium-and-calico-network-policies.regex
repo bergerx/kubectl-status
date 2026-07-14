@@ -12,6 +12,6 @@ Pod/cni-policy-selected-pod -n e2e-cni-policy-pod, created 1m ago, gen:1(, start
   Calico NetworkPolicy: selected by Calico NetworkPolicy calico-np-ingress \(ingress restricted\)
   Calico GlobalNetworkPolicy: selected by Calico GlobalNetworkPolicy calico-gnp-egress-e2e-cni-policy-pod \(egress restricted\)
   Known/recorded manage events:
-    1m ago Updated by cmd\.test \(metadata, spec\)
+    1m ago Updated by cmd\.test \(metadata\.labels\.app, spec\)
     1m ago Updated by kubelet \(status\)
 \z
