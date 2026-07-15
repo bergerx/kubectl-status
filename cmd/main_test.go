@@ -988,10 +988,17 @@ func TestE2EDynamicManifests(t *testing.T) {
 
 		t.Run("deployment", func(t *testing.T) {
 			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-blocked-deployment"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
 			name := "e2e-rollouts-blocked-deployment"
 			one := int32(1)
 			dep := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 				Spec: appsv1.DeploymentSpec{
 					Replicas: &one,
 					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
@@ -1001,23 +1008,30 @@ func TestE2EDynamicManifests(t *testing.T) {
 					},
 				},
 			}
-			_, err := clientset.AppsV1().Deployments("default").Create(context.TODO(), dep, metav1.CreateOptions{})
+			_, err = clientset.AppsV1().Deployments(ns).Create(context.TODO(), dep, metav1.CreateOptions{})
 			require.NoError(t, err)
-			defer clientset.AppsV1().Deployments("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
-			podName := waitForPodByLabel(t, "default", "app="+name)
-			waitForContainerWaitingReason(t, "pod/"+podName, "app", "ImagePullBackOff")
+			defer clientset.AppsV1().Deployments(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+			podName := waitForPodByLabel(t, ns, "app="+name)
+			waitForContainerWaitingReasonInNamespace(t, "pod/"+podName, "app", "ImagePullBackOff", ns)
 
 			cmdTest{
-				args:            []string{"deployment/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"deployment/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-deployment.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("statefulset", func(t *testing.T) {
 			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-blocked-statefulset"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
 			name := "e2e-rollouts-blocked-statefulset"
 			one := int32(1)
 			sts := &appsv1.StatefulSet{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 				Spec: appsv1.StatefulSetSpec{
 					Replicas:    &one,
 					ServiceName: name,
@@ -1028,21 +1042,28 @@ func TestE2EDynamicManifests(t *testing.T) {
 					},
 				},
 			}
-			_, err := clientset.AppsV1().StatefulSets("default").Create(context.TODO(), sts, metav1.CreateOptions{})
+			_, err = clientset.AppsV1().StatefulSets(ns).Create(context.TODO(), sts, metav1.CreateOptions{})
 			require.NoError(t, err)
-			defer clientset.AppsV1().StatefulSets("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
-			waitForContainerWaitingReason(t, "pod/"+name+"-0", "app", "ImagePullBackOff")
+			defer clientset.AppsV1().StatefulSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+			waitForContainerWaitingReasonInNamespace(t, "pod/"+name+"-0", "app", "ImagePullBackOff", ns)
 
 			cmdTest{
-				args:            []string{"statefulset/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"statefulset/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-statefulset.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("daemonset", func(t *testing.T) {
 			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-blocked-daemonset"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
 			name := "e2e-rollouts-blocked-daemonset"
 			ds := &appsv1.DaemonSet{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 				Spec: appsv1.DaemonSetSpec{
 					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
 					Template: corev1.PodTemplateSpec{
@@ -1051,23 +1072,30 @@ func TestE2EDynamicManifests(t *testing.T) {
 					},
 				},
 			}
-			_, err := clientset.AppsV1().DaemonSets("default").Create(context.TODO(), ds, metav1.CreateOptions{})
+			_, err = clientset.AppsV1().DaemonSets(ns).Create(context.TODO(), ds, metav1.CreateOptions{})
 			require.NoError(t, err)
-			defer clientset.AppsV1().DaemonSets("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
-			podName := waitForPodByLabel(t, "default", "app="+name)
-			waitForContainerWaitingReason(t, "pod/"+podName, "app", "ImagePullBackOff")
+			defer clientset.AppsV1().DaemonSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+			podName := waitForPodByLabel(t, ns, "app="+name)
+			waitForContainerWaitingReasonInNamespace(t, "pod/"+podName, "app", "ImagePullBackOff", ns)
 
 			cmdTest{
-				args:            []string{"daemonset/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"daemonset/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-daemonset.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("healthy single rollout stays suppressed", func(t *testing.T) {
 			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-healthy-deployment"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
 			name := "e2e-rollouts-healthy-deployment"
 			one := int32(1)
 			dep := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 				Spec: appsv1.DeploymentSpec{
 					Replicas: &one,
 					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
@@ -1077,13 +1105,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 					},
 				},
 			}
-			_, err := clientset.AppsV1().Deployments("default").Create(context.TODO(), dep, metav1.CreateOptions{})
+			_, err = clientset.AppsV1().Deployments(ns).Create(context.TODO(), dep, metav1.CreateOptions{})
 			require.NoError(t, err)
-			defer clientset.AppsV1().Deployments("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
-			waitFor(t, "deployment/"+name, "condition=Available")
+			defer clientset.AppsV1().Deployments(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+			waitForInNamespace(t, "deployment/"+name, "condition=Available", ns)
 
 			cmdTest{
-				args:            []string{"deployment/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"deployment/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-healthy-deployment.regex",
 			}.assert(t, nil, opts...)
 		})
@@ -1092,26 +1120,33 @@ func TestE2EDynamicManifests(t *testing.T) {
 			// there are two consecutive pairs to diff, not just the one covered by the
 			// "--include-rollout-diffs shows the diff between revisions" test above.
 			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-three-revisions"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
 			name := "e2e-rollouts-three-revisions"
-			applyManifest(t, "e2e-artifacts/rollouts-three-revisions.yaml")
-			waitFor(t, "deployment/"+name, "condition=Available")
+			applyManifestInNamespace(t, "e2e-artifacts/rollouts-three-revisions.yaml", ns)
+			waitForInNamespace(t, "deployment/"+name, "condition=Available", ns)
 
-			require.NoError(t, exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.26", "-n", "default").Run())
-			rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", "default", "--timeout=2m")
+			require.NoError(t, exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.26", "-n", ns).Run())
+			rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
 			output, err := rolloutCmd.CombinedOutput()
 			t.Logf("rollout status for %s (nginx:1.26): %s", name, output)
 			require.NoError(t, err)
-			waitForSinglePod(t, "default", "app="+name)
+			waitForSinglePod(t, ns, "app="+name)
 
-			require.NoError(t, exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.27", "-n", "default").Run())
-			rolloutCmd = exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", "default", "--timeout=2m")
+			require.NoError(t, exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.27", "-n", ns).Run())
+			rolloutCmd = exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
 			output, err = rolloutCmd.CombinedOutput()
 			t.Logf("rollout status for %s (nginx:1.27): %s", name, output)
 			require.NoError(t, err)
-			waitForSinglePod(t, "default", "app="+name)
+			waitForSinglePod(t, ns, "app="+name)
 
 			cmdTest{
-				args:            []string{"deployment/" + name, "--include-events=false", "--include-managed-fields=false", "--include-rollout-diffs", "--v", "5"},
+				args:            []string{"deployment/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--include-rollout-diffs", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-three-revisions-with-diffs.regex",
 			}.assert(t, nil, opts...)
 		})
@@ -1923,14 +1958,8 @@ func waitForPodByLabel(t *testing.T, namespace, labelSelector string) string {
 	return ""
 }
 
-func waitForContainerWaitingReason(t *testing.T, resource, containerName, reason string) {
-	t.Helper()
-	waitForContainerWaitingReasonInNamespace(t, resource, containerName, reason, "")
-}
-
-// waitForContainerWaitingReasonInNamespace is waitForContainerWaitingReason, but targets a
-// namespace explicitly via `kubectl -n` instead of the kubeconfig's default; pass "" to behave
-// exactly like waitForContainerWaitingReason.
+// waitForContainerWaitingReasonInNamespace targets a namespace explicitly via `kubectl -n`
+// instead of the kubeconfig's default; pass "" to use the kubeconfig's default namespace.
 func waitForContainerWaitingReasonInNamespace(t *testing.T, resource, containerName, reason, namespace string) {
 	t.Helper()
 	jsonpath := fmt.Sprintf(`{.status.containerStatuses[?(@.name=="%s")].state.waiting.reason}`, containerName)
