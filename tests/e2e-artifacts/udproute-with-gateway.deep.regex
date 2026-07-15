@@ -1,8 +1,8 @@
 \A
-UDPRoute/e2e-udproute -n default, created 1m ago, gen:1
+UDPRoute/e2e-udproute -n e2e-udproute, created 1m ago, gen:1
   Current: Resource is current
   Parents:
-    Gateway/e2e-udp-gw -n default, created 1m ago, gen:1
+    Gateway/e2e-udp-gw -n e2e-udproute, created 1m ago, gen:1
       Current: Resource is current
       Accepted Pending, Waiting for controller for 1m
       Programmed Pending, Waiting for controller for 1m

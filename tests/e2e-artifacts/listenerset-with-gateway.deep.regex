@@ -1,8 +1,8 @@
 \A
-ListenerSet/e2e-listenerset -n default, created 1m ago, gen:1
+ListenerSet/e2e-listenerset -n e2e-listenerset, created 1m ago, gen:1
   Current: Resource is current
   Gateway:
-    Gateway/e2e-lset-gw -n default, created 1m ago, gen:1
+    Gateway/e2e-lset-gw -n e2e-listenerset, created 1m ago, gen:1
       Current: Resource is current
       Accepted Pending, Waiting for controller for 1m
       Programmed Pending, Waiting for controller for 1m

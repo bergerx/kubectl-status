@@ -1203,49 +1203,77 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("tcproute-with-gateway", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/tcproute-with-gateway.yaml")
+		ns := "e2e-tcproute"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/tcproute-with-gateway.yaml", ns)
 		cmdTest{
-			args:            []string{"tcproute/e2e-tcproute", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"tcproute/e2e-tcproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/tcproute-with-gateway.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"tcproute/e2e-tcproute", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"tcproute/e2e-tcproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/tcproute-with-gateway.deep.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("udproute-with-gateway", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/udproute-with-gateway.yaml")
+		ns := "e2e-udproute"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/udproute-with-gateway.yaml", ns)
 		cmdTest{
-			args:            []string{"udproute/e2e-udproute", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"udproute/e2e-udproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/udproute-with-gateway.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"udproute/e2e-udproute", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"udproute/e2e-udproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/udproute-with-gateway.deep.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("listenerset-with-gateway", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/listenerset-with-gateway.yaml")
+		ns := "e2e-listenerset"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/listenerset-with-gateway.yaml", ns)
 		cmdTest{
-			args:            []string{"listenerset/e2e-listenerset", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"listenerset/e2e-listenerset", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/listenerset-with-gateway.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"listenerset/e2e-listenerset", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"listenerset/e2e-listenerset", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/listenerset-with-gateway.deep.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("backendtlspolicy-with-target", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/backendtlspolicy-with-target.yaml")
+		ns := "e2e-backendtlspolicy"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/backendtlspolicy-with-target.yaml", ns)
 		cmdTest{
-			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/backendtlspolicy-with-target.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/backendtlspolicy-with-target.deep.regex",
 		}.assert(t, nil, opts...)
 	})

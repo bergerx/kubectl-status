@@ -1,5 +1,5 @@
 \A
-BackendTLSPolicy/e2e-backendtlspolicy -n default, created 1m ago, gen:1
+BackendTLSPolicy/e2e-backendtlspolicy -n e2e-backendtlspolicy, created 1m ago, gen:1
   Current: Resource is current
   Targets:
     Service/e2e-tls-backend-svc
