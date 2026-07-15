@@ -494,14 +494,22 @@ func TestE2EDynamicManifests(t *testing.T) {
 	}
 	t.Run("owners should be included with deep", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-owner-secret"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
 		owner := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "owner",
-				Namespace: "default",
+				Namespace: ns,
 			},
 		}
-		owner, err := clientset.CoreV1().Secrets("default").Create(context.TODO(), owner, metav1.CreateOptions{})
-		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), "owner", metav1.DeleteOptions{})
+		owner, err = clientset.CoreV1().Secrets(ns).Create(context.TODO(), owner, metav1.CreateOptions{})
+		defer clientset.CoreV1().Secrets(ns).Delete(context.TODO(), "owner", metav1.DeleteOptions{})
 		require.NoError(t, err)
 		uid := owner.GetUID()
 		t.Logf("owner secret is created, uid is %s", uid)
@@ -509,7 +517,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		child := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "child",
-				Namespace: "default",
+				Namespace: ns,
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion: "v1",
@@ -520,13 +528,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 				},
 			},
 		}
-		_, err = clientset.CoreV1().Secrets("default").Create(context.TODO(), child, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().Secrets(ns).Create(context.TODO(), child, metav1.CreateOptions{})
 		t.Log("child secret is created")
-		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), "child", metav1.DeleteOptions{})
+		defer clientset.CoreV1().Secrets(ns).Delete(context.TODO(), "child", metav1.DeleteOptions{})
 		require.NoError(t, err)
 
 		test := cmdTest{
-			args: []string{"secret/child", "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "7"},
+			args: []string{"secret/child", "-n", ns, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "7"},
 			// Secret.tmpl intentionally omits kstatus_summary (Secret is always reported
 			// "Resource is always ready" by kstatus, so the "Current:" line is redundant
 			// noise) -- see tests/artifacts/secret-tls-healthy.out for the same committed
