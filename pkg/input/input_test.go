@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,7 +26,7 @@ func newTestFactory() *cmdtesting.TestFactory {
 func TestOwnersOrphanDetection(t *testing.T) {
 	f := newTestFactory()
 	t.Cleanup(func() { f.Cleanup() })
-	repo, err := NewResourceRepo(f)
+	repo, err := NewResourceRepo(f, viper.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +84,7 @@ func TestOwnersOrphanDetection(t *testing.T) {
 func TestOwnersNoOwnerReferences(t *testing.T) {
 	f := newTestFactory()
 	t.Cleanup(func() { f.Cleanup() })
-	repo, err := NewResourceRepo(f)
+	repo, err := NewResourceRepo(f, viper.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +104,7 @@ func TestOwnersNoOwnerReferences(t *testing.T) {
 func TestOwnersClusterScopedOwner(t *testing.T) {
 	f := newTestFactory()
 	t.Cleanup(func() { f.Cleanup() })
-	repo, err := NewResourceRepo(f)
+	repo, err := NewResourceRepo(f, viper.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +197,7 @@ func TestMetricsUnavailableReason(t *testing.T) {
 	t.Run("not installed when the APIService doesn't exist", func(t *testing.T) {
 		f := newAPIServiceFactory(t, nil)
 		t.Cleanup(func() { f.Cleanup() })
-		repo, err := NewResourceRepo(f)
+		repo, err := NewResourceRepo(f, viper.New())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -209,7 +210,7 @@ func TestMetricsUnavailableReason(t *testing.T) {
 	t.Run("unavailable, surfacing the condition's message, when the APIService exists but isn't Available", func(t *testing.T) {
 		f := newAPIServiceFactory(t, apiServiceObj(false, "no endpoints available for service \"metrics-server\""))
 		t.Cleanup(func() { f.Cleanup() })
-		repo, err := NewResourceRepo(f)
+		repo, err := NewResourceRepo(f, viper.New())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -222,7 +223,7 @@ func TestMetricsUnavailableReason(t *testing.T) {
 	t.Run("empty when the APIService is Available", func(t *testing.T) {
 		f := newAPIServiceFactory(t, apiServiceObj(true, ""))
 		t.Cleanup(func() { f.Cleanup() })
-		repo, err := NewResourceRepo(f)
+		repo, err := NewResourceRepo(f, viper.New())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -234,7 +235,7 @@ func TestMetricsUnavailableReason(t *testing.T) {
 	t.Run("result is cached", func(t *testing.T) {
 		f := newAPIServiceFactory(t, apiServiceObj(true, ""))
 		t.Cleanup(func() { f.Cleanup() })
-		repo, err := NewResourceRepo(f)
+		repo, err := NewResourceRepo(f, viper.New())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -256,7 +257,7 @@ func TestMetricsUnavailableReason(t *testing.T) {
 func TestOwnersResolutionIsCached(t *testing.T) {
 	f := newTestFactory()
 	t.Cleanup(func() { f.Cleanup() })
-	repo, err := NewResourceRepo(f)
+	repo, err := NewResourceRepo(f, viper.New())
 	if err != nil {
 		t.Fatal(err)
 	}

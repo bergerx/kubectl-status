@@ -20,7 +20,7 @@ func newRenderableObject(obj map[string]interface{}, engine *renderEngine, repo 
 		Unstructured: unstructured.Unstructured{Object: obj},
 		engine:       engine,
 		repo:         repo,
-		Config:       viper.GetViper(),
+		Config:       engine.cfg.Viper,
 	}
 	return r
 }
@@ -157,7 +157,7 @@ func (r RenderableObject) renderTemplate(templateName string, data interface{}) 
 
 func (r RenderableObject) executeTemplate(wr io.Writer, name string, data any) error {
 	target, ok := data.(RenderableObject)
-	if ok && target.Kind() == name && renderedUIDs.checkAdd(target.GetUID()) && !viper.GetBool("watching") {
+	if ok && target.Kind() == name && r.engine.renderedUIDs.checkAdd(target.GetUID()) && !r.Config.GetBool("watching") {
 		klog.V(3).InfoS("skip rendering of the RenderableObject as its already rendered",
 			"r", r, "templateName", name)
 		_, _ = color.New(color.FgWhite).Fprintf(wr, "%s is already printed", target.String())
@@ -174,13 +174,4 @@ func (s uidSet) checkAdd(uid types.UID) bool {
 		s[uid] = struct{}{}
 	}
 	return exists
-}
-
-var renderedUIDs = make(uidSet)
-
-// resetRenderedUIDs clears the already-rendered tracking before starting a fresh top-level render pass, so
-// dedup state from a prior resource (or a prior CLI invocation sharing this process, e.g. in tests) doesn't
-// leak in and incorrectly suppress rendering of an unrelated object with the same UID recurrence.
-func resetRenderedUIDs() {
-	renderedUIDs = make(uidSet)
 }

@@ -57,7 +57,7 @@ func (u Objects) Swap(i, j int) {
 	u[i], u[j] = u[j], u[i]
 }
 
-func NewResourceRepo(factory util.Factory) (*ResourceRepo, error) {
+func NewResourceRepo(factory util.Factory, v *viper.Viper) (*ResourceRepo, error) {
 	dynamicClient, err := factory.DynamicClient()
 	if err != nil {
 		return nil, err
@@ -68,6 +68,7 @@ func NewResourceRepo(factory util.Factory) (*ResourceRepo, error) {
 	}
 	return &ResourceRepo{
 		f:                     factory,
+		viper:                 v,
 		dynamicClient:         dynamicClient,
 		kubernetesClientSet:   kubernetesClientSet,
 		nodeStatsSummaryCache: make(map[string]nodeStatsSummaryCacheEntry),
@@ -81,6 +82,7 @@ func NewResourceRepo(factory util.Factory) (*ResourceRepo, error) {
 
 type ResourceRepo struct {
 	f                             util.Factory
+	viper                         *viper.Viper
 	dynamicClient                 dynamic.Interface
 	kubernetesClientSet           *kubernetes.Clientset
 	nodeStatsSummaryCache         map[string]nodeStatsSummaryCacheEntry
@@ -125,17 +127,17 @@ type ownerCacheEntry struct {
 
 func (r *ResourceRepo) newBaseBuilder() *resource.Builder {
 	builder := r.f.NewBuilder().
-		NamespaceParam(viper.GetString("namespace")).
+		NamespaceParam(r.viper.GetString("namespace")).
 		DefaultNamespace().
-		AllNamespaces(viper.GetBool("all-namepaces")).
+		AllNamespaces(r.viper.GetBool("all-namepaces")).
 		ContinueOnError().
 		Unstructured().
 		Flatten()
-	if viper.GetBool("local") {
+	if r.viper.GetBool("local") {
 		builder = builder.
 			FilenameParam(false, &resource.FilenameOptions{
-				Filenames: viper.GetStringSlice("filename"),
-				Recursive: viper.GetBool("recursive"),
+				Filenames: r.viper.GetStringSlice("filename"),
+				Recursive: r.viper.GetBool("recursive"),
 			}).
 			Local()
 	}
@@ -144,17 +146,17 @@ func (r *ResourceRepo) newBaseBuilder() *resource.Builder {
 
 func (r *ResourceRepo) CLIQueryResults(args []string) *resource.Result {
 	builder := r.newBaseBuilder().
-		LabelSelectorParam(viper.GetString("selector")).
-		FieldSelectorParam(viper.GetString("field-selector"))
-	if !viper.GetBool("local") {
+		LabelSelectorParam(r.viper.GetString("selector")).
+		FieldSelectorParam(r.viper.GetString("field-selector"))
+	if !r.viper.GetBool("local") {
 		builder = builder.
 			FilenameParam(false, &resource.FilenameOptions{
-				Filenames: viper.GetStringSlice("filename"),
-				Recursive: viper.GetBool("recursive"),
+				Filenames: r.viper.GetStringSlice("filename"),
+				Recursive: r.viper.GetBool("recursive"),
 			})
 	}
 
-	if !viper.GetBool("local") {
+	if !r.viper.GetBool("local") {
 		builder = builder.ResourceTypeOrNameArgs(true, args...)
 	}
 	return builder.Do()

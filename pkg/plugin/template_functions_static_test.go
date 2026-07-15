@@ -635,36 +635,39 @@ func TestCalicoNamespaceSelectorMatches(t *testing.T) {
 }
 
 func TestAgoSuffix(t *testing.T) {
-	viper.Set("absolute-time", false)
-	if got := agoSuffix(); got != " ago" {
+	v := viper.New()
+	cfg := NewRenderConfig(v)
+	v.Set("absolute-time", false)
+	if got := cfg.agoSuffix(); got != " ago" {
 		t.Errorf("agoSuffix() = %q, want %q", got, " ago")
 	}
-	viper.Set("absolute-time", true)
-	if got := agoSuffix(); got != "" {
+	v.Set("absolute-time", true)
+	if got := cfg.agoSuffix(); got != "" {
 		t.Errorf("agoSuffix() = %q, want empty string", got)
 	}
-	viper.Set("absolute-time", false)
 }
 
 func TestForOrSince(t *testing.T) {
-	viper.Set("absolute-time", false)
-	if got := forOrSince(); got != "for" {
+	v := viper.New()
+	cfg := NewRenderConfig(v)
+	v.Set("absolute-time", false)
+	if got := cfg.forOrSince(); got != "for" {
 		t.Errorf("forOrSince() = %q, want %q", got, "for")
 	}
-	viper.Set("absolute-time", true)
-	if got := forOrSince(); got != "since" {
+	v.Set("absolute-time", true)
+	if got := cfg.forOrSince(); got != "since" {
 		t.Errorf("forOrSince() = %q, want %q", got, "since")
 	}
-	viper.Set("absolute-time", false)
 }
 
 func TestColorAgoAbsolute(t *testing.T) {
-	viper.Set("absolute-time", true)
+	v := viper.New()
+	cfg := NewRenderConfig(v)
+	v.Set("absolute-time", true)
 	input := "2006-01-02T15:04:05Z"
-	if got := colorAgo(input); got != input {
+	if got := cfg.colorAgo(input); got != input {
 		t.Errorf("colorAgo(%q) = %q, want %q", input, got, input)
 	}
-	viper.Set("absolute-time", false)
 }
 
 // genCertOptions configures generateTestCert.

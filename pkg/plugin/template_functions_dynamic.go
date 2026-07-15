@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/pmezard/go-difflib/difflib"
-	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -25,7 +24,7 @@ import (
 )
 
 func (r RenderableObject) KubeGet(namespace string, args ...string) (out []RenderableObject) {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("processing KubeGet", "r", r, "namespace", namespace, "args", args)
@@ -47,7 +46,7 @@ func (r RenderableObject) objectsToRenderableObjects(objects input.Objects) (out
 // KubeGetFirst returns a new RenderableObject with a nil Object when no object found.
 func (r RenderableObject) KubeGetFirst(namespace string, args ...string) RenderableObject {
 	nr := r.newRenderableObject(nil)
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return nr
 	}
 	klog.V(5).InfoS("called template method KubeGetFirst",
@@ -65,7 +64,7 @@ func (r RenderableObject) KubeGetFirst(namespace string, args ...string) Rendera
 //
 //	> kubectl get -n {namespace} {resourceType} -l {label_key=label_val,...}
 func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, labels map[string]interface{}) (out []RenderableObject) {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called template method KubeGetByLabelsMap",
@@ -86,7 +85,7 @@ func (r RenderableObject) KubeGetByLabelsMap(namespace, resourceType string, lab
 
 func (r RenderableObject) KubeGetEvents() RenderableObject {
 	nr := r.newRenderableObject(nil)
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return nr
 	}
 	klog.V(5).InfoS("called KubeGetEvents", "r", r)
@@ -110,7 +109,7 @@ type OwnersResult struct {
 // KubeGetOwners resolves the Owner references of an object, returning both the owners that
 // could be found and any ownerReferences left dangling because their owner no longer exists.
 func (r RenderableObject) KubeGetOwners() (out OwnersResult) {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("KubeGetOwners called KubeGetOwners", "r", r)
@@ -124,7 +123,7 @@ func (r RenderableObject) KubeGetOwners() (out OwnersResult) {
 }
 
 func (r RenderableObject) KubeGetIngressesMatchingService(namespace, svcName string) (out []RenderableObject) {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetIngressesMatchingService",
@@ -169,7 +168,7 @@ func (r RenderableObject) KubeGetRoutesMatchingService(namespace, svcName string
 }
 
 func (r RenderableObject) kubeGetRoutesMatchingService(namespace, svcName, resourceType string) (out []RenderableObject) {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called kubeGetRoutesMatchingService",
@@ -228,7 +227,7 @@ func doesRouteUseService(obj input.Object, routeNamespace, svcName string) bool 
 }
 
 func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels map[string]interface{}) (out []RenderableObject) {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetServicesMatchingLabels", "r", r, "namespace", namespace, "labels", labels)
@@ -261,7 +260,7 @@ func (r RenderableObject) KubeGetServicesMatchingLabels(namespace string, labels
 // Kubernetes 1.25, so that legacy case isn't handled here.
 func (r RenderableObject) KubeGetPodDisruptionBudgetsMatchingLabels(namespace string, labels_ map[string]interface{}) (out []RenderableObject) {
 	out = make([]RenderableObject, 0)
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetPodDisruptionBudgetsMatchingLabels", "r", r, "namespace", namespace, "labels", labels_)
@@ -297,7 +296,7 @@ func (r RenderableObject) KubeGetPodDisruptionBudgetsMatchingLabels(namespace st
 
 func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) (out []RenderableObject) {
 	out = make([]RenderableObject, 0)
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetServicesMatchingPod", "r", r, "namespace", namespace, "podName", podName)
@@ -334,7 +333,7 @@ func (r RenderableObject) KubeGetServicesMatchingPod(namespace, podName string) 
 
 // KubeGetEndpointSlicesForService returns EndpointSlices associated with the given service.
 func (r RenderableObject) KubeGetEndpointSlicesForService(namespace, serviceName string) (out []RenderableObject) {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetEndpointSlicesForService", "r", r, "namespace", namespace, "serviceName", serviceName)
@@ -355,7 +354,7 @@ func (r RenderableObject) KubeGetEndpointSlicesForService(namespace, serviceName
 // semantics.
 func (r RenderableObject) KubeGetNetworkPoliciesMatchingPod(namespace string, podLabels map[string]interface{}) (out []RenderableObject) {
 	out = make([]RenderableObject, 0)
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
@@ -387,7 +386,7 @@ func (r RenderableObject) KubeGetNetworkPoliciesMatchingPod(namespace string, po
 // e.g. RBAC denies the list.
 func (r RenderableObject) KubeGetCiliumNetworkPoliciesMatchingPod(namespace string, podLabels map[string]interface{}) (out []RenderableObject) {
 	out = make([]RenderableObject, 0)
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetCiliumNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
@@ -412,7 +411,7 @@ func (r RenderableObject) KubeGetCiliumNetworkPoliciesMatchingPod(namespace stri
 // handling, which applies here identically.
 func (r RenderableObject) KubeGetCiliumClusterwideNetworkPoliciesMatchingPod(podLabels map[string]interface{}) (out []RenderableObject) {
 	out = make([]RenderableObject, 0)
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetCiliumClusterwideNetworkPoliciesMatchingPod", "r", r, "podLabels", podLabels)
@@ -443,7 +442,7 @@ func (r RenderableObject) KubeGetCiliumClusterwideNetworkPoliciesMatchingPod(pod
 // KubeGetCiliumNetworkPoliciesMatchingPod when the CRD isn't registered.
 func (r RenderableObject) KubeGetCalicoNetworkPoliciesMatchingPod(namespace string, podLabels map[string]interface{}) (out []RenderableObject) {
 	out = make([]RenderableObject, 0)
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetCalicoNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
@@ -473,7 +472,7 @@ func (r RenderableObject) KubeGetCalicoNetworkPoliciesMatchingPod(namespace stri
 // against its labels (via calicoNamespaceSelectorMatches).
 func (r RenderableObject) KubeGetCalicoGlobalNetworkPoliciesMatchingPod(namespace string, podLabels map[string]interface{}) (out []RenderableObject) {
 	out = make([]RenderableObject, 0)
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetCalicoGlobalNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
@@ -525,7 +524,7 @@ func isSubset(a, b map[string]string) bool {
 }
 
 func (r RenderableObject) KubeGetNodeStatsSummary(nodeName string) map[string]interface{} {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return nil
 	}
 	klog.V(5).InfoS("called KubeGetNodeStatsSummary", "r", r, "node", nodeName)
@@ -538,7 +537,7 @@ func (r RenderableObject) KubeGetNodeStatsSummary(nodeName string) map[string]in
 }
 
 func (r RenderableObject) KubeGetNodeConfigz(nodeName string) map[string]interface{} {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return nil
 	}
 	klog.V(5).InfoS("called KubeGetNodeConfigz", "r", r, "node", nodeName)
@@ -554,7 +553,7 @@ func (r RenderableObject) KubeGetNodeConfigz(nodeName string) map[string]interfa
 // apiserver->kubelet proxy path is unreachable. The error is surfaced (not swallowed) since a failure
 // here is the whole point of the check.
 func (r RenderableObject) KubeGetNodeHealthz(nodeName string) string {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return ""
 	}
 	klog.V(5).InfoS("called KubeGetNodeHealthz", "r", r, "node", nodeName)
@@ -572,7 +571,7 @@ func (r RenderableObject) KubeGetNodeHealthz(nodeName string) string {
 // PodMetrics for the whole namespace once per render, so that rendering multiple pods in the same
 // namespace still only requires a single metrics.k8s.io request instead of one per pod.
 func (r RenderableObject) KubeGetPodMetrics(namespace, name string) RenderableObject {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return r.newRenderableObject(nil)
 	}
 	if allPodMetrics, err := r.repo.AllNamespacesPodMetrics(); err == nil {
@@ -610,7 +609,7 @@ func (r RenderableObject) KubeGetNodeMetrics(name string) RenderableObject {
 // way. In shallow mode no cluster call is made (per this file's convention) and "" (available) is
 // assumed, so callers don't spuriously warn about something that was never checked.
 func (r RenderableObject) KubeMetricsUnavailableReason() string {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return ""
 	}
 	return r.repo.MetricsUnavailableReason()
@@ -621,7 +620,7 @@ func (r RenderableObject) KubeMetricsUnavailableReason() string {
 // instance, equivalent to `kubectl logs --previous`. Returns an empty string if there are no logs
 // or the fetch fails.
 func (r RenderableObject) KubeGetContainerLogs(namespace, podName, containerName string, previous bool, tailLines int) string {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return ""
 	}
 	klog.V(5).InfoS("called KubeGetContainerLogs",
@@ -637,7 +636,7 @@ func (r RenderableObject) KubeGetContainerLogs(namespace, podName, containerName
 
 // KubeGetNonTerminatedPodsOnNode returns details of all pods which are not in terminal status
 func (r RenderableObject) KubeGetNonTerminatedPodsOnNode(nodeName string) (podList []RenderableObject) {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return
 	}
 	klog.V(5).InfoS("called KubeGetNonTerminatedPodsOnNode", "r", r, "node", nodeName)
@@ -654,7 +653,7 @@ func (r RenderableObject) KubeGetNonTerminatedPodsOnNode(nodeName string) (podLi
 // known to be creating noise in diff, see the removeFieldsThatCreateDiffNoise function to see which fields are being
 // dropped.
 func (r RenderableObject) KubeGetUnifiedDiffString(resourceOrKind, namespace, nameA, nameB string) string {
-	if viper.GetBool("shallow") {
+	if r.Config.GetBool("shallow") {
 		return ""
 	}
 	klog.V(5).InfoS("called KubeGetUnifiedDiffString",
@@ -686,8 +685,8 @@ func (r RenderableObject) kubeGetUnifiedDiffString(resourceOrKind, namespace, na
 		B:        difflib.SplitLines(string(bBytes)),
 		FromFile: fmt.Sprintf("a %s/%s", aKind, nameA),
 		ToFile:   fmt.Sprintf("b %s/%s", bKind, nameB),
-		FromDate: fmt.Sprintf("%s (%s ago)", aTime.String(), ago(aTime)),
-		ToDate:   fmt.Sprintf("%s (%s ago)", bTime.String(), ago(bTime)),
+		FromDate: fmt.Sprintf("%s (%s ago)", aTime.String(), r.engine.cfg.ago(aTime)),
+		ToDate:   fmt.Sprintf("%s (%s ago)", bTime.String(), r.engine.cfg.ago(bTime)),
 		Context:  3,
 	}
 	return difflib.GetUnifiedDiffString(diff)

@@ -94,32 +94,36 @@ func (h deprecationNoticeFilter) WithGroup(name string) slog.Handler {
 // renderEngine provides methods to build kubernetes api queries from provided cli options.
 // Also holds the parsed templates.
 type renderEngine struct {
-	ioStreams genericiooptions.IOStreams
+	ioStreams    genericiooptions.IOStreams
+	cfg          *RenderConfig
+	renderedUIDs uidSet
 	template.Template
 }
 
-func newRenderEngine(streams genericiooptions.IOStreams) (*renderEngine, error) {
+func newRenderEngine(streams genericiooptions.IOStreams, cfg *RenderConfig) (*renderEngine, error) {
 	klog.V(5).InfoS("Creating new render engine instance...")
 	setupDeprecationFilter(streams.ErrOut)
-	tmpl, err := getTemplate()
+	tmpl, err := getTemplate(cfg)
 	if err != nil {
 		klog.V(3).ErrorS(err, "Error parsing templates")
 		return nil, err
 	}
 	return &renderEngine{
 		streams,
+		cfg,
+		make(uidSet),
 		*tmpl,
 	}, nil
 }
 
 // We don't overlay templates dynamically, we use them all in all cases, this may be inefficient and changing this
 // could be beneficial in the future. But we parse them all once and re-use again for all template executions.
-func getTemplate() (*template.Template, error) {
+func getTemplate(cfg *RenderConfig) (*template.Template, error) {
 	klog.V(5).InfoS("Creating new template instance...")
 	tmpl := template.
 		New("templates").
 		Funcs(sprigin.TxtFuncMap()).
-		Funcs(funcMap())
+		Funcs(cfg.funcMap())
 	return parseTemplates(tmpl)
 }
 
