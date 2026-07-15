@@ -3,10 +3,10 @@ package plugin
 import (
 	"context"
 	"embed"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"text/template"
 
 	"github.com/go-sprout/sprout/sprigin"
@@ -17,8 +17,10 @@ import (
 //go:embed templates
 var templatesFS embed.FS
 
-// setupDeprecationFilter configures the default slog handler to drop go-sprout's
-// per-call deprecation-signature warnings, writing anything else to w.
+var deprecationFilterOnce sync.Once
+
+// setupDeprecationFilter installs, once for the life of the process, a slog handler that drops
+// go-sprout's per-call deprecation-signature warnings and forwards anything else to os.Stderr.
 //
 // go-sprout (our sprig replacement) logs a WARN via slog on every call to a
 // function whose signature changed during the sprig->sprout migration (e.g.
@@ -28,13 +30,24 @@ var templatesFS embed.FS
 // https://github.com/bergerx/kubectl-status/issues/688 for migrating the
 // templates to the new signatures, at which point this filter can go away.
 //
+// This used to reinstall a fresh handler (writing to that invocation's streams.ErrOut) on every
+// newRenderEngine call. sprigin reads slog.Default() again on every single template function
+// call, not just once when the funcMap is built, so two renders in flight at once (e.g. parallel
+// e2e subtests) would race rebinding the global default and could route one render's output
+// through another's ErrOut. The only thing this handler is known to ever emit is the
+// deprecation-tagged warnings it drops (see #688), so installing it once and forwarding the
+// (currently unreachable) non-deprecated case to os.Stderr rather than a per-render writer is
+// behaviorally identical to before, without serializing renders against each other.
+//
 // The handler is built fresh (not by wrapping the pre-existing
 // slog.Default().Handler()): the zero-value default handler bridges back
 // into the standard "log" package's global, mutex-protected logger, and
 // re-installing a wrapper around it as the new default causes that bridge
 // to call back into itself, deadlocking on the mutex.
-func setupDeprecationFilter(w io.Writer) {
-	slog.SetDefault(slog.New(deprecationNoticeFilter{Handler: slog.NewTextHandler(w, nil)}))
+func setupDeprecationFilter() {
+	deprecationFilterOnce.Do(func() {
+		slog.SetDefault(slog.New(deprecationNoticeFilter{Handler: slog.NewTextHandler(os.Stderr, nil)}))
+	})
 }
 
 // deprecationNoticeFilter drops log records tagged with a "notice"="deprecated"
@@ -102,7 +115,7 @@ type renderEngine struct {
 
 func newRenderEngine(streams genericiooptions.IOStreams, cfg *RenderConfig) (*renderEngine, error) {
 	klog.V(5).InfoS("Creating new render engine instance...")
-	setupDeprecationFilter(streams.ErrOut)
+	setupDeprecationFilter()
 	tmpl, err := getTemplate(cfg)
 	if err != nil {
 		klog.V(3).ErrorS(err, "Error parsing templates")
