@@ -1292,10 +1292,17 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("sts-without-service", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/sts-without-service.yaml")
-		waitFor(t, "sts/sts-without-service", "jsonpath={.status.readyReplicas}=1")
+		ns := "e2e-sts-without-service"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/sts-without-service.yaml", ns)
+		waitForInNamespace(t, "sts/sts-without-service", "jsonpath={.status.readyReplicas}=1", ns)
 		cmdTest{
-			args:            []string{"sts/sts-without-service", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"sts/sts-without-service", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-without-service.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -1734,11 +1741,43 @@ func applyManifest(t *testing.T, filepath string) {
 	t.Logf("applied manifest %s: %s", filepath, string(output))
 }
 
+// applyManifestInNamespace is applyManifest, but targets a namespace via `kubectl -n` instead of
+// relying on the manifest's own metadata.namespace (or the kubeconfig's default) -- used to give a
+// subtest a dedicated namespace without needing a namespace-specific copy of its fixture yaml. The
+// manifest's objects must not already set their own metadata.namespace, since that always wins
+// over `-n` and would silently defeat the isolation this is for.
+func applyManifestInNamespace(t *testing.T, filepath, namespace string) {
+	t.Helper()
+	filepath = path.Join("..", "tests", filepath)
+	cmd := exec.Command("kubectl", "apply", "-n", namespace, "-f", filepath)
+	output, err := cmd.CombinedOutput()
+	t.Cleanup(func() {
+		t.Logf("deleting manifest %s from namespace %s", filepath, namespace)
+		cmd := exec.Command("kubectl", "delete", "-n", namespace, "-f", filepath)
+		output, err := cmd.CombinedOutput()
+		assert.NoError(t, err)
+		t.Logf("manifest deleted %s from namespace %s: %s", filepath, namespace, string(output))
+	})
+	require.NoError(t, err)
+	t.Logf("applied manifest %s to namespace %s: %s", filepath, namespace, string(output))
+}
+
 func waitFor(t *testing.T, resource, forParam string) {
 	t.Helper()
 	cmd := exec.Command("kubectl", "wait", "--for", forParam, resource, "--timeout=2m")
 	output, err := cmd.CombinedOutput()
 	t.Logf("wait result for %s: %s", resource, string(output))
+	require.NoError(t, err)
+}
+
+// waitForInNamespace is waitFor, but targets a namespace explicitly via `kubectl -n` instead of
+// the kubeconfig's default -- pairs with applyManifestInNamespace for subtests moved off the
+// shared default namespace.
+func waitForInNamespace(t *testing.T, resource, forParam, namespace string) {
+	t.Helper()
+	cmd := exec.Command("kubectl", "wait", "-n", namespace, "--for", forParam, resource, "--timeout=2m")
+	output, err := cmd.CombinedOutput()
+	t.Logf("wait result for %s in namespace %s: %s", resource, namespace, string(output))
 	require.NoError(t, err)
 }
 
