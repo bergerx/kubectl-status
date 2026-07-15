@@ -1,13 +1,13 @@
 \A
-Deployment/web -n default, created 1m ago, gen:1 rev:1
+Deployment/web -n e2e-web-policies, created 1m ago, gen:1 rev:1
   Current: Deployment is available\. Replicas: 3
   desired:3, existing:3, ready:3, updated:3, available:3
   Selector: app=web
-    Pod/web-[a-z0-9]+-[a-z0-9]+ -n default, created 1m ago Running, 1/1 ready, netpol: ingress restricted
-    Pod/web-[a-z0-9]+-[a-z0-9]+ -n default, created 1m ago Running, 1/1 ready, netpol: ingress restricted
-    Pod/web-[a-z0-9]+-[a-z0-9]+ -n default, created 1m ago Running, 1/1 ready, netpol: ingress restricted
+    Pod/web-[a-z0-9]+-[a-z0-9]+ -n e2e-web-policies, created 1m ago Running, 1/1 ready, netpol: ingress restricted
+    Pod/web-[a-z0-9]+-[a-z0-9]+ -n e2e-web-policies, created 1m ago Running, 1/1 ready, netpol: ingress restricted
+    Pod/web-[a-z0-9]+-[a-z0-9]+ -n e2e-web-policies, created 1m ago Running, 1/1 ready, netpol: ingress restricted
   Not matched by any Service
-  PodDisruptionBudgets: PodDisruptionBudget/web -n default, created 1m ago, min available=1, disruptions allowed
+  PodDisruptionBudgets: PodDisruptionBudget/web -n e2e-web-policies, created 1m ago, min available=1, disruptions allowed
   NetworkPolicy: selected by NetworkPolicy web \(ingress restricted\)
   Available MinimumReplicasAvailable, Deployment has minimum availability\. for 1m
   Progressing NewReplicaSetAvailable, ReplicaSet "web-[a-z0-9]+" has successfully progressed\. for 1m(?:, last update was 1m ago)?

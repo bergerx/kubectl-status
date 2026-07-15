@@ -1367,15 +1367,22 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// "issued by <CA>" rather than "Self-signed" -- the same cert-manager chain used for
 		// the demo screenshot's Secret example, but exercised here as a regular e2e fixture.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/web-cert.yaml")
-		waitFor(t, "certificate/web-ca", "condition=Ready")
-		waitFor(t, "certificate/web-tls", "condition=Ready")
+		ns := "e2e-web-cert"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/web-cert.yaml", ns)
+		waitForInNamespace(t, "certificate/web-ca", "condition=Ready", ns)
+		waitForInNamespace(t, "certificate/web-tls", "condition=Ready", ns)
 		cmdTest{
-			args:            []string{"secret/web-tls", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"secret/web-tls", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/web-cert.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"secret/web-tls", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"secret/web-tls", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/web-cert.deep.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -1383,12 +1390,19 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// A PodDisruptionBudget and NetworkPolicy both selecting the same Deployment's Pods --
 		// the same fixture used for the demo screenshot's matching-PDB/NetworkPolicy example.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/web.yaml")
-		applyManifest(t, "e2e-artifacts/web-policies.yaml")
-		waitFor(t, "deployment/web", "condition=Available")
-		waitFor(t, "pdb/web", "jsonpath={.status.observedGeneration}=1")
+		ns := "e2e-web-policies"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/web.yaml", ns)
+		applyManifestInNamespace(t, "e2e-artifacts/web-policies.yaml", ns)
+		waitForInNamespace(t, "deployment/web", "condition=Available", ns)
+		waitForInNamespace(t, "pdb/web", "jsonpath={.status.observedGeneration}=1", ns)
 		cmdTest{
-			args:            []string{"deployment/web", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"deployment/web", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/web-policies.regex",
 		}.assert(t, nil, opts...)
 	})
