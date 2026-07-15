@@ -558,24 +558,32 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("pod on a cordoned node with an untolerated taint and a bad condition", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-bad-node-pod"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
 		nodeName := createBadNode(t, clientset)
 
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "pod-on-bad-node",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: corev1.PodSpec{
 				NodeName:   nodeName,
 				Containers: []corev1.Container{{Name: "app", Image: "busybox"}},
 			},
 		}
-		_, err := clientset.CoreV1().Pods("default").Create(context.TODO(), pod, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 
 		cmdTest{
-			args:            []string{"pod/pod-on-bad-node", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/pod-on-bad-node", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -647,6 +655,14 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("workload's matching pod on a cordoned node surfaces a compact node-problem flag", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-bad-node-rs"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
 		nodeName := createBadNode(t, clientset)
 
 		// The Pod's spec.nodeName is set directly at creation, bypassing the scheduler, so it
@@ -655,7 +671,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "pod-on-bad-node-for-rs",
-				Namespace: "default",
+				Namespace: ns,
 				Labels:    map[string]string{"app": "kubectl-status-test-bad-rs"},
 			},
 			Spec: corev1.PodSpec{
@@ -663,15 +679,15 @@ func TestE2EDynamicManifests(t *testing.T) {
 				Containers: []corev1.Container{{Name: "app", Image: "busybox"}},
 			},
 		}
-		_, err := clientset.CoreV1().Pods("default").Create(context.TODO(), pod, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 
 		one := int32(1)
 		rs := &appsv1.ReplicaSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "bad-rs",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: appsv1.ReplicaSetSpec{
 				Replicas: &one,
@@ -682,12 +698,12 @@ func TestE2EDynamicManifests(t *testing.T) {
 				},
 			},
 		}
-		_, err = clientset.AppsV1().ReplicaSets("default").Create(context.TODO(), rs, metav1.CreateOptions{})
+		_, err = clientset.AppsV1().ReplicaSets(ns).Create(context.TODO(), rs, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.AppsV1().ReplicaSets("default").Delete(context.TODO(), rs.Name, metav1.DeleteOptions{})
+		defer clientset.AppsV1().ReplicaSets(ns).Delete(context.TODO(), rs.Name, metav1.DeleteOptions{})
 
 		cmdTest{
-			args:            []string{"rs/bad-rs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"rs/bad-rs", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node-for-rs.regex",
 		}.assert(t, nil, opts...)
 	})
