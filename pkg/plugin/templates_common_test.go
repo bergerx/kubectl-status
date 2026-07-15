@@ -18,13 +18,19 @@ import (
 
 func checkTemplate(t *testing.T, templateName string, obj map[string]interface{}, shouldContain string, useRenderable bool) {
 	t.Helper()
-	tmpl, _ := getTemplate()
+	checkTemplateWithViper(t, templateName, obj, shouldContain, useRenderable, viper.New())
+}
+
+func checkTemplateWithViper(t *testing.T, templateName string, obj map[string]interface{}, shouldContain string, useRenderable bool, v *viper.Viper) {
+	t.Helper()
+	cfg := NewRenderConfig(v)
+	tmpl, _ := getTemplate(cfg)
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
 	f.Client = &fake.RESTClient{}
 	f.UnstructuredClient = f.Client
 	t.Cleanup(func() { f.Cleanup() })
-	repo, _ := input.NewResourceRepo(f)
-	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard())
+	repo, _ := input.NewResourceRepo(f, cfg.Viper)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
 	e.Template = *tmpl
 	r := newRenderableObject(obj, e, repo)
 	var objToPassTemplate interface{}
@@ -275,13 +281,14 @@ func TestOwnersTemplate(t *testing.T) {
 // directly, so callers can assert both presence and absence of substrings.
 func renderTemplateForTest(t *testing.T, templateName string, obj map[string]interface{}) string {
 	t.Helper()
-	tmpl, _ := getTemplate()
+	cfg := NewRenderConfig(viper.New())
+	tmpl, _ := getTemplate(cfg)
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
 	f.Client = &fake.RESTClient{}
 	f.UnstructuredClient = f.Client
 	t.Cleanup(func() { f.Cleanup() })
-	repo, _ := input.NewResourceRepo(f)
-	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard())
+	repo, _ := input.NewResourceRepo(f, cfg.Viper)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
 	e.Template = *tmpl
 	r := newRenderableObject(map[string]interface{}{}, e, repo)
 	got, err := r.renderTemplate(templateName, obj)
@@ -444,14 +451,19 @@ func factoryWithHealthyMetricsServer(t *testing.T) *cmdtesting.TestFactory {
 }
 
 func renderPodTemplate(t *testing.T, f *cmdtesting.TestFactory, obj map[string]interface{}) string {
+	return renderPodTemplateWithViper(t, f, obj, viper.New())
+}
+
+func renderPodTemplateWithViper(t *testing.T, f *cmdtesting.TestFactory, obj map[string]interface{}, v *viper.Viper) string {
 	t.Helper()
-	tmpl, _ := getTemplate()
+	cfg := NewRenderConfig(v)
+	tmpl, _ := getTemplate(cfg)
 	t.Cleanup(func() { f.Cleanup() })
-	repo, err := input.NewResourceRepo(f)
+	repo, err := input.NewResourceRepo(f, cfg.Viper)
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard())
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
 	e.Template = *tmpl
 	r := newRenderableObject(obj, e, repo)
 	got, err := r.renderTemplate("Pod", r)
@@ -512,12 +524,12 @@ func TestPodContainersMetricsNoDataYetTemplate(t *testing.T) {
 // TestPodContainersMetricsWarningSuppressedInShallowMode verifies that --shallow, which never
 // queries the cluster for enrichment, doesn't misreport an unchecked metrics-server as missing.
 func TestPodContainersMetricsWarningSuppressedInShallowMode(t *testing.T) {
-	viper.Set("shallow", true)
-	t.Cleanup(func() { viper.Set("shallow", false) })
+	v := viper.New()
+	v.Set("shallow", true)
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
 	f.Client = &fake.RESTClient{}
 	f.UnstructuredClient = f.Client
-	got := renderPodTemplate(t, f, runningPodWithNoMetricsObj())
+	got := renderPodTemplateWithViper(t, f, runningPodWithNoMetricsObj(), v)
 	if strings.Contains(got, "not installed") || strings.Contains(got, "not available") || strings.Contains(got, "no metrics yet") {
 		t.Errorf("expected no metrics-related note in shallow mode, got = %q", got)
 	}
@@ -528,8 +540,8 @@ func TestPodContainersMetricsWarningSuppressedInShallowMode(t *testing.T) {
 // APIService for it), enabling the opt-in "include-node-detailed-usage" section should surface a
 // warning instead of silently skipping cpu/mem/pods usage.
 func TestNodePodDetailsMetricsNotInstalledWarningTemplate(t *testing.T) {
-	viper.Set("include-node-detailed-usage", true)
-	t.Cleanup(func() { viper.Set("include-node-detailed-usage", false) })
+	v := viper.New()
+	v.Set("include-node-detailed-usage", true)
 	obj := map[string]interface{}{
 		"metadata": map[string]interface{}{"name": "some-node"},
 		"status": map[string]interface{}{
@@ -540,7 +552,7 @@ func TestNodePodDetailsMetricsNotInstalledWarningTemplate(t *testing.T) {
 			},
 		},
 	}
-	checkTemplate(t, "node_pod_details", obj, "not installed", true)
+	checkTemplateWithViper(t, "node_pod_details", obj, "not installed", true, v)
 }
 
 // aksKubeletConfigzObj mirrors a real AKS node's `kubectl get --raw
@@ -618,13 +630,14 @@ func TestKubeletConfigzSummaryTemplateDefaultPoliciesHidden(t *testing.T) {
 
 func renderConfigzSummary(t *testing.T, configz map[string]interface{}) string {
 	t.Helper()
-	tmpl, _ := getTemplate()
+	cfg := NewRenderConfig(viper.New())
+	tmpl, _ := getTemplate(cfg)
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
 	f.Client = &fake.RESTClient{}
 	f.UnstructuredClient = f.Client
 	t.Cleanup(func() { f.Cleanup() })
-	repo, _ := input.NewResourceRepo(f)
-	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard())
+	repo, _ := input.NewResourceRepo(f, cfg.Viper)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
 	e.Template = *tmpl
 	r := newRenderableObject(map[string]interface{}{}, e, repo)
 	got, err := r.renderTemplate("kubelet_configz_summary", configz)

@@ -75,15 +75,25 @@ not all resources are fully supported.`
 // This variable is populated by goreleaser
 var version string
 
-func RootCmd() *cobra.Command {
+// RootCmd builds the kubectl-status cobra.Command. It owns a fresh *viper.Viper and
+// plugin.RenderConfig for this invocation instead of reading the package-level viper singleton or
+// pkg/plugin's Now/DurationRound/StartedAfterClause, so concurrent invocations (e.g. parallel
+// tests) never share mutable state. cfgOpts let callers (tests) override RenderConfig's hooks
+// before the command runs; production callers pass none.
+func RootCmd(cfgOpts ...func(*plugin.RenderConfig)) *cobra.Command {
+	v := viper.New()
+	cfg := plugin.NewRenderConfig(v)
+	for _, opt := range cfgOpts {
+		opt(cfg)
+	}
 	cmd := &cobra.Command{
 		Use:     "kubectl-status (TYPE[.VERSION][.GROUP] [NAME | -l label] | TYPE[.VERSION][.GROUP]/NAME ...) [flags]",
 		Short:   "Display status for one or many resources",
 		Long:    longCmdMessage,
 		Example: examplesMessage,
 		PreRun: func(cmd *cobra.Command, args []string) {
-			viper.AutomaticEnv()
-			err := viper.BindPFlags(cmd.Flags())
+			v.AutomaticEnv()
+			err := v.BindPFlags(cmd.Flags())
 			if err != nil {
 				cmd.PrintErr("error binding flags", err)
 			}
@@ -93,7 +103,7 @@ func RootCmd() *cobra.Command {
 	}
 	initColorCobra(cmd)
 	configFlags := initFlags(cmd)
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	f := cmdutil.NewFactory(configFlags)
 	cmd.ValidArgsFunction = completion.ResourceTypeAndNameCompletionFunc(f)
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
@@ -102,14 +112,14 @@ func RootCmd() *cobra.Command {
 		cmdutil.BehaviorOnFatal(func(msg string, i int) {
 			err = errors.New(msg)
 		})
-		cmdutil.CheckErr(complete(f))
-		cmdutil.CheckErr(validate())
+		cmdutil.CheckErr(complete(f, v))
+		cmdutil.CheckErr(validate(v))
 		if b, _ := cmd.Flags().GetBool("test-hack"); b {
-			viper.Set("test-hack", true)
-			plugin.SetDurationRound(func(_ interface{}) string { return "1m" })
+			v.Set("test-hack", true)
+			cfg.DurationRound = func(_ interface{}) string { return "1m" }
 		}
 		ioStreams := genericiooptions.IOStreams{In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), ErrOut: cmd.ErrOrStderr()}
-		cmdutil.CheckErr(plugin.Run(f, ioStreams, args))
+		cmdutil.CheckErr(plugin.Run(f, ioStreams, args, cfg))
 		return err
 	}
 	return cmd
@@ -215,74 +225,74 @@ func addRenderFlags(flags *pflag.FlagSet) {
 		"helper flag for tests, e.g. always report 1m for any time duration, 1.1.1.1 for IPs, etc.")
 }
 
-func isBoolConfigExplicitlySetToTrue(key string) bool {
-	return viper.IsSet(key) && viper.GetBool(key)
+func isBoolConfigExplicitlySetToTrue(v *viper.Viper, key string) bool {
+	return v.IsSet(key) && v.GetBool(key)
 }
 
-func isBoolConfigExplicitlySetToFalse(key string) bool {
-	return viper.IsSet(key) && !viper.GetBool(key)
+func isBoolConfigExplicitlySetToFalse(v *viper.Viper, key string) bool {
+	return v.IsSet(key) && !v.GetBool(key)
 }
 
-func complete(f cmdutil.Factory) error {
+func complete(f cmdutil.Factory, v *viper.Viper) error {
 	klog.V(5).InfoS("Complete options...")
-	err := setNamespace(f)
+	err := setNamespace(f, v)
 	if err != nil {
 		return err
 	}
-	if viper.GetBool("shallow") {
-		allowExplicitIncludesOnly()
+	if v.GetBool("shallow") {
+		allowExplicitIncludesOnly(v)
 	}
-	if viper.GetBool("deep") {
-		enableAllIncludes()
+	if v.GetBool("deep") {
+		enableAllIncludes(v)
 	}
 	return nil
 }
 
-func setNamespace(f cmdutil.Factory) error {
-	if viper.GetBool("all-namespaces") {
-		viper.Set("namespace", "")
+func setNamespace(f cmdutil.Factory, v *viper.Viper) error {
+	if v.GetBool("all-namespaces") {
+		v.Set("namespace", "")
 		return nil
 	}
 	namespace, _, err := f.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return fmt.Errorf("can't determine namespace")
 	}
-	viper.Set("namespace", namespace)
+	v.Set("namespace", namespace)
 	return nil
 }
 
-func allowExplicitIncludesOnly() {
-	for key, val := range viper.AllSettings() {
+func allowExplicitIncludesOnly(v *viper.Viper) {
+	for key, val := range v.AllSettings() {
 		if strings.HasPrefix(key, "include") {
 			switch val.(type) {
 			case bool:
-				if !isBoolConfigExplicitlySetToTrue(key) {
-					viper.Set(key, false)
+				if !isBoolConfigExplicitlySetToTrue(v, key) {
+					v.Set(key, false)
 				}
 			}
 		}
 	}
 }
 
-func enableAllIncludes() {
-	for key, val := range viper.AllSettings() {
+func enableAllIncludes(v *viper.Viper) {
+	for key, val := range v.AllSettings() {
 		if strings.HasPrefix(key, "include") {
 			switch val.(type) {
 			case bool:
-				if !isBoolConfigExplicitlySetToFalse(key) {
-					viper.Set(key, true)
+				if !isBoolConfigExplicitlySetToFalse(v, key) {
+					v.Set(key, true)
 				}
 			}
 		}
 	}
 }
 
-func validate() error {
+func validate(v *viper.Viper) error {
 	klog.V(5).InfoS("Validating cli options...")
-	if viper.GetBool("shallow") && viper.GetBool("deep") {
+	if v.GetBool("shallow") && v.GetBool("deep") {
 		return fmt.Errorf("--shallow and --deep are mutually exclusive")
 	}
-	if viper.GetBool("local") && len(viper.GetStringSlice("filename")) == 0 {
+	if v.GetBool("local") && len(v.GetStringSlice("filename")) == 0 {
 		return fmt.Errorf("when using --local, --filename must be provided")
 	}
 	return nil

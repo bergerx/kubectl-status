@@ -32,31 +32,35 @@ import (
 	"github.com/bergerx/kubectl-status/pkg/plugin/calicoselector"
 )
 
-var durationRound = DefaultDurationRound()
+// RenderConfig carries the per-invocation configuration and time/duration hooks that template
+// functions read, so that concurrent renders (e.g. parallel e2e subtests) don't share mutable
+// process-global state. Viper is a *viper.Viper instance owned by this invocation (not the
+// package-level global singleton); Now/DurationRound/StartedAfterClause default to the real
+// implementations and are only overridden by tests.
+type RenderConfig struct {
+	Viper              *viper.Viper
+	Now                func() time.Time
+	DurationRound      func(duration interface{}) string
+	StartedAfterClause func(createdKubeDate, startedKubeDate string) string
+}
 
-var nowFunc = time.Now
-
-// SetNowFunc is a helper method for tests
-func SetNowFunc(f func() time.Time) (revertFunc func()) {
-	nowFunc = f
-	return func() {
-		nowFunc = time.Now
+// NewRenderConfig builds a RenderConfig backed by v, with the real Now/DurationRound/
+// StartedAfterClause implementations.
+func NewRenderConfig(v *viper.Viper) *RenderConfig {
+	cfg := &RenderConfig{
+		Viper:         v,
+		Now:           time.Now,
+		DurationRound: DefaultDurationRound(),
 	}
+	cfg.StartedAfterClause = defaultStartedAfterClause(cfg)
+	return cfg
 }
 
 func DefaultDurationRound() func(duration interface{}) string {
 	return sprouttime.NewRegistry().DurationRound
 }
 
-// SetDurationRound is a helper method for tests
-func SetDurationRound(f func(duration interface{}) string) (revertFunc func()) {
-	durationRound = f
-	return func() {
-		durationRound = DefaultDurationRound()
-	}
-}
-
-func funcMap() template.FuncMap {
+func (cfg *RenderConfig) funcMap() template.FuncMap {
 	return template.FuncMap{
 		"green":                     color.GreenString,
 		"yellow":                    color.YellowString,
@@ -64,9 +68,9 @@ func funcMap() template.FuncMap {
 		"cyan":                      color.CyanString,
 		"blue":                      color.BlueString,
 		"bold":                      color.New(color.Bold).SprintfFunc(),
-		"colorAgo":                  colorAgo,
-		"colorDuration":             colorDuration,
-		"startedAfterClause":        startedAfterClause,
+		"colorAgo":                  cfg.colorAgo,
+		"colorDuration":             cfg.colorDuration,
+		"startedAfterClause":        cfg.startedAfterClause,
 		"colorBool":                 colorBool,
 		"colorKeyword":              colorKeyword,
 		"markRed":                   markRed,
@@ -90,17 +94,17 @@ func funcMap() template.FuncMap {
 		"addFloat64":                addFloat64,
 		"subFloat64":                subFloat64,
 		"divFloat64":                divFloat64,
-		"ip":                        ip,
-		"agoSuffix":                 agoSuffix,
-		"forOrSince":                forOrSince,
-		"relativeTime":              relativeTime,
+		"ip":                        cfg.ip,
+		"agoSuffix":                 cfg.agoSuffix,
+		"forOrSince":                cfg.forOrSince,
+		"relativeTime":              cfg.relativeTime,
 		"labelSelector":             labelSelector,
 		"taintsNotToleratedByPod":   taintsNotToleratedByPod,
 		"networkPolicyPolicyTypes":  networkPolicyPolicyTypes,
 		"calicoPolicyTypes":         calicoPolicyTypes,
 		"ciliumPolicyDirections":    ciliumPolicyDirectionsForTemplate,
-		"cronNextTime":              cronNextTime,
-		"withinLastHour":            withinLastHour,
+		"cronNextTime":              cfg.cronNextTime,
+		"withinLastHour":            cfg.withinLastHour,
 		"parseTLSSecretCertificate": parseTLSSecretCertificate,
 		"certificatesInSecret":      certificatesInSecret,
 		"certificatesInConfigMap":   certificatesInConfigMap,
@@ -109,8 +113,8 @@ func funcMap() template.FuncMap {
 	}
 }
 
-func ip(ip string) string {
-	if viper.GetBool("test-hack") {
+func (cfg *RenderConfig) ip(ip string) string {
+	if cfg.Viper.GetBool("test-hack") {
 		return "1.1.1.1"
 	}
 	return ip
@@ -572,58 +576,50 @@ func colorKeyword(phase string) string {
 	}
 }
 
-func colorAgo(kubeDate string) string {
+func (cfg *RenderConfig) colorAgo(kubeDate string) string {
 	t, _ := time.ParseInLocation("2006-01-02T15:04:05Z", kubeDate, time.UTC)
-	if viper.GetBool("absolute-time") {
+	if cfg.Viper.GetBool("absolute-time") {
 		return t.Format("2006-01-02T15:04:05Z")
 	}
-	duration := time.Since(t).Round(time.Second)
-	return colorDuration(duration)
+	duration := cfg.Now().Sub(t).Round(time.Second)
+	return cfg.colorDuration(duration)
 }
-
-var startedAfterClauseFunc = defaultStartedAfterClause
 
 // defaultStartedAfterClause renders the ", started after <duration>" suffix of the status
 // summary line. Both timestamps come off the wire at 1-second resolution, so on a live cluster
 // whether this clause appears at all hinges on whether the pod's creation and kubelet-acknowledge
 // timestamps land in the same wall-clock second -- a coin flip e2e tests can't control. Tests
-// replace this func (see SetStartedAfterClause) so the clause is deterministic instead of tied to
+// override RenderConfig.StartedAfterClause so the clause is deterministic instead of tied to
 // that real scheduling latency.
-func defaultStartedAfterClause(createdKubeDate, startedKubeDate string) string {
-	created, err := time.Parse(time.RFC3339, createdKubeDate)
-	if err != nil {
-		return ""
-	}
-	started, err := time.Parse(time.RFC3339, startedKubeDate)
-	if err != nil {
-		return ""
-	}
-	duration := started.Sub(created)
-	if duration <= 0 {
-		return ""
-	}
-	return ", started after " + colorDuration(duration)
-}
-
-// SetStartedAfterClause is a helper method for tests
-func SetStartedAfterClause(f func(createdKubeDate, startedKubeDate string) string) (revertFunc func()) {
-	startedAfterClauseFunc = f
-	return func() {
-		startedAfterClauseFunc = defaultStartedAfterClause
+func defaultStartedAfterClause(cfg *RenderConfig) func(createdKubeDate, startedKubeDate string) string {
+	return func(createdKubeDate, startedKubeDate string) string {
+		created, err := time.Parse(time.RFC3339, createdKubeDate)
+		if err != nil {
+			return ""
+		}
+		started, err := time.Parse(time.RFC3339, startedKubeDate)
+		if err != nil {
+			return ""
+		}
+		duration := started.Sub(created)
+		if duration <= 0 {
+			return ""
+		}
+		return ", started after " + cfg.colorDuration(duration)
 	}
 }
 
-func startedAfterClause(createdKubeDate, startedKubeDate string) string {
-	return startedAfterClauseFunc(createdKubeDate, startedKubeDate)
+func (cfg *RenderConfig) startedAfterClause(createdKubeDate, startedKubeDate string) string {
+	return cfg.StartedAfterClause(createdKubeDate, startedKubeDate)
 }
 
-func ago(t time.Time) string {
-	duration := time.Since(t).Round(time.Second)
-	return durationRound(duration.String())
+func (cfg *RenderConfig) ago(t time.Time) string {
+	duration := cfg.Now().Sub(t).Round(time.Second)
+	return cfg.DurationRound(duration.String())
 }
 
-func colorDuration(duration time.Duration) string {
-	str := durationRound(duration.String())
+func (cfg *RenderConfig) colorDuration(duration time.Duration) string {
+	str := cfg.DurationRound(duration.String())
 	if duration < time.Minute*5 {
 		return color.RedString(str)
 	}
@@ -636,21 +632,21 @@ func colorDuration(duration time.Duration) string {
 	return str
 }
 
-func agoSuffix() string {
-	if viper.GetBool("absolute-time") {
+func (cfg *RenderConfig) agoSuffix() string {
+	if cfg.Viper.GetBool("absolute-time") {
 		return ""
 	}
 	return " ago"
 }
 
-func forOrSince() string {
-	if viper.GetBool("absolute-time") {
+func (cfg *RenderConfig) forOrSince() string {
+	if cfg.Viper.GetBool("absolute-time") {
 		return "since"
 	}
 	return "for"
 }
 
-func withinLastHour(kubeDate interface{}) bool {
+func (cfg *RenderConfig) withinLastHour(kubeDate interface{}) bool {
 	s, ok := kubeDate.(string)
 	if !ok || s == "" {
 		return false
@@ -659,17 +655,17 @@ func withinLastHour(kubeDate interface{}) bool {
 	if err != nil {
 		return false
 	}
-	d := nowFunc().Sub(t)
+	d := cfg.Now().Sub(t)
 	return d >= 0 && d < time.Hour
 }
 
-func relativeTime(kubeDate string) string {
-	if viper.GetBool("absolute-time") {
+func (cfg *RenderConfig) relativeTime(kubeDate string) string {
+	if cfg.Viper.GetBool("absolute-time") {
 		return ""
 	}
 	t, _ := time.ParseInLocation("2006-01-02T15:04:05Z", kubeDate, time.UTC)
-	duration := time.Since(t).Round(time.Second)
-	return fmt.Sprintf(" (%s ago)", colorDuration(duration))
+	duration := cfg.Now().Sub(t).Round(time.Second)
+	return fmt.Sprintf(" (%s ago)", cfg.colorDuration(duration))
 }
 
 func (r RenderableObject) Include(templateName string, data interface{}) (string, error) {
@@ -683,7 +679,7 @@ func (r RenderableObject) IncludeRenderableObject(obj RenderableObject) (output 
 	return renderString
 }
 
-func cronNextTime(schedule string, timezone interface{}) string {
+func (cfg *RenderConfig) cronNextTime(schedule string, timezone interface{}) string {
 	tz, _ := timezone.(string)
 	schedStr := schedule
 	if !strings.Contains(schedule, "TZ") && tz != "" {
@@ -695,17 +691,17 @@ func cronNextTime(schedule string, timezone interface{}) string {
 	if err != nil {
 		return ""
 	}
-	now := nowFunc()
+	now := cfg.Now()
 	next := sched.Next(now)
 	if next.IsZero() {
 		return ""
 	}
 	nextStr := next.UTC().Format("2006-01-02T15:04:05Z")
-	if viper.GetBool("absolute-time") {
+	if cfg.Viper.GetBool("absolute-time") {
 		return nextStr
 	}
 	duration := next.Sub(now).Round(time.Second)
-	return fmt.Sprintf("%s (in %s)", nextStr, colorDuration(duration))
+	return fmt.Sprintf("%s (in %s)", nextStr, cfg.colorDuration(duration))
 }
 
 func labelSelector(s map[string]interface{}) string {

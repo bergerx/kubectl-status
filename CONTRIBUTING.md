@@ -288,20 +288,25 @@ Similarly, the status summary line's `, started after <duration>` clause (also i
 measures live scheduling latency between a Pod's `creationTimestamp` and `status.startTime` — both
 1-second-resolution timestamps, so on a real cluster whether the clause clears the "at least 1s
 apart" threshold, and therefore whether it renders at all, is a coin flip e2e tests can't control.
-`testHack(t)` overrides `plugin.SetStartedAfterClause` to force the clause present (as `, started
-after 1m`) whenever `status.startTime` is set, so fixtures can pin it as a literal instead of
-wrapping it in an optional group.
+`testHackOpts(t)` overrides `plugin.RenderConfig.StartedAfterClause` to force the clause present (as
+`, started after 1m`) whenever `status.startTime` is set, so fixtures can pin it as a literal instead
+of wrapping it in an optional group.
 
 ### Parallel-Safe e2e Subtests
 
 `make test-e2e` currently runs `TestE2E*` as one sequential `go test` invocation.
 `TestE2EParallel` (`cmd/main_test.go`) is a dedicated home for subtests that are independent enough
 to run concurrently instead -- see the doc comment on that function for exactly what a subtest needs
-(a dedicated namespace or none at all, no shared cluster-scoped resource names, no dependency on the
-global `viper` singleton or `testHack`/`viperTestHack`) before it can move there with
-`t.Run(name, func(t *testing.T) { t.Parallel(); ... })`. Most existing `TestE2E*` subtests still call
-`testHack`/`viperTestHack` and can't move until that global state is threaded through as a parameter
-instead of a package-level singleton.
+(a dedicated namespace or none at all, no shared cluster-scoped resource names) before it can move
+there with `t.Run(name, func(t *testing.T) { t.Parallel(); ... })`. `RootCmd`/`pkg/plugin` no longer
+depend on a global `viper` singleton or package-level `Now`/`DurationRound`/`StartedAfterClause`
+overrides (each `RootCmd()` call owns its own `*viper.Viper`/`plugin.RenderConfig`, see #694), so
+`testHackOpts`/`viperTestHackOpts` are safe to use from concurrent subtests too. Two process-global
+sinks still remain on the render path, though: `cmdutil.BehaviorOnFatal` in `RootCmd`'s `RunE`
+(installs a global fatal handler capturing that invocation's `err`) and `slog.SetDefault` in
+`newRenderEngine`'s `setupDeprecationFilter` (rebinds the global slog default per render). A
+subtest touching either of those isn't parallel-safe yet -- moving one means checking both its
+Kubernetes-side isolation and these two.
 
 ### Improving The Documentation
 

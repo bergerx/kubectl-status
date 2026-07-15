@@ -7,7 +7,6 @@ import (
 	_ "unsafe" // required for using go:linkname in the file
 
 	"github.com/fatih/color"
-	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -26,19 +25,19 @@ func errorPrintf(wr io.Writer, format string, a ...interface{}) {
 	_, _ = fmt.Fprintln(wr)
 }
 
-func Run(f util.Factory, streams genericiooptions.IOStreams, args []string) error {
-	klog.V(5).InfoS("All config settings", "settings", viper.AllSettings())
-	if viper.Get("color") == "always" {
+func Run(f util.Factory, streams genericiooptions.IOStreams, args []string, cfg *RenderConfig) error {
+	klog.V(5).InfoS("All config settings", "settings", cfg.Viper.AllSettings())
+	if cfg.Viper.Get("color") == "always" {
 		color.NoColor = false
-	} else if viper.Get("color") == "never" {
+	} else if cfg.Viper.Get("color") == "never" {
 		color.NoColor = true
 	}
-	repo, err := input.NewResourceRepo(f)
+	repo, err := input.NewResourceRepo(f, cfg.Viper)
 	if err != nil {
 		klog.V(2).ErrorS(err, "Error creating repo")
 		return err
 	}
-	engine, err := newRenderEngine(streams)
+	engine, err := newRenderEngine(streams, cfg)
 	if err != nil {
 		klog.V(2).ErrorS(err, "Error creating engine")
 		return err
@@ -57,20 +56,20 @@ func Run(f util.Factory, streams genericiooptions.IOStreams, args []string) erro
 		klog.V(1).ErrorS(err, "Error querying resources")
 		return err
 	}
-	isWatch := viper.GetBool("watch")
+	isWatch := cfg.Viper.GetBool("watch")
 	if !isWatch && count == 0 {
 		return fmt.Errorf("no resources found")
 	}
-	if viper.GetBool("watch") {
-		return runWatch(results, engine, repo)
+	if cfg.Viper.GetBool("watch") {
+		return runWatch(results, engine, repo, cfg)
 	}
 	return nil
 }
 
-func runWatch(results *resource.Result, engine *renderEngine, repo *input.ResourceRepo) error {
+func runWatch(results *resource.Result, engine *renderEngine, repo *input.ResourceRepo, cfg *RenderConfig) error {
 	color.HiYellow("\nPrinted all existing resource statuses, starting to watch. Switching to shallow mode during watch!\n\n")
-	viper.Set("shallow", true)
-	viper.Set("watching", true)
+	cfg.Viper.Set("shallow", true)
+	cfg.Viper.Set("watching", true)
 	klog.V(5).InfoS("Will run watch")
 	obj, err := results.Object()
 	if err != nil {
@@ -111,7 +110,7 @@ func processObj(obj runtime.Object, engine *renderEngine, repo *input.ResourceRe
 		errorPrintf(streams.ErrOut, "Failed to decode obj=%s: %s", obj, err)
 		return
 	}
-	resetRenderedUIDs()
+	engine.renderedUIDs = make(uidSet)
 	r := newRenderableObject(out, engine, repo)
 	err = r.render(streams.Out)
 	if err != nil {
