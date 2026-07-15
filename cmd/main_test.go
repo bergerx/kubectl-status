@@ -449,11 +449,13 @@ func e2eMinikubeTest(t *testing.T) {
 // viper singleton or package-level Now/DurationRound/StartedAfterClause overrides -- each RootCmd()
 // call owns its own *viper.Viper and plugin.RenderConfig (see #694), and testHackOpts/
 // viperTestHackOpts just build option values rather than mutating shared state, so calling them
-// from concurrent subtests is safe. Two process-global sinks remain on the render path and still
-// need addressing before a subtest touching them is parallel-safe: cmdutil.BehaviorOnFatal in
-// RootCmd's RunE (installs a global fatal handler capturing that invocation's err) and
-// slog.SetDefault in newRenderEngine's setupDeprecationFilter (rebinds the global slog default per
-// render). A subtest qualifies for t.Parallel() once it:
+// from concurrent subtests is safe. The two remaining process-global sinks on the render path --
+// cmdutil.BehaviorOnFatal in RootCmd's RunE and slog.SetDefault in newRenderEngine's
+// setupDeprecationFilter -- are also now safe under concurrent RootCmd().Execute() calls: the
+// former is guarded by cmd/main.go's fatalMu, held only around installing/consuming the handler
+// rather than around the render itself; the latter installs its filtering handler once per
+// process (sync.Once) instead of rebinding it on every render (see #701). A subtest qualifies for
+// t.Parallel() once it:
 //   - needs no namespace, or creates/uses a namespace dedicated to that subtest (never `default`,
 //     and never a namespace another subtest might also touch)
 //   - never relies on a fixed cluster-scoped resource name (Node, CustomResourceDefinition,

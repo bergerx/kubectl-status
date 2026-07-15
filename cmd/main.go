@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	cc "github.com/ivanpirog/coloredcobra"
 	"github.com/spf13/cobra"
@@ -108,21 +109,53 @@ func RootCmd(cfgOpts ...func(*plugin.RenderConfig)) *cobra.Command {
 	cmd.ValidArgsFunction = completion.ResourceTypeAndNameCompletionFunc(f)
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		klog.V(5).InfoS("running the cobra.Command ...")
-		var err error
-		cmdutil.BehaviorOnFatal(func(msg string, i int) {
-			err = errors.New(msg)
-		})
-		cmdutil.CheckErr(complete(f, v))
-		cmdutil.CheckErr(validate(v))
+		if err := checkErr(complete(f, v)); err != nil {
+			return err
+		}
+		if err := checkErr(validate(v)); err != nil {
+			return err
+		}
 		if b, _ := cmd.Flags().GetBool("test-hack"); b {
 			v.Set("test-hack", true)
 			cfg.DurationRound = func(_ interface{}) string { return "1m" }
 		}
 		ioStreams := genericiooptions.IOStreams{In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), ErrOut: cmd.ErrOrStderr()}
-		cmdutil.CheckErr(plugin.Run(f, ioStreams, args, cfg))
-		return err
+		return checkErr(plugin.Run(f, ioStreams, args, cfg))
 	}
 	return cmd
+}
+
+// fatalMu serializes installing and consuming cmdutil's process-global fatal handler
+// (BehaviorOnFatal + CheckErr). We keep routing errors through CheckErr for its user-friendly
+// formatting (e.g. NoResourceMatchError phrasing, the "error: " prefix some e2e assertions pin
+// on) rather than returning them raw. The lock is only held around the install-and-consume step in
+// checkErr, not around whatever produced err, so it doesn't serialize concurrent RootCmd().Execute()
+// calls' actual work (e.g. plugin.Run) -- only this narrow reformatting step, which is what made
+// BehaviorOnFatal a process-global race in the first place: two concurrent invocations installing
+// their own closure could catch each other's fatal error instead of their own.
+var fatalMu sync.Mutex
+
+// checkErr runs err through cmdutil.CheckErr's formatting (installing a scoped BehaviorOnFatal
+// handler instead of letting CheckErr's default os.Exit tear down the process) and returns the
+// formatted error instead of exiting, so RunE can propagate it normally. The handler is restored
+// to the default before returning, so it doesn't leak into unrelated later calls.
+func checkErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	fatalMu.Lock()
+	defer fatalMu.Unlock()
+	// restore under lock, before Unlock, so a waiting caller's handler isn't clobbered
+	defer cmdutil.DefaultBehaviorOnFatal()
+	var out error
+	cmdutil.BehaviorOnFatal(func(msg string, _ int) {
+		out = errors.New(msg)
+	})
+	cmdutil.CheckErr(err)
+	if out == nil {
+		return err
+	}
+	return out
 }
 
 func initFlags(cmd *cobra.Command) *genericclioptions.ConfigFlags {
