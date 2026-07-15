@@ -1,13 +1,13 @@
 \A
-Service/svc-with-httproute -n default, created 1m ago
+Service/svc-with-httproute -n e2e-svc-httproute, created 1m ago
   Current: Service is ready
   Missing Endpoint: Service has no matching endpoint.
   Routes matching this Service:
-    HTTPRoute/svc-with-httproute -n default, created 1m ago, gen:1
+    HTTPRoute/svc-with-httproute -n e2e-svc-httproute, created 1m ago, gen:1
       Current: Resource is current
       Hostnames: svc-with-httproute\.example\.com
       Parents:
       Rules:
         PathPrefix /
-        Service/svc-with-httproute\[default\] is already printed
+        Service/svc-with-httproute\[e2e-svc-httproute\] is already printed
 \z

@@ -1,10 +1,10 @@
 \A
-Deployment/e2e-rollouts-blocked-deployment -n default, created 1m ago, gen:1 rev:1
+Deployment/e2e-rollouts-blocked-deployment -n e2e-rollouts-blocked-deployment, created 1m ago, gen:1 rev:1
   InProgress: Available: 0/1
     Reconciling: LessAvailable, Available: 0/1
   desired:1, existing:1, ready:0, updated:1, available:0, unavailable:1
   Selector: app=e2e-rollouts-blocked-deployment
-    Pod/e2e-rollouts-blocked-deployment-[a-z0-9]+-[a-z0-9]+ -n default, created 1m ago Pending, 0/1 ready
+    Pod/e2e-rollouts-blocked-deployment-[a-z0-9]+-[a-z0-9]+ -n e2e-rollouts-blocked-deployment, created 1m ago Pending, 0/1 ready
   Not matched by any Service
   Available MinimumReplicasUnavailable, Deployment does not have minimum availability\. for 1m
   Progressing ReplicaSetUpdated, ReplicaSet "e2e-rollouts-blocked-deployment-[a-z0-9]+" is progressing\. for 1m

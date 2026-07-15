@@ -1,12 +1,12 @@
 \A
-Secret/web-tls -n default, created 1m ago
+Secret/web-tls -n e2e-web-cert, created 1m ago
   Managed by
-    Certificate/web-tls -n default, created 1m ago, gen:1
+    Certificate/web-tls -n e2e-web-cert, created 1m ago, gen:1
       Current: Resource is Ready
       Issued by Issuer/web-ca-issuer for "web\.ks-demo\.svc" · stored in secret/web-tls
       Issued \d{4}-\d{2}-\d{2} \(1m ago\), expires \d{4}-\d{2}-\d{2}, auto-renews \d{4}-\d{2}-\d{2}(?: · rev [0-9]+)?
       Ready Ready, Certificate is up to date and has not expired for 1m
-    Issuer/web-ca-issuer -n default, created 1m ago, gen:1
+    Issuer/web-ca-issuer -n e2e-web-cert, created 1m ago, gen:1
       Current: Resource is Ready
       Backend: CA · signing key in secret/web-ca-secret
       Ready KeyPairVerified, Signing CA verified for 1m

@@ -5,6 +5,13 @@ metadata:
 spec:
   failurePolicy: Fail
   matchConstraints:
+    # Scoped to this subtest's own namespace via the built-in kubernetes.io/metadata.name label
+    # (every Namespace object carries it automatically) -- without this, denying Deployments
+    # without a "team" label applies cluster-wide, breaking any other subtest that creates a
+    # Deployment concurrently.
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: e2e-vap-binding
     resourceRules:
       - apiGroups: ["apps"]
         apiVersions: ["v1"]

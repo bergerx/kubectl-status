@@ -494,14 +494,24 @@ func TestE2EDynamicManifests(t *testing.T) {
 	}
 	t.Run("owners should be included with deep", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-owner-secret"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
 		owner := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "owner",
-				Namespace: "default",
+				Namespace: ns,
 			},
 		}
-		owner, err := clientset.CoreV1().Secrets("default").Create(context.TODO(), owner, metav1.CreateOptions{})
-		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), "owner", metav1.DeleteOptions{})
+		owner, err = clientset.CoreV1().Secrets(ns).Create(context.TODO(), owner, metav1.CreateOptions{})
+		t.Cleanup(func() {
+			clientset.CoreV1().Secrets(ns).Delete(context.TODO(), "owner", metav1.DeleteOptions{})
+		})
 		require.NoError(t, err)
 		uid := owner.GetUID()
 		t.Logf("owner secret is created, uid is %s", uid)
@@ -509,7 +519,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		child := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "child",
-				Namespace: "default",
+				Namespace: ns,
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion: "v1",
@@ -520,13 +530,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 				},
 			},
 		}
-		_, err = clientset.CoreV1().Secrets("default").Create(context.TODO(), child, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().Secrets(ns).Create(context.TODO(), child, metav1.CreateOptions{})
 		t.Log("child secret is created")
-		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), "child", metav1.DeleteOptions{})
+		defer clientset.CoreV1().Secrets(ns).Delete(context.TODO(), "child", metav1.DeleteOptions{})
 		require.NoError(t, err)
 
 		test := cmdTest{
-			args: []string{"secret/child", "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "7"},
+			args: []string{"secret/child", "-n", ns, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "7"},
 			// Secret.tmpl intentionally omits kstatus_summary (Secret is always reported
 			// "Resource is always ready" by kstatus, so the "Current:" line is redundant
 			// noise) -- see tests/artifacts/secret-tls-healthy.out for the same committed
@@ -550,70 +560,86 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("pod on a cordoned node with an untolerated taint and a bad condition", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-bad-node-pod"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
 		nodeName := createBadNode(t, clientset)
 
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "pod-on-bad-node",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: corev1.PodSpec{
 				NodeName:   nodeName,
 				Containers: []corev1.Container{{Name: "app", Image: "busybox"}},
 			},
 		}
-		_, err := clientset.CoreV1().Pods("default").Create(context.TODO(), pod, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 
 		cmdTest{
-			args:            []string{"pod/pod-on-bad-node", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/pod-on-bad-node", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pod's serviceAccountName resolves to the ServiceAccount and surfaces automount/imagePullSecrets", func(t *testing.T) {
 		opts := combineOpts(viperTestHackOpts())
+		ns := "e2e-pod-custom-sa"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
 		f := false
 		sa := &corev1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "kubectl-status-test-sa",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			AutomountServiceAccountToken: &f,
 			ImagePullSecrets:             []corev1.LocalObjectReference{{Name: "regcred"}},
 		}
-		_, err := clientset.CoreV1().ServiceAccounts("default").Create(context.TODO(), sa, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().ServiceAccounts(ns).Create(context.TODO(), sa, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.CoreV1().ServiceAccounts("default").Delete(context.TODO(), sa.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().ServiceAccounts(ns).Delete(context.TODO(), sa.Name, metav1.DeleteOptions{})
 
 		// The ServiceAccount admission plugin merges its imagePullSecrets onto every Pod that
 		// uses it, so Pod.tmpl's own (pre-existing) imagePullSecrets check will flag "regcred" as
 		// missing unless it actually exists with the expected type.
 		regcred := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: "regcred", Namespace: "default"},
+			ObjectMeta: metav1.ObjectMeta{Name: "regcred", Namespace: ns},
 			Type:       corev1.SecretTypeDockerConfigJson,
 			Data:       map[string][]byte{".dockerconfigjson": []byte("{}")},
 		}
-		_, err = clientset.CoreV1().Secrets("default").Create(context.TODO(), regcred, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().Secrets(ns).Create(context.TODO(), regcred, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), regcred.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().Secrets(ns).Delete(context.TODO(), regcred.Name, metav1.DeleteOptions{})
 
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "pod-with-custom-sa",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: corev1.PodSpec{
 				ServiceAccountName: sa.Name,
 				Containers:         []corev1.Container{{Name: "app", Image: "busybox"}},
 			},
 		}
-		_, err = clientset.CoreV1().Pods("default").Create(context.TODO(), pod, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 
 		cmdTest{
-			args:            []string{"pod/pod-with-custom-sa", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/pod-with-custom-sa", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-with-custom-sa.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -631,6 +657,14 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("workload's matching pod on a cordoned node surfaces a compact node-problem flag", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-bad-node-rs"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
 		nodeName := createBadNode(t, clientset)
 
 		// The Pod's spec.nodeName is set directly at creation, bypassing the scheduler, so it
@@ -639,7 +673,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "pod-on-bad-node-for-rs",
-				Namespace: "default",
+				Namespace: ns,
 				Labels:    map[string]string{"app": "kubectl-status-test-bad-rs"},
 			},
 			Spec: corev1.PodSpec{
@@ -647,15 +681,15 @@ func TestE2EDynamicManifests(t *testing.T) {
 				Containers: []corev1.Container{{Name: "app", Image: "busybox"}},
 			},
 		}
-		_, err := clientset.CoreV1().Pods("default").Create(context.TODO(), pod, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 
 		one := int32(1)
 		rs := &appsv1.ReplicaSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "bad-rs",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: appsv1.ReplicaSetSpec{
 				Replicas: &one,
@@ -666,12 +700,12 @@ func TestE2EDynamicManifests(t *testing.T) {
 				},
 			},
 		}
-		_, err = clientset.AppsV1().ReplicaSets("default").Create(context.TODO(), rs, metav1.CreateOptions{})
+		_, err = clientset.AppsV1().ReplicaSets(ns).Create(context.TODO(), rs, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.AppsV1().ReplicaSets("default").Delete(context.TODO(), rs.Name, metav1.DeleteOptions{})
+		defer clientset.AppsV1().ReplicaSets(ns).Delete(context.TODO(), rs.Name, metav1.DeleteOptions{})
 
 		cmdTest{
-			args:            []string{"rs/bad-rs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"rs/bad-rs", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node-for-rs.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -900,12 +934,20 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("deployment rollout with --include-rollout-diffs shows the diff between revisions", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-rollout-diff"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
 		name := "rollout-diff-test"
 		one := int32(1)
 		dep := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &one,
@@ -916,19 +958,19 @@ func TestE2EDynamicManifests(t *testing.T) {
 				},
 			},
 		}
-		_, err := clientset.AppsV1().Deployments("default").Create(context.TODO(), dep, metav1.CreateOptions{})
+		_, err = clientset.AppsV1().Deployments(ns).Create(context.TODO(), dep, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.AppsV1().Deployments("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
-		waitFor(t, "deployment/"+name, "condition=Available")
+		defer clientset.AppsV1().Deployments(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+		waitForInNamespace(t, "deployment/"+name, "condition=Available", ns)
 
 		// Update the image so a second ReplicaSet revision is created, giving --include-rollout-diffs
 		// something to diff.
-		dep, err = clientset.AppsV1().Deployments("default").Get(context.TODO(), name, metav1.GetOptions{})
+		dep, err = clientset.AppsV1().Deployments(ns).Get(context.TODO(), name, metav1.GetOptions{})
 		require.NoError(t, err)
 		dep.Spec.Template.Spec.Containers[0].Image = "nginx:1.26"
-		_, err = clientset.AppsV1().Deployments("default").Update(context.TODO(), dep, metav1.UpdateOptions{})
+		_, err = clientset.AppsV1().Deployments(ns).Update(context.TODO(), dep, metav1.UpdateOptions{})
 		require.NoError(t, err)
-		rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", "default", "--timeout=2m")
+		rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
 		output, err := rolloutCmd.CombinedOutput()
 		t.Logf("rollout status for %s: %s", name, output)
 		require.NoError(t, err)
@@ -936,7 +978,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// The order in which the two ReplicaSet revisions are diffed (and so which side
 		// gets "-" vs "+") isn't guaranteed, so the fixture alternates both directions.
 		cmdTest{
-			args:            []string{"deployment/" + name, "--include-rollout-diffs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"deployment/" + name, "-n", ns, "--include-rollout-diffs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/rollout-diff.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -948,10 +990,17 @@ func TestE2EDynamicManifests(t *testing.T) {
 
 		t.Run("deployment", func(t *testing.T) {
 			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-blocked-deployment"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
 			name := "e2e-rollouts-blocked-deployment"
 			one := int32(1)
 			dep := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 				Spec: appsv1.DeploymentSpec{
 					Replicas: &one,
 					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
@@ -961,23 +1010,30 @@ func TestE2EDynamicManifests(t *testing.T) {
 					},
 				},
 			}
-			_, err := clientset.AppsV1().Deployments("default").Create(context.TODO(), dep, metav1.CreateOptions{})
+			_, err = clientset.AppsV1().Deployments(ns).Create(context.TODO(), dep, metav1.CreateOptions{})
 			require.NoError(t, err)
-			defer clientset.AppsV1().Deployments("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
-			podName := waitForPodByLabel(t, "default", "app="+name)
-			waitForContainerWaitingReason(t, "pod/"+podName, "app", "ImagePullBackOff")
+			defer clientset.AppsV1().Deployments(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+			podName := waitForPodByLabel(t, ns, "app="+name)
+			waitForContainerWaitingReasonInNamespace(t, "pod/"+podName, "app", "ImagePullBackOff", ns)
 
 			cmdTest{
-				args:            []string{"deployment/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"deployment/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-deployment.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("statefulset", func(t *testing.T) {
 			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-blocked-statefulset"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
 			name := "e2e-rollouts-blocked-statefulset"
 			one := int32(1)
 			sts := &appsv1.StatefulSet{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 				Spec: appsv1.StatefulSetSpec{
 					Replicas:    &one,
 					ServiceName: name,
@@ -988,21 +1044,28 @@ func TestE2EDynamicManifests(t *testing.T) {
 					},
 				},
 			}
-			_, err := clientset.AppsV1().StatefulSets("default").Create(context.TODO(), sts, metav1.CreateOptions{})
+			_, err = clientset.AppsV1().StatefulSets(ns).Create(context.TODO(), sts, metav1.CreateOptions{})
 			require.NoError(t, err)
-			defer clientset.AppsV1().StatefulSets("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
-			waitForContainerWaitingReason(t, "pod/"+name+"-0", "app", "ImagePullBackOff")
+			defer clientset.AppsV1().StatefulSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+			waitForContainerWaitingReasonInNamespace(t, "pod/"+name+"-0", "app", "ImagePullBackOff", ns)
 
 			cmdTest{
-				args:            []string{"statefulset/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"statefulset/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-statefulset.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("daemonset", func(t *testing.T) {
 			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-blocked-daemonset"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
 			name := "e2e-rollouts-blocked-daemonset"
 			ds := &appsv1.DaemonSet{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 				Spec: appsv1.DaemonSetSpec{
 					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
 					Template: corev1.PodTemplateSpec{
@@ -1011,23 +1074,30 @@ func TestE2EDynamicManifests(t *testing.T) {
 					},
 				},
 			}
-			_, err := clientset.AppsV1().DaemonSets("default").Create(context.TODO(), ds, metav1.CreateOptions{})
+			_, err = clientset.AppsV1().DaemonSets(ns).Create(context.TODO(), ds, metav1.CreateOptions{})
 			require.NoError(t, err)
-			defer clientset.AppsV1().DaemonSets("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
-			podName := waitForPodByLabel(t, "default", "app="+name)
-			waitForContainerWaitingReason(t, "pod/"+podName, "app", "ImagePullBackOff")
+			defer clientset.AppsV1().DaemonSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+			podName := waitForPodByLabel(t, ns, "app="+name)
+			waitForContainerWaitingReasonInNamespace(t, "pod/"+podName, "app", "ImagePullBackOff", ns)
 
 			cmdTest{
-				args:            []string{"daemonset/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"daemonset/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-daemonset.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("healthy single rollout stays suppressed", func(t *testing.T) {
 			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-healthy-deployment"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
 			name := "e2e-rollouts-healthy-deployment"
 			one := int32(1)
 			dep := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 				Spec: appsv1.DeploymentSpec{
 					Replicas: &one,
 					Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
@@ -1037,13 +1107,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 					},
 				},
 			}
-			_, err := clientset.AppsV1().Deployments("default").Create(context.TODO(), dep, metav1.CreateOptions{})
+			_, err = clientset.AppsV1().Deployments(ns).Create(context.TODO(), dep, metav1.CreateOptions{})
 			require.NoError(t, err)
-			defer clientset.AppsV1().Deployments("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
-			waitFor(t, "deployment/"+name, "condition=Available")
+			defer clientset.AppsV1().Deployments(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+			waitForInNamespace(t, "deployment/"+name, "condition=Available", ns)
 
 			cmdTest{
-				args:            []string{"deployment/" + name, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"deployment/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-healthy-deployment.regex",
 			}.assert(t, nil, opts...)
 		})
@@ -1052,47 +1122,63 @@ func TestE2EDynamicManifests(t *testing.T) {
 			// there are two consecutive pairs to diff, not just the one covered by the
 			// "--include-rollout-diffs shows the diff between revisions" test above.
 			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-three-revisions"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
 			name := "e2e-rollouts-three-revisions"
-			applyManifest(t, "e2e-artifacts/rollouts-three-revisions.yaml")
-			waitFor(t, "deployment/"+name, "condition=Available")
+			applyManifestInNamespace(t, "e2e-artifacts/rollouts-three-revisions.yaml", ns)
+			waitForInNamespace(t, "deployment/"+name, "condition=Available", ns)
 
-			require.NoError(t, exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.26", "-n", "default").Run())
-			rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", "default", "--timeout=2m")
+			out, err := exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.26", "-n", ns).CombinedOutput()
+			require.NoError(t, err, string(out))
+			rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
 			output, err := rolloutCmd.CombinedOutput()
 			t.Logf("rollout status for %s (nginx:1.26): %s", name, output)
 			require.NoError(t, err)
-			waitForSinglePod(t, "default", "app="+name)
+			waitForSinglePod(t, ns, "app="+name)
 
-			require.NoError(t, exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.27", "-n", "default").Run())
-			rolloutCmd = exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", "default", "--timeout=2m")
+			out, err = exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.27", "-n", ns).CombinedOutput()
+			require.NoError(t, err, string(out))
+			rolloutCmd = exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
 			output, err = rolloutCmd.CombinedOutput()
 			t.Logf("rollout status for %s (nginx:1.27): %s", name, output)
 			require.NoError(t, err)
-			waitForSinglePod(t, "default", "app="+name)
+			waitForSinglePod(t, ns, "app="+name)
 
 			cmdTest{
-				args:            []string{"deployment/" + name, "--include-events=false", "--include-managed-fields=false", "--include-rollout-diffs", "--v", "5"},
+				args:            []string{"deployment/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--include-rollout-diffs", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-three-revisions-with-diffs.regex",
 			}.assert(t, nil, opts...)
 		})
 	})
 	t.Run("sts-with-ingress", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-sts-with-ingress"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
 		// using sts here as the pod name is predictable in that case, not true for deployments and ds
-		applyManifest(t, "e2e-artifacts/sts-with-ingress.yaml")
-		waitFor(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1")
+		applyManifestInNamespace(t, "e2e-artifacts/sts-with-ingress.yaml", ns)
+		waitForInNamespace(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1", ns)
 		cmdTest{
 			// Log/volume usage bytes come from live kubelet stats and aren't reproducible
 			// across runs, so this is matched as a regex rather than exact text.
-			args:            []string{"pod/sts-with-ingress-0", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/sts-with-ingress-0", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.pod.regex",
 		}.assert(t, nodeNameModifier, opts...)
 		cmdTest{
-			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"service/sts-with-ingress", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.service.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"service/sts-with-ingress", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.service-deep.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -1101,116 +1187,182 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// same Service, so its "Routes matching this Service" section shows up alongside the
 		// Ingress already covered there.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/sts-with-ingress.yaml")
-		applyManifest(t, "e2e-artifacts/sts-with-ingress-routes.yaml")
-		waitFor(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1")
+		ns := "e2e-sts-with-ingress-routes"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/sts-with-ingress.yaml", ns)
+		applyManifestInNamespace(t, "e2e-artifacts/sts-with-ingress-routes.yaml", ns)
+		waitForInNamespace(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1", ns)
 		cmdTest{
-			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"service/sts-with-ingress", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress-routes.regex",
 		}.assert(t, nodeNameModifier, opts...)
 		cmdTest{
-			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"service/sts-with-ingress", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress-routes.deep.regex",
 		}.assert(t, nodeNameModifier, opts...)
 	})
 	t.Run("svc-with-httproute", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/svc-with-httproute.yaml")
+		ns := "e2e-svc-httproute"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/svc-with-httproute.yaml", ns)
 		cmdTest{
-			args:            []string{"service/svc-with-httproute", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"service/svc-with-httproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/svc-with-httproute.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"service/svc-with-httproute", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"service/svc-with-httproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/svc-with-httproute.deep.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("sts-with-nodeport", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-sts-nodeport"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
 		// using sts here as the pod name is predictable in that case, not true for deployments and ds
-		applyManifest(t, "e2e-artifacts/sts-with-nodeport.yaml")
-		waitFor(t, "sts/sts-with-nodeport", "jsonpath={.status.readyReplicas}=1")
-		waitFor(t, "pdb/sts-with-nodeport", "jsonpath={.status.currentHealthy}=1")
+		applyManifestInNamespace(t, "e2e-artifacts/sts-with-nodeport.yaml", ns)
+		waitForInNamespace(t, "sts/sts-with-nodeport", "jsonpath={.status.readyReplicas}=1", ns)
+		waitForInNamespace(t, "pdb/sts-with-nodeport", "jsonpath={.status.currentHealthy}=1", ns)
 		cmdTest{
 			// Log/volume usage bytes come from live kubelet stats and aren't reproducible
 			// across runs, so this is matched as a regex rather than exact text.
-			args:            []string{"pod/sts-with-nodeport-0", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/sts-with-nodeport-0", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pod.regex",
 		}.assert(t, nodeNameModifier, opts...)
 		cmdTest{
-			args:            []string{"pdb/sts-with-nodeport", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pdb/sts-with-nodeport", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pdb.regex",
 		}.assert(t, nodeNameModifier, opts...)
 		cmdTest{
-			args:            []string{"sts/sts-with-nodeport", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"sts/sts-with-nodeport", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.sts.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pdb-empty-selector-conflict", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/pdb-empty-selector-conflict.yaml")
-		waitFor(t, "sts/pdb-conflict-test", "jsonpath={.status.readyReplicas}=1")
+		ns := "e2e-pdb-conflict"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/pdb-empty-selector-conflict.yaml", ns)
+		waitForInNamespace(t, "sts/pdb-conflict-test", "jsonpath={.status.readyReplicas}=1", ns)
 		// Kubernetes' disruption controller picks one of the two overlapping PDBs arbitrarily
 		// and leaves the other's currentHealthy permanently at 0 -- observedGeneration is the
 		// reliable "controller has made its (possibly permanent) decision" signal here, not
 		// currentHealthy, which may never reach 1 for the non-chosen budget.
-		waitFor(t, "pdb/pdb-conflict-test", "jsonpath={.status.observedGeneration}=1")
-		waitFor(t, "pdb/pdb-conflict-test-catch-all", "jsonpath={.status.observedGeneration}=1")
+		waitForInNamespace(t, "pdb/pdb-conflict-test", "jsonpath={.status.observedGeneration}=1", ns)
+		waitForInNamespace(t, "pdb/pdb-conflict-test-catch-all", "jsonpath={.status.observedGeneration}=1", ns)
 		cmdTest{
-			args:            []string{"pod/pdb-conflict-test-0", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/pdb-conflict-test-0", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pdb-empty-selector-conflict.pod.regex",
 		}.assert(t, nodeNameModifier, opts...)
 	})
 	t.Run("tcproute-with-gateway", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/tcproute-with-gateway.yaml")
+		ns := "e2e-tcproute"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/tcproute-with-gateway.yaml", ns)
 		cmdTest{
-			args:            []string{"tcproute/e2e-tcproute", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"tcproute/e2e-tcproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/tcproute-with-gateway.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"tcproute/e2e-tcproute", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"tcproute/e2e-tcproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/tcproute-with-gateway.deep.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("udproute-with-gateway", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/udproute-with-gateway.yaml")
+		ns := "e2e-udproute"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/udproute-with-gateway.yaml", ns)
 		cmdTest{
-			args:            []string{"udproute/e2e-udproute", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"udproute/e2e-udproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/udproute-with-gateway.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"udproute/e2e-udproute", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"udproute/e2e-udproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/udproute-with-gateway.deep.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("listenerset-with-gateway", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/listenerset-with-gateway.yaml")
+		ns := "e2e-listenerset"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/listenerset-with-gateway.yaml", ns)
 		cmdTest{
-			args:            []string{"listenerset/e2e-listenerset", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"listenerset/e2e-listenerset", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/listenerset-with-gateway.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"listenerset/e2e-listenerset", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"listenerset/e2e-listenerset", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/listenerset-with-gateway.deep.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("backendtlspolicy-with-target", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/backendtlspolicy-with-target.yaml")
+		ns := "e2e-backendtlspolicy"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/backendtlspolicy-with-target.yaml", ns)
 		cmdTest{
-			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/backendtlspolicy-with-target.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/backendtlspolicy-with-target.deep.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("vap-binding-resolves-policy", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		// The policy itself is cluster-scoped (ValidatingAdmissionPolicy/Binding aren't
+		// namespaced), but its matchConstraints.namespaceSelector in vap-binding.yaml scopes
+		// enforcement to this namespace specifically -- see the comment there for why.
+		ns := "e2e-vap-binding"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
 		applyManifest(t, "e2e-artifacts/vap-binding.yaml")
 		cmdTest{
 			args:            []string{"validatingadmissionpolicybinding/e2e-require-team-label-binding", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -1233,15 +1385,22 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// "issued by <CA>" rather than "Self-signed" -- the same cert-manager chain used for
 		// the demo screenshot's Secret example, but exercised here as a regular e2e fixture.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/web-cert.yaml")
-		waitFor(t, "certificate/web-ca", "condition=Ready")
-		waitFor(t, "certificate/web-tls", "condition=Ready")
+		ns := "e2e-web-cert"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/web-cert.yaml", ns)
+		waitForInNamespace(t, "certificate/web-ca", "condition=Ready", ns)
+		waitForInNamespace(t, "certificate/web-tls", "condition=Ready", ns)
 		cmdTest{
-			args:            []string{"secret/web-tls", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"secret/web-tls", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/web-cert.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"secret/web-tls", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"secret/web-tls", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/web-cert.deep.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -1249,21 +1408,35 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// A PodDisruptionBudget and NetworkPolicy both selecting the same Deployment's Pods --
 		// the same fixture used for the demo screenshot's matching-PDB/NetworkPolicy example.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/web.yaml")
-		applyManifest(t, "e2e-artifacts/web-policies.yaml")
-		waitFor(t, "deployment/web", "condition=Available")
-		waitFor(t, "pdb/web", "jsonpath={.status.observedGeneration}=1")
+		ns := "e2e-web-policies"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/web.yaml", ns)
+		applyManifestInNamespace(t, "e2e-artifacts/web-policies.yaml", ns)
+		waitForInNamespace(t, "deployment/web", "condition=Available", ns)
+		waitForInNamespace(t, "pdb/web", "jsonpath={.status.observedGeneration}=1", ns)
 		cmdTest{
-			args:            []string{"deployment/web", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"deployment/web", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/web-policies.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("sts-without-service", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/sts-without-service.yaml")
-		waitFor(t, "sts/sts-without-service", "jsonpath={.status.readyReplicas}=1")
+		ns := "e2e-sts-without-service"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/sts-without-service.yaml", ns)
+		waitForInNamespace(t, "sts/sts-without-service", "jsonpath={.status.readyReplicas}=1", ns)
 		cmdTest{
-			args:            []string{"sts/sts-without-service", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"sts/sts-without-service", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-without-service.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -1275,14 +1448,21 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// KubeGetFirst a no-op, so this e2e suite is the only place in the whole test suite
 		// that exercises the found-secret validation branches of Ingress.tmpl/Gateway.tmpl.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/tls-validation-ca.yaml")
-		waitFor(t, "certificate/e2e-tls-root-ca", "condition=Ready")
-		waitFor(t, "issuer/e2e-tls-ca-issuer", "condition=Ready")
-		applyManifest(t, "e2e-artifacts/tls-validation-leaf.yaml")
-		waitFor(t, "certificate/e2e-tls-leaf", "condition=Ready")
+		ns := "e2e-tls-validation"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-ca.yaml", ns)
+		waitForInNamespace(t, "certificate/e2e-tls-root-ca", "condition=Ready", ns)
+		waitForInNamespace(t, "issuer/e2e-tls-ca-issuer", "condition=Ready", ns)
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-leaf.yaml", ns)
+		waitForInNamespace(t, "certificate/e2e-tls-leaf", "condition=Ready", ns)
 
 		t.Run("secret/leaf shows full non-self-signed certificate detail", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"secret/e2e-tls-leaf-tls", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"secret/e2e-tls-leaf-tls", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-secret-leaf.regex"))
 			require.NoError(t, rerr)
@@ -1295,18 +1475,18 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("secret/leaf with --deep inlines the full Certificate and Issuer detail", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"secret/e2e-tls-leaf-tls", "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"secret/e2e-tls-leaf-tls", "-n", ns, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-secret-leaf-deep.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("secret/root-ca is flagged self-signed", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"secret/e2e-tls-root-ca-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"secret/e2e-tls-root-ca-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-secret-root.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("ingress with matching hostname is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"ingress/e2e-tls-ingress-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"ingress/e2e-tls-ingress-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-ingress-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1324,24 +1504,24 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("ingress with mismatched hostname flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"ingress/e2e-tls-ingress-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"ingress/e2e-tls-ingress-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("ingress referencing the root CA secret flags self-signed", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"ingress/e2e-tls-ingress-selfsigned", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"ingress/e2e-tls-ingress-selfsigned", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-selfsigned.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("ingress with --deep inlines the full Secret detail", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"ingress/e2e-tls-ingress-healthy", "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"ingress/e2e-tls-ingress-healthy", "-n", ns, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-deep.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("gateway with matching hostname is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"gateway/e2e-tls-gw-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"gateway/e2e-tls-gw-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-gateway-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1352,13 +1532,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("gateway with mismatched hostname flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"gateway/e2e-tls-gw-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"gateway/e2e-tls-gw-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-gateway-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
-		applyManifest(t, "e2e-artifacts/tls-validation-grpcroute.yaml")
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-grpcroute.yaml", ns)
 		t.Run("grpcroute attached to healthy gateway listener shows no cert flags", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"grpcroute/e2e-tls-grpcroute-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"grpcroute/e2e-tls-grpcroute-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-grpcroute-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1369,13 +1549,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("grpcroute with its own hostname mismatching the cert SANs flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"grpcroute/e2e-tls-grpcroute-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"grpcroute/e2e-tls-grpcroute-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-grpcroute-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
-		applyManifest(t, "e2e-artifacts/tls-validation-tlsroute.yaml")
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-tlsroute.yaml", ns)
 		t.Run("tlsroute attached to Terminate listener with matching hostname is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-tlsroute-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1386,12 +1566,12 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("tlsroute with its own hostname mismatching the cert SANs flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"tlsroute/e2e-tlsroute-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"tlsroute/e2e-tlsroute-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-tlsroute-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("tlsroute attached to a Passthrough listener shows no cert flags", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-passthrough", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-passthrough", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-tlsroute-passthrough.regex"))
 			require.NoError(t, rerr)
@@ -1400,9 +1580,9 @@ func TestE2EDynamicManifests(t *testing.T) {
 				assert.NotContains(t, stdout, problem)
 			}
 		})
-		applyManifest(t, "e2e-artifacts/tls-validation-httproute.yaml")
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-httproute.yaml", ns)
 		t.Run("httproute attached to a healthy listener is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-httproute-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1413,7 +1593,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("httproute attached to a mismatched-hostname listener flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"httproute/e2e-tls-httproute-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"httproute/e2e-tls-httproute-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-httproute-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
@@ -1424,30 +1604,37 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// branches of Pod.tmpl's imagePullSecrets check (Check A) and the "broken secrets"
 		// correlation branch of the ImagePullBackOff hint (Check B).
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/pod-image-pull-secrets.yaml")
+		ns := "e2e-pod-image-pull-secrets"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/pod-image-pull-secrets.yaml", ns)
 		// waitForImagePullBackoff accepts either ErrImagePull or ImagePullBackOff, but the
 		// kubelet keeps cycling between them on its retry loop, so it doesn't give a stable
 		// render. Pin to ImagePullBackOff specifically -- it's the longer-lived of the two
 		// (exponential backoff), so it survives the gap until the subtests below observe it.
-		waitForContainerWaitingReason(t, "pod/e2e-pod-missing-pull-secret", "main", "ImagePullBackOff")
-		waitForContainerWaitingReason(t, "pod/e2e-pod-wrong-type-pull-secret", "main", "ImagePullBackOff")
-		waitForContainerWaitingReason(t, "pod/e2e-pod-healthy-pull-secret", "main", "ImagePullBackOff")
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-missing-pull-secret", "main", "ImagePullBackOff", ns)
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-wrong-type-pull-secret", "main", "ImagePullBackOff", ns)
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-healthy-pull-secret", "main", "ImagePullBackOff", ns)
 
 		t.Run("pod referencing a non-existent Secret flags it and correlates with the pull failure", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-missing-pull-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-missing-pull-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-missing.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("pod referencing a wrong-type Secret flags it and correlates with the pull failure", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-wrong-type-pull-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-wrong-type-pull-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-wrong-type.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("pod referencing a healthy Secret shows no warnings", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-healthy-pull-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-healthy-pull-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-healthy.regex",
 			}.assert(t, nil, opts...)
 		})
@@ -1457,47 +1644,54 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// this e2e suite is the only place that exercises the configMap/secret volume
 		// existence and key-presence checks in Pod.tmpl's pod_volumes/pod_volume_line.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/pod-volume-configmap-secret.yaml")
-		waitForContainerWaitingReason(t, "pod/e2e-pod-volume-missing-configmap", "main", "ContainerCreating")
-		waitForContainerWaitingReason(t, "pod/e2e-pod-volume-missing-secret", "main", "ContainerCreating")
-		waitForContainerWaitingReason(t, "pod/e2e-pod-volume-missing-key", "main", "ContainerCreating")
-		waitFor(t, "pod/e2e-pod-volume-optional-missing", "condition=Ready")
-		waitFor(t, "pod/e2e-pod-volume-optional-missing-key", "condition=Ready")
-		waitFor(t, "pod/e2e-pod-volume-healthy", "condition=Ready")
+		ns := "e2e-pod-volume-configmap-secret"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/pod-volume-configmap-secret.yaml", ns)
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-volume-missing-configmap", "main", "ContainerCreating", ns)
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-volume-missing-secret", "main", "ContainerCreating", ns)
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-volume-missing-key", "main", "ContainerCreating", ns)
+		waitForInNamespace(t, "pod/e2e-pod-volume-optional-missing", "condition=Ready", ns)
+		waitForInNamespace(t, "pod/e2e-pod-volume-optional-missing-key", "condition=Ready", ns)
+		waitForInNamespace(t, "pod/e2e-pod-volume-healthy", "condition=Ready", ns)
 
 		t.Run("pod referencing a non-existent ConfigMap volume flags it without --include-all-volumes", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-volume-missing-configmap", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-volume-missing-configmap", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-missing-configmap.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("pod referencing a non-existent Secret volume flags it without --include-all-volumes", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-volume-missing-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-volume-missing-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-missing-secret.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("pod referencing an existing ConfigMap but a missing key flags it", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-volume-missing-key", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-volume-missing-key", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-missing-key.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("optional configMap volume referencing a non-existent ConfigMap shows no warning", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-volume-optional-missing", "--include-events=false", "--include-managed-fields=false", "--include-all-volumes", "--v", "5"},
+				args:            []string{"pod/e2e-pod-volume-optional-missing", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--include-all-volumes", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-optional-missing.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("optional configMap volume with items referencing a missing key shows no warning", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-volume-optional-missing-key", "--include-events=false", "--include-managed-fields=false", "--include-all-volumes", "--v", "5"},
+				args:            []string{"pod/e2e-pod-volume-optional-missing-key", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--include-all-volumes", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-optional-missing-key.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("healthy configMap and secret volumes show no warnings", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-volume-healthy", "--include-events=false", "--include-managed-fields=false", "--include-all-volumes", "--v", "5"},
+				args:            []string{"pod/e2e-pod-volume-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--include-all-volumes", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-healthy.regex",
 			}.assert(t, nil, opts...)
 		})
@@ -1517,14 +1711,21 @@ func TestE2EDynamicManifests(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts(), []func(*plugin.RenderConfig){
 			func(cfg *plugin.RenderConfig) { cfg.Now = time.Now },
 		})
-		applyManifest(t, "e2e-artifacts/pod-container-logs.yaml")
+		ns := "e2e-pod-container-logs"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/pod-container-logs.yaml", ns)
 		// Wait for a stable Waiting(CrashLoopBackOff) state rather than just restartCount > 0:
 		// the container's current state otherwise flips between Waiting and Terminated(Error)
 		// as the kubelet retries, which would make the golden regex flaky.
-		waitForContainerWaitingReason(t, "pod/e2e-pod-container-logs", "crasher", "CrashLoopBackOff")
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-container-logs", "crasher", "CrashLoopBackOff", ns)
 
 		cmdTest{
-			args:            []string{"pod/e2e-pod-container-logs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/e2e-pod-container-logs", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-container-logs.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -1695,18 +1896,48 @@ func applyManifest(t *testing.T, filepath string) {
 		t.Logf("deleting manifest %s", filepath)
 		cmd := exec.Command("kubectl", "delete", "-f", filepath)
 		output, err := cmd.CombinedOutput()
-		assert.NoError(t, err)
+		if err != nil {
+			t.Logf("warning: failed to delete manifest %s: %v (output: %s)", filepath, err, string(output))
+			return
+		}
 		t.Logf("manifest deleted %s: %s", filepath, string(output))
 	})
 	require.NoError(t, err)
 	t.Logf("applied manifest %s: %s", filepath, string(output))
 }
 
-func waitFor(t *testing.T, resource, forParam string) {
+// applyManifestInNamespace is applyManifest, but targets a namespace via `kubectl -n` instead of
+// relying on the manifest's own metadata.namespace (or the kubeconfig's default) -- used to give a
+// subtest a dedicated namespace without needing a namespace-specific copy of its fixture yaml. The
+// manifest's objects must not already set their own metadata.namespace, since that always wins
+// over `-n` and would silently defeat the isolation this is for.
+func applyManifestInNamespace(t *testing.T, filepath, namespace string) {
 	t.Helper()
-	cmd := exec.Command("kubectl", "wait", "--for", forParam, resource, "--timeout=2m")
+	filepath = path.Join("..", "tests", filepath)
+	cmd := exec.Command("kubectl", "apply", "-n", namespace, "-f", filepath)
 	output, err := cmd.CombinedOutput()
-	t.Logf("wait result for %s: %s", resource, string(output))
+	t.Cleanup(func() {
+		t.Logf("deleting manifest %s from namespace %s", filepath, namespace)
+		cmd := exec.Command("kubectl", "delete", "-n", namespace, "-f", filepath)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Logf("warning: failed to delete manifest %s from namespace %s: %v (output: %s)", filepath, namespace, err, string(output))
+			return
+		}
+		t.Logf("manifest deleted %s from namespace %s: %s", filepath, namespace, string(output))
+	})
+	require.NoError(t, err)
+	t.Logf("applied manifest %s to namespace %s: %s", filepath, namespace, string(output))
+}
+
+// waitForInNamespace targets a namespace explicitly via `kubectl -n` instead of the kubeconfig's
+// default -- pairs with applyManifestInNamespace for subtests moved off the shared default
+// namespace.
+func waitForInNamespace(t *testing.T, resource, forParam, namespace string) {
+	t.Helper()
+	cmd := exec.Command("kubectl", "wait", "-n", namespace, "--for", forParam, resource, "--timeout=2m")
+	output, err := cmd.CombinedOutput()
+	t.Logf("wait result for %s in namespace %s: %s", resource, namespace, string(output))
 	require.NoError(t, err)
 }
 
@@ -1764,12 +1995,18 @@ func waitForPodByLabel(t *testing.T, namespace, labelSelector string) string {
 	return ""
 }
 
-func waitForContainerWaitingReason(t *testing.T, resource, containerName, reason string) {
+// waitForContainerWaitingReasonInNamespace targets a namespace explicitly via `kubectl -n`
+// instead of the kubeconfig's default; pass "" to use the kubeconfig's default namespace.
+func waitForContainerWaitingReasonInNamespace(t *testing.T, resource, containerName, reason, namespace string) {
 	t.Helper()
 	jsonpath := fmt.Sprintf(`{.status.containerStatuses[?(@.name=="%s")].state.waiting.reason}`, containerName)
+	args := []string{"get", resource, "-o", "jsonpath=" + jsonpath}
+	if namespace != "" {
+		args = append([]string{"-n", namespace}, args...)
+	}
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
-		cmd := exec.Command("kubectl", "get", resource, "-o", "jsonpath="+jsonpath)
+		cmd := exec.Command("kubectl", args...)
 		output, err := cmd.CombinedOutput()
 		if err == nil && strings.TrimSpace(string(output)) == reason {
 			t.Logf("%s container %s reached waiting reason %s", resource, containerName, reason)

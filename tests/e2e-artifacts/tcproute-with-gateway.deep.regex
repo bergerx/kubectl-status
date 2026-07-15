@@ -1,8 +1,8 @@
 \A
-TCPRoute/e2e-tcproute -n default, created 1m ago, gen:1
+TCPRoute/e2e-tcproute -n e2e-tcproute, created 1m ago, gen:1
   Current: Resource is current
   Parents:
-    Gateway/e2e-tcp-gw -n default, created 1m ago, gen:1
+    Gateway/e2e-tcp-gw -n e2e-tcproute, created 1m ago, gen:1
       Current: Resource is current
       Accepted Pending, Waiting for controller for 1m
       Programmed Pending, Waiting for controller for 1m

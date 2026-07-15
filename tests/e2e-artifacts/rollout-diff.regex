@@ -1,9 +1,9 @@
 \A
-Deployment/rollout-diff-test -n default, created \d+[a-z]+ ago, gen:\d+ rev:\d+
+Deployment/rollout-diff-test -n e2e-rollout-diff, created \d+[a-z]+ ago, gen:\d+ rev:\d+
   Current: Deployment is available\. Replicas: 1
   desired:1, existing:1, ready:1, updated:1, available:1
   Selector: app=rollout-diff-test
-(?:    Pod/rollout-diff-test-[a-z0-9]+-[a-z0-9]+ -n default, created \d+[a-z]+ ago Running, 1/1 ready
+(?:    Pod/rollout-diff-test-[a-z0-9]+-[a-z0-9]+ -n e2e-rollout-diff, created \d+[a-z]+ ago Running, 1/1 ready
 )+  Not matched by any Service
   Available MinimumReplicasAvailable, Deployment has minimum availability\. for \d+[a-z]+
   Progressing NewReplicaSetAvailable, ReplicaSet "rollout-diff-test-7cf6c88cf8" has successfully progressed\. for \d+[a-z]+
