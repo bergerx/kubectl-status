@@ -54,6 +54,16 @@ command -v gh >/dev/null 2>&1 || {
 	exit 1
 }
 
+command -v jq >/dev/null 2>&1 || {
+	echo "jq is required (to parse Claude session state) but not found" >&2
+	exit 1
+}
+
+if [ ! -d "$worktrees_dir" ]; then
+	echo "No worktrees directory found at $worktrees_dir. Nothing to reap."
+	exit 0
+fi
+
 git fetch origin master --quiet 2>/dev/null || true
 
 # cwd of every still-running Claude Code session on this machine (interactive
@@ -112,12 +122,23 @@ process_worktree() {
 			echo "SKIP  $br ($wt): has unpushed commits"
 			return
 		fi
-		echo "REAP  $br ($wt): PR $pr_state"
-		reap_minikube_profile "$br"
-		if $apply; then
-			git worktree unlock "$wt" 2>/dev/null || true
-			git worktree remove "$wt" || { echo "      ERROR removing worktree, leaving for manual review"; return; }
-			git branch -D "$br" || echo "      ERROR deleting branch, leaving for manual review"
+		if git merge-base --is-ancestor "$br" origin/master 2>/dev/null; then
+			echo "REAP  $br ($wt): PR $pr_state (merged into origin/master)"
+			reap_minikube_profile "$br"
+			if $apply; then
+				git worktree unlock "$wt" 2>/dev/null || true
+				git worktree remove "$wt" || { echo "      ERROR removing worktree, leaving for manual review"; return; }
+				# -D, not -d: already verified merged into origin/master above (-d checks
+				# local HEAD instead, which can lag origin and wrongly refuse).
+				git branch -D "$br" || echo "      ERROR deleting branch, leaving for manual review"
+			fi
+		else
+			echo "PARTIAL-REAP  $br ($wt): PR $pr_state but has unmerged work -- removing worktree, keeping branch for manual review"
+			reap_minikube_profile "$br"
+			if $apply; then
+				git worktree unlock "$wt" 2>/dev/null || true
+				git worktree remove "$wt" || echo "      ERROR removing worktree, leaving for manual review"
+			fi
 		fi
 		return
 		;;
@@ -128,8 +149,15 @@ process_worktree() {
 		return
 	fi
 
+	local last_commit_timestamp
+	last_commit_timestamp="$(git -C "$wt" log -1 --format=%ct 2>/dev/null || true)"
+	if [ -z "$last_commit_timestamp" ]; then
+		echo "SKIP  $br ($wt): could not determine last commit timestamp"
+		return
+	fi
+
 	local last_commit_age_days
-	last_commit_age_days=$(( ($(date +%s) - $(git -C "$wt" log -1 --format=%ct)) / 86400 ))
+	last_commit_age_days=$(( ($(date +%s) - last_commit_timestamp) / 86400 ))
 	if [ "$last_commit_age_days" -lt "$stale_days" ]; then
 		echo "SKIP  $br ($wt): no PR, session ended, but only ${last_commit_age_days}d old (< ${stale_days}d threshold)"
 		return

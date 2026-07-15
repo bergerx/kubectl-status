@@ -5,4 +5,4 @@
 # compute it identically.
 set -euo pipefail
 
-printf '%s' "$1" | (sha1sum 2>/dev/null || shasum) | cut -c1-8
+printf '%s' "${1:-}" | (sha1sum 2>/dev/null || shasum) | cut -c1-8
