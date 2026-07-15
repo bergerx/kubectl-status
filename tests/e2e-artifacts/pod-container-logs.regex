@@ -1,5 +1,5 @@
 \A
-Pod/e2e-pod-container-logs -n default, created 1m ago, gen:1, started after 1m Running BestEffort
+Pod/e2e-pod-container-logs -n e2e-pod-container-logs, created 1m ago, gen:1, started after 1m Running BestEffort
   Failed: Containers in CrashLoop state: crasher
     Stalled: ContainerCrashLooping, Containers in CrashLoop state: crasher
   PodScheduled -> Initialized -> Not ContainersReady -> Not Ready
@@ -12,7 +12,7 @@ Pod/e2e-pod-container-logs -n default, created 1m ago, gen:1, started after 1m R
         init-setup-log-line
     init-silent \(busybox:latest\) Started 1m ago and Completed after 1m, has no logs
   Containers:
-    crasher \(busybox:latest\) Waiting CrashLoopBackOff: back-off [0-9smh]+ restarting failed container=crasher pod=e2e-pod-container-logs_default\([0-9a-f-]+\), restarted [0-9]+ times(?: \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\))?
+    crasher \(busybox:latest\) Waiting CrashLoopBackOff: back-off [0-9smh]+ restarting failed container=crasher pod=e2e-pod-container-logs_e2e-pod-container-logs\([0-9a-f-]+\), restarted [0-9]+ times(?: \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\))?
       previously: Started 1m ago and Error after 1m with exit code exit with 1
       Last 20 lines of logs from previous instance \(restarted within last hour\):
         crasher-log-line

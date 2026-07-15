@@ -1623,14 +1623,21 @@ func TestE2EDynamicManifests(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts(), []func(*plugin.RenderConfig){
 			func(cfg *plugin.RenderConfig) { cfg.Now = time.Now },
 		})
-		applyManifest(t, "e2e-artifacts/pod-container-logs.yaml")
+		ns := "e2e-pod-container-logs"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/pod-container-logs.yaml", ns)
 		// Wait for a stable Waiting(CrashLoopBackOff) state rather than just restartCount > 0:
 		// the container's current state otherwise flips between Waiting and Terminated(Error)
 		// as the kubelet retries, which would make the golden regex flaky.
-		waitForContainerWaitingReason(t, "pod/e2e-pod-container-logs", "crasher", "CrashLoopBackOff")
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-container-logs", "crasher", "CrashLoopBackOff", ns)
 
 		cmdTest{
-			args:            []string{"pod/e2e-pod-container-logs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/e2e-pod-container-logs", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-container-logs.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -1904,10 +1911,22 @@ func waitForPodByLabel(t *testing.T, namespace, labelSelector string) string {
 
 func waitForContainerWaitingReason(t *testing.T, resource, containerName, reason string) {
 	t.Helper()
+	waitForContainerWaitingReasonInNamespace(t, resource, containerName, reason, "")
+}
+
+// waitForContainerWaitingReasonInNamespace is waitForContainerWaitingReason, but targets a
+// namespace explicitly via `kubectl -n` instead of the kubeconfig's default; pass "" to behave
+// exactly like waitForContainerWaitingReason.
+func waitForContainerWaitingReasonInNamespace(t *testing.T, resource, containerName, reason, namespace string) {
+	t.Helper()
 	jsonpath := fmt.Sprintf(`{.status.containerStatuses[?(@.name=="%s")].state.waiting.reason}`, containerName)
+	args := []string{"get", resource, "-o", "jsonpath=" + jsonpath}
+	if namespace != "" {
+		args = append([]string{"-n", namespace}, args...)
+	}
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
-		cmd := exec.Command("kubectl", "get", resource, "-o", "jsonpath="+jsonpath)
+		cmd := exec.Command("kubectl", args...)
 		output, err := cmd.CombinedOutput()
 		if err == nil && strings.TrimSpace(string(output)) == reason {
 			t.Logf("%s container %s reached waiting reason %s", resource, containerName, reason)
