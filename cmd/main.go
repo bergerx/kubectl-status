@@ -152,6 +152,9 @@ func checkErr(err error) error {
 		out = errors.New(msg)
 	})
 	cmdutil.CheckErr(err)
+	if out == nil {
+		return err
+	}
 	return out
 }
 
