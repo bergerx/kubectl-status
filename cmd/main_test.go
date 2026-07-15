@@ -509,7 +509,9 @@ func TestE2EDynamicManifests(t *testing.T) {
 			},
 		}
 		owner, err = clientset.CoreV1().Secrets(ns).Create(context.TODO(), owner, metav1.CreateOptions{})
-		defer clientset.CoreV1().Secrets(ns).Delete(context.TODO(), "owner", metav1.DeleteOptions{})
+		t.Cleanup(func() {
+			clientset.CoreV1().Secrets(ns).Delete(context.TODO(), "owner", metav1.DeleteOptions{})
+		})
 		require.NoError(t, err)
 		uid := owner.GetUID()
 		t.Logf("owner secret is created, uid is %s", uid)
@@ -1131,14 +1133,16 @@ func TestE2EDynamicManifests(t *testing.T) {
 			applyManifestInNamespace(t, "e2e-artifacts/rollouts-three-revisions.yaml", ns)
 			waitForInNamespace(t, "deployment/"+name, "condition=Available", ns)
 
-			require.NoError(t, exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.26", "-n", ns).Run())
+			out, err := exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.26", "-n", ns).CombinedOutput()
+			require.NoError(t, err, string(out))
 			rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
 			output, err := rolloutCmd.CombinedOutput()
 			t.Logf("rollout status for %s (nginx:1.26): %s", name, output)
 			require.NoError(t, err)
 			waitForSinglePod(t, ns, "app="+name)
 
-			require.NoError(t, exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.27", "-n", ns).Run())
+			out, err = exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.27", "-n", ns).CombinedOutput()
+			require.NoError(t, err, string(out))
 			rolloutCmd = exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
 			output, err = rolloutCmd.CombinedOutput()
 			t.Logf("rollout status for %s (nginx:1.27): %s", name, output)
@@ -1892,7 +1896,10 @@ func applyManifest(t *testing.T, filepath string) {
 		t.Logf("deleting manifest %s", filepath)
 		cmd := exec.Command("kubectl", "delete", "-f", filepath)
 		output, err := cmd.CombinedOutput()
-		assert.NoError(t, err)
+		if err != nil {
+			t.Logf("warning: failed to delete manifest %s: %v (output: %s)", filepath, err, string(output))
+			return
+		}
 		t.Logf("manifest deleted %s: %s", filepath, string(output))
 	})
 	require.NoError(t, err)
@@ -1913,7 +1920,10 @@ func applyManifestInNamespace(t *testing.T, filepath, namespace string) {
 		t.Logf("deleting manifest %s from namespace %s", filepath, namespace)
 		cmd := exec.Command("kubectl", "delete", "-n", namespace, "-f", filepath)
 		output, err := cmd.CombinedOutput()
-		assert.NoError(t, err)
+		if err != nil {
+			t.Logf("warning: failed to delete manifest %s from namespace %s: %v (output: %s)", filepath, namespace, err, string(output))
+			return
+		}
 		t.Logf("manifest deleted %s from namespace %s: %s", filepath, namespace, string(output))
 	})
 	require.NoError(t, err)

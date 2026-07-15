@@ -9,5 +9,5 @@ Service/svc-with-httproute -n e2e-svc-httproute, created 1m ago
       Parents:
       Rules:
         PathPrefix /
-        Service/svc-with-httproute\[default\] is already printed
+        Service/svc-with-httproute\[e2e-svc-httproute\] is already printed
 \z
