@@ -1243,6 +1243,16 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("vap-binding-resolves-policy", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		// The policy itself is cluster-scoped (ValidatingAdmissionPolicy/Binding aren't
+		// namespaced), but its matchConstraints.namespaceSelector in vap-binding.yaml scopes
+		// enforcement to this namespace specifically -- see the comment there for why.
+		ns := "e2e-vap-binding"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
 		applyManifest(t, "e2e-artifacts/vap-binding.yaml")
 		cmdTest{
 			args:            []string{"validatingadmissionpolicybinding/e2e-require-team-label-binding", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
