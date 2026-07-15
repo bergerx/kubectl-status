@@ -1,0 +1,1 @@
+ServiceAccount/kubectl-status-test-sa, automountServiceAccountToken: false, imagePullSecrets: regcred

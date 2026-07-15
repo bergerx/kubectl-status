@@ -550,6 +550,64 @@ func TestE2EDynamicManifests(t *testing.T) {
 			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node.regex",
 		}.assert(t, nil)
 	})
+	t.Run("pod's serviceAccountName resolves to the ServiceAccount and surfaces automount/imagePullSecrets", func(t *testing.T) {
+		viperTestHack(t)
+		f := false
+		sa := &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "kubectl-status-test-sa",
+				Namespace: "default",
+			},
+			AutomountServiceAccountToken: &f,
+			ImagePullSecrets:             []corev1.LocalObjectReference{{Name: "regcred"}},
+		}
+		_, err := clientset.CoreV1().ServiceAccounts("default").Create(context.TODO(), sa, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.CoreV1().ServiceAccounts("default").Delete(context.TODO(), sa.Name, metav1.DeleteOptions{})
+
+		// The ServiceAccount admission plugin merges its imagePullSecrets onto every Pod that
+		// uses it, so Pod.tmpl's own (pre-existing) imagePullSecrets check will flag "regcred" as
+		// missing unless it actually exists with the expected type.
+		regcred := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "regcred", Namespace: "default"},
+			Type:       corev1.SecretTypeDockerConfigJson,
+			Data:       map[string][]byte{".dockerconfigjson": []byte("{}")},
+		}
+		_, err = clientset.CoreV1().Secrets("default").Create(context.TODO(), regcred, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), regcred.Name, metav1.DeleteOptions{})
+
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-with-custom-sa",
+				Namespace: "default",
+			},
+			Spec: corev1.PodSpec{
+				ServiceAccountName: sa.Name,
+				Containers:         []corev1.Container{{Name: "app", Image: "busybox"}},
+			},
+		}
+		_, err = clientset.CoreV1().Pods("default").Create(context.TODO(), pod, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+
+		cmdTest{
+			args:            []string{"pod/pod-with-custom-sa", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-with-custom-sa.regex",
+		}.assert(t, nil)
+	})
+	t.Run("pod referencing a missing ServiceAccount surfaces a doesn't-exist warning", func(t *testing.T) {
+		// Rendered with --local (rather than created on the cluster) since a real cluster's
+		// ServiceAccount admission plugin rejects a Pod at creation time when its
+		// serviceAccountName doesn't resolve -- --local still resolves the reference against the
+		// real API server (only the Pod object itself is local), so the not-found check is
+		// exercised the same way, without needing admission to allow the invalid Pod through.
+		viperTestHack(t)
+		cmdTest{
+			args:            []string{"-f", "../tests/e2e-artifacts/pod-missing-service-account.yaml", "--local", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-missing-service-account.regex",
+		}.assert(t, nil)
+	})
 	t.Run("workload's matching pod on a cordoned node surfaces a compact node-problem flag", func(t *testing.T) {
 		viperTestHack(t)
 		nodeName := createBadNode(t, clientset)

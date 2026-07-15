@@ -9,6 +9,7 @@
     {{- $podTemplate := .Spec.template | default dict }}
     {{- $podMeta := $podTemplate.metadata | default dict }}
     {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" true "vpaTargetable" true "serviceExpected" true) }}
+    {{- template "service_account_summary" (dict "ctx" . "namespace" .Namespace "serviceAccountName" ($podTemplate.spec | default dict).serviceAccountName) }}
     {{- /* When there is no readyReplicas, STS may not have related fields at all */ -}}
     {{- $status := .Status }}
     {{- $_ := set $status "readyReplicas" ($status.readyReplicas | default 0) }}
