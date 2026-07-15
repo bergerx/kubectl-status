@@ -1,1 +1,1 @@
-Ingress/e2e-tls-ingress-healthy -n default, created .* ago, gen:1
+Ingress/e2e-tls-ingress-healthy -n e2e-tls-validation, created .* ago, gen:1

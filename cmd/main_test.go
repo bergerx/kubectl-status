@@ -1444,14 +1444,21 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// KubeGetFirst a no-op, so this e2e suite is the only place in the whole test suite
 		// that exercises the found-secret validation branches of Ingress.tmpl/Gateway.tmpl.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/tls-validation-ca.yaml")
-		waitFor(t, "certificate/e2e-tls-root-ca", "condition=Ready")
-		waitFor(t, "issuer/e2e-tls-ca-issuer", "condition=Ready")
-		applyManifest(t, "e2e-artifacts/tls-validation-leaf.yaml")
-		waitFor(t, "certificate/e2e-tls-leaf", "condition=Ready")
+		ns := "e2e-tls-validation"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-ca.yaml", ns)
+		waitForInNamespace(t, "certificate/e2e-tls-root-ca", "condition=Ready", ns)
+		waitForInNamespace(t, "issuer/e2e-tls-ca-issuer", "condition=Ready", ns)
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-leaf.yaml", ns)
+		waitForInNamespace(t, "certificate/e2e-tls-leaf", "condition=Ready", ns)
 
 		t.Run("secret/leaf shows full non-self-signed certificate detail", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"secret/e2e-tls-leaf-tls", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"secret/e2e-tls-leaf-tls", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-secret-leaf.regex"))
 			require.NoError(t, rerr)
@@ -1464,18 +1471,18 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("secret/leaf with --deep inlines the full Certificate and Issuer detail", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"secret/e2e-tls-leaf-tls", "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"secret/e2e-tls-leaf-tls", "-n", ns, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-secret-leaf-deep.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("secret/root-ca is flagged self-signed", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"secret/e2e-tls-root-ca-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"secret/e2e-tls-root-ca-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-secret-root.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("ingress with matching hostname is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"ingress/e2e-tls-ingress-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"ingress/e2e-tls-ingress-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-ingress-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1493,24 +1500,24 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("ingress with mismatched hostname flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"ingress/e2e-tls-ingress-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"ingress/e2e-tls-ingress-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("ingress referencing the root CA secret flags self-signed", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"ingress/e2e-tls-ingress-selfsigned", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"ingress/e2e-tls-ingress-selfsigned", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-selfsigned.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("ingress with --deep inlines the full Secret detail", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"ingress/e2e-tls-ingress-healthy", "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"ingress/e2e-tls-ingress-healthy", "-n", ns, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-ingress-deep.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("gateway with matching hostname is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"gateway/e2e-tls-gw-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"gateway/e2e-tls-gw-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-gateway-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1521,13 +1528,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("gateway with mismatched hostname flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"gateway/e2e-tls-gw-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"gateway/e2e-tls-gw-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-gateway-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
-		applyManifest(t, "e2e-artifacts/tls-validation-grpcroute.yaml")
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-grpcroute.yaml", ns)
 		t.Run("grpcroute attached to healthy gateway listener shows no cert flags", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"grpcroute/e2e-tls-grpcroute-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"grpcroute/e2e-tls-grpcroute-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-grpcroute-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1538,13 +1545,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("grpcroute with its own hostname mismatching the cert SANs flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"grpcroute/e2e-tls-grpcroute-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"grpcroute/e2e-tls-grpcroute-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-grpcroute-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
-		applyManifest(t, "e2e-artifacts/tls-validation-tlsroute.yaml")
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-tlsroute.yaml", ns)
 		t.Run("tlsroute attached to Terminate listener with matching hostname is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-tlsroute-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1555,12 +1562,12 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("tlsroute with its own hostname mismatching the cert SANs flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"tlsroute/e2e-tlsroute-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"tlsroute/e2e-tlsroute-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-tlsroute-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("tlsroute attached to a Passthrough listener shows no cert flags", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-passthrough", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-passthrough", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-tlsroute-passthrough.regex"))
 			require.NoError(t, rerr)
@@ -1569,9 +1576,9 @@ func TestE2EDynamicManifests(t *testing.T) {
 				assert.NotContains(t, stdout, problem)
 			}
 		})
-		applyManifest(t, "e2e-artifacts/tls-validation-httproute.yaml")
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-httproute.yaml", ns)
 		t.Run("httproute attached to a healthy listener is healthy", func(t *testing.T) {
-			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-healthy", "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
 			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-httproute-healthy.regex"))
 			require.NoError(t, rerr)
@@ -1582,7 +1589,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 		t.Run("httproute attached to a mismatched-hostname listener flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"httproute/e2e-tls-httproute-mismatch", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"httproute/e2e-tls-httproute-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-httproute-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
@@ -1913,17 +1920,9 @@ func applyManifestInNamespace(t *testing.T, filepath, namespace string) {
 	t.Logf("applied manifest %s to namespace %s: %s", filepath, namespace, string(output))
 }
 
-func waitFor(t *testing.T, resource, forParam string) {
-	t.Helper()
-	cmd := exec.Command("kubectl", "wait", "--for", forParam, resource, "--timeout=2m")
-	output, err := cmd.CombinedOutput()
-	t.Logf("wait result for %s: %s", resource, string(output))
-	require.NoError(t, err)
-}
-
-// waitForInNamespace is waitFor, but targets a namespace explicitly via `kubectl -n` instead of
-// the kubeconfig's default -- pairs with applyManifestInNamespace for subtests moved off the
-// shared default namespace.
+// waitForInNamespace targets a namespace explicitly via `kubectl -n` instead of the kubeconfig's
+// default -- pairs with applyManifestInNamespace for subtests moved off the shared default
+// namespace.
 func waitForInNamespace(t *testing.T, resource, forParam, namespace string) {
 	t.Helper()
 	cmd := exec.Command("kubectl", "wait", "-n", namespace, "--for", forParam, resource, "--timeout=2m")
