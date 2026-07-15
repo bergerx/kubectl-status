@@ -932,12 +932,20 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("deployment rollout with --include-rollout-diffs shows the diff between revisions", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-rollout-diff"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
 		name := "rollout-diff-test"
 		one := int32(1)
 		dep := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &one,
@@ -948,19 +956,19 @@ func TestE2EDynamicManifests(t *testing.T) {
 				},
 			},
 		}
-		_, err := clientset.AppsV1().Deployments("default").Create(context.TODO(), dep, metav1.CreateOptions{})
+		_, err = clientset.AppsV1().Deployments(ns).Create(context.TODO(), dep, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.AppsV1().Deployments("default").Delete(context.TODO(), name, metav1.DeleteOptions{})
-		waitFor(t, "deployment/"+name, "condition=Available")
+		defer clientset.AppsV1().Deployments(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+		waitForInNamespace(t, "deployment/"+name, "condition=Available", ns)
 
 		// Update the image so a second ReplicaSet revision is created, giving --include-rollout-diffs
 		// something to diff.
-		dep, err = clientset.AppsV1().Deployments("default").Get(context.TODO(), name, metav1.GetOptions{})
+		dep, err = clientset.AppsV1().Deployments(ns).Get(context.TODO(), name, metav1.GetOptions{})
 		require.NoError(t, err)
 		dep.Spec.Template.Spec.Containers[0].Image = "nginx:1.26"
-		_, err = clientset.AppsV1().Deployments("default").Update(context.TODO(), dep, metav1.UpdateOptions{})
+		_, err = clientset.AppsV1().Deployments(ns).Update(context.TODO(), dep, metav1.UpdateOptions{})
 		require.NoError(t, err)
-		rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", "default", "--timeout=2m")
+		rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
 		output, err := rolloutCmd.CombinedOutput()
 		t.Logf("rollout status for %s: %s", name, output)
 		require.NoError(t, err)
@@ -968,7 +976,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// The order in which the two ReplicaSet revisions are diffed (and so which side
 		// gets "-" vs "+") isn't guaranteed, so the fixture alternates both directions.
 		cmdTest{
-			args:            []string{"deployment/" + name, "--include-rollout-diffs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"deployment/" + name, "-n", ns, "--include-rollout-diffs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/rollout-diff.regex",
 		}.assert(t, nil, opts...)
 	})
