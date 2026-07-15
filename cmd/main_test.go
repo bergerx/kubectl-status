@@ -1155,49 +1155,70 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("svc-with-httproute", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/svc-with-httproute.yaml")
+		ns := "e2e-svc-httproute"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/svc-with-httproute.yaml", ns)
 		cmdTest{
-			args:            []string{"service/svc-with-httproute", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"service/svc-with-httproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/svc-with-httproute.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"service/svc-with-httproute", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"service/svc-with-httproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/svc-with-httproute.deep.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("sts-with-nodeport", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-sts-nodeport"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
 		// using sts here as the pod name is predictable in that case, not true for deployments and ds
-		applyManifest(t, "e2e-artifacts/sts-with-nodeport.yaml")
-		waitFor(t, "sts/sts-with-nodeport", "jsonpath={.status.readyReplicas}=1")
-		waitFor(t, "pdb/sts-with-nodeport", "jsonpath={.status.currentHealthy}=1")
+		applyManifestInNamespace(t, "e2e-artifacts/sts-with-nodeport.yaml", ns)
+		waitForInNamespace(t, "sts/sts-with-nodeport", "jsonpath={.status.readyReplicas}=1", ns)
+		waitForInNamespace(t, "pdb/sts-with-nodeport", "jsonpath={.status.currentHealthy}=1", ns)
 		cmdTest{
 			// Log/volume usage bytes come from live kubelet stats and aren't reproducible
 			// across runs, so this is matched as a regex rather than exact text.
-			args:            []string{"pod/sts-with-nodeport-0", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/sts-with-nodeport-0", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pod.regex",
 		}.assert(t, nodeNameModifier, opts...)
 		cmdTest{
-			args:            []string{"pdb/sts-with-nodeport", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pdb/sts-with-nodeport", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.pdb.regex",
 		}.assert(t, nodeNameModifier, opts...)
 		cmdTest{
-			args:            []string{"sts/sts-with-nodeport", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"sts/sts-with-nodeport", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-nodeport.sts.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pdb-empty-selector-conflict", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/pdb-empty-selector-conflict.yaml")
-		waitFor(t, "sts/pdb-conflict-test", "jsonpath={.status.readyReplicas}=1")
+		ns := "e2e-pdb-conflict"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/pdb-empty-selector-conflict.yaml", ns)
+		waitForInNamespace(t, "sts/pdb-conflict-test", "jsonpath={.status.readyReplicas}=1", ns)
 		// Kubernetes' disruption controller picks one of the two overlapping PDBs arbitrarily
 		// and leaves the other's currentHealthy permanently at 0 -- observedGeneration is the
 		// reliable "controller has made its (possibly permanent) decision" signal here, not
 		// currentHealthy, which may never reach 1 for the non-chosen budget.
-		waitFor(t, "pdb/pdb-conflict-test", "jsonpath={.status.observedGeneration}=1")
-		waitFor(t, "pdb/pdb-conflict-test-catch-all", "jsonpath={.status.observedGeneration}=1")
+		waitForInNamespace(t, "pdb/pdb-conflict-test", "jsonpath={.status.observedGeneration}=1", ns)
+		waitForInNamespace(t, "pdb/pdb-conflict-test-catch-all", "jsonpath={.status.observedGeneration}=1", ns)
 		cmdTest{
-			args:            []string{"pod/pdb-conflict-test-0", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/pdb-conflict-test-0", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pdb-empty-selector-conflict.pod.regex",
 		}.assert(t, nodeNameModifier, opts...)
 	})
