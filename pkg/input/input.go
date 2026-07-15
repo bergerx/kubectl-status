@@ -129,7 +129,7 @@ func (r *ResourceRepo) newBaseBuilder() *resource.Builder {
 	builder := r.f.NewBuilder().
 		NamespaceParam(r.viper.GetString("namespace")).
 		DefaultNamespace().
-		AllNamespaces(r.viper.GetBool("all-namepaces")).
+		AllNamespaces(r.viper.GetBool("all-namespaces")).
 		ContinueOnError().
 		Unstructured().
 		Flatten()

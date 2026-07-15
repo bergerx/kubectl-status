@@ -572,7 +572,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pod's serviceAccountName resolves to the ServiceAccount and surfaces automount/imagePullSecrets", func(t *testing.T) {
-		viperTestHack(t)
+		opts := combineOpts(viperTestHackOpts())
 		f := false
 		sa := &corev1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
@@ -615,7 +615,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		cmdTest{
 			args:            []string{"pod/pod-with-custom-sa", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-with-custom-sa.regex",
-		}.assert(t, nil)
+		}.assert(t, nil, opts...)
 	})
 	t.Run("pod referencing a missing ServiceAccount surfaces a doesn't-exist warning", func(t *testing.T) {
 		// Rendered with --local (rather than created on the cluster) since a real cluster's
@@ -623,11 +623,11 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// serviceAccountName doesn't resolve -- --local still resolves the reference against the
 		// real API server (only the Pod object itself is local), so the not-found check is
 		// exercised the same way, without needing admission to allow the invalid Pod through.
-		viperTestHack(t)
+		opts := combineOpts(viperTestHackOpts())
 		cmdTest{
 			args:            []string{"-f", "../tests/e2e-artifacts/pod-missing-service-account.yaml", "--local", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-missing-service-account.regex",
-		}.assert(t, nil)
+		}.assert(t, nil, opts...)
 	})
 	t.Run("workload's matching pod on a cordoned node surfaces a compact node-problem flag", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())

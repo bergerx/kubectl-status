@@ -109,10 +109,10 @@ func newRenderEngine(streams genericiooptions.IOStreams, cfg *RenderConfig) (*re
 		return nil, err
 	}
 	return &renderEngine{
-		streams,
-		cfg,
-		make(uidSet),
-		*tmpl,
+		ioStreams:    streams,
+		cfg:          cfg,
+		renderedUIDs: make(uidSet),
+		Template:     *tmpl,
 	}, nil
 }
 
