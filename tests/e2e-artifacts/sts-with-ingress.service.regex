@@ -1,2 +1,2 @@
 Ingresses matching this Service:
-    Ingress/sts-with-ingress -n default, created 1m ago, sts-with-ingress\.com, [^\n]*Current
+    Ingress/sts-with-ingress -n e2e-sts-with-ingress, created 1m ago, sts-with-ingress\.com, [^\n]*Current

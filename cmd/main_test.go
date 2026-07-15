@@ -1153,21 +1153,28 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("sts-with-ingress", func(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-sts-with-ingress"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
 		// using sts here as the pod name is predictable in that case, not true for deployments and ds
-		applyManifest(t, "e2e-artifacts/sts-with-ingress.yaml")
-		waitFor(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1")
+		applyManifestInNamespace(t, "e2e-artifacts/sts-with-ingress.yaml", ns)
+		waitForInNamespace(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1", ns)
 		cmdTest{
 			// Log/volume usage bytes come from live kubelet stats and aren't reproducible
 			// across runs, so this is matched as a regex rather than exact text.
-			args:            []string{"pod/sts-with-ingress-0", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/sts-with-ingress-0", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.pod.regex",
 		}.assert(t, nodeNameModifier, opts...)
 		cmdTest{
-			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"service/sts-with-ingress", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.service.regex",
 		}.assert(t, nil, opts...)
 		cmdTest{
-			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"service/sts-with-ingress", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress.service-deep.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -1176,15 +1183,22 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// same Service, so its "Routes matching this Service" section shows up alongside the
 		// Ingress already covered there.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/sts-with-ingress.yaml")
-		applyManifest(t, "e2e-artifacts/sts-with-ingress-routes.yaml")
-		waitFor(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1")
+		ns := "e2e-sts-with-ingress-routes"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/sts-with-ingress.yaml", ns)
+		applyManifestInNamespace(t, "e2e-artifacts/sts-with-ingress-routes.yaml", ns)
+		waitForInNamespace(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1", ns)
 		cmdTest{
-			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"service/sts-with-ingress", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress-routes.regex",
 		}.assert(t, nodeNameModifier, opts...)
 		cmdTest{
-			args:            []string{"service/sts-with-ingress", "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			args:            []string{"service/sts-with-ingress", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-with-ingress-routes.deep.regex",
 		}.assert(t, nodeNameModifier, opts...)
 	})
