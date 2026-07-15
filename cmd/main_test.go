@@ -581,47 +581,55 @@ func TestE2EDynamicManifests(t *testing.T) {
 	})
 	t.Run("pod's serviceAccountName resolves to the ServiceAccount and surfaces automount/imagePullSecrets", func(t *testing.T) {
 		opts := combineOpts(viperTestHackOpts())
+		ns := "e2e-pod-custom-sa"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
 		f := false
 		sa := &corev1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "kubectl-status-test-sa",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			AutomountServiceAccountToken: &f,
 			ImagePullSecrets:             []corev1.LocalObjectReference{{Name: "regcred"}},
 		}
-		_, err := clientset.CoreV1().ServiceAccounts("default").Create(context.TODO(), sa, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().ServiceAccounts(ns).Create(context.TODO(), sa, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.CoreV1().ServiceAccounts("default").Delete(context.TODO(), sa.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().ServiceAccounts(ns).Delete(context.TODO(), sa.Name, metav1.DeleteOptions{})
 
 		// The ServiceAccount admission plugin merges its imagePullSecrets onto every Pod that
 		// uses it, so Pod.tmpl's own (pre-existing) imagePullSecrets check will flag "regcred" as
 		// missing unless it actually exists with the expected type.
 		regcred := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: "regcred", Namespace: "default"},
+			ObjectMeta: metav1.ObjectMeta{Name: "regcred", Namespace: ns},
 			Type:       corev1.SecretTypeDockerConfigJson,
 			Data:       map[string][]byte{".dockerconfigjson": []byte("{}")},
 		}
-		_, err = clientset.CoreV1().Secrets("default").Create(context.TODO(), regcred, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().Secrets(ns).Create(context.TODO(), regcred, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.CoreV1().Secrets("default").Delete(context.TODO(), regcred.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().Secrets(ns).Delete(context.TODO(), regcred.Name, metav1.DeleteOptions{})
 
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "pod-with-custom-sa",
-				Namespace: "default",
+				Namespace: ns,
 			},
 			Spec: corev1.PodSpec{
 				ServiceAccountName: sa.Name,
 				Containers:         []corev1.Container{{Name: "app", Image: "busybox"}},
 			},
 		}
-		_, err = clientset.CoreV1().Pods("default").Create(context.TODO(), pod, metav1.CreateOptions{})
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
-		defer clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 
 		cmdTest{
-			args:            []string{"pod/pod-with-custom-sa", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/pod-with-custom-sa", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-with-custom-sa.regex",
 		}.assert(t, nil, opts...)
 	})
