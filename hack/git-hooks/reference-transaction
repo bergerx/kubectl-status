@@ -16,8 +16,8 @@ stage="${1:-}"
 [ "$stage" = "committed" ] || exit 0
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-slug_script="$repo_root/hack/e2e-branch-slug.sh"
-[ -x "$slug_script" ] || exit 0
+hash_script="$repo_root/hack/e2e-hash.sh"
+[ -x "$hash_script" ] || exit 0
 command -v minikube >/dev/null 2>&1 || exit 0
 
 is_zero_oid() {
@@ -35,11 +35,15 @@ while read -r old_oid new_oid ref_name; do
 	is_zero_oid "$new_oid" || continue
 
 	branch="${ref_name#refs/heads/}"
-	slug="$("$slug_script" "$branch")"
-	[ -n "$slug" ] || continue
+	branch_hash="$("$hash_script" "$branch")"
+	[ -n "$branch_hash" ] || continue
 
+	# Matched on BRANCH_HASH (a function of the branch name alone), not the
+	# readable slug: several branches can share a truncated slug (e.g. all
+	# worktree-*-<ulid> branches collapse to the same 20-char prefix), and
+	# matching on the slug would delete sibling branches' still-live profiles.
 	profiles="$(minikube profile list -o json 2>/dev/null \
-		| grep -o "\"Name\"[[:space:]]*:[[:space:]]*\"kstat-e2e-${slug}-[a-f0-9]\{8\}\"" \
+		| grep -o "\"Name\"[[:space:]]*:[[:space:]]*\"kstat-e2e-[a-z0-9-]*-${branch_hash}-[a-f0-9]\{8\}\"" \
 		| cut -d'"' -f4 \
 		| sort -u || true)"
 	for profile in $profiles; do
