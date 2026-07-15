@@ -137,13 +137,16 @@ var fatalMu sync.Mutex
 
 // checkErr runs err through cmdutil.CheckErr's formatting (installing a scoped BehaviorOnFatal
 // handler instead of letting CheckErr's default os.Exit tear down the process) and returns the
-// formatted error instead of exiting, so RunE can propagate it normally.
+// formatted error instead of exiting, so RunE can propagate it normally. The handler is restored
+// to the default before returning, so it doesn't leak into unrelated later calls.
 func checkErr(err error) error {
 	if err == nil {
 		return nil
 	}
 	fatalMu.Lock()
 	defer fatalMu.Unlock()
+	// restore under lock, before Unlock, so a waiting caller's handler isn't clobbered
+	defer cmdutil.DefaultBehaviorOnFatal()
 	var out error
 	cmdutil.BehaviorOnFatal(func(msg string, _ int) {
 		out = errors.New(msg)
