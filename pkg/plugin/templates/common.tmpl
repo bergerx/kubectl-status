@@ -55,6 +55,39 @@
     {{- with .namespace }} -n {{ if eq . "default" }}{{ . | red }}{{ else }}{{ . | cyan }}{{ end }}{{ end }}
 {{- end -}}
 
+{{- define "service_account_summary" }}
+    {{- /* Expects dict "ctx" (RenderableObject, used for KubeGetFirst/Config/Include -- a Pod for
+           Pod.tmpl, or the owning workload for workload templates, since a bare pod template spec
+           has none of these methods) "namespace" "serviceAccountName"
+           (Pod.spec.serviceAccountName / podTemplate.spec.serviceAccountName, empty meaning the
+           "default" ServiceAccount every namespace has). Surfaces the SA itself since its
+           annotations commonly drive cloud IAM binding (IRSA/Workload Identity) and its
+           automountServiceAccountToken/imagePullSecrets affect the pod even when nothing on the
+           pod spec looks wrong. The ubiquitous "default" SA with nothing noteworthy set on it is
+           suppressed -- it's not worth a line on nearly every pod. */ -}}
+    {{- $ctx := .ctx }}
+    {{- if not ($ctx.Config.GetBool "shallow") }}
+        {{- $name := .serviceAccountName | default "default" }}
+        {{- $sa := $ctx.KubeGetFirst .namespace "ServiceAccount" $name }}
+        {{- if not $sa.Object }}
+            {{- "ServiceAccount" | bold | nindent 2 }}/{{ $name }} {{ "doesn't exist" | red | bold }}, but it's referenced as the serviceAccountName.
+        {{- else }}
+            {{- /* "| default true" would be wrong here: sprig's default treats false as an empty
+                   value, so it would silently turn an explicit "false" back into "true". */ -}}
+            {{- $automountFalse := and (hasKey $sa.Object "automountServiceAccountToken") (not $sa.Object.automountServiceAccountToken) }}
+            {{- $pullSecrets := $sa.Object.imagePullSecrets }}
+            {{- if or (ne $name "default") $automountFalse $pullSecrets }}
+                {{- $ctx.Include "resource_ref" (dict "kind" "ServiceAccount" "name" $name) | nindent 2 }}
+                {{- if $automountFalse }}, {{ "automountServiceAccountToken: false" | yellow }}{{ end }}
+                {{- with $pullSecrets }}, imagePullSecrets: {{ range $i, $s := . }}{{ if $i }}, {{ end }}{{ $s.name | cyan }}{{ end }}{{ end }}
+                {{- if $ctx.Config.GetBool "deep" }}
+                    {{- $ctx.IncludeRenderableObject $sa | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
 {{- define "status_summary_line" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- if (.Object | default dict).inline }}

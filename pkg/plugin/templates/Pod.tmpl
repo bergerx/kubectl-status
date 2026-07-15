@@ -42,6 +42,7 @@
             {{- end }}
         {{- end }}
     {{- end }}
+    {{- template "service_account_summary" (dict "ctx" . "namespace" .Namespace "serviceAccountName" .Spec.serviceAccountName) }}
     {{- template "pod_init_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
     {{- template "pod_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
     {{- template "pod_ephemeral_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}

@@ -69,6 +69,7 @@
     {{- $podTemplate := .Spec.template | default dict }}
     {{- $podMeta := $podTemplate.metadata | default dict }}
     {{- template "matching_workload_resources" (dict "ctx" . "namespace" .Namespace "labels" ($podMeta.labels | default dict) "scalable" false "vpaTargetable" false "serviceExpected" false) }}
+    {{- template "service_account_summary" (dict "ctx" . "namespace" .Namespace "serviceAccountName" ($podTemplate.spec | default dict).serviceAccountName) }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
