@@ -1530,30 +1530,37 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// branches of Pod.tmpl's imagePullSecrets check (Check A) and the "broken secrets"
 		// correlation branch of the ImagePullBackOff hint (Check B).
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		applyManifest(t, "e2e-artifacts/pod-image-pull-secrets.yaml")
+		ns := "e2e-pod-image-pull-secrets"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+		applyManifestInNamespace(t, "e2e-artifacts/pod-image-pull-secrets.yaml", ns)
 		// waitForImagePullBackoff accepts either ErrImagePull or ImagePullBackOff, but the
 		// kubelet keeps cycling between them on its retry loop, so it doesn't give a stable
 		// render. Pin to ImagePullBackOff specifically -- it's the longer-lived of the two
 		// (exponential backoff), so it survives the gap until the subtests below observe it.
-		waitForContainerWaitingReason(t, "pod/e2e-pod-missing-pull-secret", "main", "ImagePullBackOff")
-		waitForContainerWaitingReason(t, "pod/e2e-pod-wrong-type-pull-secret", "main", "ImagePullBackOff")
-		waitForContainerWaitingReason(t, "pod/e2e-pod-healthy-pull-secret", "main", "ImagePullBackOff")
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-missing-pull-secret", "main", "ImagePullBackOff", ns)
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-wrong-type-pull-secret", "main", "ImagePullBackOff", ns)
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-healthy-pull-secret", "main", "ImagePullBackOff", ns)
 
 		t.Run("pod referencing a non-existent Secret flags it and correlates with the pull failure", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-missing-pull-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-missing-pull-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-missing.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("pod referencing a wrong-type Secret flags it and correlates with the pull failure", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-wrong-type-pull-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-wrong-type-pull-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-wrong-type.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("pod referencing a healthy Secret shows no warnings", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-healthy-pull-secret", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				args:            []string{"pod/e2e-pod-healthy-pull-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-healthy.regex",
 			}.assert(t, nil, opts...)
 		})
