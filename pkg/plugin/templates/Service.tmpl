@@ -75,6 +75,10 @@
     {{- $itp := .Spec.internalTrafficPolicy | default "Cluster" }}
     {{- $showEtp := ne $etp "Cluster" }}
     {{- $showItp := ne $itp "Cluster" }}
+    {{- $ifp := .Spec.ipFamilyPolicy | default "SingleStack" }}
+    {{- if ne $ifp "SingleStack" }}
+        {{- "IP families" | bold | nindent 2 }}: {{ join ", " .Spec.ipFamilies | cyan }} ({{ $ifp | cyan }})
+    {{- end }}
     {{- if or $showEtp $showItp }}
         {{- "Traffic policy" | bold | nindent 2 }}:
         {{- if $showEtp }} external={{ $etp | cyan }}{{ with .Spec.healthCheckNodePort }} (healthCheckNodePort:{{ . | toString | cyan }}){{ end }}{{ end }}
