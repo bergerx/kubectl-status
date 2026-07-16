@@ -110,7 +110,11 @@ e2e-minikube-up:
 	# prior run (e.g. killed mid-suite) into this run, causing spurious "already exists"
 	# failures and cluster-load-related flakiness unrelated to the code under test.
 	-$(E2E_KUBECONFIG_ENV) minikube delete -p $(E2E_PROFILE)
-	$(E2E_KUBECONFIG_ENV) minikube start -p $(E2E_PROFILE) --addons=metrics-server
+	# --cpus/--memory: TestE2EParallel's subtests run with -parallel=4 (see test-e2e below),
+	# each doing real cluster work (pod scheduling, image pulls, rollouts) concurrently --
+	# minikube's own defaults are sized for serial usage and get overwhelmed (widespread
+	# `kubectl wait` timeouts) under that load.
+	$(E2E_KUBECONFIG_ENV) minikube start -p $(E2E_PROFILE) --addons=metrics-server --cpus=4 --memory=6g
 
 .PHONY: e2e-minikube-down
 e2e-minikube-down:
@@ -122,6 +126,11 @@ install-e2e-deps:
 	# metrics-server is needed by e2e scenarios exercising pod/node metrics rendering.
 	$(E2E_KUBECONFIG_ENV) minikube addons enable metrics-server $(E2E_PROFILE_FLAG)
 	$(E2E_KUBECONFIG_ENV) kubectl -n kube-system rollout status deployment/metrics-server --timeout=120s
+	# The Deployment/Pod going Ready above can still briefly precede the Service's EndpointSlice
+	# getting its addresses -- a subtest that happens to run first in TestE2EParallel's pool (e.g.
+	# pdb-empty-selector-conflict) can otherwise race that gap and render a spurious
+	# "metrics-server is not available" line. Poll the actual data path instead of the rollout.
+	$(E2E_KUBECONFIG_ENV) bash -c 'for i in $$(seq 1 60); do kubectl get --raw /apis/metrics.k8s.io/v1beta1/nodes >/dev/null 2>&1 && exit 0; sleep 2; done; echo "metrics.k8s.io never became queryable" >&2; exit 1'
 	# cert-manager and Gateway API CRDs are needed by e2e TLS-validation test scenarios.
 	# Versions are pinned in hack/versions.env (shared with hack/generate-screenshots.sh);
 	# bump them there periodically.
@@ -170,7 +179,10 @@ test-e2e: vet staticcheck install-e2e-deps
 	# per package (default --format=pkgname) -- the ~60 fixture/scenario subtests in
 	# cmd/main_test.go otherwise flood the terminal with "=== RUN"/"--- PASS" and t.Logf
 	# noise on every green run.
-	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -run 'TestE2E*'
+	# -parallel=4: bounds how many TestE2EParallel subtests hit the cluster at once. Go's
+	# default (GOMAXPROCS, i.e. host core count) can far exceed what the e2e-minikube-up VM
+	# above is sized for, causing widespread `kubectl wait` timeouts instead of a speedup.
+	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# The isolated cluster (profile: $(E2E_PROFILE)) is torn down afterwards whether the suite
@@ -178,8 +190,8 @@ test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# preserved so a failing suite still fails the target (and blocks the push).
 	# using count to prevent caching; see the timeout note in the ASSUME_MINIKUBE_IS_CONFIGURED
 	# branch above.
-	# See the gotestsum note in the ASSUME_MINIKUBE_IS_CONFIGURED branch above.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -run 'TestE2E*'; \
+	# See the gotestsum note, and the -parallel=4 note above the other branch's go test invocation.
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'; \
 	status=$$?; \
 	$(MAKE) e2e-minikube-down; \
 	exit $$status

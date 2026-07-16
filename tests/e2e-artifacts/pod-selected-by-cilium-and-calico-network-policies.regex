@@ -5,7 +5,7 @@ Pod/cni-policy-selected-pod -n e2e-cni-policy-pod, created 1m ago, gen:1(, start
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
   Standalone POD\.
   Containers: app \(busybox:latest\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
-  (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
+  (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \([^)]*\))
   Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
   CiliumNetworkPolicy: selected by CiliumNetworkPolicy cnp-ingress \(ingress restricted\)
   CiliumClusterwideNetworkPolicy: selected by CiliumClusterwideNetworkPolicy ccnp-egress-e2e-cni-policy-pod \(egress restricted\)

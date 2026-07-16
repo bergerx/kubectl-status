@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -415,7 +416,9 @@ func startMinikube(t *testing.T) {
 	kubeconfig := path.Join(dir, "minikube.kubeconfig")
 	t.Setenv("KUBECONFIG", kubeconfig)
 	t.Logf("Starting Minikube cluster %s with %s ...", clusterName, kubeconfig)
-	startMinikube := exec.Command("minikube", "start", "-p", clusterName, "--addons=metrics-server")
+	// --cpus/--memory: matches the Makefile's e2e-minikube-up sizing, needed for TestE2EParallel's
+	// subtests to run concurrently without overwhelming the VM (see that target's comment).
+	startMinikube := exec.Command("minikube", "start", "-p", clusterName, "--addons=metrics-server", "--cpus=4", "--memory=6g")
 	require.NoError(t, startMinikube.Run())
 	require.NoError(t, exec.Command("kubectl", "-n", "kube-system", "rollout", "status",
 		"deployment/metrics-server", "--timeout=120s").Run())
@@ -442,6 +445,29 @@ func e2eMinikubeTest(t *testing.T) {
 	} else {
 		startMinikube(t)
 	}
+}
+
+func e2eClients(t *testing.T) ([]func(*plugin.RenderConfig), *kubernetes.Clientset, dynamic.Interface) {
+	t.Helper()
+	hackOpts := testHackOpts(t)
+	kubeconfigPath := os.Getenv("KUBECONFIG")
+	if kubeconfigPath == "" {
+		homeDir := os.Getenv("HOME")
+		kubeconfigPath = filepath.Join(homeDir, ".kube", "config")
+	}
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hackOpts, clientset, dynamicClient
 }
 
 // TestE2EParallel is a dedicated home for e2e subtests that are independent of each other and can
@@ -472,29 +498,9 @@ func e2eMinikubeTest(t *testing.T) {
 // already marked parallel.
 func TestE2EParallel(t *testing.T) {
 	e2eMinikubeTest(t)
-}
-
-func TestE2EDynamicManifests(t *testing.T) {
-	e2eMinikubeTest(t)
-	hackOpts := testHackOpts(t)
-	kubeconfigPath := os.Getenv("KUBECONFIG")
-	if kubeconfigPath == "" {
-		homeDir := os.Getenv("HOME")
-		kubeconfigPath = filepath.Join(homeDir, ".kube", "config")
-	}
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dynamicClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		t.Fatal(err)
-	}
+	hackOpts, clientset, dynamicClient := e2eClients(t)
 	t.Run("owners should be included with deep", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-owner-secret"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -548,6 +554,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		test.assert(t, nil, opts...) // to update the out files check /tests/artifacts/README.md
 	})
 	t.Run("ownerReference pointing at a deleted owner is flagged as orphan", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		// The child is rendered with --local straight from a manifest rather than created on
 		// the cluster: a live Secret with a dangling ownerReference gets swept up by the
@@ -561,6 +568,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pod on a cordoned node with an untolerated taint and a bad condition", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-bad-node-pod"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -592,6 +600,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pod's serviceAccountName resolves to the ServiceAccount and surfaces automount/imagePullSecrets", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(viperTestHackOpts())
 		ns := "e2e-pod-custom-sa"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -646,6 +655,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pod referencing a missing ServiceAccount surfaces a doesn't-exist warning", func(t *testing.T) {
+		t.Parallel()
 		// Rendered with --local (rather than created on the cluster) since a real cluster's
 		// ServiceAccount admission plugin rejects a Pod at creation time when its
 		// serviceAccountName doesn't resolve -- --local still resolves the reference against the
@@ -658,6 +668,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("workload's matching pod on a cordoned node surfaces a compact node-problem flag", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-bad-node-rs"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -712,6 +723,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pod selected by a NetworkPolicy surfaces the compact isolation signal", func(t *testing.T) {
+		t.Parallel()
 		// A dedicated namespace keeps this test in control of exactly which NetworkPolicy
 		// objects exist -- an empty podSelector elsewhere in a shared namespace (e.g. "default")
 		// would also match this Pod and make the asserted policy name/count non-deterministic.
@@ -752,7 +764,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// The full-output regex fixture below pins the Pod to a Running/Ready state, so this
 		// must wait rather than race the kubelet -- otherwise the render can catch it Pending.
 		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
-			"pod/netpol-selected-pod", "-n", ns, "--timeout=2m").Run())
+			"pod/netpol-selected-pod", "-n", ns, "--timeout=4m").Run())
 
 		cmdTest{
 			args:            []string{"pod/netpol-selected-pod", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -760,6 +772,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pod selected by multiple NetworkPolicies lists all of them and unions both directions", func(t *testing.T) {
+		t.Parallel()
 		// Same isolation rationale as the single-policy case above, but with three policies that
 		// each cover only part of the picture -- a default-deny (both directions, no rules), an
 		// egress-only allow, and an ingress-only allow -- to exercise the union across matching
@@ -831,7 +844,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// The full-output regex fixture below pins the Pod to a Running/Ready state, so this
 		// must wait rather than race the kubelet -- otherwise the render can catch it Pending.
 		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
-			"pod/netpol-multi-selected-pod", "-n", ns, "--timeout=2m").Run())
+			"pod/netpol-multi-selected-pod", "-n", ns, "--timeout=4m").Run())
 
 		cmdTest{
 			args:            []string{"pod/netpol-multi-selected-pod", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -839,6 +852,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pod selected by CiliumNetworkPolicy/CiliumClusterwideNetworkPolicy and Calico NetworkPolicy/GlobalNetworkPolicy surfaces each compact signal", func(t *testing.T) {
+		t.Parallel()
 		// These CRDs are only installed standalone (via install-e2e-deps), without Cilium or
 		// Calico actually running as the cluster's CNI -- kubectl-status only ever matches these
 		// objects' selectors against the Pod's own labels client-side, it never depends on either
@@ -927,7 +941,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// The full-output regex fixture below pins the Pod to a Running/Ready state, so this
 		// must wait rather than race the kubelet -- otherwise the render can catch it Pending.
 		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
-			"pod/cni-policy-selected-pod", "-n", ns, "--timeout=2m").Run())
+			"pod/cni-policy-selected-pod", "-n", ns, "--timeout=4m").Run())
 
 		cmdTest{
 			args:            []string{"pod/cni-policy-selected-pod", "-n", ns, "--include-events=false", "--v", "5"},
@@ -935,6 +949,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("deployment rollout with --include-rollout-diffs shows the diff between revisions", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-rollout-diff"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -972,7 +987,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		dep.Spec.Template.Spec.Containers[0].Image = "nginx:1.26"
 		_, err = clientset.AppsV1().Deployments(ns).Update(context.TODO(), dep, metav1.UpdateOptions{})
 		require.NoError(t, err)
-		rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
+		rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=4m")
 		output, err := rolloutCmd.CombinedOutput()
 		t.Logf("rollout status for %s: %s", name, output)
 		require.NoError(t, err)
@@ -985,6 +1000,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("Rollouts section shows a single blocked rollout even without a second one to compare against", func(t *testing.T) {
+		t.Parallel()
 		// #213: the Rollouts list used to be suppressed unless there were 2+ rollouts to
 		// compare, hiding a stuck or unhealthy first/only rollout. It should now also show up
 		// for a single rollout that isn't done yet.
@@ -1137,7 +1153,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 
 			out, err := exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.26", "-n", ns).CombinedOutput()
 			require.NoError(t, err, string(out))
-			rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
+			rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=4m")
 			output, err := rolloutCmd.CombinedOutput()
 			t.Logf("rollout status for %s (nginx:1.26): %s", name, output)
 			require.NoError(t, err)
@@ -1145,7 +1161,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 
 			out, err = exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.27", "-n", ns).CombinedOutput()
 			require.NoError(t, err, string(out))
-			rolloutCmd = exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=2m")
+			rolloutCmd = exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=4m")
 			output, err = rolloutCmd.CombinedOutput()
 			t.Logf("rollout status for %s (nginx:1.27): %s", name, output)
 			require.NoError(t, err)
@@ -1158,6 +1174,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 	})
 	t.Run("sts-with-ingress", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-sts-with-ingress"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1185,6 +1202,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("sts-with-ingress-routes", func(t *testing.T) {
+		t.Parallel()
 		// Builds on sts-with-ingress above: adds a Gateway/HTTPRoute/TCPRoute targeting the
 		// same Service, so its "Routes matching this Service" section shows up alongside the
 		// Ingress already covered there.
@@ -1209,6 +1227,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nodeNameModifier, opts...)
 	})
 	t.Run("svc-with-httproute", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-svc-httproute"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1228,6 +1247,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("sts-with-nodeport", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-sts-nodeport"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1256,6 +1276,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pdb-empty-selector-conflict", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-pdb-conflict"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1278,6 +1299,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nodeNameModifier, opts...)
 	})
 	t.Run("tcproute-with-gateway", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-tcproute"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1297,6 +1319,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("udproute-with-gateway", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-udproute"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1316,6 +1339,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("listenerset-with-gateway", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-listenerset"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1335,6 +1359,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("backendtlspolicy-with-target", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-backendtlspolicy"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1354,6 +1379,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("vap-binding-resolves-policy", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		// The policy itself is cluster-scoped (ValidatingAdmissionPolicy/Binding aren't
 		// namespaced), but its matchConstraints.namespaceSelector in vap-binding.yaml scopes
@@ -1372,6 +1398,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("vapbinding referencing a missing policy is flagged not found", func(t *testing.T) {
+		t.Parallel()
 		// The binding is rendered with --local straight from a manifest rather than created on
 		// the cluster, mirroring the orphan-owner-reference pattern above -- --local still
 		// resolves the policyName against the real API server (only the binding object itself is
@@ -1383,6 +1410,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("web-cert", func(t *testing.T) {
+		t.Parallel()
 		// A self-signed local CA issuing a leaf certificate, so the leaf's Secret shows
 		// "issued by <CA>" rather than "Self-signed" -- the same cert-manager chain used for
 		// the demo screenshot's Secret example, but exercised here as a regular e2e fixture.
@@ -1407,6 +1435,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("web-policies", func(t *testing.T) {
+		t.Parallel()
 		// A PodDisruptionBudget and NetworkPolicy both selecting the same Deployment's Pods --
 		// the same fixture used for the demo screenshot's matching-PDB/NetworkPolicy example.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
@@ -1427,6 +1456,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("sts-without-service", func(t *testing.T) {
+		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-sts-without-service"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1443,6 +1473,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("tls-validation", func(t *testing.T) {
+		t.Parallel()
 		// Builds a real cert-manager CA chain (self-signed root -> ca-type Issuer -> leaf
 		// certificate) so the Ingress/Gateway/Secret TLS-consistency checks (self-signed,
 		// hostname/SAN match, wrong type, missing keys) can be exercised against genuine
@@ -1601,6 +1632,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 	})
 	t.Run("pod-image-pull-secrets", func(t *testing.T) {
+		t.Parallel()
 		// --shallow (used by the offline golden-file tests) makes KubeGetFirst a no-op,
 		// so this e2e suite is the only place that exercises the found-secret validation
 		// branches of Pod.tmpl's imagePullSecrets check (Check A) and the "broken secrets"
@@ -1614,26 +1646,27 @@ func TestE2EDynamicManifests(t *testing.T) {
 			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
 		})
 		applyManifestInNamespace(t, "e2e-artifacts/pod-image-pull-secrets.yaml", ns)
-		// waitForImagePullBackoff accepts either ErrImagePull or ImagePullBackOff, but the
-		// kubelet keeps cycling between them on its retry loop, so it doesn't give a stable
-		// render. Pin to ImagePullBackOff specifically -- it's the longer-lived of the two
-		// (exponential backoff), so it survives the gap until the subtests below observe it.
-		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-missing-pull-secret", "main", "ImagePullBackOff", ns)
-		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-wrong-type-pull-secret", "main", "ImagePullBackOff", ns)
-		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-healthy-pull-secret", "main", "ImagePullBackOff", ns)
 
+		// The kubelet keeps cycling a failing pull between ErrImagePull and ImagePullBackOff on
+		// its retry loop; ImagePullBackOff is the longer-lived of the two (exponential backoff),
+		// but under concurrent cluster load even that can elapse before a later sibling subtest's
+		// render runs -- so re-confirm right before each assert instead of once up front for all
+		// three pods.
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-missing-pull-secret", "main", "ImagePullBackOff", ns)
 		t.Run("pod referencing a non-existent Secret flags it and correlates with the pull failure", func(t *testing.T) {
 			cmdTest{
 				args:            []string{"pod/e2e-pod-missing-pull-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-missing.regex",
 			}.assert(t, nil, opts...)
 		})
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-wrong-type-pull-secret", "main", "ImagePullBackOff", ns)
 		t.Run("pod referencing a wrong-type Secret flags it and correlates with the pull failure", func(t *testing.T) {
 			cmdTest{
 				args:            []string{"pod/e2e-pod-wrong-type-pull-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-image-pull-secrets-wrong-type.regex",
 			}.assert(t, nil, opts...)
 		})
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-healthy-pull-secret", "main", "ImagePullBackOff", ns)
 		t.Run("pod referencing a healthy Secret shows no warnings", func(t *testing.T) {
 			cmdTest{
 				args:            []string{"pod/e2e-pod-healthy-pull-secret", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -1642,6 +1675,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 	})
 	t.Run("pod-volume-configmap-secret", func(t *testing.T) {
+		t.Parallel()
 		// --shallow (used by the offline golden-file tests) makes KubeGetFirst a no-op, so
 		// this e2e suite is the only place that exercises the configMap/secret volume
 		// existence and key-presence checks in Pod.tmpl's pod_volumes/pod_volume_line.
@@ -1699,6 +1733,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		})
 	})
 	t.Run("pod-container-logs", func(t *testing.T) {
+		t.Parallel()
 		// --shallow (used by the offline golden-file tests) makes KubeGetContainerLogs a
 		// no-op, so this e2e suite is the only place that exercises real log fetching: a
 		// terminated init container with output (current-state logs), a terminated init
@@ -1725,6 +1760,11 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// the container's current state otherwise flips between Waiting and Terminated(Error)
 		// as the kubelet retries, which would make the golden regex flaky.
 		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-container-logs", "crasher", "CrashLoopBackOff", ns)
+		// The fixture pins a usage line for both healthy containers -- wait for metrics-server to
+		// have scraped each of them specifically, not just the Pod overall: a container that
+		// started slightly later than its siblings can still be missing from PodMetrics even once
+		// the pod-level object exists, which otherwise renders that container's usage line blank.
+		waitForContainerMetrics(t, ns, "e2e-pod-container-logs", "healthy", "sidecar")
 
 		cmdTest{
 			args:            []string{"pod/e2e-pod-container-logs", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -1732,6 +1772,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("node correctly resolves pod metrics for pods in multiple namespaces via the batched PodMetrics lookup", func(t *testing.T) {
+		t.Parallel()
 		// Node.tmpl loops over every pod on the node (KubeGetNonTerminatedPodsOnNode) and looks
 		// up each one's PodMetrics via KubeGetPodMetrics, which fetches metrics.k8s.io once for
 		// the whole render (cluster-wide, or per-namespace as a fallback) instead of once per
@@ -1741,8 +1782,21 @@ func TestE2EDynamicManifests(t *testing.T) {
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 		require.NoError(t, err)
-		require.NotEmpty(t, nodes.Items)
-		nodeName := nodes.Items[0].Name
+		var nodeName string
+		for _, n := range nodes.Items {
+			if n.Spec.Unschedulable {
+				continue
+			}
+			for _, cond := range n.Status.Conditions {
+				if cond.Type == corev1.NodeReady && cond.Status == corev1.ConditionTrue {
+					nodeName = n.Name
+				}
+			}
+			if nodeName != "" {
+				break
+			}
+		}
+		require.NotEmpty(t, nodeName, "expected at least one schedulable, Ready node")
 
 		for _, ns := range []string{"e2e-node-metrics-a", "e2e-node-metrics-b"} {
 			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1759,7 +1813,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 			}, metav1.CreateOptions{})
 			require.NoError(t, err)
 			require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
-				"pod/e2e-metrics-pod", "-n", ns, "--timeout=2m").Run())
+				"pod/e2e-metrics-pod", "-n", ns, "--timeout=4m").Run())
 			waitForPodMetrics(t, ns, "e2e-metrics-pod")
 		}
 
@@ -1768,6 +1822,11 @@ func TestE2EDynamicManifests(t *testing.T) {
 			stdoutRegexPath: "e2e-artifacts/node-metrics-multi-namespace.regex",
 		}.assert(t, nil, opts...)
 	})
+}
+
+func TestE2EDynamicManifests(t *testing.T) {
+	e2eMinikubeTest(t)
+	hackOpts, clientset, dynamicClient := e2eClients(t)
 	t.Run("pod containers section warns when metrics-server's APIService is missing", func(t *testing.T) {
 		// Issue #165 case 1: metrics-server was never installed. We simulate that by removing
 		// just the APIService object that fronts it (not the Deployment/Service), which is
@@ -1803,11 +1862,12 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("VerticalPodAutoscaler reverse-matches its target workload and shows an applied recommendation", func(t *testing.T) {
-		// Unlike the CRD-only e2e scenarios above, this needs the real VPA controllers
-		// (recommender/updater, installed by `make install-e2e-deps` via Helm) to actually
-		// compute and apply a recommendation -- the point is to exercise VPA "acting" (evicting
-		// and recreating the Pod), not just render a static object. The container burns real CPU
-		// against a deliberately low initial request so the recommender has a reason to raise it.
+		// Deliberately kept out of TestE2EParallel's pool: the burner container below
+		// intentionally pegs a full CPU to give the VPA recommender a reason to act, and on a
+		// single-node cluster that starves metrics-server's own readiness probe when it runs
+		// alongside the other concurrent subtests -- causing unrelated renders elsewhere to
+		// intermittently report "metrics-server is not available". Running it serially, alongside
+		// the other genuinely cluster-wide-affecting subtest above, avoids that.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-vpa"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -1843,7 +1903,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		_, err = clientset.AppsV1().Deployments(ns).Create(context.TODO(), dep, metav1.CreateOptions{})
 		require.NoError(t, err)
 		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Available",
-			"deployment/"+name, "-n", ns, "--timeout=2m").Run())
+			"deployment/"+name, "-n", ns, "--timeout=4m").Run())
 		originalPod := waitForPodByLabel(t, ns, "app="+name)
 
 		vpaGVR := schema.GroupVersionResource{Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"}
@@ -1877,6 +1937,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// The evicted Pod can briefly still be listed (Terminating) alongside the replacement --
 		// wait for exactly one to remain so the fixture below can pin a single Pod line.
 		waitForSinglePod(t, ns, "app="+name)
+		// waitForPodRecreated/waitForSinglePod only check the replacement Pod's name/count, not
+		// its readiness -- under concurrent cluster load its Running/Ready transition can lag
+		// well behind that, and the fixture below pins the Deployment as fully Available, so wait
+		// for that explicitly rather than racing the kubelet.
+		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Available",
+			"deployment/"+name, "-n", ns, "--timeout=5m").Run())
+		waitForVPAPodsMatched(t, ns, name)
 
 		cmdTest{
 			args:            []string{"deployment/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -1937,7 +2004,7 @@ func applyManifestInNamespace(t *testing.T, filepath, namespace string) {
 // namespace.
 func waitForInNamespace(t *testing.T, resource, forParam, namespace string) {
 	t.Helper()
-	cmd := exec.Command("kubectl", "wait", "-n", namespace, "--for", forParam, resource, "--timeout=2m")
+	cmd := exec.Command("kubectl", "wait", "-n", namespace, "--for", forParam, resource, "--timeout=4m")
 	output, err := cmd.CombinedOutput()
 	t.Logf("wait result for %s in namespace %s: %s", resource, namespace, string(output))
 	require.NoError(t, err)
@@ -1952,7 +2019,7 @@ func waitForInNamespace(t *testing.T, resource, forParam, namespace string) {
 // briefly list two Pods instead of one.
 func waitForSinglePod(t *testing.T, namespace, labelSelector string) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Minute)
+	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
 		cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
 			"-o", "jsonpath={.items[*].metadata.name}")
@@ -1978,7 +2045,7 @@ func waitForSinglePod(t *testing.T, namespace, labelSelector string) {
 // known ahead of time (unlike StatefulSet, where pod names are predictable).
 func waitForPodByLabel(t *testing.T, namespace, labelSelector string) string {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Minute)
+	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
 		cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
 			"-o", "jsonpath={.items[*].metadata.name}")
@@ -2006,7 +2073,7 @@ func waitForContainerWaitingReasonInNamespace(t *testing.T, resource, containerN
 	if namespace != "" {
 		args = append([]string{"-n", namespace}, args...)
 	}
-	deadline := time.Now().Add(2 * time.Minute)
+	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
 		cmd := exec.Command("kubectl", args...)
 		output, err := cmd.CombinedOutput()
@@ -2025,7 +2092,7 @@ func waitForContainerWaitingReasonInNamespace(t *testing.T, resource, containerN
 func waitForPodMetrics(t *testing.T, namespace, name string) {
 	t.Helper()
 	rawPath := fmt.Sprintf("/apis/metrics.k8s.io/v1beta1/namespaces/%s/pods/%s", namespace, name)
-	deadline := time.Now().Add(2 * time.Minute)
+	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
 		if err := exec.Command("kubectl", "get", "--raw", rawPath).Run(); err == nil {
 			t.Logf("metrics available for pod %s/%s", namespace, name)
@@ -2034,6 +2101,54 @@ func waitForPodMetrics(t *testing.T, namespace, name string) {
 		time.Sleep(2 * time.Second)
 	}
 	t.Fatalf("timed out waiting for metrics.k8s.io data for pod %s/%s", namespace, name)
+}
+
+// waitForContainerMetrics polls metrics.k8s.io until every named container has a recorded cpu
+// usage. A pod's PodMetrics can exist while still missing an entry for a container that started
+// slightly later than its siblings (more likely under concurrent cluster load): Pod.tmpl's
+// container_status_summary only renders a usage line once a container's own entry is present
+// with usage.cpu set, so asserting before that leaves the container's line silently blank
+// instead of matching a golden fixture.
+func waitForContainerMetrics(t *testing.T, namespace, name string, containerNames ...string) {
+	t.Helper()
+	rawPath := fmt.Sprintf("/apis/metrics.k8s.io/v1beta1/namespaces/%s/pods/%s", namespace, name)
+	type containerMetrics struct {
+		Name  string `json:"name"`
+		Usage struct {
+			CPU string `json:"cpu"`
+		} `json:"usage"`
+	}
+	type podMetrics struct {
+		Containers []containerMetrics `json:"containers"`
+	}
+	deadline := time.Now().Add(4 * time.Minute)
+	for time.Now().Before(deadline) {
+		output, err := exec.Command("kubectl", "get", "--raw", rawPath).Output()
+		if err == nil {
+			var m podMetrics
+			if json.Unmarshal(output, &m) == nil {
+				have := map[string]bool{}
+				for _, c := range m.Containers {
+					if c.Usage.CPU != "" {
+						have[c.Name] = true
+					}
+				}
+				allPresent := true
+				for _, want := range containerNames {
+					if !have[want] {
+						allPresent = false
+						break
+					}
+				}
+				if allPresent {
+					t.Logf("metrics available for all of %v in pod %s/%s", containerNames, namespace, name)
+					return
+				}
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for metrics.k8s.io cpu usage for containers %v in pod %s/%s", containerNames, namespace, name)
 }
 
 // waitForMetricsAPIServiceAvailable polls until the metrics-server APIService reports
@@ -2060,7 +2175,7 @@ func waitForMetricsAPIServiceAvailable(t *testing.T) {
 // recommendation, so this can take roughly a minute after the VPA and its target Pod both exist.
 func waitForVPARecommendation(t *testing.T, namespace, name string) {
 	t.Helper()
-	deadline := time.Now().Add(3 * time.Minute)
+	deadline := time.Now().Add(5 * time.Minute)
 	for time.Now().Before(deadline) {
 		output, err := exec.Command("kubectl", "get", "vpa", name, "-n", namespace,
 			"-o", "jsonpath={.status.recommendation.containerRecommendations[0].target.cpu}").CombinedOutput()
@@ -2073,12 +2188,32 @@ func waitForVPARecommendation(t *testing.T, namespace, name string) {
 	t.Fatalf("timed out waiting for VPA %s/%s to compute a recommendation", namespace, name)
 }
 
+// waitForVPAPodsMatched polls until a VerticalPodAutoscaler's NoPodsMatched condition is gone
+// (or already False). The VPA controller re-evaluates this independently of, and can lag behind,
+// the target Deployment's own Available condition -- right after the updater recreates the Pod,
+// the VPA can still be reporting stale NoPodsMatched=True for a beat, which the golden fixture
+// doesn't expect to see at all.
+func waitForVPAPodsMatched(t *testing.T, namespace, name string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		output, err := exec.Command("kubectl", "get", "vpa", name, "-n", namespace,
+			"-o", `jsonpath={.status.conditions[?(@.type=="NoPodsMatched")].status}`).CombinedOutput()
+		if err == nil && strings.TrimSpace(string(output)) != "True" {
+			t.Logf("VPA %s/%s no longer reports NoPodsMatched", namespace, name)
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for VPA %s/%s to clear its NoPodsMatched condition", namespace, name)
+}
+
 // waitForPodRecreated polls until the Pod matching labelSelector is no longer originalPodName --
 // evidence the VPA updater actually evicted/recreated it to apply the recommendation, not just
 // computed one that nobody applied.
 func waitForPodRecreated(t *testing.T, namespace, labelSelector, originalPodName string) {
 	t.Helper()
-	deadline := time.Now().Add(3 * time.Minute)
+	deadline := time.Now().Add(5 * time.Minute)
 	for time.Now().Before(deadline) {
 		output, err := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
 			"-o", "jsonpath={.items[*].metadata.name}").CombinedOutput()
