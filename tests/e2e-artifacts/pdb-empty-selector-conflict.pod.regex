@@ -4,7 +4,7 @@ Pod/pdb-conflict-test-0 -n e2e-pdb-conflict, created 1m ago by StatefulSet/pdb-c
   Managed by pdb-conflict-test application
   PodScheduled -> Initialized -> ContainersReady -> Ready for 1m
   Containers: pdb-conflict-test \(registry\.k8s\.io/pause:3\.9\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
-  (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \([^)]*\))
+  (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
   Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
   2 PodDisruptionBudgets match — evictions of these pods will fail \(Kubernetes doesn't support a pod covered by multiple PDBs\)
   PodDisruptionBudgets:
