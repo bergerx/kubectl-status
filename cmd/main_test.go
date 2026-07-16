@@ -452,7 +452,10 @@ func e2eClients(t *testing.T) ([]func(*plugin.RenderConfig), *kubernetes.Clients
 	hackOpts := testHackOpts(t)
 	kubeconfigPath := os.Getenv("KUBECONFIG")
 	if kubeconfigPath == "" {
-		homeDir := os.Getenv("HOME")
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			t.Fatalf("failed to get user home directory: %v", err)
+		}
 		kubeconfigPath = filepath.Join(homeDir, ".kube", "config")
 	}
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)

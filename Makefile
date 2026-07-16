@@ -130,7 +130,7 @@ install-e2e-deps:
 	# getting its addresses -- a subtest that happens to run first in TestE2EParallel's pool (e.g.
 	# pdb-empty-selector-conflict) can otherwise race that gap and render a spurious
 	# "metrics-server is not available" line. Poll the actual data path instead of the rollout.
-	$(E2E_KUBECONFIG_ENV) bash -c 'for i in $$(seq 1 60); do kubectl get --raw /apis/metrics.k8s.io/v1beta1/nodes >/dev/null 2>&1 && exit 0; sleep 2; done; echo "metrics.k8s.io never became queryable" >&2; exit 1'
+	$(E2E_KUBECONFIG_ENV) bash -c 'for ((i=1; i<=60; i++)); do kubectl get --raw /apis/metrics.k8s.io/v1beta1/nodes >/dev/null 2>&1 && exit 0; sleep 2; done; echo "metrics.k8s.io never became queryable" >&2; exit 1'
 	# cert-manager and Gateway API CRDs are needed by e2e TLS-validation test scenarios.
 	# Versions are pinned in hack/versions.env (shared with hack/generate-screenshots.sh);
 	# bump them there periodically.
