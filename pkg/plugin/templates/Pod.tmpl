@@ -534,6 +534,20 @@
            * podPullSecretsBroken (optional): Boolean, true if any podImagePullSecrets entry doesn't resolve to a usable Secret
            * metricsUnavailableReason (optional): non-empty string explaining why there's no containerMetrics
         */ -}}
+    {{- /* Failure log visibility, by current/previous container state (applies uniformly to init,
+           sidecar, regular and Job/CronJob containers -- there's no per-type special-casing):
+             current state.terminated, reason Completed (success)   -> never show
+             current state.terminated, reason != Completed (crash)  -> always show current instance's logs
+             current state.running, lastState.terminated recent     -> show previous instance's logs, gated by withinLastHour
+             current state.running, lastState.terminated stale      -> don't show (already recovered, old news)
+             current state.waiting (e.g. CrashLoopBackOff)          -> always show previous instance's logs, no recency gate (still unresolved)
+           A successful completion is never shown regardless of container type: whether the
+           container is one-shot (plain init container, Job/CronJob container under
+           OnFailure/Never) or gets restarted by the kubelet after exiting (sidecar, regular
+           container under a pod's default restartPolicy: Always), "it finished cleanly" isn't
+           interesting. Only the latest failure is ever shown, and only one of the two blocks
+           below fires for a given container: state.terminated and lastState.terminated are
+           mutually exclusive on how they gate. */ -}}
     {{- .containerStatus.name | bold }}{{ if .sidecar }}{{ " [sidecar]" | cyan }}{{ end }} ({{ .containerStatus.image | markYellow "latest" }}) {{ template "container_state_summary" .containerStatus.state }}
     {{- if .containerStatus.state.running }}{{ if .containerStatus.ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
     {{- if gt (.containerStatus.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.containerStatus.restartCount | int) | yellow | bold }}{{ end }}
@@ -562,10 +576,10 @@
         {{- "previously:" | yellow | nindent 2 }} {{ template "container_state_summary" . }}
     {{- end }}
     {{- with .containerStatus.state.terminated }}
-        {{- if and .startedAt (not ($.pod.Config.GetBool "shallow")) }}
+        {{- if and .startedAt (ne .reason "Completed") (not ($.pod.Config.GetBool "shallow")) }}
             {{- $logs := $.pod.KubeGetContainerLogs $.pod.Namespace $.pod.Name $.containerStatus.name false 20 }}
             {{- if $logs }}
-                {{- "Last 20 lines of logs:" | bold | nindent 2 }}
+                {{- "Last failure logs:" | yellow | bold | nindent 2 }}
                 {{- $logs | nindent 4 }}
             {{- else }}
                 {{- ", " }}{{ "has no logs" | yellow }}
@@ -573,10 +587,11 @@
         {{- end }}
     {{- end }}
     {{- with .containerStatus.lastState.terminated }}
-        {{- if and (withinLastHour .finishedAt) (not ($.pod.Config.GetBool "shallow")) }}
+        {{- $unresolved := not $.containerStatus.state.running }}
+        {{- if and (not $.containerStatus.state.terminated) (or $unresolved (withinLastHour .finishedAt)) (not ($.pod.Config.GetBool "shallow")) }}
             {{- $logs := $.pod.KubeGetContainerLogs $.pod.Namespace $.pod.Name $.containerStatus.name true 20 }}
             {{- if $logs }}
-                {{- "Last 20 lines of logs from previous instance (restarted within last hour):" | bold | nindent 2 }}
+                {{- "Last failure logs:" | yellow | bold | nindent 2 }}
                 {{- $logs | nindent 4 }}
             {{- else }}
                 {{- ", " }}{{ "has no previous logs" | yellow }}
