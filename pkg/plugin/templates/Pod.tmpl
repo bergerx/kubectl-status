@@ -190,7 +190,7 @@
 {{- end }}
 
 {{- define "pod_volume_line" }}
-    {{- /* Renders a single volume spec entry. Expects dict "vol" (spec entry) "stats" (kubelet VolumeStats or nil) "pvcStorage" (optional PVC requested storage) "problem" (optional string, existence/key validation failure for a configMap/secret volume) */ -}}
+    {{- /* Renders a single volume spec entry. Expects dict "vol" (spec entry) "stats" (kubelet VolumeStats or nil) "pvcStorage" (optional PVC requested storage) "problem" (optional pre-styled string, existence/key validation failure or optional-missing note for a configMap/secret volume) */ -}}
     {{- .vol.name | bold }}
     {{- $inner := "" }}
     {{- $isPVC := false }}
@@ -228,7 +228,7 @@
         {{- end }}
     {{- end }}
     {{- if $inner }} ({{ $inner }}){{ end }}
-    {{- with .problem }} {{ . | red | bold }}{{ end }}
+    {{- with .problem }} {{ . }}{{ end }}
 {{- end }}
 
 {{- define "pod_volume_configmap_secret_problem" }}
@@ -236,11 +236,14 @@
            presence, returning a short problem string or "" -- the caller already renders the
            "(ConfigMap: name)"/"(Secret: name)" part, so this only needs the tail. Expects dict
            "kind" ("ConfigMap" or "Secret") "ctx" (Pod RenderableObject) "name" (object name)
-           "optional" (bool) "items" (list of KeyToPath, or nil). */ -}}
+           "optional" (bool) "items" (list of KeyToPath, or nil).
+           A missing optional source doesn't block the pod (kubelet mounts it empty), but it's
+           still worth a diagnostic note distinct from the non-optional "doesn't exist" error. */ -}}
     {{- $obj := $.ctx.KubeGetFirst $.ctx.Namespace $.kind $.name }}
     {{- $problem := "" }}
     {{- if not $obj.Object }}
-        {{- if not $.optional }}{{ $problem = "doesn't exist" }}{{ end }}
+        {{- if $.optional }}{{ $problem = "optional, not found" | yellow }}
+        {{- else }}{{ $problem = "doesn't exist" | red | bold }}{{ end }}
     {{- else if not $.optional }}
         {{- /* "optional" on the volume source governs both the object's existence and its keys
                (https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.32/#configmapvolumesource-v1-core)
@@ -257,7 +260,7 @@
             {{- end }}
         {{- end }}
         {{- with $missingKeys }}
-            {{- $problem = printf "missing key%s %s" (ternary "s" "" (gt (len .) 1)) (join ", " .) }}
+            {{- $problem = printf "missing key%s %s" (ternary "s" "" (gt (len .) 1)) (join ", " .) | red | bold }}
         {{- end }}
     {{- end }}
     {{- $problem }}
