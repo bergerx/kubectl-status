@@ -1291,11 +1291,18 @@ func TestE2EParallel(t *testing.T) {
 		applyManifestInNamespace(t, "e2e-artifacts/pdb-empty-selector-conflict.yaml", ns)
 		waitForInNamespace(t, "sts/pdb-conflict-test", "jsonpath={.status.readyReplicas}=1", ns)
 		// Kubernetes' disruption controller picks one of the two overlapping PDBs arbitrarily
-		// and leaves the other's currentHealthy permanently at 0 -- observedGeneration is the
-		// reliable "controller has made its (possibly permanent) decision" signal here, not
-		// currentHealthy, which may never reach 1 for the non-chosen budget.
+		// and leaves the other's currentHealthy permanently at 0 -- observedGeneration is not
+		// enough to prove the controller has converged, since it only tracks spec generation:
+		// a PDB can briefly report observedGeneration=1 with expectedPods=0 (as if its selector
+		// matched no pods) before a later resync corrects it to the real count. Confirmed by
+		// concurrently creating this fixture across many namespaces and polling: expectedPods=0
+		// shows up transiently under load and always self-heals within seconds, it's never a
+		// stable end state -- so wait for expectedPods=1 (both PDBs' selectors match the single
+		// Pod here once converged) rather than trusting observedGeneration alone.
 		waitForInNamespace(t, "pdb/pdb-conflict-test", "jsonpath={.status.observedGeneration}=1", ns)
+		waitForInNamespace(t, "pdb/pdb-conflict-test", "jsonpath={.status.expectedPods}=1", ns)
 		waitForInNamespace(t, "pdb/pdb-conflict-test-catch-all", "jsonpath={.status.observedGeneration}=1", ns)
+		waitForInNamespace(t, "pdb/pdb-conflict-test-catch-all", "jsonpath={.status.expectedPods}=1", ns)
 		cmdTest{
 			args:            []string{"pod/pdb-conflict-test-0", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pdb-empty-selector-conflict.pod.regex",
