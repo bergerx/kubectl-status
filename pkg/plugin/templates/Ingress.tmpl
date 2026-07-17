@@ -90,10 +90,14 @@
 {{- define "load_balancer_ingress" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- with .Status.loadBalancer.ingress }}
-        {{- if or (index . 0).hostname (index . 0).ip }}
-            {{- with (index . 0).hostname }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
-            {{- with (index . 0).ip }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
-        {{- else }} {{ "Pending LoadBalancer" | red | bold }}
+        {{- range $index, $entry := . }}
+            {{- if or $entry.hostname $entry.ip }}
+                {{- with $entry.hostname }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
+                {{- with $entry.ip }} {{ "LoadBalancer" | green }}:{{ . }}{{ end }}
+                {{- with $entry.ipMode }} ({{ . }}){{ end }}
+            {{- else if eq $index 0 }}
+                {{- "Pending LoadBalancer" | red | bold }}
+            {{- end }}
         {{- end }}
     {{- end }}
 {{- end -}}

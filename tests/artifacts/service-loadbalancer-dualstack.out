@@ -1,0 +1,5 @@
+
+Service/svc-loadbalancer-dualstack -n kubectl-status-svc-test, created 1m ago LoadBalancer:192.0.2.10 (VIP) LoadBalancer:2001:db8::10 (VIP)
+  Current: Service is ready
+  IP families: IPv4, IPv6 (PreferDualStack)
+  Missing Endpoint: Service has no matching endpoint.

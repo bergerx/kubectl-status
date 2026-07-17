@@ -81,6 +81,10 @@
         {{- if and $showEtp $showItp }},{{ end }}
         {{- if $showItp }} internal={{ $itp | cyan }}{{ end }}
     {{- end }}
+    {{- $ipFamilyPolicy := .Spec.ipFamilyPolicy | default "SingleStack" }}
+    {{- if ne $ipFamilyPolicy "SingleStack" }}
+        {{- "IP families" | bold | nindent 2 }}: {{ join ", " .Spec.ipFamilies | cyan }} ({{ $ipFamilyPolicy }})
+    {{- end }}
     {{- if eq .Spec.sessionAffinity "ClientIP" }}
         {{- "Session affinity" | bold | nindent 2 }}: {{ "ClientIP" | cyan }}
         {{- with .Spec.sessionAffinityConfig.clientIP.timeoutSeconds }} (timeout {{ . | toString | cyan }}s){{ end }}
