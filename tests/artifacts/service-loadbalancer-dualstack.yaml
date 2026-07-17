@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: "2026-07-06T15:21:33Z"
+  name: svc-dualstack-lb
+  namespace: kubectl-status-svc-test
+  resourceVersion: "133728"
+  uid: 3a2f9c1e-5a4b-4e2a-9c1e-5a4b4e2a9c1e
+spec:
+  allocateLoadBalancerNodePorts: true
+  clusterIP: 10.96.200.10
+  clusterIPs:
+  - 10.96.200.10
+  - fd00::200:10
+  ipFamilies:
+  - IPv4
+  - IPv6
+  ipFamilyPolicy: PreferDualStack
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: svc-dualstack-lb
+  sessionAffinity: None
+  type: LoadBalancer
+status:
+  loadBalancer:
+    ingress:
+    - ip: 203.0.113.50
+      ipMode: VIP
+    - ip: 2001:db8::50
+      ipMode: VIP
