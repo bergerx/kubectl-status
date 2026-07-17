@@ -8,13 +8,11 @@ Pod/e2e-pod-container-logs -n e2e-pod-container-logs, created 1m ago, gen:1, sta
   Standalone POD\.
   InitContainers:
     init-setup \(busybox:latest\) Started 1m ago and Completed after 1m
-      Last 20 lines of logs:
-        init-setup-log-line
-    init-silent \(busybox:latest\) Started 1m ago and Completed after 1m, has no logs
+    init-silent \(busybox:latest\) Started 1m ago and Completed after 1m
   Containers:
     crasher \(busybox:latest\) Waiting CrashLoopBackOff: back-off [0-9smh]+ restarting failed container=crasher pod=e2e-pod-container-logs_e2e-pod-container-logs\([0-9a-f-]+\), restarted [0-9]+ times(?: \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\))?
       previously: Started 1m ago and Error after 1m with exit code exit with 1
-      Last 20 lines of logs from previous instance \(restarted within last hour\):
+      Last failure logs:
         crasher-log-line
     healthy \(busybox:latest\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
       (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
