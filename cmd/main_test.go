@@ -1723,9 +1723,9 @@ func TestE2EParallel(t *testing.T) {
 				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-missing-key.regex",
 			}.assert(t, nil, opts...)
 		})
-		t.Run("optional configMap volume referencing a non-existent ConfigMap shows no warning", func(t *testing.T) {
+		t.Run("optional configMap volume referencing a non-existent ConfigMap flags it as an optional-missing note without --include-all-volumes", func(t *testing.T) {
 			cmdTest{
-				args:            []string{"pod/e2e-pod-volume-optional-missing", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--include-all-volumes", "--v", "5"},
+				args:            []string{"pod/e2e-pod-volume-optional-missing", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/pod-volume-configmap-secret-optional-missing.regex",
 			}.assert(t, nil, opts...)
 		})
