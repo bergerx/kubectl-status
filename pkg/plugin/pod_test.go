@@ -16,13 +16,22 @@ import (
 func renderContainerStatusSummary(t *testing.T, containerStatus map[string]interface{}) string {
 	t.Helper()
 	cfg := NewRenderConfig(viper.New())
-	tmpl, _ := getTemplate(cfg)
+	tmpl, err := getTemplate(cfg)
+	if err != nil {
+		t.Fatalf("getTemplate() error = %v", err)
+	}
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
 	f.Client = &fake.RESTClient{}
 	f.UnstructuredClient = f.Client
 	t.Cleanup(func() { f.Cleanup() })
-	repo, _ := input.NewResourceRepo(f, cfg.Viper)
-	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+	repo, err := input.NewResourceRepo(f, cfg.Viper)
+	if err != nil {
+		t.Fatalf("NewResourceRepo() error = %v", err)
+	}
+	e, err := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+	if err != nil {
+		t.Fatalf("newRenderEngine() error = %v", err)
+	}
 	e.Template = *tmpl
 	pod := newRenderableObject(map[string]interface{}{
 		"apiVersion": "v1",
