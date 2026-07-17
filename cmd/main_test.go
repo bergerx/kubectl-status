@@ -1766,15 +1766,21 @@ func TestE2EParallel(t *testing.T) {
 			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
 		})
 		applyManifestInNamespace(t, "e2e-artifacts/pod-container-logs.yaml", ns)
-		// Wait for a stable Waiting(CrashLoopBackOff) state rather than just restartCount > 0:
-		// the container's current state otherwise flips between Waiting and Terminated(Error)
-		// as the kubelet retries, which would make the golden regex flaky.
-		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-container-logs", "crasher", "CrashLoopBackOff", ns)
 		// The fixture pins a usage line for both healthy containers -- wait for metrics-server to
 		// have scraped each of them specifically, not just the Pod overall: a container that
 		// started slightly later than its siblings can still be missing from PodMetrics even once
 		// the pod-level object exists, which otherwise renders that container's usage line blank.
+		// Done before the CrashLoopBackOff wait below (not after): metrics-server's scrape
+		// interval can take tens of seconds, and the crasher container keeps cycling
+		// Waiting/Terminated the whole time it waits, so checking CrashLoopBackOff first and
+		// then waiting on metrics just reintroduces the same flip the CrashLoopBackOff wait was
+		// meant to avoid, by leaving a wide gap between the check and the actual assertion.
 		waitForContainerMetrics(t, ns, "e2e-pod-container-logs", "healthy", "sidecar")
+		// Wait for a stable Waiting(CrashLoopBackOff) state rather than just restartCount > 0:
+		// the container's current state otherwise flips between Waiting and Terminated(Error)
+		// as the kubelet retries, which would make the golden regex flaky. This has to be the
+		// last wait before the assertion below -- see the comment above.
+		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-container-logs", "crasher", "CrashLoopBackOff", ns)
 
 		cmdTest{
 			args:            []string{"pod/e2e-pod-container-logs", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
