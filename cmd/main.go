@@ -117,7 +117,7 @@ func RootCmd(cfgOpts ...func(*plugin.RenderConfig)) *cobra.Command {
 		}
 		if b, _ := cmd.Flags().GetBool("test-hack"); b {
 			v.Set("test-hack", true)
-			cfg.DurationRound = func(_ interface{}) string { return "1m" }
+			plugin.ApplyTestHack(cfg)
 		}
 		ioStreams := genericiooptions.IOStreams{In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), ErrOut: cmd.ErrOrStderr()}
 		return checkErr(plugin.Run(f, ioStreams, args, cfg))

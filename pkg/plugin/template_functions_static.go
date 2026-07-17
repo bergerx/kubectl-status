@@ -60,6 +60,25 @@ func DefaultDurationRound() func(duration interface{}) string {
 	return sprouttime.NewRegistry().DurationRound
 }
 
+// TestHackNow is the fixed timestamp ApplyTestHack pins RenderConfig.Now to, so relative-duration
+// output (e.g. "Ready: 15h") is deterministic instead of drifting with wall-clock time. Test
+// fixtures under tests/artifacts/ are dated relative to this.
+var TestHackNow = time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC)
+
+// ApplyTestHack overrides cfg's time-sensitive hooks for deterministic output: a fixed Now, a
+// fixed "1m" DurationRound, and a fixed "started after" clause. Real creation and kubelet-ack
+// timestamps only carry 1-second resolution over the wire, so whether the "started after" clause
+// appears is otherwise a coin flip; this forces it present whenever Status.startTime is set.
+//
+// Both the "--test-hack" CLI flag (cmd/main.go, used by `make update-artifacts`/`make
+// new-artifact`) and the e2e test suite (cmd/main_test.go) call this, so the artifacts generated
+// on disk and the output the tests compare against can never drift apart.
+func ApplyTestHack(cfg *RenderConfig) {
+	cfg.Now = func() time.Time { return TestHackNow }
+	cfg.DurationRound = func(_ interface{}) string { return "1m" }
+	cfg.StartedAfterClause = func(_, _ string) string { return ", started after 1m" }
+}
+
 func (cfg *RenderConfig) funcMap() template.FuncMap {
 	return template.FuncMap{
 		"green":                     color.GreenString,
