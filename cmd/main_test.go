@@ -281,27 +281,12 @@ func TestE2EAgainstVanillaMinikube(t *testing.T) {
 }
 
 // testHackOpts fixes plugin.RenderConfig's Now/DurationRound/StartedAfterClause for
-// deterministic e2e output. Each RootCmd() invocation gets its own fresh RenderConfig (see
-// cmd/main.go), so unlike the old global package-var overrides this needs no revert -- see #694.
+// deterministic e2e output (see plugin.ApplyTestHack). Each RootCmd() invocation gets its own
+// fresh RenderConfig (see cmd/main.go), so unlike the old global package-var overrides this needs
+// no revert -- see #694.
 func testHackOpts(t *testing.T) []func(*plugin.RenderConfig) {
 	t.Helper()
-	fixedNow := time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC)
-	return []func(*plugin.RenderConfig){
-		func(cfg *plugin.RenderConfig) {
-			cfg.DurationRound = func(_ interface{}) string { return "1m" }
-		},
-		func(cfg *plugin.RenderConfig) {
-			cfg.Now = func() time.Time { return fixedNow }
-		},
-		// Whether a live pod's creation and kubelet-acknowledge timestamps land in the same
-		// wall-clock second (hiding the "started after" clause) or not (showing it) is a coin
-		// flip e2e tests can't control -- both timestamps only carry 1-second resolution over
-		// the wire. Force the clause present whenever Status.startTime is set, so fixtures can
-		// pin it literally instead of making it optional.
-		func(cfg *plugin.RenderConfig) {
-			cfg.StartedAfterClause = func(_, _ string) string { return ", started after 1m" }
-		},
-	}
+	return []func(*plugin.RenderConfig){plugin.ApplyTestHack}
 }
 
 // viperTestHackOpts sets "test-hack" on this invocation's RenderConfig, which makes ip() report a
