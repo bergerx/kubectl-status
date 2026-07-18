@@ -16,7 +16,7 @@
     {{- end }}
     {{- with .Status.active }}
         {{- range . }}
-            {{- "Active" | green | nindent 2 }}: {{ .kind | bold }}/{{ .name }} is running.
+            {{- "Active" | green | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" .kind "name" .name) }} is running.
         {{- end }}
     {{- end }}
     {{- $cronJobJobs := list }}

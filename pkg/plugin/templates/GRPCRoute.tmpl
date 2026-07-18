@@ -17,9 +17,8 @@
                 {{- $obj := $.KubeGetFirst $ns (.kind | default "Gateway") .name }}
                 {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
             {{- else }}
-                {{- printf "%s/%s" (.kind | default "Gateway") .name | cyan | nindent 4 }}
+                {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
-                {{- with .namespace }} -n {{ . }}{{ end }}
                 {{- if not ($.Config.GetBool "shallow") }}
                     {{- if eq (.kind | default "Gateway") "Gateway" }}
                         {{- $parentRef := . }}
@@ -90,9 +89,8 @@
             {{- end }}
             {{- with .backendRefs }}
                 {{- range . }}
-                    {{- printf "→ %s/%s" (.kind | default "Service") .name | cyan | nindent 4 }}
+                    {{- "→ " | nindent 4 }}{{ $.Include "resource_ref" (dict "kind" (.kind | default "Service") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) }}
                     {{- with .port }}:{{ . }}{{ end }}
-                    {{- with .namespace }} -n {{ . }}{{ end }}
                     {{- if and (hasKey . "weight") (ne (.weight | int) 1) }}, weight:{{ .weight }}{{ end }}
                 {{- end }}
             {{- end }}
@@ -101,7 +99,7 @@
     {{- with .Status.parents }}
         {{- "Status" | bold | nindent 2 }}:
         {{- range . }}
-            {{- printf "%s/%s" (.parentRef.kind | default "Gateway") .parentRef.name | bold | nindent 4 }}
+            {{- $.Include "resource_ref" (dict "kind" (.parentRef.kind | default "Gateway") "name" .parentRef.name "namespace" .parentRef.namespace "callerNamespace" $.Namespace) | nindent 4 }}
             {{- with .parentRef.sectionName }} [{{ . }}]{{ end }}
             {{- with .controllerName }} ({{ . }}){{ end }}
             {{- range .conditions }}

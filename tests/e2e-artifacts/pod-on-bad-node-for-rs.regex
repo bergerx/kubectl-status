@@ -1,1 +1,1 @@
-Pod/pod-on-bad-node-for-rs -n e2e-bad-node-rs[^\n]*, node cordoned, node NotReady, node MemoryPressure, untolerated node taint
+Pod/pod-on-bad-node-for-rs[^\n]*, node cordoned, node NotReady, node MemoryPressure, untolerated node taint

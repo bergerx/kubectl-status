@@ -72,7 +72,7 @@
             {{- $obj := $.KubeGetFirst $ns .kind .name }}
             {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 2 }}{{ end }}
         {{- else }}
-            {{- "Infrastructure" | bold | nindent 2 }}: {{ printf "%s/%s" .kind .name | cyan }}
+            {{- "Infrastructure" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" .kind "name" .name) }}
             {{- with .group }} ({{ . }}){{ end }}
         {{- end }}
     {{- end }}

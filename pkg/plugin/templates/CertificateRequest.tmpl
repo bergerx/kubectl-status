@@ -11,11 +11,11 @@
     {{- $certRevision := index .Annotations "cert-manager.io/certificate-revision" }}
     {{- with .Spec.username }}
         {{- "Requested by" | nindent 2 }} {{ . | cyan | bold }}
-        {{- with $certName }} for {{ printf "Certificate/%s" . | cyan | bold }}{{ end }}
+        {{- with $certName }} for {{ $.Include "resource_ref" (dict "kind" "Certificate" "name" .) }}{{ end }}
         {{- with $certRevision }} (rev {{ . | cyan }}){{ end }}
     {{- end }}
     {{- with .Spec.issuerRef }}
-        {{- "Via" | bold | nindent 4 }}: {{ printf "%s/%s" (.kind | default "Issuer") .name | cyan }}
+        {{- "Via" | bold | nindent 4 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Issuer") "name" .name) }}
         {{- with .group }} ({{ . | cyan }}){{ end }}
     {{- end }}
     {{- /* Requester group membership */ -}}

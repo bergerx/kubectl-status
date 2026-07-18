@@ -51,8 +51,15 @@
 {{- end -}}
 
 {{- define "resource_ref" }}
+    {{- /* Expects dict "kind" "name" "namespace" (optional) "callerNamespace" (optional -- the
+           namespace of the object doing the referencing; when it matches "namespace" the
+           namespace is redundant on screen and is dropped). */ -}}
     {{- .kind | cyan | bold }}/{{ .name | cyan }}
-    {{- with .namespace }} -n {{ if eq . "default" }}{{ . | red }}{{ else }}{{ . | cyan }}{{ end }}{{ end }}
+    {{- with .namespace }}
+        {{- if or (not $.callerNamespace) (ne . $.callerNamespace) }}
+            {{- " -n " }}{{ if eq . "default" }}{{ . | red }}{{ else }}{{ . | cyan }}{{ end }}
+        {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "service_account_summary" }}
@@ -91,13 +98,13 @@
 {{- define "status_summary_line" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- if (.Object | default dict).inline }}
-        {{- .Kind | bold }}/{{ .Name }}
+        {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- else }}
         {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
     {{- end }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if .Metadata.ownerReferences }} by {{ range $index, $ownerReference := .Metadata.ownerReferences }}
-        {{- if $index }},{{ end }}{{ $ownerReference.kind | bold }}/{{ $ownerReference.name }}
+        {{- if $index }},{{ end }}{{ template "resource_ref" (dict "kind" $ownerReference.kind "name" $ownerReference.name) }}
     {{- end }}{{ end }}
     {{- with .Metadata.generation }}, gen:{{ . }}{{ end }}
     {{- if and .Status.startTime (ne .Kind "Job") }}
@@ -196,7 +203,7 @@
             {{- end }}{{ end }}
         {{- end }}
         {{- range .Orphans }}
-            {{- "Orphan" | red | bold | nindent 2 }}: owner {{ .Kind | bold }}/{{ .Name }} referenced in ownerReferences no longer exists
+            {{- "Orphan" | red | bold | nindent 2 }}: owner {{ template "resource_ref" (dict "kind" .Kind "name" .Name) }} referenced in ownerReferences no longer exists
         {{- end }}
     {{- end }}
 {{- end }}
@@ -247,7 +254,7 @@
 
 {{- define "pod_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with .Status.phase }} {{ . | colorKeyword }}{{ end }}
     {{- $total := 0 }}{{ $ready := 0 }}
@@ -417,7 +424,7 @@
 
 {{- define "service_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with .Spec }}{{ with .type }}, {{ if eq . "NodePort" }}{{ . | yellow | bold }}{{ else }}{{ . | colorKeyword }}{{ end }}{{ end }}{{ end }}
     {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
@@ -446,7 +453,7 @@
 
 {{- define "ingress_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with .Spec.rules }}, {{ range $index, $rule := . }}{{ if $index }}, {{ end }}{{ $rule.host | cyan }}{{ end }}{{ end }}
     {{- with .Status.loadBalancer.ingress }}
@@ -461,7 +468,7 @@
 {{- define "route_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* Shared compact summary for HTTPRoute, GRPCRoute, TCPRoute, UDPRoute and TLSRoute. */ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with .Spec.hostnames }}, {{ join ", " . | cyan }}{{ end }}
     {{- with $.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
@@ -469,7 +476,7 @@
 
 {{- define "job_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if .Status.active }}, {{ "Active" | yellow | bold }}{{ end }}
     {{- if .Status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
@@ -484,7 +491,7 @@
 
 {{- define "pdb_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- $budgetViolated := lt (.Status.currentHealthy | int) (.Status.desiredHealthy | int) }}
     {{- $noDisruptions := and (hasKey .Status "disruptionsAllowed") (eq (.Status.disruptionsAllowed | int) 0) }}
@@ -678,7 +685,7 @@
 
 {{- define "hpa_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- $minReplicas := 1 }}{{- if hasKey .Spec "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | int }}{{- end }}
     {{- $current := .Status.currentReplicas | default 0 | int }}
     {{- $desired := .Status.desiredReplicas | default 0 | int }}
@@ -727,7 +734,7 @@
 
 {{- define "vpa_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- $updateMode := (.Spec.updatePolicy | default dict).updateMode | default "Auto" }}
     {{- if ne $updateMode "Auto" }}, {{ $updateMode | cyan }}{{ end }}
     {{- range (.Status.recommendation | default dict).containerRecommendations }}
@@ -853,7 +860,7 @@
 
 {{- define "workload_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if eq .Kind "DaemonSet" }}
         {{- $desired := .Status.desiredNumberScheduled | int }}

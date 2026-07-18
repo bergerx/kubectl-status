@@ -1,7 +1,7 @@
 
 Certificate/kubectl-status-selfsigned -n default, created 1m ago, gen:1
   Current: Resource is Ready
-  Issued by Issuer/kubectl-status-selfsigned-issuer for "kubectl-status-selfsigned" · stored in secret/kubectl-status-selfsigned-secret
+  Issued by Issuer/kubectl-status-selfsigned-issuer for "kubectl-status-selfsigned" · stored in Secret/kubectl-status-selfsigned-secret
   Requested lifetime: 8760h, renew 720h before expiry
   Issued 2026-06-26 (1m ago), expires 2027-06-26, auto-renews 2027-05-27 · rev 1
   Ready Ready, Certificate is up to date and has not expired for 1m

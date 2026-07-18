@@ -3,10 +3,10 @@ HTTPRoute/prometheus -n default, created 1m ago, gen:1
   Current: Resource is current
   Hostnames: prometheus.local
   Parents:
-    Gateway/eg -n default
+    Gateway/eg
       controller: gateway.envoyproxy.io/gatewayclass-controller
       Accepted Accepted, Route is accepted for 1m
       ResolvedRefs ResolvedRefs, Resolved all the Object references for the Route for 1m
   Rules:
     PathPrefix /
-    → Service/kube-prometheus-stack-1782-prometheus -n default:9090
+    → Service/kube-prometheus-stack-1782-prometheus:9090

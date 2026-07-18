@@ -30,7 +30,7 @@
                         {{- end }}
                     {{- end }}
                     {{- if not $portDefinedInSvc }}
-                        {{- "Service port doesnt exist" | red | bold | nindent 2 }}: {{ "Service" | bold }}/{{ $ingSvcName }}:{{ $ingSvcPort }} referenced in ingress, but Service doesn't have that port defined.
+                        {{- "Service port doesnt exist" | red | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" "Service" "name" $ingSvcName) }}:{{ $ingSvcPort }} referenced in ingress, but Service doesn't have that port defined.
                     {{- else if not ($shownSvcs | has $ingSvcName) }}
                         {{- $.Include "service_health_summary" $svc | nindent 2 }}
                         {{- $shownSvcs = append $shownSvcs $ingSvcName }}

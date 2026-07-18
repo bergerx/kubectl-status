@@ -1,7 +1,7 @@
 
 HorizontalPodAutoscaler/my-app -n default, created 1m ago, last scaled 1m ago
   Current: Resource is current
-  Scales: Deployment/my-app -n default
+  Scales: Deployment/my-app
   Replicas: 3/2-10, desired: 7
   Metrics:
     cpu:92%/70%

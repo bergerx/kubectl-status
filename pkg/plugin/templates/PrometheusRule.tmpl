@@ -73,7 +73,7 @@
                 {{- $obj := $.KubeGetFirst .namespace $kind .name }}
                 {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
             {{- else }}
-                {{- printf "%s/%s" .resource .name | cyan | nindent 4 }} -n {{ .namespace | cyan }}
+                {{- $.Include "resource_ref" (dict "kind" .resource "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}

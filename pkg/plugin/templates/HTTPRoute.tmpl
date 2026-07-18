@@ -34,7 +34,7 @@
                 {{- $obj := $.KubeGetFirst $ns (.kind | default "Gateway") .name }}
                 {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
             {{- else }}
-                {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace) | nindent 4 }}
+                {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
                 {{- if and (eq (.kind | default "Gateway") "Gateway") (not ($.Config.GetBool "shallow")) }}
                     {{- $ns := coalesce .namespace $.Namespace }}
@@ -134,7 +134,7 @@
                     {{- end }}
                 {{- else }}
                     {{- range . }}
-                        {{- "→" | nindent 4 }} {{ $.Include "resource_ref" (dict "kind" (.kind | default "Service") "name" .name "namespace" .namespace) }}
+                        {{- "→" | nindent 4 }} {{ $.Include "resource_ref" (dict "kind" (.kind | default "Service") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) }}
                         {{- with .port }}:{{ . | toString | cyan }}{{ end }}
                         {{- if and (hasKey . "weight") (ne (.weight | int) 1) }}, weight:{{ .weight | toString | cyan }}{{ end }}
                     {{- end }}

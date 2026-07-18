@@ -1,5 +1,5 @@
 
 Issuer/kubectl-status-ca-issuer -n default, created 1m ago, gen:1
   Current: Resource is Ready
-  Backend: CA · signing key in secret/kubectl-status-ca-secret
+  Backend: CA · signing key in Secret/kubectl-status-ca-secret
   Ready KeyPairVerified, Signing CA verified for 1m

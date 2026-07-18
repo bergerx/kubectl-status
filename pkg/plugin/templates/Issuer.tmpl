@@ -12,7 +12,7 @@
             {{- "CRL" | bold | nindent 4 }}: {{ join ", " . | cyan }}
         {{- end }}
     {{- else if .Spec.ca }}
-        {{- "Backend" | bold | nindent 2 }}: {{ "CA" | cyan }} · signing key in {{ printf "secret/%s" .Spec.ca.secretName | cyan }}
+        {{- "Backend" | bold | nindent 2 }}: {{ "CA" | cyan }} · signing key in {{ $.Include "resource_ref" (dict "kind" "Secret" "name" .Spec.ca.secretName) }}
         {{- with .Spec.ca.ocspServers }}
             {{- "OCSP" | bold | nindent 4 }}: {{ join ", " . | cyan }}
         {{- end }}
@@ -23,10 +23,10 @@
         {{- "Backend" | bold | nindent 2 }}: {{ "ACME" | cyan }} at {{ .Spec.acme.server | cyan }}
         {{- with .Spec.acme.email }}
             {{- "Account" | bold | nindent 4 }}: {{ . | cyan }}
-            {{- with $.Spec.acme.privateKeySecretRef }} · key in {{ printf "secret/%s" .name | cyan }}{{ end }}
+            {{- with $.Spec.acme.privateKeySecretRef }} · key in {{ $.Include "resource_ref" (dict "kind" "Secret" "name" .name) }}{{ end }}
         {{- else }}
             {{- with .Spec.acme.privateKeySecretRef }}
-                {{- "Account key" | bold | nindent 4 }}: {{ printf "secret/%s" .name | cyan }}
+                {{- "Account key" | bold | nindent 4 }}: {{ $.Include "resource_ref" (dict "kind" "Secret" "name" .name) }}
             {{- end }}
         {{- end }}
         {{- with .Spec.acme.preferredChain }}
@@ -59,7 +59,7 @@
             {{- else if .kubernetes }}
                 {{- "Auth" | bold | nindent 4 }}: {{ "Kubernetes" | cyan }} · role={{ .kubernetes.role | cyan }}
             {{- else if .tokenSecretRef }}
-                {{- "Auth" | bold | nindent 4 }}: {{ "Token" | cyan }} from {{ printf "secret/%s" .tokenSecretRef.name | cyan }}
+                {{- "Auth" | bold | nindent 4 }}: {{ "Token" | cyan }} from {{ $.Include "resource_ref" (dict "kind" "Secret" "name" .tokenSecretRef.name) }}
             {{- else if .clientCertificate }}
                 {{- "Auth" | bold | nindent 4 }}: {{ "Client Certificate" | cyan }}
             {{- end }}

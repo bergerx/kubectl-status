@@ -146,9 +146,8 @@
     {{- $ip := (index .endpoint.addresses 0) | ip }}
     {{- $hasTargetRef := not (not .endpoint.targetRef) }}
     {{- if .endpoint.targetRef }}
-        {{- .endpoint.targetRef.kind | bold }}/{{ .endpoint.targetRef.name }}
-        {{- with .endpoint.targetRef.namespace }} -n {{ . }}{{ end }}
-        {{- with .endpoint.nodeName }} on {{ "Node" | bold }}/{{ . }}{{ end }}
+        {{- template "resource_ref" (dict "kind" .endpoint.targetRef.kind "name" .endpoint.targetRef.name) }}
+        {{- with .endpoint.nodeName }} on {{ template "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}
     {{- end }}
     {{- range $index, $port := .ports }}
         {{- if $hasTargetRef }}, {{ else }}{{if $index}}, {{end}}{{ end }}

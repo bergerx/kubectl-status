@@ -13,8 +13,7 @@
             {{- $obj := $.KubeGetFirst $ns "Gateway" .name }}
             {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
         {{- else }}
-            {{- printf "Gateway/%s" .name | cyan | nindent 4 }}
-            {{- with .namespace }} -n {{ . }}{{ end }}
+            {{- $.Include "resource_ref" (dict "kind" "Gateway" "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
         {{- end }}
     {{- end }}
     {{- with .Spec.listeners }}
