@@ -45,6 +45,7 @@
     {{- template "service_account_summary" (dict "ctx" . "namespace" .Namespace "serviceAccountName" .Spec.serviceAccountName) }}
     {{- template "pod_init_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
     {{- template "pod_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
+    {{- template "pod_runtimeclass_overhead" . }}
     {{- template "pod_ephemeral_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
     {{- template "pod_volumes" . }}
     {{- template "matching_services" (dict "ctx" . "namespace" .Namespace "svcs" (.KubeGetServicesMatchingPod .Namespace .Name)) }}
@@ -172,6 +173,35 @@
                 {{- " " }}{{- $pod.Include "container_status_summary" $containerStatusSummaryDict }}
             {{- else }}
                 {{- $pod.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "pod_runtimeclass_overhead" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Resolves .spec.runtimeClassName to its RuntimeClass object and surfaces
+           overhead.podFixed -- the per-pod resource cost the sandboxed runtime (gVisor, Kata,
+           ...) adds on top of container requests/limits, which scheduling and quota accounting
+           include but the Pod spec alone never shows. Silent when there's no runtimeClassName, no
+           RuntimeClass object, or no overhead.podFixed. */ -}}
+    {{- with .Spec.runtimeClassName }}
+        {{- $rc := $.KubeGetFirst "" "RuntimeClass" . }}
+        {{- if $rc.Object }}
+            {{- $podFixed := ($rc.Object.overhead | default dict).podFixed | default dict }}
+            {{- if $podFixed }}
+                {{- $parts := list }}
+                {{- range $name := keys $podFixed | sortAlpha }}
+                    {{- $qty := index $podFixed $name }}
+                    {{- if eq $name "cpu" }}
+                        {{- $parts = append $parts (printf "cpu: %s" ($qty | quantityToFloat64 | printf "%.1g" | cyan)) }}
+                    {{- else if eq $name "memory" }}
+                        {{- $parts = append $parts (printf "memory: %s" ($qty | quantityToFloat64 | humanizeSI "B" | cyan)) }}
+                    {{- else }}
+                        {{- $parts = append $parts (printf "%s: %s" $name ($qty | toString | cyan)) }}
+                    {{- end }}
+                {{- end }}
+                {{- printf "RuntimeClass/%s overhead:" . | bold | nindent 2 }} {{ join ", " $parts }}
             {{- end }}
         {{- end }}
     {{- end }}
