@@ -1,7 +1,7 @@
 \A
 Service/sts-with-ingress -n e2e-sts-with-ingress-routes, created 1m ago, last endpoint change was 1m ago
   Current: Service is ready
-  Ready: Pod/sts-with-ingress-0 -n e2e-sts-with-ingress-routes on Node/minikube, [0-9.]+:80/TCP
+  Ready: Pod/sts-with-ingress-0 on Node/minikube, [0-9.]+:80/TCP
   Ingresses matching this Service:
     Ingress/sts-with-ingress -n e2e-sts-with-ingress-routes, created 1m ago, gen:1
       Current: Resource is current

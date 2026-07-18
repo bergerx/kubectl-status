@@ -3,5 +3,5 @@ Service/svc-with-httproute -n e2e-svc-httproute, created 1m ago
   Current: Service is ready
   Missing Endpoint: Service has no matching endpoint.
   Routes matching this Service:
-    HTTPRoute/svc-with-httproute -n e2e-svc-httproute, created 1m ago, svc-with-httproute\.example\.com, Current
+    HTTPRoute/svc-with-httproute, created 1m ago, svc-with-httproute\.example\.com, Current
 \z
