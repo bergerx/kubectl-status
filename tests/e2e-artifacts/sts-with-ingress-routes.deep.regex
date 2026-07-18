@@ -5,7 +5,7 @@ Service/sts-with-ingress -n e2e-sts-with-ingress-routes, created 1m ago, last en
   Ingresses matching this Service:
     Ingress/sts-with-ingress -n e2e-sts-with-ingress-routes, created 1m ago, gen:1
       Current: Resource is current
-      Service/sts-with-ingress -n e2e-sts-with-ingress-routes, created 1m ago, ClusterIP, 1 ready, 80/TCP
+      Service/sts-with-ingress, created 1m ago, ClusterIP, 1 ready, 80/TCP
   Routes matching this Service:
     HTTPRoute/sts-http -n e2e-sts-with-ingress-routes, created 1m ago, gen:1
       Current: Resource is current
