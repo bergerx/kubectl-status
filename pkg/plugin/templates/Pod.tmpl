@@ -201,7 +201,7 @@
                         {{- $parts = append $parts (printf "%s: %s" $name ($qty | toString | cyan)) }}
                     {{- end }}
                 {{- end }}
-                {{- printf "RuntimeClass/%s overhead:" . | bold | nindent 2 }} {{ join ", " $parts }}
+                {{- "Overhead:" | bold | nindent 2 }} {{ template "resource_ref" (dict "kind" "RuntimeClass" "name" .) }} ({{ join ", " $parts }})
             {{- end }}
         {{- end }}
     {{- end }}
