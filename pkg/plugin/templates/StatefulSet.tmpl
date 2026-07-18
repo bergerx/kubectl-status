@@ -152,7 +152,7 @@
         {{- $previousRevision := "" }}
         {{- range $revisions }}
             {{- "" | nindent 4 }}
-            {{- with .Metadata.creationTimestamp }}{{ . | colorAgo }}{{ agoSuffix }}{{ end }} used {{ .Kind | bold }}/{{ .Name }}.
+            {{- with .Metadata.creationTimestamp }}{{ . | colorAgo }}{{ agoSuffix }}{{ end }} used {{ $.Include "resource_ref" (dict "kind" .Kind "name" .Name) }}.
             {{- if and $previousRevision ($.Config.GetBool "include-rollout-diffs") }}
                 {{- with $.KubeGetUnifiedDiffString "ControllerRevision" $.Namespace $previousRevision.Name .Name }}
                     {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 6 }}

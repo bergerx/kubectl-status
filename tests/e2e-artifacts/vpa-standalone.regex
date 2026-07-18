@@ -1,7 +1,7 @@
 \A
 VerticalPodAutoscaler/vpa-burner -n e2e-vpa, created 1m ago, gen:1
   Current: Resource is current
-  Targets: Deployment/vpa-burner -n e2e-vpa
+  Targets: Deployment/vpa-burner
   Update mode: Recreate
   Min replicas for eviction: 1
   Policy\[burner\]: min cpu=10m, min mem=16Mi, max cpu=500m, max mem=128Mi

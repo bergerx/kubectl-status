@@ -11,9 +11,9 @@
     {{- with .Spec.dnsNames }}{{ $dnsFirst = index . 0 }}{{ end }}
     {{- $primary := coalesce .Spec.commonName $dnsFirst .Spec.literalSubject }}
     {{- with .Spec.issuerRef }}
-        {{- "Issued by" | nindent 2 }} {{ printf "%s/%s" (.kind | default "Issuer") .name | cyan | bold }}
+        {{- "Issued by" | nindent 2 }} {{ $.Include "resource_ref" (dict "kind" (.kind | default "Issuer") "name" .name) }}
         {{- with $primary }} for {{ printf "%q" . | cyan }}{{ end }}
-        {{- with $.Spec.secretName }} · stored in {{ printf "secret/%s" . | cyan }}{{ end }}
+        {{- with $.Spec.secretName }} · stored in {{ $.Include "resource_ref" (dict "kind" "Secret" "name" .) }}{{ end }}
     {{- end }}
     {{- /* Subject / identity details */ -}}
     {{- with .Spec.literalSubject }}

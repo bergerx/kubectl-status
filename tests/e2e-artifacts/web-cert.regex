@@ -1,6 +1,6 @@
 \A
 Secret/web-tls -n e2e-web-cert, created 1m ago
-  Managed by Certificate/web-tls -n e2e-web-cert via Issuer/web-ca-issuer -n e2e-web-cert \(cert-manager\.io\)
+  Managed by Certificate/web-tls via Issuer/web-ca-issuer \(cert-manager\.io\)
   Certificate for CN=web\.ks-demo\.svc · issued by CN=kubectl-status-demo-ca
     Valid 1m ago, expires \d{4}-\d{2}-\d{2}
     Key: RSA · serial [0-9]+

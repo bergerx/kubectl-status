@@ -5,7 +5,7 @@
     {{- template "finalizer_details_on_termination" . }}
     {{- "PV" | nindent 2 }} is {{- with .Status.phase }} {{ . | colorKeyword }}{{ end }}
     {{- with .Status.lastPhaseTransitionTime }}, since {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- with .Spec.storageClassName  }} managed by {{ "StorageClass" | bold }}/{{ . }}{{ end }}
+    {{- with .Spec.storageClassName  }} managed by {{ $.Include "resource_ref" (dict "kind" "StorageClass" "name" .) }}{{ end }}
     {{- with index .Annotations "kubernetes.io/createdby" }} created by {{ . | bold }}{{ end }}
     {{- with index .Annotations "pv.kubernetes.io/provisioned-by" }} provisioned by {{ . | bold }}{{ end }}
     {{- with .Spec.accessModes }}{{- with index . 0 }} with {{ . | bold }} mode{{ end }}{{- end }}
@@ -13,7 +13,7 @@
     {{- with .Status.reason }}{{ "reason" | bold }}: {{ . }}{{ end }}
     {{- with .Status.message }}{{ "message" | red | bold | nindent 2 }}: {{ . }}{{- end }}{{/* Exists usually when there is problem */}}
     {{- with .Spec.claimRef }}
-        {{- "Created" | nindent 2 }} for {{ .kind | bold }}/{{ .name }} -n {{ .namespace }}
+        {{- "Created" | nindent 2 }} for {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" .namespace) }}
         {{- $pvc := $.KubeGetFirst .namespace .kind .name }}
         {{- if $pvc.Object }}
             {{- if ne $pvc.Metadata.uid .uid }}

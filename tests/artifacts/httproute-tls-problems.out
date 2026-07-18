@@ -30,18 +30,18 @@ HTTPRoute/app -n default, created 1m ago, gen:1
   Current: Resource is current
   Hostnames: app.example.com
   Parents:
-    Gateway/eg -n default [self-signed]
+    Gateway/eg [self-signed]
       controller: gateway.envoyproxy.io/gatewayclass-controller
       Accepted Accepted, Route is accepted for 1m
       ResolvedRefs ResolvedRefs, Resolved all the Object references for the Route for 1m
-    Gateway/eg -n default [hostname-mismatch]
+    Gateway/eg [hostname-mismatch]
       controller: gateway.envoyproxy.io/gatewayclass-controller
       Accepted Accepted, Route is accepted for 1m
       ResolvedRefs ResolvedRefs, Resolved all the Object references for the Route for 1m
-    Gateway/eg -n default [missing-secret]
+    Gateway/eg [missing-secret]
       controller: gateway.envoyproxy.io/gatewayclass-controller
       Accepted Accepted, Route is accepted for 1m
       ResolvedRefs ResolvedRefs, Resolved all the Object references for the Route for 1m
   Rules:
     PathPrefix /
-    → Service/app-svc -n default:8080
+    → Service/app-svc:8080

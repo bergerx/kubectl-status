@@ -6,11 +6,11 @@
     {{- template "application_details" . }}
     {{- template "conditions_summary" . }}
     {{- "PVC" | nindent 2 }}
-    {{- with .Spec.volumeName }} uses {{ "PersistentVolume" | bold }}/{{ . }}{{ end }}
+    {{- with .Spec.volumeName }} uses {{ $.Include "resource_ref" (dict "kind" "PersistentVolume" "name" .) }}{{ end }}
     {{- with .Spec.volumeMode }}, with {{ . | bold }} mode{{ end }}
     {{- with .Status.capacity.storage }}, asks for {{ . | bold }}{{ end }}
     {{- with index .Annotations "volume.beta.kubernetes.io/storage-provisioner" }}, provisioned by {{ . | bold }}{{ end }}
-    {{- with index .Annotations "volume.kubernetes.io/selected-node" }}, attached on {{ "Node" | bold }}/{{ . }}{{ end }}
+    {{- with index .Annotations "volume.kubernetes.io/selected-node" }}, attached on {{ $.Include "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}
     {{- if not .Spec.volumeName }}, {{ "Pending" | red | bold }}: no paired PV yet{{ end }}
     {{- /* Disk usage: find running pods that have this PVC mounted, collect usage stats from the first one */ -}}
     {{- $pvcName := $.Name }}

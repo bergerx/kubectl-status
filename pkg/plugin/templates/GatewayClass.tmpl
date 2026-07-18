@@ -12,8 +12,7 @@
             {{- $obj := $.KubeGetFirst $ns .kind .name }}
             {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
         {{- else }}
-            {{- "Parameters" | bold | nindent 2 }}: {{ printf "%s/%s" .kind .name | cyan }}
-            {{- with .namespace }} -n {{ . }}{{ end }}
+            {{- "Parameters" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" .namespace) }}
         {{- end }}
     {{- end }}
     {{- with .Spec.description }}

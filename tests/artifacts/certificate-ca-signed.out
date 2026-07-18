@@ -1,7 +1,7 @@
 
 Certificate/kubectl-status-server -n default, created 1m ago, gen:1
   Current: Resource is Ready
-  Issued by Issuer/kubectl-status-ca-issuer for "kubectl-status-server" · stored in secret/kubectl-status-server-secret
+  Issued by Issuer/kubectl-status-ca-issuer for "kubectl-status-server" · stored in Secret/kubectl-status-server-secret
     Also valid for: kubectl-status-svc.default.svc.cluster.local
   Usages: server auth, client auth
   Requested lifetime: 8760h, renew 720h before expiry
