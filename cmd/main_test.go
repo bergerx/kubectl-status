@@ -21,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	nodev1 "k8s.io/api/node/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -653,6 +654,64 @@ func TestE2EParallel(t *testing.T) {
 		cmdTest{
 			args:            []string{"-f", "../tests/e2e-artifacts/pod-missing-service-account.yaml", "--local", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-missing-service-account.regex",
+		}.assert(t, nil, opts...)
+	})
+	t.Run("pod's runtimeClassName resolves to the RuntimeClass and surfaces overhead.podFixed", func(t *testing.T) {
+		t.Parallel()
+		// No real gVisor/Kata handler is installed on the e2e cluster, so the RuntimeClass object
+		// is created directly (its "handler" field is never resolved to an actual runtime by this
+		// test) -- the goal is validating the fetch-and-render path, not sandboxed execution. The
+		// Pod is created for real (not rendered via --local): --local's builder can't mix -f with a
+		// secondary lookup that's expected to resolve (KubeGetFirst always hits the "when paths,
+		// URLs, or stdin is provided as input, you may not specify resource arguments as well"
+		// error in that mode -- invisible for lookups expected to fail, like the missing-SA case
+		// above, since a builder error and a real not-found both render as "doesn't exist", but
+		// fatal for a lookup that's expected to succeed). The API server's RuntimeClass admission
+		// plugin will also copy overhead.podFixed into this Pod's own spec.overhead, but Pod.tmpl
+		// reads it from the fetched RuntimeClass object, not spec.overhead, so that duplication
+		// doesn't undermine what's being verified here.
+		opts := combineOpts(viperTestHackOpts())
+		ns := "e2e-pod-runtimeclass-overhead"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		rc := &nodev1.RuntimeClass{
+			ObjectMeta: metav1.ObjectMeta{Name: "e2e-test-gvisor"},
+			Handler:    "runsc",
+			Overhead: &nodev1.Overhead{
+				PodFixed: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("250m"),
+					corev1.ResourceMemory: resource.MustParse("64Mi"),
+				},
+			},
+		}
+		_, err = clientset.NodeV1().RuntimeClasses().Create(context.TODO(), rc, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.NodeV1().RuntimeClasses().Delete(context.TODO(), rc.Name, metav1.DeleteOptions{})
+		})
+
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-with-runtimeclass-overhead",
+				Namespace: ns,
+			},
+			Spec: corev1.PodSpec{
+				RuntimeClassName: &rc.Name,
+				Containers:       []corev1.Container{{Name: "app", Image: "busybox"}},
+			},
+		}
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+
+		cmdTest{
+			args:            []string{"pod/pod-with-runtimeclass-overhead", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-with-runtimeclass-overhead.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("workload's matching pod on a cordoned node surfaces a compact node-problem flag", func(t *testing.T) {
