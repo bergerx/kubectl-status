@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -540,20 +541,18 @@ func TestE2EParallel(t *testing.T) {
 		}
 		test.assert(t, nil, opts...) // to update the out files check /tests/artifacts/README.md
 	})
-	t.Run("ownerReference pointing at a deleted owner is flagged as orphan", func(t *testing.T) {
-		t.Parallel()
-		opts := combineOpts(hackOpts, viperTestHackOpts())
-		// The child is rendered with --local straight from a manifest rather than created on
-		// the cluster: a live Secret with a dangling ownerReference gets swept up by the
-		// built-in garbage collector almost immediately (it treats a missing owner as a signal
-		// to cascade-delete the dependent), which would make this test flaky. --local still
-		// resolves the ownerReference against the real API server (only the child object itself
-		// is local), so the orphan check is exercised the same way, without the race.
-		cmdTest{
-			args:            []string{"-f", "../tests/e2e-artifacts/secret-orphan-owner-reference.yaml", "--local", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
-			stdoutRegexPath: "e2e-artifacts/secret-orphan-owner-reference.regex",
-		}.assert(t, nil, opts...)
-	})
+	// There's no e2e coverage for "ownerReference pointing at a deleted owner is flagged as
+	// orphan": a live Secret with a dangling ownerReference gets swept by the built-in garbage
+	// collector in well under a second regardless of how the dangling reference comes to exist
+	// (deleting the real owner, or patching a fake one onto an existing dependent), so there's
+	// no way to construct this scenario against a real cluster without racing the GC on every
+	// run. It used to be exercised via --local straight from a manifest -- --local resolved the
+	// ownerReference against the real API server without the object itself ever touching the
+	// cluster, sidestepping the GC entirely -- but --local no longer does any live queries (see
+	// LiveQueriesDisabled), so that path no longer exists either. The orphan-detection logic
+	// itself is still covered deterministically: TestOwnersOrphanDetection in
+	// pkg/input/input_test.go and TestOwnersTemplate in pkg/plugin/templates_common_test.go
+	// exercise it against a fake clientset.
 	t.Run("pod on a cordoned node with an untolerated taint and a bad condition", func(t *testing.T) {
 		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
@@ -643,14 +642,46 @@ func TestE2EParallel(t *testing.T) {
 	})
 	t.Run("pod referencing a missing ServiceAccount surfaces a doesn't-exist warning", func(t *testing.T) {
 		t.Parallel()
-		// Rendered with --local (rather than created on the cluster) since a real cluster's
-		// ServiceAccount admission plugin rejects a Pod at creation time when its
-		// serviceAccountName doesn't resolve -- --local still resolves the reference against the
-		// real API server (only the Pod object itself is local), so the not-found check is
-		// exercised the same way, without needing admission to allow the invalid Pod through.
+		// A real cluster's ServiceAccount admission plugin rejects a Pod at creation time when
+		// its serviceAccountName doesn't resolve, so this scenario can't be created directly --
+		// instead a Pod is created against a real ServiceAccount (which admission accepts), then
+		// the ServiceAccount is deleted out from under it. Nothing reconciles a running Pod's
+		// serviceAccountName after admission, so the Pod is left referencing a name that no
+		// longer resolves, which is exactly the "doesn't exist" case being tested -- just
+		// reached via drift instead of an upfront invalid manifest.
 		opts := combineOpts(viperTestHackOpts())
+		ns := "e2e-pod-missing-sa"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		sa := &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{Name: "will-be-deleted", Namespace: ns},
+		}
+		_, err = clientset.CoreV1().ServiceAccounts(ns).Create(context.TODO(), sa, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-missing-service-account",
+				Namespace: ns,
+			},
+			Spec: corev1.PodSpec{
+				ServiceAccountName: sa.Name,
+				Containers:         []corev1.Container{{Name: "app", Image: "busybox"}},
+			},
+		}
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+
+		require.NoError(t, clientset.CoreV1().ServiceAccounts(ns).Delete(context.TODO(), sa.Name, metav1.DeleteOptions{}))
+
 		cmdTest{
-			args:            []string{"-f", "../tests/e2e-artifacts/pod-missing-service-account.yaml", "--local", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"pod/pod-missing-service-account", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-missing-service-account.regex",
 		}.assert(t, nil, opts...)
 	})
@@ -1451,13 +1482,25 @@ func TestE2EParallel(t *testing.T) {
 	})
 	t.Run("vapbinding referencing a missing policy is flagged not found", func(t *testing.T) {
 		t.Parallel()
-		// The binding is rendered with --local straight from a manifest rather than created on
-		// the cluster, mirroring the orphan-owner-reference pattern above -- --local still
-		// resolves the policyName against the real API server (only the binding object itself is
-		// local), so the not-found check is exercised the same way.
+		// Unlike a Pod's serviceAccountName, a ValidatingAdmissionPolicyBinding's policyName
+		// isn't checked by admission at creation time, so the binding can be created for real
+		// with a policyName that never resolves.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
+		binding := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: "e2e-orphan-binding"},
+			Spec: admissionregistrationv1.ValidatingAdmissionPolicyBindingSpec{
+				PolicyName:        "e2e-does-not-exist",
+				ValidationActions: []admissionregistrationv1.ValidationAction{admissionregistrationv1.Deny},
+			},
+		}
+		_, err := clientset.AdmissionregistrationV1().ValidatingAdmissionPolicyBindings().Create(context.TODO(), binding, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.AdmissionregistrationV1().ValidatingAdmissionPolicyBindings().Delete(context.TODO(), binding.Name, metav1.DeleteOptions{})
+		})
+
 		cmdTest{
-			args:            []string{"-f", "../tests/e2e-artifacts/vapbinding-orphan-policy.yaml", "--local", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			args:            []string{"validatingadmissionpolicybinding/e2e-orphan-binding", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/vapbinding-orphan-policy.regex",
 		}.assert(t, nil, opts...)
 	})
