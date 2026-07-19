@@ -8,5 +8,5 @@ CertificateSigningRequest/my-svc.default, created 1m ago
     IPs: 10.96.0.50
     Key: RSA
   Issued by CN=My Example Signer
-    Valid 1m ago, expires 2036-07-04 · serial 235396120524669862452369845749073012805689220907
+    Valid 1m ago, expires 2036-07-04 (in 1m) · serial 235396120524669862452369845749073012805689220907
   Approved KubectlApprove, This CSR was approved by kubectl certificate approve. for 1m
