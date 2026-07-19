@@ -233,7 +233,8 @@
     {{- with $validRefs }}
         {{- "Composed resources" | bold | nindent 2 }}:
         {{- range . }}
-            {{- $ns := coalesce .namespace $.Namespace }}
+            {{- $ns := $.Namespace }}
+            {{- with .namespace }}{{ $ns = . }}{{ end }}
             {{- if $.Config.GetBool "deep" }}
                 {{- $obj := $.KubeGetFirst $ns .kind .name }}
                 {{- if $obj.Object }}
