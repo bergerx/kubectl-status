@@ -62,6 +62,19 @@
     {{- end }}
 {{- end -}}
 
+{{- define "certificate_validity_line" }}
+    {{- /* Expects dict "cert" (a parsed-certificate entry from parseTLSSecretCertificate /
+           certificatesInSecret / certificatesInConfigMap / certificateInCSR -- all of which set
+           NotBefore, NotAfter and Expired). Flags an already-expired certificate in red instead
+           of quietly printing its expiry date like any other. */ -}}
+    {{- $cert := .cert }}
+    {{- if $cert.Expired }}
+        {{- "Expired" | red | bold | nindent 4 }} {{ $cert.NotAfter.Format "2006-01-02" | red }} ({{ $cert.NotAfter.UTC.Format "2006-01-02T15:04:05Z" | colorAgo }}{{ agoSuffix }})
+    {{- else }}
+        {{- "Valid" | bold | nindent 4 }} {{ $cert.NotBefore.UTC.Format "2006-01-02T15:04:05Z" | colorAgo }}{{ agoSuffix }}, expires {{ $cert.NotAfter.Format "2006-01-02" | cyan }}
+    {{- end }}
+{{- end }}
+
 {{- define "service_account_summary" }}
     {{- /* Expects dict "ctx" (RenderableObject, used for KubeGetFirst/Config/Include -- a Pod for
            Pod.tmpl, or the owning workload for workload templates, since a bare pod template spec

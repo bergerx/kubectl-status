@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -124,11 +125,12 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"ciliumPolicyDirections":    ciliumPolicyDirectionsForTemplate,
 		"cronNextTime":              cfg.cronNextTime,
 		"withinLastHour":            cfg.withinLastHour,
-		"parseTLSSecretCertificate": parseTLSSecretCertificate,
-		"certificatesInSecret":      certificatesInSecret,
-		"certificatesInConfigMap":   certificatesInConfigMap,
-		"certificateInCSR":          certificateInCSR,
+		"parseTLSSecretCertificate": cfg.parseTLSSecretCertificate,
+		"certificatesInSecret":      cfg.certificatesInSecret,
+		"certificatesInConfigMap":   cfg.certificatesInConfigMap,
+		"certificateInCSR":          cfg.certificateInCSR,
 		"certificateRequestInCSR":   certificateRequestInCSR,
+		"parseDockerConfigSecret":   parseDockerConfigSecret,
 	}
 }
 
@@ -996,7 +998,7 @@ func stringifyLabels(labels map[string]interface{}) map[string]string {
 // flags against an optional expected hostname (for Ingress/Gateway callers). hostname == ""
 // skips the hostname-match check and is used by Secret.tmpl, which has no "expected host" of
 // its own.
-func parseTLSSecretCertificate(secret RenderableObject, hostname string) map[string]interface{} {
+func (cfg *RenderConfig) parseTLSSecretCertificate(secret RenderableObject, hostname string) map[string]interface{} {
 	result := map[string]interface{}{
 		"Exists":          false,
 		"WrongType":       false,
@@ -1013,6 +1015,7 @@ func parseTLSSecretCertificate(secret RenderableObject, hostname string) map[str
 		"IPAddresses":     []string{},
 		"KeyAlgorithm":    "",
 		"SelfSigned":      false,
+		"Expired":         false,
 		"MatchesHostname": false,
 	}
 	if secret.Object == nil {
@@ -1092,6 +1095,7 @@ func parseTLSSecretCertificate(secret RenderableObject, hostname string) map[str
 	result["IPAddresses"] = ipAddresses
 	result["KeyAlgorithm"] = cert.PublicKeyAlgorithm.String()
 	result["SelfSigned"] = bytes.Equal(cert.RawIssuer, cert.RawSubject)
+	result["Expired"] = cert.NotAfter.Before(cfg.Now())
 
 	if hostname == "" {
 		result["MatchesHostname"] = true
@@ -1099,6 +1103,78 @@ func parseTLSSecretCertificate(secret RenderableObject, hostname string) map[str
 		result["MatchesHostname"] = cert.VerifyHostname(hostname) == nil
 	}
 
+	return result
+}
+
+// parseDockerConfigSecret inspects a Secret expected to be type kubernetes.io/dockerconfigjson
+// or the legacy kubernetes.io/dockercfg and extracts the configured registry hostnames only --
+// never credentials, since those would end up in copy-pasted output. A missing/wrong registry
+// entry is a common cause of ImagePullBackOff; Pod.tmpl's imagePullSecrets check only validates
+// the Secret's type, not its contents.
+func parseDockerConfigSecret(secret RenderableObject) map[string]interface{} {
+	result := map[string]interface{}{
+		"Exists":     false,
+		"WrongType":  false,
+		"ActualType": "",
+		"MissingKey": "",
+		"ParseError": "",
+		"Registries": []string{},
+	}
+	if secret.Object == nil {
+		return result
+	}
+	result["Exists"] = true
+
+	actualType, _ := secret.Object["type"].(string)
+	result["ActualType"] = actualType
+
+	var dataKey string
+	switch actualType {
+	case "kubernetes.io/dockerconfigjson":
+		dataKey = ".dockerconfigjson"
+	case "kubernetes.io/dockercfg":
+		dataKey = ".dockercfg"
+	default:
+		result["WrongType"] = true
+		return result
+	}
+
+	data, _ := secret.Object["data"].(map[string]interface{})
+	encoded, ok := data[dataKey].(string)
+	if !ok {
+		result["MissingKey"] = dataKey
+		return result
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to base64-decode %s: %v", dataKey, err)
+		return result
+	}
+
+	var auths map[string]interface{}
+	if actualType == "kubernetes.io/dockerconfigjson" {
+		var wrapper struct {
+			Auths map[string]interface{} `json:"auths"`
+		}
+		if err := json.Unmarshal(decoded, &wrapper); err != nil {
+			result["ParseError"] = fmt.Sprintf("failed to parse %s: %v", dataKey, err)
+			return result
+		}
+		auths = wrapper.Auths
+	} else if err := json.Unmarshal(decoded, &auths); err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to parse %s: %v", dataKey, err)
+		return result
+	}
+
+	var registries []string
+	for registry := range auths {
+		registries = append(registries, registry)
+	}
+	sort.Strings(registries)
+	if registries == nil {
+		registries = []string{}
+	}
+	result["Registries"] = registries
 	return result
 }
 
@@ -1117,13 +1193,15 @@ func newCertificateEntry(name string) map[string]interface{} {
 		"IPAddresses":  []string{},
 		"KeyAlgorithm": "",
 		"SelfSigned":   false,
+		"Expired":      false,
 	}
 }
 
 // parseCertificateBytesInto PEM-decodes and parses decoded as an X.509 certificate, filling
 // entry's fields in place, or setting entry["ParseError"] on failure. name is only used to
-// identify the source key in error messages.
-func parseCertificateBytesInto(entry map[string]interface{}, name string, decoded []byte) {
+// identify the source key in error messages. Expired is computed against cfg.Now() rather than
+// time.Now() so it stays pinned under ApplyTestHack.
+func (cfg *RenderConfig) parseCertificateBytesInto(entry map[string]interface{}, name string, decoded []byte) {
 	block, _ := pem.Decode(decoded)
 	if block == nil {
 		entry["ParseError"] = fmt.Sprintf("failed to PEM-decode %s", name)
@@ -1159,13 +1237,14 @@ func parseCertificateBytesInto(entry map[string]interface{}, name string, decode
 	}
 	entry["KeyAlgorithm"] = cert.PublicKeyAlgorithm.String()
 	entry["SelfSigned"] = bytes.Equal(cert.RawIssuer, cert.RawSubject)
+	entry["Expired"] = cert.NotAfter.Before(cfg.Now())
 }
 
 // certificatesInSecret scans a Secret's data for keys ending in ".crt", regardless of the
 // Secret's declared type, and parses each as an X.509 certificate. This covers secrets that
 // don't use the standard kubernetes.io/tls layout, e.g. cert-manager's internal CA secrets,
 // which are type Opaque and hold a ca.crt alongside a tls.crt/tls.key pair.
-func certificatesInSecret(secret RenderableObject) []map[string]interface{} {
+func (cfg *RenderConfig) certificatesInSecret(secret RenderableObject) []map[string]interface{} {
 	var results []map[string]interface{}
 	if secret.Object == nil {
 		return results
@@ -1197,7 +1276,7 @@ func certificatesInSecret(secret RenderableObject) []map[string]interface{} {
 			entry["ParseError"] = fmt.Sprintf("failed to base64-decode %s: %v", key, err)
 			continue
 		}
-		parseCertificateBytesInto(entry, key, decoded)
+		cfg.parseCertificateBytesInto(entry, key, decoded)
 	}
 
 	return results
@@ -1207,7 +1286,7 @@ func certificatesInSecret(secret RenderableObject) []map[string]interface{} {
 // and parses each as an X.509 certificate. Unlike Secret, ConfigMap.data values are plain
 // text (not base64) while ConfigMap.binaryData values are base64, matching the Kubernetes API
 // convention for the two fields.
-func certificatesInConfigMap(configMap RenderableObject) []map[string]interface{} {
+func (cfg *RenderConfig) certificatesInConfigMap(configMap RenderableObject) []map[string]interface{} {
 	var results []map[string]interface{}
 	if configMap.Object == nil {
 		return results
@@ -1260,7 +1339,7 @@ func certificatesInConfigMap(configMap RenderableObject) []map[string]interface{
 			entry["ParseError"] = s.err.Error()
 			continue
 		}
-		parseCertificateBytesInto(entry, s.key, s.decoded)
+		cfg.parseCertificateBytesInto(entry, s.key, s.decoded)
 	}
 
 	return results
@@ -1269,7 +1348,7 @@ func certificatesInConfigMap(configMap RenderableObject) []map[string]interface{
 // certificateInCSR parses a CertificateSigningRequest's status.certificate (base64-encoded PEM,
 // populated once a signer issues the certificate) as an X.509 certificate. Returns nil if the
 // CSR hasn't been issued yet.
-func certificateInCSR(csr RenderableObject) map[string]interface{} {
+func (cfg *RenderConfig) certificateInCSR(csr RenderableObject) map[string]interface{} {
 	certEncoded, ok := csr.Status()["certificate"].(string)
 	if !ok || certEncoded == "" {
 		return nil
@@ -1281,7 +1360,7 @@ func certificateInCSR(csr RenderableObject) map[string]interface{} {
 		entry["ParseError"] = fmt.Sprintf("failed to base64-decode certificate: %v", err)
 		return entry
 	}
-	parseCertificateBytesInto(entry, "certificate", decoded)
+	cfg.parseCertificateBytesInto(entry, "certificate", decoded)
 	return entry
 }
 

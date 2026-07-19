@@ -766,6 +766,7 @@ func tlsSecret(secretType string, crt, key []byte) RenderableObject {
 }
 
 func TestParseTLSSecretCertificate(t *testing.T) {
+	cfg := NewRenderConfig(viper.New())
 	selfSignedPEM, selfSignedCert, selfSignedKey := generateTestCert(t, genCertOptions{
 		subjectCN:  "self-signed.example.com",
 		dnsNames:   []string{"self-signed.example.com"},
@@ -955,7 +956,7 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseTLSSecretCertificate(tt.secret, tt.hostname)
+			got := cfg.parseTLSSecretCertificate(tt.secret, tt.hostname)
 			for _, key := range tt.checkKeysOnly {
 				wantVal, ok := tt.want[key]
 				if !ok {
@@ -975,11 +976,11 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 	}
 
 	// Sanity: every key in the result map must always be present (never <no value> in templates).
-	all := parseTLSSecretCertificate(RenderableObject{Unstructured: unstructured.Unstructured{Object: nil}}, "")
+	all := cfg.parseTLSSecretCertificate(RenderableObject{Unstructured: unstructured.Unstructured{Object: nil}}, "")
 	expectedKeys := []string{
 		"Exists", "WrongType", "ActualType", "MissingKeys", "ParseError",
 		"Subject", "Issuer", "SerialNumber", "NotBefore", "NotAfter",
-		"DNSNames", "AltDNSNames", "IPAddresses", "KeyAlgorithm", "SelfSigned", "MatchesHostname",
+		"DNSNames", "AltDNSNames", "IPAddresses", "KeyAlgorithm", "SelfSigned", "Expired", "MatchesHostname",
 	}
 	for _, key := range expectedKeys {
 		if _, ok := all[key]; !ok {
@@ -989,6 +990,7 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 }
 
 func TestCertificatesInSecret(t *testing.T) {
+	cfg := NewRenderConfig(viper.New())
 	caPEM, caCert, caKey := generateTestCert(t, genCertOptions{
 		subjectCN:  "Test CA",
 		isCA:       true,
@@ -1010,7 +1012,7 @@ func TestCertificatesInSecret(t *testing.T) {
 				"tls.key": base64.StdEncoding.EncodeToString([]byte("irrelevant")),
 			},
 		}
-		got := certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if len(got) != 2 {
 			t.Fatalf("expected 2 certificates, got %d: %#v", len(got), got)
 		}
@@ -1033,7 +1035,7 @@ func TestCertificatesInSecret(t *testing.T) {
 				"username": base64.StdEncoding.EncodeToString([]byte("admin")),
 			},
 		}
-		got := certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if len(got) != 0 {
 			t.Errorf("expected no certificates, got %#v", got)
 		}
@@ -1046,18 +1048,19 @@ func TestCertificatesInSecret(t *testing.T) {
 				"ca.crt": "not-valid-base64!!!",
 			},
 		}
-		got := certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if len(got) != 1 || got[0]["ParseError"] == "" {
 			t.Errorf("expected 1 entry with non-empty ParseError, got %#v", got)
 		}
 	})
 
-	if got := certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: nil}}); len(got) != 0 {
+	if got := cfg.certificatesInSecret(RenderableObject{Unstructured: unstructured.Unstructured{Object: nil}}); len(got) != 0 {
 		t.Errorf("expected nil Object to yield no certificates, got %#v", got)
 	}
 }
 
 func TestCertificatesInConfigMap(t *testing.T) {
+	cfg := NewRenderConfig(viper.New())
 	caPEM, caCert, caKey := generateTestCert(t, genCertOptions{
 		subjectCN:  "Test CA",
 		isCA:       true,
@@ -1076,7 +1079,7 @@ func TestCertificatesInConfigMap(t *testing.T) {
 				"ca.crt": string(caPEM),
 			},
 		}
-		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if len(got) != 1 {
 			t.Fatalf("expected 1 certificate, got %d: %#v", len(got), got)
 		}
@@ -1091,7 +1094,7 @@ func TestCertificatesInConfigMap(t *testing.T) {
 				"tls.crt": base64.StdEncoding.EncodeToString(leafPEM),
 			},
 		}
-		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if len(got) != 1 {
 			t.Fatalf("expected 1 certificate, got %d: %#v", len(got), got)
 		}
@@ -1109,7 +1112,7 @@ func TestCertificatesInConfigMap(t *testing.T) {
 				"tls.crt": base64.StdEncoding.EncodeToString(leafPEM),
 			},
 		}
-		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if len(got) != 2 {
 			t.Fatalf("expected 2 certificates, got %d: %#v", len(got), got)
 		}
@@ -1124,7 +1127,7 @@ func TestCertificatesInConfigMap(t *testing.T) {
 				"application.properties": "foo=bar",
 			},
 		}
-		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if len(got) != 0 {
 			t.Errorf("expected no certificates, got %#v", got)
 		}
@@ -1136,7 +1139,7 @@ func TestCertificatesInConfigMap(t *testing.T) {
 				"ca.crt": "not a certificate",
 			},
 		}
-		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if len(got) != 1 || got[0]["ParseError"] == "" {
 			t.Errorf("expected 1 entry with non-empty ParseError, got %#v", got)
 		}
@@ -1148,18 +1151,19 @@ func TestCertificatesInConfigMap(t *testing.T) {
 				"ca.crt": "not-valid-base64!!!",
 			},
 		}
-		got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if len(got) != 1 || got[0]["ParseError"] == "" {
 			t.Errorf("expected 1 entry with non-empty ParseError, got %#v", got)
 		}
 	})
 
-	if got := certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: nil}}); len(got) != 0 {
+	if got := cfg.certificatesInConfigMap(RenderableObject{Unstructured: unstructured.Unstructured{Object: nil}}); len(got) != 0 {
 		t.Errorf("expected nil Object to yield no certificates, got %#v", got)
 	}
 }
 
 func TestCertificateInCSR(t *testing.T) {
+	cfg := NewRenderConfig(viper.New())
 	_, caCert, caKey := generateTestCert(t, genCertOptions{
 		subjectCN:  "Test CA",
 		isCA:       true,
@@ -1174,7 +1178,7 @@ func TestCertificateInCSR(t *testing.T) {
 
 	t.Run("not yet issued", func(t *testing.T) {
 		obj := map[string]interface{}{"status": map[string]interface{}{}}
-		got := certificateInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificateInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if got != nil {
 			t.Errorf("expected nil for unissued CSR, got %#v", got)
 		}
@@ -1186,7 +1190,7 @@ func TestCertificateInCSR(t *testing.T) {
 				"certificate": base64.StdEncoding.EncodeToString(leafPEM),
 			},
 		}
-		got := certificateInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificateInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if got == nil {
 			t.Fatal("expected non-nil result for issued CSR")
 		}
@@ -1204,7 +1208,7 @@ func TestCertificateInCSR(t *testing.T) {
 				"certificate": "not-valid-base64!!!",
 			},
 		}
-		got := certificateInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
+		got := cfg.certificateInCSR(RenderableObject{Unstructured: unstructured.Unstructured{Object: obj}})
 		if got == nil || got["ParseError"] == "" {
 			t.Errorf("expected non-nil result with ParseError, got %#v", got)
 		}
