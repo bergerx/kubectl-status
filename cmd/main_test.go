@@ -2055,6 +2055,93 @@ func TestE2EDynamicManifests(t *testing.T) {
 			stdoutRegexPath: "e2e-artifacts/vpa-standalone.regex",
 		}.assert(t, nil, opts...)
 	})
+	t.Run("Crossplane XR composes namespaced children and surfaces their health", func(t *testing.T) {
+		// Crossplane core plus the two Composition Functions it needs (installed cluster-wide by
+		// `make install-e2e-deps`) must actually reconcile to produce the XR's composed children,
+		// same "controller must actually run" reasoning as the VPA subtest above.
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-crossplane-xr"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		applyManifest(t, "e2e-artifacts/crossplane-xstatusprobe.yaml")
+		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Established",
+			"xrd/xstatusprobes.tests.kubectl-status.io", "--timeout=60s").Run())
+		applyManifestInNamespace(t, "e2e-artifacts/crossplane-xr.yaml", ns)
+		waitForInNamespace(t, "xstatusprobe/probe-a", "condition=Synced", ns)
+		// The Deployment child is deliberately unschedulable (a nodeSelector no node can match),
+		// so the XR itself never reaches Ready -- wait on the field kubectl-status actually reads
+		// instead of a condition that will never flip.
+		waitForCrossplaneComposedRefs(t, ns, "probe-a", 2)
+		// Synced/resourceRefs land as soon as the render step runs, but the XR's own Responsive
+		// condition and the composed Deployment's Progressing/Available conditions populate
+		// slightly later via separate reconciles -- wait for all of them so the fixtures below
+		// pin a stable message instead of racing a transient "Replicas: 0/1" kstatus summary.
+		waitForInNamespace(t, "xstatusprobe/probe-a", "condition=Responsive", ns)
+		waitForInNamespace(t, "deployment/probe-a-blocked", "condition=Progressing", ns)
+		require.NoError(t, exec.Command("kubectl", "wait", "-n", ns,
+			"--for=condition=PodScheduled=false", "pod", "-l", "app=probe-a-blocked", "--timeout=2m").Run())
+		// kstatus (sigs.k8s.io/cli-utils/pkg/kstatus/status.ScheduleWindow) gives a Pod 15s from
+		// its creationTimestamp before reporting Unschedulable as Failed rather than InProgress --
+		// wait that out so the fixtures below pin the stable "Failed: Pod could not be scheduled"
+		// message instead of racing the transient one.
+		waitForPodScheduleWindow(t, ns, "app=probe-a-blocked")
+
+		// Only the live-query-dependent branches belong here: default mode's KubeGetFirst lookup
+		// (populating each composed child's compact health) and --deep's IncludeRenderableObject
+		// inline. Shallow rendering and Composition.tmpl make no live queries at all -- both are
+		// already covered by the offline artifacts (tests/artifacts/crossplane-*).
+		cmdTest{
+			args:            []string{"xstatusprobe/probe-a", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/crossplane-xr.regex",
+		}.assert(t, nil, opts...)
+		cmdTest{
+			args:            []string{"xstatusprobe/probe-a", "-n", ns, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/crossplane-xr-deep.regex",
+		}.assert(t, nil, opts...)
+	})
+}
+
+// waitForPodScheduleWindow blocks until at least 15s (kstatus's
+// sigs.k8s.io/cli-utils/pkg/kstatus/status.ScheduleWindow) have passed since the matching Pod's
+// creationTimestamp.
+func waitForPodScheduleWindow(t *testing.T, namespace, labelSelector string) {
+	t.Helper()
+	cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
+		"-o", "jsonpath={.items[0].metadata.creationTimestamp}")
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err)
+	created, err := time.Parse(time.RFC3339, strings.TrimSpace(string(output)))
+	require.NoError(t, err)
+	if remaining := time.Until(created.Add(16 * time.Second)); remaining > 0 {
+		time.Sleep(remaining)
+	}
+}
+
+// waitForCrossplaneComposedRefs polls until the XR's spec.crossplane.resourceRefs has at least
+// wantCount entries. Used instead of waiting on a Ready condition since the XR under test never
+// reaches Ready (one composed child is deliberately unschedulable).
+func waitForCrossplaneComposedRefs(t *testing.T, namespace, name string, wantCount int) {
+	t.Helper()
+	deadline := time.Now().Add(4 * time.Minute)
+	for time.Now().Before(deadline) {
+		cmd := exec.Command("kubectl", "get", "xstatusprobe", name, "-n", namespace,
+			"-o", "jsonpath={.spec.crossplane.resourceRefs}")
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			var refs []interface{}
+			if json.Unmarshal(output, &refs) == nil && len(refs) >= wantCount {
+				t.Logf("xstatusprobe %s in namespace %s has %d composed resource refs", name, namespace, len(refs))
+				return
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for xstatusprobe %s in namespace %s to have %d composed resource refs", name, namespace, wantCount)
 }
 
 func applyManifest(t *testing.T, filepath string) {

@@ -1,0 +1,8 @@
+apiVersion: tests.kubectl-status.io/v1alpha1
+kind: XStatusProbe
+metadata:
+  name: probe-a
+spec:
+  crossplane:
+    compositionRef:
+      name: status-probe

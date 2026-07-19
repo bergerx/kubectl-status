@@ -1,0 +1,48 @@
+apiVersion: tests.kubectl-status.io/v1alpha1
+kind: XStatusProbe
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"tests.kubectl-status.io/v1alpha1","kind":"XStatusProbe","metadata":{"annotations":{},"name":"probe-a","namespace":"crossplane-e2e"},"spec":{"crossplane":{"compositionRef":{"name":"status-probe"}}}}
+  creationTimestamp: "2026-07-19T20:11:10Z"
+  finalizers:
+  - composite.apiextensions.crossplane.io
+  generation: 3
+  labels:
+    crossplane.io/composite: probe-a
+  name: probe-a
+  namespace: crossplane-e2e
+  resourceVersion: "1144"
+  uid: 137d2392-316b-4b78-a7b4-724cadf75a94
+spec:
+  crossplane:
+    compositionRef:
+      name: status-probe
+    compositionRevisionRef:
+      name: status-probe-56d8414
+    compositionUpdatePolicy: Automatic
+    resourceRefs:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: probe-a-blocked
+    - apiVersion: v1
+      kind: ConfigMap
+      name: probe-a-config
+status:
+  conditions:
+  - lastTransitionTime: "2026-07-19T20:11:32Z"
+    observedGeneration: 3
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2026-07-19T20:11:32Z"
+    message: 'Unready resources: blocked-workload, config'
+    observedGeneration: 3
+    reason: Creating
+    status: "False"
+    type: Ready
+  - lastTransitionTime: "2026-07-19T20:11:32Z"
+    observedGeneration: 3
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive
