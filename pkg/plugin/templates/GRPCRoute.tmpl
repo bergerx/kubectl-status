@@ -19,7 +19,7 @@
             {{- else }}
                 {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
-                {{- if not ($.Config.GetBool "shallow") }}
+                {{- if not ($.LiveQueriesDisabled) }}
                     {{- if eq (.kind | default "Gateway") "Gateway" }}
                         {{- $parentRef := . }}
                         {{- $gwNs := coalesce .namespace $.Namespace }}

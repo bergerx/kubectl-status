@@ -27,7 +27,7 @@
     {{- range .Spec.imagePullSecrets }}
         {{- $secretName := .name }}
         {{- if $secretName }}
-            {{- if not ($.Config.GetBool "shallow") }}
+            {{- if not ($.LiveQueriesDisabled) }}
                 {{- $secret := $.KubeGetFirst $.Namespace "Secret" $secretName }}
                 {{- if not $secret.Object }}
                     {{- $podPullSecretsBroken = true }}
@@ -136,7 +136,7 @@
         {{- "Containers:" | nindent 2 }}
         {{- $podMetrics := $pod.KubeGetPodMetrics $pod.Namespace $pod.Name }}
         {{- $metricsUnavailableReason := "" }}
-        {{- if and (not ($pod.Config.GetBool "shallow")) (eq $pod.Status.phase "Running") (not ($podMetrics.Object | default dict).containers) }}
+        {{- if and (not ($pod.LiveQueriesDisabled)) (eq $pod.Status.phase "Running") (not ($podMetrics.Object | default dict).containers) }}
             {{- $metricsUnavailableReason = $pod.KubeMetricsUnavailableReason | default "no metrics yet" }}
         {{- end }}
         {{- $containerStatusSummaryDict := dict }}
@@ -308,7 +308,7 @@
            Gated behind "shallow" like the imagePullSecrets check above -- offline golden tests run
            --shallow, making KubeGetFirst a no-op there; only the live e2e suite exercises this. */ -}}
     {{- $volProblems := dict }}
-    {{- if not ($.Config.GetBool "shallow") }}
+    {{- if not ($.LiveQueriesDisabled) }}
         {{- range $.Spec.volumes }}
             {{- if hasKey . "configMap" }}
                 {{- $cm := .configMap }}
@@ -513,7 +513,7 @@
            only report a coincidence, never real admission-time provenance -- do not strengthen
            the wording to "defaulted by LimitRange" without direct evidence (see CONVENTIONS.md).
         */ -}}
-    {{- if not (.pod.Config.GetBool "shallow") }}
+    {{- if not (.pod.LiveQueriesDisabled) }}
         {{- $requests := ((.containerSpec.resources | default dict).requests) | default dict }}
         {{- $limits := ((.containerSpec.resources | default dict).limits) | default dict }}
         {{- if or $requests $limits }}
@@ -606,7 +606,7 @@
         {{- "previously:" | yellow | nindent 2 }} {{ template "container_state_summary" . }}
     {{- end }}
     {{- with .containerStatus.state.terminated }}
-        {{- if and .startedAt (ne .reason "Completed") (not ($.pod.Config.GetBool "shallow")) }}
+        {{- if and .startedAt (ne .reason "Completed") (not ($.pod.LiveQueriesDisabled)) }}
             {{- $logs := $.pod.KubeGetContainerLogs $.pod.Namespace $.pod.Name $.containerStatus.name false 20 }}
             {{- if $logs }}
                 {{- "Last failure logs:" | yellow | bold | nindent 2 }}
@@ -618,7 +618,7 @@
     {{- end }}
     {{- with .containerStatus.lastState.terminated }}
         {{- $unresolved := not $.containerStatus.state.running }}
-        {{- if and (not $.containerStatus.state.terminated) (or $unresolved (withinLastHour .finishedAt)) (not ($.pod.Config.GetBool "shallow")) }}
+        {{- if and (not $.containerStatus.state.terminated) (or $unresolved (withinLastHour .finishedAt)) (not ($.pod.LiveQueriesDisabled)) }}
             {{- $logs := $.pod.KubeGetContainerLogs $.pod.Namespace $.pod.Name $.containerStatus.name true 20 }}
             {{- if $logs }}
                 {{- "Last failure logs:" | yellow | bold | nindent 2 }}

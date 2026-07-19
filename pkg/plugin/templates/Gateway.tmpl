@@ -34,7 +34,7 @@
                     {{- range . }}
                         {{- $refKind := .kind | default "Secret" }}
                         {{- printf ", cert:%s/%s" $refKind .name | cyan }}
-                        {{- if and (eq $refKind "Secret") (not ($.Config.GetBool "shallow")) }}
+                        {{- if and (eq $refKind "Secret") (not ($.LiveQueriesDisabled)) }}
                             {{- $refNs := coalesce .namespace $.Namespace }}
                             {{- $secret := $.KubeGetFirst $refNs "Secret" .name }}
                             {{- if not $secret.Object }}

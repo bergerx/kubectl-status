@@ -23,7 +23,7 @@
             {{- printf "replacement: %s" . | yellow | nindent 2 }}
         {{- end }}
     {{- end }}
-    {{- if and .Status.failed (not ($.Config.GetBool "shallow")) }}
+    {{- if and .Status.failed (not ($.LiveQueriesDisabled)) }}
         {{- $failedPods := list }}
         {{- range $.KubeGetByLabelsMap $.Namespace "pods" (dict "job-name" .Name) }}
             {{- if eq .Status.phase "Failed" }}
@@ -41,7 +41,7 @@
             {{- end }}
         {{- end }}
     {{- end }}
-    {{- if and .Status.active (not ($.Config.GetBool "shallow")) }}
+    {{- if and .Status.active (not ($.LiveQueriesDisabled)) }}
         {{- /* A Job's own status has no signal for "why hasn't this started" -- only its Pods do.
                pod_health_summary carries the Node-side hint (cordoned/tainted/unhealthy node),
                which is usually the answer for a Pod stuck Pending. */ -}}

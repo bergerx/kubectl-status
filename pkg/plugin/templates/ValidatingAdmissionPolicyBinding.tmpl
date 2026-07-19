@@ -7,7 +7,7 @@
     {{- template "application_details" . }}
     {{- with .Spec.policyName }}
         {{- "Policy" | bold | nindent 2 }}: {{ template "resource_ref" (dict "kind" "ValidatingAdmissionPolicy" "name" .) }}
-        {{- if not ($.Config.GetBool "shallow") }}
+        {{- if not ($.LiveQueriesDisabled) }}
             {{- $policy := $.KubeGetFirst "" "ValidatingAdmissionPolicy" . }}
             {{- if not $policy.Object }}
                 {{- " (not found)" | red | bold }}

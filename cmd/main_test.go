@@ -176,13 +176,11 @@ func TestRootCmdWithoutACluster(t *testing.T) {
 			name:            "file with 'kind: List' should list all resources",
 			args:            []string{"-f", "../tests/artifacts/multiple-2-pods-list.yaml", "--local"},
 			stdoutRegexPath: "artifacts/multiple-2-pods-list.local.regex",
-			// TODO: logs `couldn't get current server API group list: Get "http://localhost:8080/api?timeout=32s": dial tcp [::1]:8080: connect: connection refused`
 		},
 		{
 			name:            "file with multiple yaml documents should list all resources",
 			args:            []string{"-f", "../tests/artifacts/multiple-2-pods-docs.yaml", "--local"},
 			stdoutRegexPath: "artifacts/multiple-2-pods-docs.local.regex",
-			// TODO: logs `couldn't get current server API group list: Get "http://localhost:8080/api?timeout=32s": dial tcp [::1]:8080: connect: connection refused`
 		},
 	}
 	for _, tt := range tests {
