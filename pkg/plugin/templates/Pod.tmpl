@@ -232,9 +232,9 @@
         {{- $inner = printf "HostPath: %s" .vol.hostPath.path }}
         {{- with .vol.hostPath.type }}{{- $inner = printf "%s, type: %s" $inner . }}{{- end }}
     {{- else if hasKey .vol "configMap" }}
-        {{- $inner = printf "ConfigMap/%s" .vol.configMap.name }}
+        {{- $inner = .refRendered }}
     {{- else if hasKey .vol "secret" }}
-        {{- $inner = printf "Secret/%s" .vol.secret.secretName }}
+        {{- $inner = .refRendered }}
     {{- else if hasKey .vol "persistentVolumeClaim" }}
         {{- $isPVC = true }}
         {{- $inner = printf "PVC: %s" .vol.persistentVolumeClaim.claimName }}
@@ -357,7 +357,12 @@
                 {{- $stats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $vol.name) }}
                 {{- $pvc := dict }}
                 {{- $pvcStorage := "" }}
-                {{- if hasKey $vol "persistentVolumeClaim" }}
+                {{- $refRendered := "" }}
+                {{- if hasKey $vol "configMap" }}
+                    {{- $refRendered = $.Include "resource_ref" (dict "kind" "ConfigMap" "name" $vol.configMap.name) }}
+                {{- else if hasKey $vol "secret" }}
+                    {{- $refRendered = $.Include "resource_ref" (dict "kind" "Secret" "name" $vol.secret.secretName) }}
+                {{- else if hasKey $vol "persistentVolumeClaim" }}
                     {{- $pvc = $.KubeGetFirst $.Namespace "PersistentVolumeClaim" $vol.persistentVolumeClaim.claimName }}
                     {{- if $pvc.Object }}
                         {{- $pvcSpec := $pvc.Spec | default dict }}
@@ -366,7 +371,7 @@
                         {{- $pvcStorage = index $pvcRequests "storage" | default "" }}
                     {{- end }}
                 {{- end }}
-                {{- " " }}{{ template "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage "problem" (index $volProblems $vol.name)) }}
+                {{- " " }}{{ template "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage "problem" (index $volProblems $vol.name) "refRendered" $refRendered) }}
                 {{- if and $deep $pvc.Metadata }}
                     {{- $.Include "PersistentVolumeClaim" $pvc | nindent 4 }}
                 {{- end }}
@@ -382,7 +387,12 @@
                 {{- $stats := $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $vol.name) }}
                 {{- $pvc := dict }}
                 {{- $pvcStorage := "" }}
-                {{- if hasKey $vol "persistentVolumeClaim" }}
+                {{- $refRendered := "" }}
+                {{- if hasKey $vol "configMap" }}
+                    {{- $refRendered = $.Include "resource_ref" (dict "kind" "ConfigMap" "name" $vol.configMap.name) }}
+                {{- else if hasKey $vol "secret" }}
+                    {{- $refRendered = $.Include "resource_ref" (dict "kind" "Secret" "name" $vol.secret.secretName) }}
+                {{- else if hasKey $vol "persistentVolumeClaim" }}
                     {{- $pvc = $.KubeGetFirst $.Namespace "PersistentVolumeClaim" $vol.persistentVolumeClaim.claimName }}
                     {{- if $pvc.Object }}
                         {{- $pvcSpec := $pvc.Spec | default dict }}
@@ -391,7 +401,7 @@
                         {{- $pvcStorage = index $pvcRequests "storage" | default "" }}
                     {{- end }}
                 {{- end }}
-                {{- $.Include "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage "problem" (index $volProblems $vol.name)) | nindent 4 }}
+                {{- $.Include "pod_volume_line" (dict "vol" $vol "stats" $stats "pvcStorage" $pvcStorage "problem" (index $volProblems $vol.name) "refRendered" $refRendered) | nindent 4 }}
                 {{- if and $deep $pvc.Metadata }}
                     {{- $.Include "PersistentVolumeClaim" $pvc | nindent 6 }}
                 {{- end }}
