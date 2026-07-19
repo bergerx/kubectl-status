@@ -231,8 +231,10 @@
     {{- else if hasKey .vol "hostPath" }}
         {{- $inner = printf "HostPath: %s" .vol.hostPath.path }}
         {{- with .vol.hostPath.type }}{{- $inner = printf "%s, type: %s" $inner . }}{{- end }}
-    {{- else if hasKey .vol "configMap" }}{{- $inner = printf "ConfigMap/%s" .vol.configMap.name }}
-    {{- else if hasKey .vol "secret" }}{{- $inner = printf "Secret/%s" .vol.secret.secretName }}
+    {{- else if hasKey .vol "configMap" }}
+        {{- $inner = printf "ConfigMap/%s" .vol.configMap.name }}
+    {{- else if hasKey .vol "secret" }}
+        {{- $inner = printf "Secret/%s" .vol.secret.secretName }}
     {{- else if hasKey .vol "persistentVolumeClaim" }}
         {{- $isPVC = true }}
         {{- $inner = printf "PVC: %s" .vol.persistentVolumeClaim.claimName }}
