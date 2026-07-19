@@ -1,0 +1,60 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apiextensions.crossplane.io/v1","kind":"Composition","metadata":{"annotations":{},"name":"status-probe"},"spec":{"compositeTypeRef":{"apiVersion":"tests.kubectl-status.io/v1alpha1","kind":"XStatusProbe"},"mode":"Pipeline","pipeline":[{"functionRef":{"name":"function-patch-and-transform"},"input":{"apiVersion":"pt.fn.crossplane.io/v1beta1","kind":"Resources","resources":[{"base":{"apiVersion":"v1","data":{"state":"healthy"},"kind":"ConfigMap","metadata":{"name":"probe-a-config"}},"name":"config"},{"base":{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"probe-a-blocked"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"probe-a-blocked"}},"template":{"metadata":{"labels":{"app":"probe-a-blocked"}},"spec":{"containers":[{"image":"registry.k8s.io/pause:3.10","name":"pause","resources":{"requests":{"cpu":"1m","memory":"16Mi"}}}],"nodeSelector":{"kubectl-status.io/e2e-never-schedules":"true"}}}}},"name":"blocked-workload"}]},"step":"render"},{"functionRef":{"name":"function-auto-ready"},"step":"readiness"}]}}
+  creationTimestamp: "2026-07-19T20:11:10Z"
+  generation: 1
+  name: status-probe
+  resourceVersion: "1078"
+  uid: 53d706c1-ca80-4c75-832b-085a9bf6ffa8
+spec:
+  compositeTypeRef:
+    apiVersion: tests.kubectl-status.io/v1alpha1
+    kind: XStatusProbe
+  mode: Pipeline
+  pipeline:
+  - functionRef:
+      name: function-patch-and-transform
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      - base:
+          apiVersion: v1
+          data:
+            state: healthy
+          kind: ConfigMap
+          metadata:
+            name: probe-a-config
+        name: config
+      - base:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: probe-a-blocked
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: probe-a-blocked
+            template:
+              metadata:
+                labels:
+                  app: probe-a-blocked
+              spec:
+                containers:
+                - image: registry.k8s.io/pause:3.10
+                  name: pause
+                  resources:
+                    requests:
+                      cpu: 1m
+                      memory: 16Mi
+                nodeSelector:
+                  kubectl-status.io/e2e-never-schedules: "true"
+        name: blocked-workload
+    step: render
+  - functionRef:
+      name: function-auto-ready
+    step: readiness

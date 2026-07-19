@@ -1,0 +1,20 @@
+{{- define "Composition" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: apiextensions.crossplane.io/v1, Kind=Composition */ -}}
+    {{- template "status_summary_line" . }}
+    {{- with .Spec.compositeTypeRef }}
+        {{- "Composite type" | bold | nindent 2 }}: {{ .kind | cyan | bold }} ({{ .apiVersion | cyan }})
+    {{- end }}
+    {{- with .Spec.mode }}{{ if ne . "Pipeline" }}
+        {{- "Mode" | bold | nindent 2 }}: {{ . | yellow }}
+    {{- end }}{{ end }}
+    {{- with .Spec.pipeline }}
+        {{- "Pipeline" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- .step | cyan | nindent 4 }}: {{ .functionRef.name | cyan }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+{{- end -}}

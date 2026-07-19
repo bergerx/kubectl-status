@@ -1,0 +1,6 @@
+
+Composition/status-probe, created 1m ago, gen:1
+  Composite type: XStatusProbe (tests.kubectl-status.io/v1alpha1)
+  Pipeline:
+    render: function-patch-and-transform
+    readiness: function-auto-ready

@@ -167,6 +167,20 @@ install-e2e-deps:
 	helm repo update cowboysysop
 	$(E2E_KUBECONFIG_ENV) helm upgrade --install vpa cowboysysop/vertical-pod-autoscaler --version 11.1.1 -n kube-system --wait --timeout 5m
 	$(E2E_KUBECONFIG_ENV) kubectl wait --for=condition=Available --timeout=120s deployment -l app.kubernetes.io/instance=vpa -n kube-system
+	# Crossplane: e2e scenarios exercise a real XR composing real children (a Composition
+	# Function renders them and derives readiness), not just kubectl-status reading static
+	# CRDs, so the Crossplane core plus the two Composition Functions it needs need to run
+	# for real -- same "controller must actually reconcile" reasoning as VPA above. No cloud
+	# provider is installed: the test Composition composes plain in-cluster Kubernetes
+	# resources (ConfigMap/Deployment), which Crossplane v2 supports natively.
+	helm repo add crossplane-stable https://charts.crossplane.io/stable
+	helm repo update crossplane-stable
+	$(E2E_KUBECONFIG_ENV) helm upgrade --install crossplane crossplane-stable/crossplane --version $(CROSSPLANE_VERSION) -n crossplane-system --create-namespace --wait --timeout 5m
+	# function-patch-and-transform renders the test Composition's child resources,
+	# function-auto-ready derives the XR's readiness from them. Versions pinned in the
+	# manifest itself (not hack/versions.env) since they're only used here.
+	$(E2E_KUBECONFIG_ENV) kubectl apply -f tests/e2e-artifacts/crossplane-functions.yaml
+	$(E2E_KUBECONFIG_ENV) kubectl wait --for=condition=Healthy --timeout=180s function.pkg.crossplane.io --all
 
 .PHONY: test-e2e
 ifeq ($(ASSUME_MINIKUBE_IS_CONFIGURED),true)

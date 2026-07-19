@@ -1,0 +1,60 @@
+\A
+XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
+  InProgress: Unready resources: blocked-workload, config
+    Reconciling: Creating, Unready resources: blocked-workload, config
+  Composed resources:
+    Deployment/probe-a-blocked -n e2e-crossplane-xr, created 1m ago by XStatusProbe/probe-a, gen:1 rev:1
+      InProgress: Available: 0/1
+        Reconciling: LessAvailable, Available: 0/1
+      desired:1, existing:1, ready:0, updated:1, available:0, unavailable:1
+      Selector: app=probe-a-blocked
+        Pod/probe-a-blocked-[a-z0-9]+-[a-z0-9]+ -n e2e-crossplane-xr, created 1m ago by ReplicaSet/probe-a-blocked-[a-z0-9]+, gen:1 Pending Burstable
+          Failed: Pod could not be scheduled
+            Stalled: PodUnschedulable, Pod could not be scheduled
+          Managed by probe-a-blocked application
+          Not PodScheduled -> Not Initialized -> Not ContainersReady -> Not Ready
+            PodScheduled Unschedulable, [^\n]*node\(s\) didn't match Pod's node affinity/selector[^\n]* for 1m
+          Volumes: kube-api-access-[a-z0-9]+ \(Projected\)
+          Owners:
+            ReplicaSet/probe-a-blocked-[a-z0-9]+ -n e2e-crossplane-xr, created 1m ago by Deployment/probe-a-blocked, gen:1
+              InProgress: Available: 0/1
+                Reconciling: LessAvailable, Available: 0/1
+              Managed by probe-a-blocked application
+              Selector: app=probe-a-blocked,pod-template-hash=[a-z0-9]+
+                Pod/probe-a-blocked-[a-z0-9]+-[a-z0-9]+\[e2e-crossplane-xr\] is already printed
+              Not matched by any Service
+              Outage: ReplicaSet has no Ready replicas\.
+              Owners:
+                Deployment/probe-a-blocked\[e2e-crossplane-xr\] is already printed
+      Not matched by any Service
+      Available MinimumReplicasUnavailable, Deployment does not have minimum availability\. for 1m
+      Progressing ReplicaSetUpdated, ReplicaSet "probe-a-blocked-[a-z0-9]+" is progressing\. for 1m
+      Ongoing Rollout: Waiting for deployment "probe-a-blocked" rollout to finish: 0 of 1 updated replicas are available\.\.\.
+      Outage: Deployment has no Ready replicas\.
+      Rollouts:
+        1m ago, managed by ReplicaSet/probe-a-blocked-[a-z0-9]+, has 1 replicas
+      Owners:
+        XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
+          InProgress: Unready resources: blocked-workload, config
+            Reconciling: Creating, Unready resources: blocked-workload, config
+          Composed resources:
+            Deployment/probe-a-blocked\[e2e-crossplane-xr\] is already printed
+            ConfigMap/probe-a-config -n e2e-crossplane-xr, created 1m ago by XStatusProbe/probe-a
+              Owners:
+                XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
+                  InProgress: Unready resources: blocked-workload, config
+                    Reconciling: Creating, Unready resources: blocked-workload, config
+                  Composed resources:
+                    Deployment/probe-a-blocked\[e2e-crossplane-xr\] is already printed
+                    ConfigMap/probe-a-config\[e2e-crossplane-xr\] is already printed
+                  Synced ReconcileSuccess for 1m
+                  Ready Creating, Unready resources: blocked-workload, config for 1m
+                  Responsive WatchCircuitClosed for 1m
+          Synced ReconcileSuccess for 1m
+          Ready Creating, Unready resources: blocked-workload, config for 1m
+          Responsive WatchCircuitClosed for 1m
+    ConfigMap/probe-a-config\[e2e-crossplane-xr\] is already printed
+  Synced ReconcileSuccess for 1m
+  Ready Creating, Unready resources: blocked-workload, config for 1m
+  Responsive WatchCircuitClosed for 1m
+\z

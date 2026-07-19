@@ -7,6 +7,7 @@
     {{- template "application_details" . }}
     {{- template "replicas_status" . }}
     {{- template "suspended" . }}
+    {{- template "crossplane_composed_resources" . }}
     {{- template "conditions_summary" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
@@ -205,6 +206,37 @@
         {{- end }}{{ end }}{{ end }}
     {{- end }}
 {{- end -}}
+
+{{- define "crossplane_composed_resources" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* A Crossplane composite resource (XR) lists the resources it composes in
+           spec.crossplane.resourceRefs (v2, namespaced XRs) or spec.resourceRefs (v1, cluster-
+           scoped XRs). Presence of either is itself the marker that this object is an XR -- no
+           other Kubernetes object sets these paths -- so this is safe to invoke unconditionally
+           from DefaultResource. */ -}}
+    {{- $refs := .Spec.resourceRefs }}
+    {{- with .Spec.crossplane }}{{ with .resourceRefs }}{{ $refs = . }}{{ end }}{{ end }}
+    {{- with $refs }}
+        {{- "Composed resources" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- $ns := coalesce .namespace $.Namespace }}
+            {{- if $.Config.GetBool "deep" }}
+                {{- $obj := $.KubeGetFirst $ns .kind .name }}
+                {{- if $obj.Object }}
+                    {{- $.IncludeRenderableObject $obj | nindent 4 }}
+                {{- else }}
+                    {{- $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" $ns "callerNamespace" $.Namespace) | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- $obj := $.KubeGetFirst $ns .kind .name }}
+                {{- $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" $ns "callerNamespace" $.Namespace) | nindent 4 }}
+                {{- if $obj.Object }}
+                    {{- with $obj.KStatus }}, {{ .Status.String | colorKeyword }}{{ with .Message }}: {{ . }}{{ end }}{{ end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
 
 {{- define "owners" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject */ -}}
