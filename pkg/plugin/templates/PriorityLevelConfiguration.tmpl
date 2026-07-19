@@ -35,7 +35,7 @@
         {{- "Note" | bold | nindent 2 }}: spec is auto-managed by the API server
     {{- end }}
     {{- /* In non-shallow mode, show which FlowSchemas route to this priority level */}}
-    {{- if not ($.Config.GetBool "shallow") }}
+    {{- if not ($.LiveQueriesDisabled) }}
         {{- $plcName := .Name }}
         {{- $schemas := list }}
         {{- range $.KubeGet "" "flowschemas" }}

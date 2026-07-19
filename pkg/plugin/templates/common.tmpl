@@ -86,7 +86,7 @@
            pod spec looks wrong. The ubiquitous "default" SA with nothing noteworthy set on it is
            suppressed -- it's not worth a line on nearly every pod. */ -}}
     {{- $ctx := .ctx }}
-    {{- if not ($ctx.Config.GetBool "shallow") }}
+    {{- if not ($ctx.LiveQueriesDisabled) }}
         {{- $name := .serviceAccountName | default "default" }}
         {{- $sa := $ctx.KubeGetFirst .namespace "ServiceAccount" $name }}
         {{- if not $sa.Object }}
@@ -342,7 +342,7 @@
            single-line-per-pod summary is needed; see "matching_network_policies",
            "matching_cilium_network_policies" and "matching_calico_network_policies" (this file)
            for the fuller per-policy render. */ -}}
-    {{- if not (.Config.GetBool "shallow") }}
+    {{- if not (.LiveQueriesDisabled) }}
         {{- $flags := list }}
         {{- $policies := .KubeGetNetworkPoliciesMatchingPod .Namespace .Labels }}
         {{- if $policies }}
@@ -548,7 +548,7 @@
         {{- $matchLabels := .matchLabels }}
         {{- /* $matchLabels is nil when the selector uses only matchExpressions; passing nil to
              KubeGetByLabelsMap builds an empty selector and matches every pod in the namespace. */ -}}
-        {{- if and $matchLabels (not ($.Config.GetBool "shallow")) }}
+        {{- if and $matchLabels (not ($.LiveQueriesDisabled)) }}
             {{- if $.Config.GetBool "deep" }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}
@@ -590,7 +590,7 @@
     {{- /* Expects dict "ctx" (RenderableObject) "namespace" "labels" (the labels of the Pods
            this workload/Pod produces). */ -}}
     {{- $ctx := .ctx }}
-    {{- if not ($ctx.Config.GetBool "shallow") }}
+    {{- if not ($ctx.LiveQueriesDisabled) }}
         {{- $pdbs := $ctx.KubeGetPodDisruptionBudgetsMatchingLabels .namespace .labels }}
         {{- if $pdbs }}
             {{- with $ctx.Include "pdb_conflict_warning" $pdbs }}{{ . | nindent 2 }}{{ end }}
@@ -619,7 +619,7 @@
            "NetworkPolicies matched" block for any workload's Pod template labels, not just an
            actual Pod. See network_policy_selection_summary for the compact form used here. */ -}}
     {{- $ctx := .ctx }}
-    {{- if not ($ctx.Config.GetBool "shallow") }}
+    {{- if not ($ctx.LiveQueriesDisabled) }}
         {{- $policies := $ctx.KubeGetNetworkPoliciesMatchingPod .namespace .labels }}
         {{- if $policies }}
             {{- if $ctx.Config.GetBool "deep" }}
@@ -639,7 +639,7 @@
            namespaced CiliumNetworkPolicy and cluster-scoped CiliumClusterwideNetworkPolicy CRDs;
            both degrade to an empty result when Cilium isn't the CNI. */ -}}
     {{- $ctx := .ctx }}
-    {{- if not ($ctx.Config.GetBool "shallow") }}
+    {{- if not ($ctx.LiveQueriesDisabled) }}
         {{- $cnp := $ctx.KubeGetCiliumNetworkPoliciesMatchingPod .namespace .labels }}
         {{- if $cnp }}
             {{- if $ctx.Config.GetBool "deep" }}
@@ -670,7 +670,7 @@
            namespaced NetworkPolicy (crd.projectcalico.org/v1) and cluster-scoped
            GlobalNetworkPolicy CRDs; both degrade to an empty result when Calico isn't the CNI. */ -}}
     {{- $ctx := .ctx }}
-    {{- if not ($ctx.Config.GetBool "shallow") }}
+    {{- if not ($ctx.LiveQueriesDisabled) }}
         {{- $np := $ctx.KubeGetCalicoNetworkPoliciesMatchingPod .namespace .labels }}
         {{- if $np }}
             {{- if $ctx.Config.GetBool "deep" }}
@@ -719,7 +719,7 @@
     {{- $namespace := .namespace }}
     {{- $kind := .kind }}
     {{- $name := .name }}
-    {{- if not ($ctx.Config.GetBool "shallow") }}
+    {{- if not ($ctx.LiveQueriesDisabled) }}
         {{- $hpas := list }}
         {{- range $ctx.KubeGet $namespace "HorizontalPodAutoscalers" }}
             {{- $ref := .Spec.scaleTargetRef | default dict }}
@@ -769,7 +769,7 @@
     {{- $namespace := .namespace }}
     {{- $kind := .kind }}
     {{- $name := .name }}
-    {{- if not ($ctx.Config.GetBool "shallow") }}
+    {{- if not ($ctx.LiveQueriesDisabled) }}
         {{- $vpas := list }}
         {{- range $ctx.KubeGet $namespace "VerticalPodAutoscalers" }}
             {{- $ref := .Spec.targetRef | default dict }}
@@ -816,7 +816,7 @@
     {{- $serviceExpected := .serviceExpected }}
     {{- with .labels }}
         {{- $svcs := $ctx.KubeGetServicesMatchingLabels $namespace . }}
-        {{- if and $serviceExpected (not $svcs) (not ($ctx.Config.GetBool "local")) (not ($ctx.Config.GetBool "shallow")) }}
+        {{- if and $serviceExpected (not $svcs) (not ($ctx.LiveQueriesDisabled)) }}
             {{- "Not matched by any Service" | yellow | bold | nindent 2 }}
         {{- end }}
         {{- template "matching_services" (dict "ctx" $ctx "namespace" $namespace "svcs" $svcs) }}

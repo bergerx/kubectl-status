@@ -28,7 +28,7 @@
              documented gap as selector_with_health_summary in common.tmpl. */ -}}
         {{- $isEmptySelector := and (not $matchLabels) (not $selector.matchExpressions) }}
         {{- if $isEmptySelector }}{{ $matchLabels = dict }}{{ end }}
-        {{- if and (or $matchLabels $isEmptySelector) (not ($.Config.GetBool "shallow")) }}
+        {{- if and (or $matchLabels $isEmptySelector) (not ($.LiveQueriesDisabled)) }}
             {{- if $.Config.GetBool "deep" }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}

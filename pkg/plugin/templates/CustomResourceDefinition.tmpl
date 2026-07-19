@@ -42,7 +42,7 @@
             {{- $svcNs := $svc.namespace }}
             {{- $svcPort := $svc.port | default 443 }}
             {{- $svcPath := $svc.path }}
-            {{- if $.Config.GetBool "shallow" }}
+            {{- if $.LiveQueriesDisabled }}
                 {{- "→ Service" | bold | nindent 4 }}/{{ $svcName }}.{{ $svcNs }}:{{ $svcPort }}{{ $svcPath }}
             {{- else }}
                 {{- $svcObj := $.KubeGetFirst $svcNs "Service" $svcName }}

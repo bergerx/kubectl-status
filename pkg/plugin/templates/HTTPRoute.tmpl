@@ -36,7 +36,7 @@
             {{- else }}
                 {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
-                {{- if and (eq (.kind | default "Gateway") "Gateway") (not ($.Config.GetBool "shallow")) }}
+                {{- if and (eq (.kind | default "Gateway") "Gateway") (not ($.LiveQueriesDisabled)) }}
                     {{- $ns := coalesce .namespace $.Namespace }}
                     {{- $gw := $.KubeGetFirst $ns "Gateway" .name }}
                     {{- if $gw.Object }}

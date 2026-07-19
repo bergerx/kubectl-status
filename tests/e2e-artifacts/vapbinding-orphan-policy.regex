@@ -1,5 +1,3 @@
-\A
-ValidatingAdmissionPolicyBinding/e2e-orphan-binding
+ValidatingAdmissionPolicyBinding/e2e-orphan-binding, created .* ago, gen:1
   Policy: ValidatingAdmissionPolicy/e2e-does-not-exist \(not found\)
   Actions: Deny
-\z

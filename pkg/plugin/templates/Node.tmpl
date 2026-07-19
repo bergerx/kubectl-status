@@ -185,7 +185,7 @@
                 {{- "Memory overcommitted" | red | bold | nindent 4 }}: Application may be OOMKilled. Expect BestEffort and then Burstable pods to have OOMKill due to overcommitted memory on the node.
             {{- end }}
             {{- with index .Status.allocatable "ephemeral-storage" }}{{ "ephemeral-storage" | bold | nindent 2 }}: {{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
-        {{- else if not (.Config.GetBool "shallow") }}
+        {{- else if not (.LiveQueriesDisabled) }}
             {{- $metricsUnavailableReason := $.KubeMetricsUnavailableReason | default "no metrics yet" }}
             {{- "cpu" | bold | nindent 2 }}: [req:{{ $podsTotalCpuRequests | printf "%.3g" }}, lim:{{ $podsTotalCpuLimits | printf "%.3g" }}]
             {{- ", " }}{{ "mem" | bold }}: [req:{{ $podsTotalMemRequests | humanizeSI "B" }}, lim:{{ $podsTotalMemLimits | humanizeSI "B" }}], ({{ $metricsUnavailableReason | yellow }})

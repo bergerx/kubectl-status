@@ -46,7 +46,7 @@
         {{- $hosts := .hosts | default list }}
         {{- if not $secretName }}
             {{- "TLS entry has no secretName" | yellow | bold | nindent 2 }}, ingress controller's default certificate will be used for host(s) [{{ $hosts | join ", " }}].
-        {{- else if not ($.Config.GetBool "shallow") }}
+        {{- else if not ($.LiveQueriesDisabled) }}
             {{- $secret := $.KubeGetFirst $.Namespace "Secret" $secretName }}
             {{- if not $secret.Object }}
                 {{- if not ($missingSecrets | has $secretName) }}

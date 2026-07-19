@@ -24,7 +24,7 @@
                 {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
                 {{- $parentRef := . }}
-                {{- if and (not ($.Config.GetBool "shallow")) (or (not $parentRef.kind) (eq $parentRef.kind "Gateway")) }}
+                {{- if and (not ($.LiveQueriesDisabled)) (or (not $parentRef.kind) (eq $parentRef.kind "Gateway")) }}
                     {{- $gwNs := coalesce $parentRef.namespace $.Namespace }}
                     {{- $gw := $.KubeGetFirst $gwNs (coalesce $parentRef.kind "Gateway") $parentRef.name }}
                     {{- if $gw.Object }}
