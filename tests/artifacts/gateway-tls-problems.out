@@ -21,6 +21,7 @@ Gateway/eg -n default, created 1m ago, gen:1
       ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
 
 Secret/opaque-secret -n default, created 1m ago
+  Keys: foo
 
 Secret/incomplete-tls -n default, created 1m ago
   Missing keys: tls.key
@@ -28,11 +29,11 @@ Secret/incomplete-tls -n default, created 1m ago
 Secret/selfsigned-tls -n default, created 1m ago
   Certificate for CN=other.example.com · issued by CN=other.example.com
     Self-signed: issuer and subject match, not issued by a separate CA
-    Valid 1m ago, expires 2126-06-10
+    Valid 1m ago, expires 2126-06-10 (in 1m)
     Key: RSA · serial 459417690588134963926490921750614064410865316534
 
 Secret/gateway-tls -n default, created 1m ago
   Certificate for CN=example.com · issued by CN=Test CA
     Also valid for: gateway.example.com
-    Valid 1m ago, expires 2126-06-10
+    Valid 1m ago, expires 2126-06-10 (in 1m)
     Key: RSA · serial 712137069015432309918504661311928280986348109454

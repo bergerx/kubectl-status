@@ -21,5 +21,5 @@ Gateway/eg -n default, created 1m ago, gen:1
 Secret/selfsigned-tls -n default, created 1m ago
   Certificate for CN=other.example.com · issued by CN=other.example.com
     Self-signed: issuer and subject match, not issued by a separate CA
-    Valid 1m ago, expires 2126-06-10
+    Valid 1m ago, expires 2126-06-10 (in 1m)
     Key: RSA · serial 459417690588134963926490921750614064410865316534

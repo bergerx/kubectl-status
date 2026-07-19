@@ -71,7 +71,7 @@
     {{- if $cert.Expired }}
         {{- "Expired" | red | bold | nindent 4 }} {{ $cert.NotAfter.Format "2006-01-02" | red }} ({{ $cert.NotAfter.UTC.Format "2006-01-02T15:04:05Z" | colorAgo }}{{ agoSuffix }})
     {{- else }}
-        {{- "Valid" | bold | nindent 4 }} {{ $cert.NotBefore.UTC.Format "2006-01-02T15:04:05Z" | colorAgo }}{{ agoSuffix }}, expires {{ $cert.NotAfter.Format "2006-01-02" | cyan }}
+        {{- "Valid" | bold | nindent 4 }} {{ $cert.NotBefore.UTC.Format "2006-01-02T15:04:05Z" | colorAgo }}{{ agoSuffix }}, expires {{ $cert.NotAfter.Format "2006-01-02" | cyan }}{{ untilClause $cert.NotAfter }}
     {{- end }}
 {{- end }}
 

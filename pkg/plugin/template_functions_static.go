@@ -24,6 +24,7 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
+	"golang.org/x/crypto/ssh"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -82,55 +83,61 @@ func ApplyTestHack(cfg *RenderConfig) {
 
 func (cfg *RenderConfig) funcMap() template.FuncMap {
 	return template.FuncMap{
-		"green":                     color.GreenString,
-		"yellow":                    color.YellowString,
-		"red":                       color.RedString,
-		"cyan":                      color.CyanString,
-		"blue":                      color.BlueString,
-		"bold":                      color.New(color.Bold).SprintfFunc(),
-		"colorAgo":                  cfg.colorAgo,
-		"colorDuration":             cfg.colorDuration,
-		"startedAfterClause":        cfg.startedAfterClause,
-		"colorBool":                 colorBool,
-		"colorKeyword":              colorKeyword,
-		"markRed":                   markRed,
-		"markYellow":                markYellow,
-		"markGreen":                 markGreen,
-		"redIf":                     redIf,
-		"redBoldIf":                 redBoldIf,
-		"signalName":                signalName,
-		"isStatusConditionHealthy":  isStatusConditionHealthy,
-		"quantityToFloat64":         quantityToFloat64,
-		"quantityToInt64":           quantityToInt64,
-		"percent":                   percent,
-		"colorPercent":              colorPercent,
-		"humanizeSI":                humanizeSI,
-		"humanizeSIPair":            humanizeSIPair,
-		"getMatchingItemInMapList":  getMatchingItemInMapList,
-		"sortMapListByKeysValue":    sortMapListByKeysValue,
-		"fieldsV1Paths":             fieldsV1Paths,
-		"sortByRevisionAnnotation":  sortByRevisionAnnotation,
-		"sortByRevisionField":       sortByRevisionField,
-		"addFloat64":                addFloat64,
-		"subFloat64":                subFloat64,
-		"divFloat64":                divFloat64,
-		"ip":                        cfg.ip,
-		"agoSuffix":                 cfg.agoSuffix,
-		"forOrSince":                cfg.forOrSince,
-		"relativeTime":              cfg.relativeTime,
-		"labelSelector":             labelSelector,
-		"taintsNotToleratedByPod":   taintsNotToleratedByPod,
-		"networkPolicyPolicyTypes":  networkPolicyPolicyTypes,
-		"calicoPolicyTypes":         calicoPolicyTypes,
-		"ciliumPolicyDirections":    ciliumPolicyDirectionsForTemplate,
-		"cronNextTime":              cfg.cronNextTime,
-		"withinLastHour":            cfg.withinLastHour,
-		"parseTLSSecretCertificate": cfg.parseTLSSecretCertificate,
-		"certificatesInSecret":      cfg.certificatesInSecret,
-		"certificatesInConfigMap":   cfg.certificatesInConfigMap,
-		"certificateInCSR":          cfg.certificateInCSR,
-		"certificateRequestInCSR":   certificateRequestInCSR,
-		"parseDockerConfigSecret":   parseDockerConfigSecret,
+		"green":                          color.GreenString,
+		"yellow":                         color.YellowString,
+		"red":                            color.RedString,
+		"cyan":                           color.CyanString,
+		"blue":                           color.BlueString,
+		"bold":                           color.New(color.Bold).SprintfFunc(),
+		"colorAgo":                       cfg.colorAgo,
+		"colorDuration":                  cfg.colorDuration,
+		"startedAfterClause":             cfg.startedAfterClause,
+		"colorBool":                      colorBool,
+		"colorKeyword":                   colorKeyword,
+		"markRed":                        markRed,
+		"markYellow":                     markYellow,
+		"markGreen":                      markGreen,
+		"redIf":                          redIf,
+		"redBoldIf":                      redBoldIf,
+		"signalName":                     signalName,
+		"isStatusConditionHealthy":       isStatusConditionHealthy,
+		"quantityToFloat64":              quantityToFloat64,
+		"quantityToInt64":                quantityToInt64,
+		"percent":                        percent,
+		"colorPercent":                   colorPercent,
+		"humanizeSI":                     humanizeSI,
+		"humanizeSIPair":                 humanizeSIPair,
+		"getMatchingItemInMapList":       getMatchingItemInMapList,
+		"sortMapListByKeysValue":         sortMapListByKeysValue,
+		"fieldsV1Paths":                  fieldsV1Paths,
+		"sortByRevisionAnnotation":       sortByRevisionAnnotation,
+		"sortByRevisionField":            sortByRevisionField,
+		"addFloat64":                     addFloat64,
+		"subFloat64":                     subFloat64,
+		"divFloat64":                     divFloat64,
+		"ip":                             cfg.ip,
+		"agoSuffix":                      cfg.agoSuffix,
+		"forOrSince":                     cfg.forOrSince,
+		"relativeTime":                   cfg.relativeTime,
+		"untilClause":                    cfg.untilClause,
+		"labelSelector":                  labelSelector,
+		"taintsNotToleratedByPod":        taintsNotToleratedByPod,
+		"networkPolicyPolicyTypes":       networkPolicyPolicyTypes,
+		"calicoPolicyTypes":              calicoPolicyTypes,
+		"ciliumPolicyDirections":         ciliumPolicyDirectionsForTemplate,
+		"cronNextTime":                   cfg.cronNextTime,
+		"withinLastHour":                 cfg.withinLastHour,
+		"parseTLSSecretCertificate":      cfg.parseTLSSecretCertificate,
+		"certificatesInSecret":           cfg.certificatesInSecret,
+		"certificatesInConfigMap":        cfg.certificatesInConfigMap,
+		"certificateInCSR":               cfg.certificateInCSR,
+		"certificateRequestInCSR":        certificateRequestInCSR,
+		"parseDockerConfigSecret":        parseDockerConfigSecret,
+		"parseBasicAuthSecret":           parseBasicAuthSecret,
+		"parseSSHAuthSecret":             parseSSHAuthSecret,
+		"parseServiceAccountTokenSecret": parseServiceAccountTokenSecret,
+		"parseBootstrapTokenSecret":      cfg.parseBootstrapTokenSecret,
+		"secretDataKeys":                 secretDataKeys,
 	}
 }
 
@@ -689,6 +696,22 @@ func (cfg *RenderConfig) relativeTime(kubeDate string) string {
 	return fmt.Sprintf(" (%s ago)", cfg.colorDuration(duration))
 }
 
+// untilClause renders a " (in <duration>)" suffix for a future timestamp -- the same shape
+// cronNextTime has printed for a CronJob's next scheduled run -- so any other "expires at /
+// valid until" timestamp (cert validity, bootstrap-token expiration, ...) can share it instead
+// of re-deriving the countdown inline. Returns "" for a non-future t or under --absolute-time,
+// same as the other *Clause/relativeTime helpers.
+func (cfg *RenderConfig) untilClause(t time.Time) string {
+	if cfg.Viper.GetBool("absolute-time") {
+		return ""
+	}
+	duration := t.Sub(cfg.Now()).Round(time.Second)
+	if duration <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (in %s)", cfg.colorDuration(duration))
+}
+
 func (r RenderableObject) Include(templateName string, data interface{}) (string, error) {
 	klog.V(5).InfoS("Include", "r", r, "templateName", templateName, "data", data)
 	return r.renderTemplate(templateName, data)
@@ -718,11 +741,7 @@ func (cfg *RenderConfig) cronNextTime(schedule string, timezone interface{}) str
 		return ""
 	}
 	nextStr := next.UTC().Format("2006-01-02T15:04:05Z")
-	if cfg.Viper.GetBool("absolute-time") {
-		return nextStr
-	}
-	duration := next.Sub(now).Round(time.Second)
-	return fmt.Sprintf("%s (in %s)", nextStr, cfg.colorDuration(duration))
+	return nextStr + cfg.untilClause(next)
 }
 
 func labelSelector(s map[string]interface{}) string {
@@ -1176,6 +1195,224 @@ func parseDockerConfigSecret(secret RenderableObject) map[string]interface{} {
 	}
 	result["Registries"] = registries
 	return result
+}
+
+// decodeSecretDataField base64-decodes data[key] as a Secret's data entry is encoded on the
+// wire, returning ok=false if the key is absent or isn't a string. A key present but undecodable
+// base64 is reported as present with an empty decoded value, since callers here only need to
+// tell "absent" from "empty" from "has content", not surface a parse error for it.
+func decodeSecretDataField(data map[string]interface{}, key string) (value string, ok bool) {
+	encoded, ok := data[key].(string)
+	if !ok {
+		return "", false
+	}
+	decoded, _ := base64.StdEncoding.DecodeString(encoded)
+	return string(decoded), true
+}
+
+// parseBasicAuthSecret inspects a Secret expected to be type kubernetes.io/basic-auth and
+// reports only whether its username/password entries are present and non-empty -- never their
+// values. An empty value (e.g. `--from-literal=password=`) is distinguished from a missing key:
+// both are broken, but they point at different mistakes.
+func parseBasicAuthSecret(secret RenderableObject) map[string]interface{} {
+	result := map[string]interface{}{
+		"HasUsername":   false,
+		"UsernameEmpty": false,
+		"HasPassword":   false,
+		"PasswordEmpty": false,
+	}
+	if secret.Object == nil {
+		return result
+	}
+	data, _ := secret.Object["data"].(map[string]interface{})
+	if v, ok := decodeSecretDataField(data, "username"); ok {
+		result["HasUsername"] = true
+		result["UsernameEmpty"] = v == ""
+	}
+	if v, ok := decodeSecretDataField(data, "password"); ok {
+		result["HasPassword"] = true
+		result["PasswordEmpty"] = v == ""
+	}
+	return result
+}
+
+// parseSSHAuthSecret inspects a Secret expected to be type kubernetes.io/ssh-auth and reports
+// whether its ssh-privatekey entry is present and parses as an SSH private key -- never the key
+// material itself. KeyType/Fingerprint are derived from the *public* half of the key pair (the
+// SHA256 fingerprint is the same one `ssh-keygen -lf` prints), mirroring the level of detail
+// parseTLSSecretCertificate reports for kubernetes.io/tls (algorithm plus an identifying value),
+// just without the certificate-specific fields (subject/issuer/validity) an SSH key doesn't have.
+func parseSSHAuthSecret(secret RenderableObject) map[string]interface{} {
+	result := map[string]interface{}{
+		"Exists":      false,
+		"ParseError":  "",
+		"KeyType":     "",
+		"Fingerprint": "",
+	}
+	if secret.Object == nil {
+		return result
+	}
+	data, _ := secret.Object["data"].(map[string]interface{})
+	encoded, ok := data["ssh-privatekey"].(string)
+	if !ok {
+		return result
+	}
+	result["Exists"] = true
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to base64-decode ssh-privatekey: %v", err)
+		return result
+	}
+	signer, err := ssh.ParsePrivateKey(decoded)
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to parse ssh-privatekey: %v", err)
+		return result
+	}
+	result["KeyType"] = signer.PublicKey().Type()
+	result["Fingerprint"] = ssh.FingerprintSHA256(signer.PublicKey())
+	return result
+}
+
+// parseServiceAccountTokenSecret inspects a Secret expected to be type
+// kubernetes.io/service-account-token. Its data.token entry is populated asynchronously by the
+// legacy TokenController once the kubernetes.io/service-account.name annotation names an
+// existing ServiceAccount, so a freshly created Secret can legitimately carry the annotation but
+// no token yet -- the template reports that as "waiting on controller", not as an error.
+func parseServiceAccountTokenSecret(secret RenderableObject) map[string]interface{} {
+	result := map[string]interface{}{
+		"HasServiceAccountName": false,
+		"ServiceAccountName":    "",
+		"HasToken":              false,
+	}
+	if secret.Object == nil {
+		return result
+	}
+	if name, ok := secret.Annotations()["kubernetes.io/service-account.name"].(string); ok && name != "" {
+		result["HasServiceAccountName"] = true
+		result["ServiceAccountName"] = name
+	}
+	data, _ := secret.Object["data"].(map[string]interface{})
+	if token, ok := data["token"].(string); ok && token != "" {
+		result["HasToken"] = true
+	}
+	return result
+}
+
+var (
+	bootstrapTokenNameRegexp   = regexp.MustCompile(`^bootstrap-token-([a-z0-9]{6})$`)
+	bootstrapTokenIDRegexp     = regexp.MustCompile(`^[a-z0-9]{6}$`)
+	bootstrapTokenSecretRegexp = regexp.MustCompile(`^[a-z0-9]{16}$`)
+)
+
+// parseBootstrapTokenSecret inspects a Secret expected to be type bootstrap.kubernetes.io/token
+// against the structural rules the bootstrap-token authenticator enforces at read time (see
+// https://kubernetes.io/docs/reference/access-authn-authz/bootstrap-tokens/): it must live in
+// kube-system, be named bootstrap-token-<token-id>, and carry a token-id/token-secret pair
+// matching that id -- a Secret violating any of these is silently never honoured as a valid
+// token, with no Kubernetes-side error to surface. token-secret's value is never reported, only
+// whether it's present and well-formed. Expired is computed against cfg.Now() rather than
+// time.Now() so it stays pinned under --test-hack.
+func (cfg *RenderConfig) parseBootstrapTokenSecret(secret RenderableObject) map[string]interface{} {
+	result := map[string]interface{}{
+		"NamespaceOK":         false,
+		"ActualNamespace":     "",
+		"NameOK":              false,
+		"MissingKeys":         []string{},
+		"TokenID":             "",
+		"TokenIDValid":        false,
+		"TokenIDMatchesName":  false,
+		"TokenSecretPresent":  false,
+		"TokenSecretValid":    false,
+		"HasExpiration":       false,
+		"Expiration":          time.Time{},
+		"Expired":             false,
+		"UsageAuthentication": false,
+		"UsageSigning":        false,
+	}
+	if secret.Object == nil {
+		return result
+	}
+
+	namespace := secret.Namespace()
+	result["ActualNamespace"] = namespace
+	result["NamespaceOK"] = namespace == "kube-system"
+
+	nameMatch := bootstrapTokenNameRegexp.FindStringSubmatch(secret.Name())
+	result["NameOK"] = nameMatch != nil
+
+	data, _ := secret.Object["data"].(map[string]interface{})
+	decode := func(key string) (string, bool) {
+		encoded, ok := data[key].(string)
+		if !ok {
+			return "", false
+		}
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return "", false
+		}
+		return string(decoded), true
+	}
+
+	var missingKeys []string
+	tokenID, ok := decode("token-id")
+	if !ok {
+		missingKeys = append(missingKeys, "token-id")
+	} else {
+		result["TokenID"] = tokenID
+		result["TokenIDValid"] = bootstrapTokenIDRegexp.MatchString(tokenID)
+		if nameMatch != nil {
+			result["TokenIDMatchesName"] = tokenID == nameMatch[1]
+		}
+	}
+	tokenSecret, ok := decode("token-secret")
+	if !ok {
+		missingKeys = append(missingKeys, "token-secret")
+	} else {
+		result["TokenSecretPresent"] = true
+		result["TokenSecretValid"] = bootstrapTokenSecretRegexp.MatchString(tokenSecret)
+	}
+	if missingKeys != nil {
+		result["MissingKeys"] = missingKeys
+	}
+
+	if expiration, ok := decode("expiration"); ok && expiration != "" {
+		if t, err := time.Parse(time.RFC3339, expiration); err == nil {
+			result["HasExpiration"] = true
+			result["Expiration"] = t
+			result["Expired"] = t.Before(cfg.Now())
+		}
+	}
+
+	if v, ok := decode("usage-bootstrap-authentication"); ok {
+		result["UsageAuthentication"] = v == "true"
+	}
+	if v, ok := decode("usage-bootstrap-signing"); ok {
+		result["UsageSigning"] = v == "true"
+	}
+
+	return result
+}
+
+// secretDataKeys returns the sorted union of a Secret's data and stringData key names, for
+// Opaque secrets where there's no dedicated type-specific section to render -- listing the keys
+// present gives a compact hint at the Secret's shape without exposing any values.
+func secretDataKeys(secret RenderableObject) []string {
+	var keys []string
+	if secret.Object == nil {
+		return keys
+	}
+	seen := map[string]bool{}
+	for _, field := range []string{"data", "stringData"} {
+		m, _ := secret.Object[field].(map[string]interface{})
+		for key := range m {
+			if !seen[key] {
+				seen[key] = true
+				keys = append(keys, key)
+			}
+		}
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // newCertificateEntry returns the zero-value result map for a single ".crt" entry, keyed the

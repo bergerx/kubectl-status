@@ -2,10 +2,10 @@
 Secret/web-tls -n e2e-web-cert, created 1m ago
   Managed by Certificate/web-tls via Issuer/web-ca-issuer \(cert-manager\.io\)
   Certificate for CN=web\.ks-demo\.svc · issued by CN=kubectl-status-demo-ca
-    Valid 1m ago, expires \d{4}-\d{2}-\d{2}
+    Valid 1m ago, expires \d{4}-\d{2}-\d{2} \(in 1m\)
     Key: RSA · serial [0-9]+
   Certificate \(ca\.crt\) for CN=kubectl-status-demo-ca · issued by CN=kubectl-status-demo-ca
     Self-signed: issuer and subject match, not issued by a separate CA
-    Valid 1m ago, expires \d{4}-\d{2}-\d{2}
+    Valid 1m ago, expires \d{4}-\d{2}-\d{2} \(in 1m\)
     Key: RSA · serial [0-9]+
 \z
