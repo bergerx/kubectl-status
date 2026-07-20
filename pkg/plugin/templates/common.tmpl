@@ -228,9 +228,10 @@
     {{- $refIsValid := and (kindIs "map" $ref) (kindIs "string" $ref.name) }}
     {{- $revisionRefIsValid := and (kindIs "map" $revisionRef) (kindIs "string" $revisionRef.name) }}
     {{- if or $refIsValid $revisionRefIsValid $updatePolicy }}
-        {{- "Composition" | bold | nindent 2 }}:
-        {{- if $refIsValid }} {{ $ref.name | cyan }}{{ end }}
-        {{- if $revisionRefIsValid }}, revision {{ $revisionRef.name | cyan }}{{ end }}
+        {{- if $refIsValid }}
+            {{- $.Include "resource_ref" (dict "kind" "Composition" "name" $ref.name) | nindent 2 }}
+        {{- end }}
+        {{- if $revisionRefIsValid }}, revision {{ $.Include "resource_ref" (dict "kind" "CompositionRevision" "name" $revisionRef.name) }}{{ end }}
         {{- with $updatePolicy }}, update policy {{ . | redBoldIf (eq . "Manual") }}
             {{- if eq . "Manual" }} (pinned; won't move to newer Composition revisions automatically){{ end }}
         {{- end }}
@@ -351,7 +352,7 @@
             {{- end }}
         {{- end }}
         {{- with .Spec.providerConfigRef }}
-            {{- "ProviderConfig" | bold | nindent 2 }}: {{ .kind | default "ProviderConfig" | cyan }}/{{ .name | cyan }}
+            {{- $.Include "resource_ref" (dict "kind" (.kind | default "ProviderConfig") "name" .name) | nindent 2 }}
         {{- end }}
         {{- $policies := .Spec.managementPolicies }}
         {{- if kindIs "slice" $policies }}
