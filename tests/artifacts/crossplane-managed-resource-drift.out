@@ -1,6 +1,14 @@
 
 VPC/checkout-network, created 1m ago, gen:2
   Current: Resource is Ready
-  Observed difference: 2 configured fields differ from observed state
+  Observed difference (`spec.forProvider` -> `status.atProvider`):
+    --- spec.forProvider
+    +++ status.atProvider
+    @@ -1,3 +1,3 @@
+    -region: eu-west-1
+    +region: us-east-1
+     tags:
+    -  environment: production
+    +  environment: staging
   Synced ReconcileSuccess for 1m
   Ready Available for 1m

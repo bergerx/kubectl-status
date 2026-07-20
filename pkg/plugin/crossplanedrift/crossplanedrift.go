@@ -15,6 +15,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/pmezard/go-difflib/difflib"
+	"sigs.k8s.io/yaml"
 )
 
 // Class classifies a single configured leaf path.
@@ -120,6 +123,80 @@ func Diff(forProvider, atProvider map[string]interface{}) Result {
 	}
 
 	return result
+}
+
+// UnifiedDiff renders a unified, git-style diff between the desired and observed values of
+// DriftEntries, as two minimal YAML documents built from just the drifted leaf paths (shared
+// parent keys act as diff context). Returns "" when there's no drift, or when every drifted path
+// is redacted (see below). It deliberately excludes in-sync/not-observed/observed-only paths that
+// would otherwise show up as diff noise.
+//
+// Redacted entries are left out of the diffed documents entirely: Diff sets both their Desired
+// and Observed to the same "REDACTED" placeholder, which would render as a no-op diff line
+// (identical text on both sides) rather than a leak, but that silently hides the fact that the
+// field drifted. Callers should list r.RedactedPaths separately when non-empty.
+func (r Result) UnifiedDiff() string {
+	desired := map[string]interface{}{}
+	observed := map[string]interface{}{}
+	for _, e := range r.DriftEntries {
+		if e.Redacted {
+			continue
+		}
+		setPath(desired, e.Path, e.Desired)
+		setPath(observed, e.Path, e.Observed)
+	}
+	if len(desired) == 0 {
+		return ""
+	}
+	desiredYAML, err := yaml.Marshal(desired)
+	if err != nil {
+		return ""
+	}
+	observedYAML, err := yaml.Marshal(observed)
+	if err != nil {
+		return ""
+	}
+	// yaml.Marshal always ends its output with a trailing newline; SplitLines would otherwise
+	// turn that into a spurious trailing empty line, rendered as a whitespace-only context line.
+	out, err := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+		A:        difflib.SplitLines(strings.TrimRight(string(desiredYAML), "\n")),
+		B:        difflib.SplitLines(strings.TrimRight(string(observedYAML), "\n")),
+		FromFile: "spec.forProvider",
+		ToFile:   "status.atProvider",
+		Context:  3,
+	})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimRight(out, "\n")
+}
+
+// RedactedPaths returns the sorted paths of DriftEntries whose values were redacted, i.e. the
+// drifted fields UnifiedDiff leaves out of its rendered diff.
+func (r Result) RedactedPaths() []string {
+	var paths []string
+	for _, e := range r.DriftEntries {
+		if e.Redacted {
+			paths = append(paths, e.Path)
+		}
+	}
+	return paths
+}
+
+// setPath sets value at the given dot-separated path within doc, creating intermediate maps as
+// needed.
+func setPath(doc map[string]interface{}, path string, value interface{}) {
+	parts := strings.Split(path, ".")
+	cur := doc
+	for _, p := range parts[:len(parts)-1] {
+		next, ok := cur[p].(map[string]interface{})
+		if !ok {
+			next = map[string]interface{}{}
+			cur[p] = next
+		}
+		cur = next
+	}
+	cur[parts[len(parts)-1]] = value
 }
 
 func redactEntry(e Entry) Entry {

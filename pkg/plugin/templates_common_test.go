@@ -701,7 +701,7 @@ func TestManagedResourceDriftTemplate_InSync(t *testing.T) {
 	}
 }
 
-func TestManagedResourceDriftTemplate_DefaultDepthSummary(t *testing.T) {
+func TestManagedResourceDriftTemplate_DefaultDepthShowsUnifiedDiff(t *testing.T) {
 	obj := managedResourceObj(
 		map[string]interface{}{"region": "eu-west-1"},
 		map[string]interface{}{"region": "us-east-1"},
@@ -710,27 +710,27 @@ func TestManagedResourceDriftTemplate_DefaultDepthSummary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("renderTemplate() error = %v", err)
 	}
-	if !strings.Contains(got, "Observed difference: 1 configured fields differ from observed state") {
-		t.Errorf("got = %q, want the compact drift count", got)
-	}
-	if strings.Contains(got, "eu-west-1") {
-		t.Errorf("got = %q, default depth must not print field-level values", got)
+	if !strings.Contains(got, "-region: eu-west-1") || !strings.Contains(got, "+region: us-east-1") {
+		t.Errorf("got = %q, want a unified diff of the drifted field", got)
 	}
 }
 
-func TestManagedResourceDriftTemplate_DeepShowsFieldDiff(t *testing.T) {
+func TestManagedResourceDriftTemplate_DeepAddsObservedOnlyCount(t *testing.T) {
 	v := viper.New()
 	v.Set("deep", true)
 	obj := managedResourceObj(
 		map[string]interface{}{"region": "eu-west-1"},
-		map[string]interface{}{"region": "us-east-1"},
+		map[string]interface{}{"region": "us-east-1", "arn": "arn:aws:ec2:eu-west-1:123456789012:vpc/vpc-1"},
 	)
 	got, err := renderManagedResourceDrift(t, obj, v)
 	if err != nil {
 		t.Fatalf("renderTemplate() error = %v", err)
 	}
-	if !strings.Contains(got, `region: "eu-west-1" -> "us-east-1"`) {
-		t.Errorf("got = %q, want the field-level diff line", got)
+	if !strings.Contains(got, "-region: eu-west-1") || !strings.Contains(got, "+region: us-east-1") {
+		t.Errorf("got = %q, want the unified diff of the drifted field", got)
+	}
+	if !strings.Contains(got, "Observed-only fields: 1") {
+		t.Errorf("got = %q, want the deep-only observed-only-fields count", got)
 	}
 }
 
