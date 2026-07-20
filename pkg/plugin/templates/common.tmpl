@@ -272,19 +272,22 @@
             {{- $labeled := crossplaneDriftLabel $syncedStatus .Spec.managementPolicies }}
             {{- if eq (len $result.DriftEntries) 0 }}
                 {{- "Drift" | bold | nindent 2 }}: none across {{ $result.TotalConfigured }} configured fields
-            {{- else if $.Config.GetBool "deep" }}
+            {{- else }}
                 {{- $labeled.Label | bold | nindent 2 }} (`spec.forProvider` -> `status.atProvider`){{ with $labeled.Annotation }}, {{ . | yellow }}{{ end }}:
-                {{- range $result.DriftEntries }}
-                    {{- printf "%s: %s -> %s" .Path (.Desired | toJson) (.Observed | toJson) | nindent 4 }}
+                {{- with $result.UnifiedDiff }}
+                    {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 4 }}
+                {{- end }}
+                {{- with $result.RedactedPaths }}
+                    {{- printf "Redacted fields differ: %s" (join ", " .) | nindent 4 }}
                 {{- end }}
                 {{- with $result.MoreCount }}
                     {{- printf "… %d more" . | nindent 4 }}
                 {{- end }}
-                {{- with $result.ObservedOnlyCount }}
-                    {{- printf "Observed-only fields: %d (hidden; provider defaults/computed state)" . | nindent 4 }}
+                {{- if $.Config.GetBool "deep" }}
+                    {{- with $result.ObservedOnlyCount }}
+                        {{- printf "Observed-only fields: %d (hidden; provider defaults/computed state)" . | nindent 4 }}
+                    {{- end }}
                 {{- end }}
-            {{- else }}
-                {{- $labeled.Label | bold | nindent 2 }}: {{ printf "%d configured fields differ from observed state" (len $result.DriftEntries) | redBoldIf true }}{{ with $labeled.Annotation }} ({{ . | yellow }}){{ end }}
             {{- end }}
         {{- end }}
     {{- end }}

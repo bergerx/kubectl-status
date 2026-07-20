@@ -1,6 +1,7 @@
 package crossplanedrift
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -65,6 +66,62 @@ func TestDiff_DifferingScalar(t *testing.T) {
 	e := result.DriftEntries[0]
 	if e.Path != "region" || e.Desired != "eu-west-1" || e.Observed != "us-east-1" {
 		t.Errorf("DriftEntries[0] = %+v, want region eu-west-1 -> us-east-1", e)
+	}
+}
+
+func TestUnifiedDiff_NoDrift(t *testing.T) {
+	result := Diff(map[string]interface{}{"region": "eu-west-1"}, map[string]interface{}{"region": "eu-west-1"})
+	if got := result.UnifiedDiff(); got != "" {
+		t.Errorf("UnifiedDiff() = %q, want empty for no drift", got)
+	}
+}
+
+func TestUnifiedDiff_NestedPathAndScalar(t *testing.T) {
+	forProvider := map[string]interface{}{
+		"region": "eu-west-1",
+		"tags":   map[string]interface{}{"environment": "production"},
+	}
+	atProvider := map[string]interface{}{
+		"region": "eu-west-1",
+		"tags":   map[string]interface{}{"environment": "staging"},
+	}
+	result := Diff(forProvider, atProvider)
+	got := result.UnifiedDiff()
+	for _, want := range []string{"--- spec.forProvider", "+++ status.atProvider", "-  environment: production", "+  environment: staging"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("UnifiedDiff() = %q, want it to contain %q", got, want)
+		}
+	}
+	if strings.Contains(got, "region") {
+		t.Errorf("UnifiedDiff() = %q, want the in-sync region field left out of the diff", got)
+	}
+}
+
+func TestUnifiedDiff_ExcludesRedactedFields(t *testing.T) {
+	forProvider := map[string]interface{}{"dbPassword": "s3cr3t-old", "region": "eu-west-1"}
+	atProvider := map[string]interface{}{"dbPassword": "s3cr3t-new", "region": "us-east-1"}
+	result := Diff(forProvider, atProvider)
+	got := result.UnifiedDiff()
+	if strings.Contains(got, "s3cr3t") || strings.Contains(got, "REDACTED") {
+		t.Errorf("UnifiedDiff() = %q, must not leak or even mention redacted fields", got)
+	}
+	if !strings.Contains(got, "-region: eu-west-1") || !strings.Contains(got, "+region: us-east-1") {
+		t.Errorf("UnifiedDiff() = %q, want the non-redacted field's diff", got)
+	}
+	if got := result.RedactedPaths(); len(got) != 1 || got[0] != "dbPassword" {
+		t.Errorf("RedactedPaths() = %v, want [dbPassword]", got)
+	}
+}
+
+func TestUnifiedDiff_OnlyRedactedFieldsDriftedYieldsNoDiff(t *testing.T) {
+	forProvider := map[string]interface{}{"dbPassword": "s3cr3t-old"}
+	atProvider := map[string]interface{}{"dbPassword": "s3cr3t-new"}
+	result := Diff(forProvider, atProvider)
+	if got := result.UnifiedDiff(); got != "" {
+		t.Errorf("UnifiedDiff() = %q, want empty when every drifted field is redacted", got)
+	}
+	if got := result.RedactedPaths(); len(got) != 1 || got[0] != "dbPassword" {
+		t.Errorf("RedactedPaths() = %v, want [dbPassword]", got)
 	}
 }
 
