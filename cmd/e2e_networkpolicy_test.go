@@ -19,6 +19,7 @@ import (
 )
 
 func runNetworkPolicySubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), clientset *kubernetes.Clientset, dynamicClient dynamic.Interface) {
+	ensureCiliumCalicoCRDs(t)
 	t.Run("pod selected by a NetworkPolicy surfaces the compact isolation signal", func(t *testing.T) {
 		t.Parallel()
 		// A dedicated namespace keeps this test in control of exactly which NetworkPolicy

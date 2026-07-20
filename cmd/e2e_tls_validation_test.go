@@ -17,6 +17,8 @@ import (
 )
 
 func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), clientset *kubernetes.Clientset) {
+	ensureCertManager(t)
+	ensureGatewayAPICRDs(t)
 	t.Run("tls-validation", func(t *testing.T) {
 		t.Parallel()
 		// Builds a real cert-manager CA chain (self-signed root -> ca-type Issuer -> leaf
