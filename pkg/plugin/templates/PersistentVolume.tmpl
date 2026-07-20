@@ -3,11 +3,13 @@
     {{- template "status_summary_line" . }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
+    {{- $provisionedByAnnotation := index .Annotations "pv.kubernetes.io/provisioned-by" }}
     {{- "PV" | nindent 2 }} is {{- with .Status.phase }} {{ . | colorKeyword }}{{ end }}
     {{- with .Status.lastPhaseTransitionTime }}, since {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with .Spec.storageClassName  }} managed by {{ $.Include "resource_ref" (dict "kind" "StorageClass" "name" .) }}{{ end }}
+    {{- with .Spec.storageClassName }}{{ $.Include "storageclass_summary" (dict "ctx" $ "name" . "provisionerShown" (hasKey $.Annotations "pv.kubernetes.io/provisioned-by")) }}{{ end }}
     {{- with index .Annotations "kubernetes.io/createdby" }} created by {{ . | bold }}{{ end }}
-    {{- with index .Annotations "pv.kubernetes.io/provisioned-by" }} provisioned by {{ . | bold }}{{ end }}
+    {{- with $provisionedByAnnotation }} provisioned by {{ . | bold }}{{ end }}
     {{- with .Spec.accessModes }}{{- with index . 0 }} with {{ . | bold }} mode{{ end }}{{- end }}
     {{- with .Spec.persistentVolumeReclaimPolicy }}, reclaim: {{ . | cyan }}{{ end }}
     {{- with .Status.reason }}{{ "reason" | bold }}: {{ . }}{{ end }}

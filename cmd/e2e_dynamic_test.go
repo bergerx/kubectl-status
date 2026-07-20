@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -194,6 +195,90 @@ func TestE2EDynamicManifests(t *testing.T) {
 		cmdTest{
 			args:            []string{"xstatusprobe/probe-a", "-n", ns, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/crossplane-xr-deep.regex",
+		}.assert(t, nil, opts...)
+	})
+	t.Run("PersistentVolumeClaim fetches its StorageClass and surfaces a non-default binding mode and volume expansion", func(t *testing.T) {
+		// Issue #669: PersistentVolumeClaim.tmpl previously only printed the storage class name
+		// as a string, never fetching the object -- so provisioning-relevant fields like
+		// volumeBindingMode (which explains a claim staying Pending until a Pod is scheduled)
+		// were invisible. This exercises the live KubeGetFirst fetch, which --shallow/--local
+		// (and thus every offline artifact test) makes a no-op.
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-storageclass"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		storageClasses, err := clientset.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
+		require.NoError(t, err)
+		require.NotEmpty(t, storageClasses.Items, "expected minikube's default storage-provisioner addon to have registered a StorageClass")
+		provisioner := storageClasses.Items[0].Provisioner
+
+		scName := "e2e-wait-for-first-consumer"
+		bindingMode := storagev1.VolumeBindingWaitForFirstConsumer
+		allowExpansion := true
+		_, err = clientset.StorageV1().StorageClasses().Create(context.TODO(), &storagev1.StorageClass{
+			ObjectMeta:           metav1.ObjectMeta{Name: scName},
+			Provisioner:          provisioner,
+			VolumeBindingMode:    &bindingMode,
+			AllowVolumeExpansion: &allowExpansion,
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.StorageV1().StorageClasses().Delete(context.TODO(), scName, metav1.DeleteOptions{})
+		})
+
+		// WaitForFirstConsumer keeps the claim Pending with no consuming Pod -- exactly the
+		// "unbound/late-bound claim" case the issue asks for, and it needs no wait: the claim
+		// is Pending as soon as it's created.
+		pvcName := "e2e-wfc-pvc"
+		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				StorageClassName: &scName,
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		cmdTest{
+			args:            []string{"pvc/" + pvcName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pvc-storageclass-wait-for-first-consumer.regex",
+		}.assert(t, nil, opts...)
+		// --deep inlines the fetched StorageClass in full -- offline artifact tests can't reach
+		// this branch either, since --shallow/--local (which every offline test uses) makes the
+		// KubeGetFirst behind it a no-op, so this is the only tier that verifies it renders.
+		cmdTest{
+			args:            []string{"pvc/" + pvcName, "-n", ns, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pvc-storageclass-wait-for-first-consumer-deep.regex",
+		}.assert(t, nil, opts...)
+
+		// A claim referencing a StorageClass that doesn't exist can't be told apart from one that
+		// simply wasn't fetched (--shallow/--local) by any offline artifact -- only a live fetch
+		// that comes back empty proves the "not found" warning path.
+		missingSCPVCName := "e2e-missing-sc-pvc"
+		missingSCName := "e2e-no-such-storageclass"
+		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: missingSCPVCName, Namespace: ns},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				StorageClassName: &missingSCName,
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		cmdTest{
+			args:            []string{"pvc/" + missingSCPVCName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pvc-storageclass-missing.regex",
 		}.assert(t, nil, opts...)
 	})
 }
