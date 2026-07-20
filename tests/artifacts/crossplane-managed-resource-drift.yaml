@@ -1,0 +1,36 @@
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: VPC
+metadata:
+  creationTimestamp: "2026-06-01T10:00:00Z"
+  finalizers:
+  - finalizer.managedresource.crossplane.io
+  generation: 2
+  name: checkout-network
+  resourceVersion: "1330976"
+  uid: be814fad-43ba-4d86-bc5a-f4fb471af6ae
+spec:
+  forProvider:
+    region: eu-west-1
+    cidrBlock: 10.0.0.0/16
+    tags:
+      environment: production
+  managementPolicies:
+  - "*"
+status:
+  observedGeneration: 2
+  conditions:
+  - lastTransitionTime: "2026-06-01T10:05:00Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2026-06-01T10:05:00Z"
+    reason: Available
+    status: "True"
+    type: Ready
+  atProvider:
+    arn: arn:aws:ec2:eu-west-1:123456789012:vpc/vpc-0123456789abcdef0
+    id: vpc-0123456789abcdef0
+    region: us-east-1
+    cidrBlock: 10.0.0.0/16
+    tags:
+      environment: staging

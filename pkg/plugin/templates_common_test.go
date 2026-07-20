@@ -646,3 +646,105 @@ func renderConfigzSummary(t *testing.T, configz map[string]interface{}) string {
 	}
 	return got
 }
+
+func managedResourceObj(forProvider, atProvider map[string]interface{}) map[string]interface{} {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "checkout-network"},
+		"spec":     map[string]interface{}{},
+		"status":   map[string]interface{}{},
+	}
+	if forProvider != nil {
+		obj["spec"].(map[string]interface{})["forProvider"] = forProvider
+	}
+	if atProvider != nil {
+		obj["status"].(map[string]interface{})["atProvider"] = atProvider
+	}
+	return obj
+}
+
+func TestManagedResourceDriftTemplate_NotAManagedResource(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "some-deployment"},
+		"spec":     map[string]interface{}{"replicas": float64(1)},
+	}
+	got, err := renderManagedResourceDrift(t, obj, viper.New())
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if got != "" {
+		t.Errorf("expected no drift output for a non-managed-resource object, got = %q", got)
+	}
+}
+
+func TestManagedResourceDriftTemplate_NotYetObserved(t *testing.T) {
+	obj := managedResourceObj(map[string]interface{}{"region": "eu-west-1"}, nil)
+	got, err := renderManagedResourceDrift(t, obj, viper.New())
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, "has not been observed yet") {
+		t.Errorf("got = %q, want a not-yet-observed message", got)
+	}
+}
+
+func TestManagedResourceDriftTemplate_InSync(t *testing.T) {
+	obj := managedResourceObj(
+		map[string]interface{}{"region": "eu-west-1"},
+		map[string]interface{}{"region": "eu-west-1"},
+	)
+	got, err := renderManagedResourceDrift(t, obj, viper.New())
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, "Drift: none across 1 configured fields") {
+		t.Errorf("got = %q, want an in-sync summary", got)
+	}
+}
+
+func TestManagedResourceDriftTemplate_DefaultDepthSummary(t *testing.T) {
+	obj := managedResourceObj(
+		map[string]interface{}{"region": "eu-west-1"},
+		map[string]interface{}{"region": "us-east-1"},
+	)
+	got, err := renderManagedResourceDrift(t, obj, viper.New())
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, "Observed difference: 1 configured fields differ from observed state") {
+		t.Errorf("got = %q, want the compact drift count", got)
+	}
+	if strings.Contains(got, "eu-west-1") {
+		t.Errorf("got = %q, default depth must not print field-level values", got)
+	}
+}
+
+func TestManagedResourceDriftTemplate_DeepShowsFieldDiff(t *testing.T) {
+	v := viper.New()
+	v.Set("deep", true)
+	obj := managedResourceObj(
+		map[string]interface{}{"region": "eu-west-1"},
+		map[string]interface{}{"region": "us-east-1"},
+	)
+	got, err := renderManagedResourceDrift(t, obj, v)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, `region: "eu-west-1" -> "us-east-1"`) {
+		t.Errorf("got = %q, want the field-level diff line", got)
+	}
+}
+
+func renderManagedResourceDrift(t *testing.T, obj map[string]interface{}, v *viper.Viper) (string, error) {
+	t.Helper()
+	cfg := NewRenderConfig(v)
+	tmpl, _ := getTemplate(cfg)
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	t.Cleanup(func() { f.Cleanup() })
+	repo, _ := input.NewResourceRepo(f, cfg.Viper)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+	e.Template = *tmpl
+	r := newRenderableObject(obj, e, repo)
+	return r.renderTemplate("crossplane_managed_resource_drift", r)
+}
