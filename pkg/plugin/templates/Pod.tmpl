@@ -45,6 +45,7 @@
     {{- template "service_account_summary" (dict "ctx" . "namespace" .Namespace "serviceAccountName" .Spec.serviceAccountName) }}
     {{- template "pod_init_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
     {{- template "pod_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
+    {{- template "pod_priorityclass_summary" . }}
     {{- template "pod_runtimeclass_overhead" . }}
     {{- template "pod_ephemeral_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
     {{- template "pod_volumes" . }}
@@ -174,6 +175,28 @@
             {{- else }}
                 {{- $pod.Include "container_status_summary" $containerStatusSummaryDict | nindent 4 }}
             {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "pod_priorityclass_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Resolves .spec.priorityClassName to its PriorityClass object and surfaces
+           value/globalDefault/preemptionPolicy -- these explain preemption/eviction order during
+           resource pressure but aren't fully visible on the Pod spec alone (spec.priority is just
+           the resolved numeric value, with no indication of default/preemption behavior). Silent
+           when there's no priorityClassName or no PriorityClass object. */ -}}
+    {{- with .Spec.priorityClassName }}
+        {{- $pc := $.KubeGetFirst "" "PriorityClass" . }}
+        {{- if $pc.Object }}
+            {{- $parts := list (printf "value: %s" ($pc.Object.value | toString | cyan)) }}
+            {{- if $pc.Object.globalDefault }}
+                {{- $parts = append $parts "global default" }}
+            {{- end }}
+            {{- if ne ($pc.Object.preemptionPolicy | default "PreemptLowerPriority") "PreemptLowerPriority" }}
+                {{- $parts = append $parts (printf "preemptionPolicy: %s" ($pc.Object.preemptionPolicy | colorKeyword)) }}
+            {{- end }}
+            {{- "Priority:" | bold | nindent 2 }} {{ template "resource_ref" (dict "kind" "PriorityClass" "name" .) }} ({{ join ", " $parts }})
         {{- end }}
     {{- end }}
 {{- end }}

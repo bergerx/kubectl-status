@@ -8,6 +8,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	nodev1 "k8s.io/api/node/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -204,6 +205,51 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		cmdTest{
 			args:            []string{"pod/pod-with-runtimeclass-overhead", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-with-runtimeclass-overhead.regex",
+		}.assert(t, nil, opts...)
+	})
+	t.Run("pod's priorityClassName resolves to the PriorityClass and surfaces value/globalDefault/preemptionPolicy", func(t *testing.T) {
+		t.Parallel()
+		opts := combineOpts(viperTestHackOpts())
+		ns := "e2e-pod-priorityclass"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		// A minikube cluster has no globalDefault PriorityClass out of the box, so setting it here
+		// is safe: it won't clash with any other PriorityClass in the (parallel) test pool.
+		never := corev1.PreemptNever
+		pc := &schedulingv1.PriorityClass{
+			ObjectMeta:       metav1.ObjectMeta{Name: "e2e-test-priority"},
+			Value:            1000000,
+			GlobalDefault:    true,
+			PreemptionPolicy: &never,
+		}
+		_, err = clientset.SchedulingV1().PriorityClasses().Create(context.TODO(), pc, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.SchedulingV1().PriorityClasses().Delete(context.TODO(), pc.Name, metav1.DeleteOptions{})
+		})
+
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-with-priorityclass",
+				Namespace: ns,
+			},
+			Spec: corev1.PodSpec{
+				PriorityClassName: pc.Name,
+				Containers:        []corev1.Container{{Name: "app", Image: "busybox"}},
+			},
+		}
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.CoreV1().Pods(ns).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+
+		cmdTest{
+			args:            []string{"pod/pod-with-priorityclass", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-with-priorityclass.regex",
 		}.assert(t, nil, opts...)
 	})
 	t.Run("workload's matching pod on a cordoned node surfaces a compact node-problem flag", func(t *testing.T) {
