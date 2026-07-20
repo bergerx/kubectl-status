@@ -1,0 +1,11 @@
+
+NodePool/static-pool, created 1m ago, gen:1
+  InProgress: EC2NodeClass default is not ready
+    Reconciling: NodeClassNotReady, EC2NodeClass default is not ready
+  NodeClass: EC2NodeClass/default
+  Requirements:
+    kubernetes.io/os In [linux]
+  Replicas: 0
+  Resources: (current/limit)
+    nodes: n/a/5
+  Ready NodeClassNotReady, EC2NodeClass default is not ready for 1m

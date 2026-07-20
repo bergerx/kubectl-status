@@ -1,0 +1,31 @@
+{{- define "NodeClaim" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: karpenter.sh/v1, Kind=NodeClaim */ -}}
+    {{- /* The owning NodePool is already shown by status_summary_line's ownerReferences clause --
+           no need to re-render it here. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.nodeClassRef }}
+        {{- "NodeClass" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" .kind "name" .name) }}
+    {{- end }}
+    {{- $labels := .Metadata.labels | default dict }}
+    {{- $instanceType := index $labels "node.kubernetes.io/instance-type" }}
+    {{- $zone := index $labels "topology.kubernetes.io/zone" }}
+    {{- $capacityType := index $labels "karpenter.sh/capacity-type" }}
+    {{- if or $instanceType $zone $capacityType }}
+        {{- "Capacity" | bold | nindent 2 }}:
+        {{- with $instanceType }} {{ . | cyan }}{{ end }}
+        {{- with $capacityType }} ({{ . | colorKeyword }}){{ end }}
+        {{- with $zone }} in {{ . | cyan }}{{ end }}
+    {{- end }}
+    {{- with (.Status | default dict).nodeName }}
+        {{- "Node" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" "Node" "name" .) }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

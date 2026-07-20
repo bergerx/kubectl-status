@@ -1,0 +1,77 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+  generation: 3
+  creationTimestamp: "2026-07-01T10:00:00Z"
+  uid: 11111111-1111-1111-1111-111111111111
+  resourceVersion: "1000"
+spec:
+  weight: 10
+  template:
+    metadata:
+      labels:
+        team: platform
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values:
+            - spot
+            - on-demand
+        - key: node.kubernetes.io/instance-type
+          operator: Exists
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values:
+            - c
+            - m
+            - r
+          minValues: 2
+        - key: topology.kubernetes.io/zone
+          operator: Gte
+          values:
+            - "1"
+        - key: kubernetes.io/arch
+          operator: In
+          values:
+            - amd64
+        - key: karpenter.k8s.aws/instance-family
+          operator: NotIn
+          values:
+            - t3
+            - t3a
+      taints:
+        - key: dedicated
+          value: gpu
+          effect: NoSchedule
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s
+  limits:
+    cpu: "1000"
+    memory: 1000Gi
+status:
+  nodeClassObservedGeneration: 3
+  nodes: 4
+  resources:
+    cpu: "48"
+    memory: 192Gi
+    pods: "220"
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Ready
+      lastTransitionTime: "2026-07-19T10:00:00Z"
+    - type: NodeClassReady
+      status: "True"
+      reason: NodeClassReady
+      lastTransitionTime: "2026-07-19T10:00:00Z"
+    - type: ValidationSucceeded
+      status: "True"
+      reason: ValidationSucceeded
+      lastTransitionTime: "2026-07-19T10:00:00Z"

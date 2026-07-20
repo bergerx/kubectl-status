@@ -1,0 +1,19 @@
+
+NodePool/default, created 1m ago, gen:3
+  Current: Resource is Ready
+  NodeClass: EC2NodeClass/default
+  Requirements:
+    karpenter.sh/capacity-type In [spot, on-demand]
+    node.kubernetes.io/instance-type exists
+    karpenter.k8s.aws/instance-category In [c, m, r] (min 2 values)
+    topology.kubernetes.io/zone Gte [1]
+    kubernetes.io/arch In [amd64]
+    karpenter.k8s.aws/instance-family NotIn [t3, t3a]
+  Nodes: 4
+  Resources: (current/limit)
+    cpu: 48/1000
+    memory: 206.1GB/1TB
+    pods: 220/unlimited
+  Ready Ready for 1m
+  NodeClassReady NodeClassReady for 1m
+  ValidationSucceeded ValidationSucceeded for 1m

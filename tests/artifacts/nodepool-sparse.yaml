@@ -1,0 +1,15 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: minimal
+  generation: 1
+  creationTimestamp: "2026-07-19T10:00:00Z"
+  uid: 22222222-2222-2222-2222-222222222222
+  resourceVersion: "500"
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: minimal
