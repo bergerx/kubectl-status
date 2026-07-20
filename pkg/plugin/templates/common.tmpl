@@ -8,6 +8,7 @@
     {{- template "replicas_status" . }}
     {{- template "suspended" . }}
     {{- template "crossplane_composed_resources" . }}
+    {{- template "crossplane_managed_resource_drift" . }}
     {{- template "conditions_summary" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
@@ -248,6 +249,42 @@
                 {{- if $obj.Object }}
                     {{- with $obj.KStatus }}, {{ .Status.String | colorKeyword }}{{ with .Message }}: {{ . }}{{ end }}{{ end }}
                 {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "crossplane_managed_resource_drift" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Eligibility: a non-empty spec.forProvider is the signal that this is a Crossplane
+           managed resource (no other Kubernetes object populates that path). A missing/empty
+           status.atProvider then means the resource hasn't been observed yet, rather than that
+           it's ineligible. See pkg/plugin/crossplanedrift for the comparison semantics. */ -}}
+    {{- $forProvider := .Spec.forProvider }}
+    {{- if and (kindIs "map" $forProvider) $forProvider }}
+        {{- $atProvider := .Status.atProvider }}
+        {{- if not (and (kindIs "map" $atProvider) $atProvider) }}
+            {{- "Drift" | bold | nindent 2 }}: unavailable; {{ "status.atProvider" | cyan }} has not been observed yet
+        {{- else }}
+            {{- $result := crossplaneManagedResourceDrift $forProvider $atProvider }}
+            {{- $syncedStatus := "" }}
+            {{- with getMatchingItemInMapList (dict "type" "Synced") .StatusConditions }}{{ $syncedStatus = .status }}{{ end }}
+            {{- $labeled := crossplaneDriftLabel $syncedStatus .Spec.managementPolicies }}
+            {{- if eq (len $result.DriftEntries) 0 }}
+                {{- "Drift" | bold | nindent 2 }}: none across {{ $result.TotalConfigured }} configured fields
+            {{- else if $.Config.GetBool "deep" }}
+                {{- $labeled.Label | bold | nindent 2 }} (`spec.forProvider` -> `status.atProvider`){{ with $labeled.Annotation }}, {{ . | yellow }}{{ end }}:
+                {{- range $result.DriftEntries }}
+                    {{- printf "%s: %s -> %s" .Path (.Desired | toJson) (.Observed | toJson) | nindent 4 }}
+                {{- end }}
+                {{- with $result.MoreCount }}
+                    {{- printf "… %d more" . | nindent 4 }}
+                {{- end }}
+                {{- with $result.ObservedOnlyCount }}
+                    {{- printf "Observed-only fields: %d (hidden; provider defaults/computed state)" . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- $labeled.Label | bold | nindent 2 }}: {{ printf "%d configured fields differ from observed state" (len $result.DriftEntries) | redBoldIf true }}{{ with $labeled.Annotation }} ({{ . | yellow }}){{ end }}
             {{- end }}
         {{- end }}
     {{- end }}

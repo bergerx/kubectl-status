@@ -1,0 +1,6 @@
+
+VPC/checkout-network, created 1m ago, gen:2
+  Current: Resource is Ready
+  Observed difference: 2 configured fields differ from observed state
+  Synced ReconcileSuccess for 1m
+  Ready Available for 1m
