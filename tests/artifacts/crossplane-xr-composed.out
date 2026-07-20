@@ -2,6 +2,7 @@
 XStatusProbe/probe-a -n crossplane-e2e, created 1m ago, gen:3
   InProgress: Unready resources: blocked-workload, config
     Reconciling: Creating, Unready resources: blocked-workload, config
+  Composition/status-probe, revision CompositionRevision/status-probe-56d8414, update policy Automatic
   Composed resources:
     Deployment/probe-a-blocked
     ConfigMap/probe-a-config

@@ -748,3 +748,172 @@ func renderManagedResourceDrift(t *testing.T, obj map[string]interface{}, v *vip
 	r := newRenderableObject(obj, e, repo)
 	return r.renderTemplate("crossplane_managed_resource_drift", r)
 }
+
+func renderCrossplaneTemplate(t *testing.T, templateName string, obj map[string]interface{}) (string, error) {
+	t.Helper()
+	v := viper.New()
+	cfg := NewRenderConfig(v)
+	tmpl, _ := getTemplate(cfg)
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	t.Cleanup(func() { f.Cleanup() })
+	repo, _ := input.NewResourceRepo(f, cfg.Viper)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+	e.Template = *tmpl
+	r := newRenderableObject(obj, e, repo)
+	return r.renderTemplate(templateName, r)
+}
+
+func TestCompositionRefTemplate_V1ClaimOrClusterScopedXR(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "checkout-db"},
+		"spec": map[string]interface{}{
+			"compositionRef":          map[string]interface{}{"name": "postgres-xl"},
+			"compositionRevisionRef":  map[string]interface{}{"name": "postgres-xl-abc123"},
+			"compositionUpdatePolicy": "Manual",
+		},
+	}
+	got, err := renderCrossplaneTemplate(t, "crossplane_composition_ref", obj)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	for _, want := range []string{"postgres-xl", "postgres-xl-abc123", "Manual"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("got = %q, want substring %q", got, want)
+		}
+	}
+}
+
+func TestCompositionRefTemplate_V2Namespaced(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "checkout-db"},
+		"spec": map[string]interface{}{
+			"crossplane": map[string]interface{}{
+				"compositionRef":          map[string]interface{}{"name": "postgres-xl"},
+				"compositionUpdatePolicy": "Automatic",
+			},
+		},
+	}
+	got, err := renderCrossplaneTemplate(t, "crossplane_composition_ref", obj)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, "postgres-xl") {
+		t.Errorf("got = %q, want composition name", got)
+	}
+	if strings.Contains(got, "pinned") {
+		t.Errorf("got = %q, Automatic policy must not show the Manual warning", got)
+	}
+}
+
+func TestCompositionRefTemplate_AbsentWhenNoCrossplaneFields(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "some-deployment"},
+		"spec":     map[string]interface{}{"replicas": float64(1)},
+	}
+	got, err := renderCrossplaneTemplate(t, "crossplane_composition_ref", obj)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if got != "" {
+		t.Errorf("expected no output for a non-Crossplane object, got = %q", got)
+	}
+}
+
+func TestManagedResourceDetailsTemplate_AnnotationsAndSpecFields(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"name": "checkout-network",
+			"annotations": map[string]interface{}{
+				"crossplane.io/external-name":             "vpc-0123456789abcdef0",
+				"crossplane.io/composition-resource-name": "network",
+				"crossplane.io/external-create-pending":   "2026-06-01T10:00:00Z",
+				"crossplane.io/external-create-succeeded": "2026-06-01T10:00:30Z",
+			},
+		},
+		"spec": map[string]interface{}{
+			"forProvider":        map[string]interface{}{"region": "eu-west-1"},
+			"providerConfigRef":  map[string]interface{}{"name": "aws-prod"},
+			"managementPolicies": []interface{}{"*"},
+			"initProvider": map[string]interface{}{
+				"tags": map[string]interface{}{"environment": "production"},
+			},
+		},
+	}
+	got, err := renderCrossplaneTemplate(t, "crossplane_managed_resource_details", obj)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	for _, want := range []string{
+		"vpc-0123456789abcdef0",
+		"network",
+		"succeeded, took 30s",
+		"aws-prod",
+		"full control",
+		"tags",
+		"applied only at creation time",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("got = %q, want substring %q", got, want)
+		}
+	}
+}
+
+func TestManagedResourceDetailsTemplate_ExternalCreatePendingWithoutSucceeded(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"name": "checkout-network",
+			"annotations": map[string]interface{}{
+				"crossplane.io/external-create-pending": "2026-06-01T10:00:00Z",
+			},
+		},
+		"spec": map[string]interface{}{
+			"forProvider": map[string]interface{}{"region": "eu-west-1"},
+		},
+	}
+	got, err := renderCrossplaneTemplate(t, "crossplane_managed_resource_details", obj)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, "External create") || !strings.Contains(got, "pending") {
+		t.Errorf("got = %q, want a pending-without-succeeded warning", got)
+	}
+	if strings.Contains(got, "took") {
+		t.Errorf("got = %q, must not compute a latency without a succeeded timestamp", got)
+	}
+}
+
+func TestManagedResourceDetailsTemplate_PartialManagementPolicies(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "checkout-network"},
+		"spec": map[string]interface{}{
+			"forProvider":        map[string]interface{}{"region": "eu-west-1"},
+			"managementPolicies": []interface{}{"Observe", "LateInitialize"},
+		},
+	}
+	got, err := renderCrossplaneTemplate(t, "crossplane_managed_resource_details", obj)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, "Observe, LateInitialize") {
+		t.Errorf("got = %q, want the partial policy list displayed", got)
+	}
+	if strings.Contains(got, "full control") {
+		t.Errorf("got = %q, partial policies must not show the full-control label", got)
+	}
+}
+
+func TestManagedResourceDetailsTemplate_NotAManagedResource(t *testing.T) {
+	obj := map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "some-deployment"},
+		"spec":     map[string]interface{}{"replicas": float64(1)},
+	}
+	got, err := renderCrossplaneTemplate(t, "crossplane_managed_resource_details", obj)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if got != "" {
+		t.Errorf("expected no output for a non-managed-resource object, got = %q", got)
+	}
+}
