@@ -13,6 +13,7 @@ import (
 )
 
 func runServiceRoutingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), clientset *kubernetes.Clientset) {
+	ensureGatewayAPICRDs(t)
 	t.Run("sts-with-ingress", func(t *testing.T) {
 		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())

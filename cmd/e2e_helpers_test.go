@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -556,4 +557,232 @@ func waitForPodRecreated(t *testing.T, namespace, labelSelector, originalPodName
 	}
 	t.Fatalf("timed out waiting for pod matching %s in namespace %s to be recreated (still %s)",
 		labelSelector, namespace, originalPodName)
+}
+
+// ---------------------------------------------------------------------------
+// Per-scenario cluster dependency installs (see #720).
+//
+// Each topical group installs whatever cluster prerequisites *it* needs (cert-manager, Gateway
+// API CRDs, Cilium/Calico CRDs, VPA, Crossplane) instead of everything being installed
+// unconditionally by `make install-e2e-deps` before any test runs. metrics-server is the one
+// exception left as a Makefile step: it must be available before TestE2EParallel's pool starts
+// (see that function's doc comment), not merely before whichever group happens to use it.
+//
+// A dependency used by more than one topical group (Gateway API CRDs: service-routing and
+// tls-validation) needs to install exactly once across the whole run, not once per group -- each
+// onceInstaller below is a package-level singleton shared by every caller, guarded by
+// sync.Once. The error from that single install attempt is cached and replayed to every caller
+// (including ones after the first) rather than only failing the subtest that happened to trigger
+// the install: sync.Once.Do still marks itself done even if its function calls t.FailNow
+// (testify's require does, via runtime.Goexit), so the install closures below stay t-free and
+// return a plain error instead.
+// ---------------------------------------------------------------------------
+
+type onceInstaller struct {
+	once sync.Once
+	err  error
+}
+
+func (o *onceInstaller) ensure(t *testing.T, install func() error) {
+	t.Helper()
+	o.once.Do(func() {
+		o.err = install()
+	})
+	require.NoError(t, o.err)
+}
+
+var (
+	versionsEnvOnce sync.Once
+	versionsEnv     map[string]string
+	versionsEnvErr  error
+)
+
+// loadVersionsEnv parses hack/versions.env's plain VAR=value lines, the same file
+// hack/generate-screenshots.sh sources, so both stay pinned to the same versions.
+func loadVersionsEnv() (map[string]string, error) {
+	versionsEnvOnce.Do(func() {
+		data, err := os.ReadFile(path.Join("..", "hack", "versions.env"))
+		if err != nil {
+			versionsEnvErr = err
+			return
+		}
+		vals := map[string]string{}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			if k, v, ok := strings.Cut(line, "="); ok {
+				vals[k] = v
+			}
+		}
+		versionsEnv = vals
+	})
+	return versionsEnv, versionsEnvErr
+}
+
+func versionsEnvValue(key string) (string, error) {
+	vals, err := loadVersionsEnv()
+	if err != nil {
+		return "", err
+	}
+	v, ok := vals[key]
+	if !ok {
+		return "", fmt.Errorf("missing %s in hack/versions.env", key)
+	}
+	return v, nil
+}
+
+var gatewayAPICRDsInstaller onceInstaller
+
+// ensureGatewayAPICRDs installs the Gateway API CRDs (experimental channel), needed by both
+// runServiceRoutingSubtests and runTLSValidationSubtests. CRDs only: kubectl-status only reads/
+// matches these objects client-side, it never relies on a real Gateway controller reconciling
+// them. Experimental channel is a superset of standard and adds TCPRoute/UDPRoute/
+// BackendTLSPolicy/ListenerSet, which some e2e scenarios also render. --server-side: the
+// experimental bundle's CRDs (e.g. HTTPRoute) are large enough that client-side apply's
+// kubectl.kubernetes.io/last-applied-configuration annotation trips the 262144-byte annotation
+// limit; server-side apply doesn't need that annotation.
+func ensureGatewayAPICRDs(t *testing.T) {
+	t.Helper()
+	gatewayAPICRDsInstaller.ensure(t, func() error {
+		version, err := versionsEnvValue("GATEWAY_API_VERSION")
+		if err != nil {
+			return err
+		}
+		url := fmt.Sprintf("https://github.com/kubernetes-sigs/gateway-api/releases/download/%s/experimental-install.yaml", version)
+		output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("kubectl apply gateway-api CRDs: %w: %s", err, output)
+		}
+		return nil
+	})
+}
+
+var certManagerInstaller onceInstaller
+
+// ensureCertManager installs cert-manager, needed by runTLSValidationSubtests. Versions are
+// pinned in hack/versions.env (shared with hack/generate-screenshots.sh); bump them there
+// periodically.
+func ensureCertManager(t *testing.T) {
+	t.Helper()
+	certManagerInstaller.ensure(t, func() error {
+		version, err := versionsEnvValue("CERT_MANAGER_VERSION")
+		if err != nil {
+			return err
+		}
+		url := fmt.Sprintf("https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml", version)
+		if output, err := exec.Command("kubectl", "apply", "-f", url).CombinedOutput(); err != nil {
+			return fmt.Errorf("kubectl apply cert-manager.yaml: %w: %s", err, output)
+		}
+		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=300s",
+			"deployment", "--all", "-n", "cert-manager").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("kubectl wait cert-manager deployments: %w: %s", err, output)
+		}
+		return nil
+	})
+}
+
+var ciliumCalicoCRDsInstaller onceInstaller
+
+// ensureCiliumCalicoCRDs installs the CiliumNetworkPolicy/CiliumClusterwideNetworkPolicy and
+// Calico NetworkPolicy/GlobalNetworkPolicy CRDs, needed by runNetworkPolicySubtests.
+// kubectl-status only reads and matches these objects client-side (selector-vs-Pod-labels), it
+// never relies on Cilium/Calico actually enforcing traffic, so the CRDs alone (no Cilium/Calico
+// installed as CNI) are enough to exercise the e2e scenarios -- same "CRDs only" reasoning as
+// cert-manager/Gateway API above. Calico's own NetworkPolicy/GlobalNetworkPolicy are served
+// under crd.projectcalico.org/v1 (the Kubernetes-datastore storage CRDs), not the
+// projectcalico.org/v3 API calicoctl/the Calico API server present -- that's the group
+// kubectl-status's KubeGetCalico*MatchingPod helpers query. --server-side: these CRDs' embedded
+// OpenAPI schemas are large enough to trip the same client-side last-applied-configuration
+// annotation limit as HTTPRoute above.
+func ensureCiliumCalicoCRDs(t *testing.T) {
+	t.Helper()
+	ciliumCalicoCRDsInstaller.ensure(t, func() error {
+		urls := []string{
+			"https://raw.githubusercontent.com/cilium/cilium/v1.19.5/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumnetworkpolicies.yaml",
+			"https://raw.githubusercontent.com/cilium/cilium/v1.19.5/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwidenetworkpolicies.yaml",
+			"https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/crds.yaml",
+		}
+		for _, url := range urls {
+			output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("kubectl apply %s: %w: %s", url, err, output)
+			}
+		}
+		return nil
+	})
+}
+
+var vpaInstaller onceInstaller
+
+// ensureVPA installs VerticalPodAutoscaler, needed by TestE2EDynamicManifests' VPA subtest.
+// Unlike the CRD-only installers above, that scenario exercises it actually acting (the updater
+// evicting/recreating a Pod to apply a recommendation), so its controllers (recommender/updater/
+// admission-controller) need to run for real, not just the CRDs. The upstream project has no
+// plain `kubectl apply` release bundle (its install script generates webhook certs locally), so
+// this uses the cowboysysop community Helm chart instead.
+func ensureVPA(t *testing.T) {
+	t.Helper()
+	vpaInstaller.ensure(t, func() error {
+		if output, err := exec.Command("helm", "repo", "add", "cowboysysop", "https://cowboysysop.github.io/charts/").CombinedOutput(); err != nil {
+			return fmt.Errorf("helm repo add cowboysysop: %w: %s", err, output)
+		}
+		if output, err := exec.Command("helm", "repo", "update", "cowboysysop").CombinedOutput(); err != nil {
+			return fmt.Errorf("helm repo update cowboysysop: %w: %s", err, output)
+		}
+		if output, err := exec.Command("helm", "upgrade", "--install", "vpa", "cowboysysop/vertical-pod-autoscaler",
+			"--version", "11.1.1", "-n", "kube-system", "--wait", "--timeout", "5m").CombinedOutput(); err != nil {
+			return fmt.Errorf("helm upgrade vpa: %w: %s", err, output)
+		}
+		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=120s",
+			"deployment", "-l", "app.kubernetes.io/instance=vpa", "-n", "kube-system").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("kubectl wait vpa deployments: %w: %s", err, output)
+		}
+		return nil
+	})
+}
+
+var crossplaneInstaller onceInstaller
+
+// ensureCrossplane installs Crossplane core plus the two Composition Functions the e2e test
+// Composition needs, required by TestE2EDynamicManifests' Crossplane subtest. That scenario
+// exercises a real XR composing real children (a Composition Function renders them and derives
+// readiness), not just kubectl-status reading static CRDs, so Crossplane needs to actually
+// reconcile -- same "controller must actually run" reasoning as VPA above. No cloud provider is
+// installed: the test Composition composes plain in-cluster Kubernetes resources (ConfigMap/
+// Deployment), which Crossplane v2 supports natively. function-patch-and-transform renders the
+// test Composition's child resources, function-auto-ready derives the XR's readiness from them.
+// Their versions are pinned in the manifest itself (not hack/versions.env) since they're only
+// used here.
+func ensureCrossplane(t *testing.T) {
+	t.Helper()
+	crossplaneInstaller.ensure(t, func() error {
+		version, err := versionsEnvValue("CROSSPLANE_VERSION")
+		if err != nil {
+			return err
+		}
+		if output, err := exec.Command("helm", "repo", "add", "crossplane-stable", "https://charts.crossplane.io/stable").CombinedOutput(); err != nil {
+			return fmt.Errorf("helm repo add crossplane-stable: %w: %s", err, output)
+		}
+		if output, err := exec.Command("helm", "repo", "update", "crossplane-stable").CombinedOutput(); err != nil {
+			return fmt.Errorf("helm repo update crossplane-stable: %w: %s", err, output)
+		}
+		if output, err := exec.Command("helm", "upgrade", "--install", "crossplane", "crossplane-stable/crossplane",
+			"--version", version, "-n", "crossplane-system", "--create-namespace", "--wait", "--timeout", "5m").CombinedOutput(); err != nil {
+			return fmt.Errorf("helm upgrade crossplane: %w: %s", err, output)
+		}
+		functionsManifest := path.Join("..", "tests", "e2e-artifacts", "crossplane-functions.yaml")
+		if output, err := exec.Command("kubectl", "apply", "-f", functionsManifest).CombinedOutput(); err != nil {
+			return fmt.Errorf("kubectl apply %s: %w: %s", functionsManifest, err, output)
+		}
+		output, err := exec.Command("kubectl", "wait", "--for=condition=Healthy", "--timeout=180s",
+			"function.pkg.crossplane.io", "--all").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("kubectl wait crossplane functions: %w: %s", err, output)
+		}
+		return nil
+	})
 }

@@ -59,6 +59,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// alongside the other concurrent subtests -- causing unrelated renders elsewhere to
 		// intermittently report "metrics-server is not available". Running it serially, alongside
 		// the other genuinely cluster-wide-affecting subtest above, avoids that.
+		ensureVPA(t)
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-vpa"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -146,9 +147,10 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("Crossplane XR composes namespaced children and surfaces their health", func(t *testing.T) {
-		// Crossplane core plus the two Composition Functions it needs (installed cluster-wide by
-		// `make install-e2e-deps`) must actually reconcile to produce the XR's composed children,
-		// same "controller must actually run" reasoning as the VPA subtest above.
+		// Crossplane core plus the two Composition Functions it needs must actually reconcile
+		// to produce the XR's composed children, same "controller must actually run" reasoning
+		// as the VPA subtest above.
+		ensureCrossplane(t)
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-crossplane-xr"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),

@@ -123,7 +123,13 @@ e2e-minikube-down:
 
 .PHONY: install-e2e-deps
 install-e2e-deps:
-	# metrics-server is needed by e2e scenarios exercising pod/node metrics rendering.
+	# metrics-server is the one cluster dependency that stays here as a global, upfront install
+	# rather than moving into its topical e2e test group (see cmd/e2e_helpers_test.go's
+	# ensure*(t) functions for cert-manager, Gateway API CRDs, Cilium/Calico CRDs, VPA, and
+	# Crossplane -- #720): pdb-empty-selector-conflict, not itself a metrics test, can render a
+	# spurious "metrics-server is not available" line if the metrics API isn't queryable yet
+	# when TestE2EParallel's parallel pool starts, so metrics availability is an invariant for
+	# the whole pool, not a per-group concern.
 	$(E2E_KUBECONFIG_ENV) minikube addons enable metrics-server $(E2E_PROFILE_FLAG)
 	$(E2E_KUBECONFIG_ENV) kubectl -n kube-system rollout status deployment/metrics-server --timeout=120s
 	# The Deployment/Pod going Ready above can still briefly precede the Service's EndpointSlice
@@ -131,56 +137,6 @@ install-e2e-deps:
 	# pdb-empty-selector-conflict) can otherwise race that gap and render a spurious
 	# "metrics-server is not available" line. Poll the actual data path instead of the rollout.
 	$(E2E_KUBECONFIG_ENV) bash -c 'for ((i=1; i<=60; i++)); do kubectl get --raw /apis/metrics.k8s.io/v1beta1/nodes >/dev/null 2>&1 && exit 0; sleep 2; done; echo "metrics.k8s.io never became queryable" >&2; exit 1'
-	# cert-manager and Gateway API CRDs are needed by e2e TLS-validation test scenarios.
-	# Versions are pinned in hack/versions.env (shared with hack/generate-screenshots.sh);
-	# bump them there periodically.
-	$(E2E_KUBECONFIG_ENV) kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml
-	$(E2E_KUBECONFIG_ENV) kubectl wait --for=condition=Available --timeout=300s deployment --all -n cert-manager
-	# CRDs only (no controller needed): e2e tests only exercise kubectl-status's own
-	# read-only rendering of these objects, they don't need a controller reconciling them.
-	# Experimental channel is a superset of standard and adds TCPRoute/UDPRoute/
-	# BackendTLSPolicy/ListenerSet, which some e2e scenarios also render.
-	# --server-side: the experimental bundle's CRDs (e.g. HTTPRoute) are large enough that
-	# client-side apply's kubectl.kubernetes.io/last-applied-configuration annotation trips
-	# the 262144-byte annotation limit; server-side apply doesn't need that annotation.
-	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/$(GATEWAY_API_VERSION)/experimental-install.yaml
-	# CiliumNetworkPolicy/CiliumClusterwideNetworkPolicy and Calico NetworkPolicy/
-	# GlobalNetworkPolicy CRDs: kubectl-status only reads and matches these objects
-	# client-side (selector-vs-Pod-labels), it never relies on Cilium/Calico actually
-	# enforcing traffic, so the CRDs alone (no Cilium/Calico installed as CNI) are enough
-	# to exercise the e2e scenarios -- same "CRDs only" reasoning as cert-manager/Gateway
-	# API above. Calico's own NetworkPolicy/GlobalNetworkPolicy are served under
-	# crd.projectcalico.org/v1 (the Kubernetes-datastore storage CRDs), not the
-	# projectcalico.org/v3 API calicoctl/the Calico API server present -- that's the group
-	# kubectl-status's KubeGetCalico*MatchingPod helpers query.
-	# --server-side: these CRDs' embedded OpenAPI schemas are large enough to trip the same
-	# client-side last-applied-configuration annotation limit as HTTPRoute above.
-	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://raw.githubusercontent.com/cilium/cilium/v1.19.5/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumnetworkpolicies.yaml
-	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://raw.githubusercontent.com/cilium/cilium/v1.19.5/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwidenetworkpolicies.yaml
-	$(E2E_KUBECONFIG_ENV) kubectl apply --server-side -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/crds.yaml
-	# VerticalPodAutoscaler: unlike the CRD-only entries above, e2e scenarios exercise it
-	# actually acting (the updater evicting/recreating a Pod to apply a recommendation), so its
-	# controllers (recommender/updater/admission-controller) need to run for real, not just the
-	# CRDs. The upstream project has no plain `kubectl apply` release bundle (its install script
-	# generates webhook certs locally), so this uses the cowboysysop community Helm chart instead.
-	helm repo add cowboysysop https://cowboysysop.github.io/charts/
-	helm repo update cowboysysop
-	$(E2E_KUBECONFIG_ENV) helm upgrade --install vpa cowboysysop/vertical-pod-autoscaler --version 11.1.1 -n kube-system --wait --timeout 5m
-	$(E2E_KUBECONFIG_ENV) kubectl wait --for=condition=Available --timeout=120s deployment -l app.kubernetes.io/instance=vpa -n kube-system
-	# Crossplane: e2e scenarios exercise a real XR composing real children (a Composition
-	# Function renders them and derives readiness), not just kubectl-status reading static
-	# CRDs, so the Crossplane core plus the two Composition Functions it needs need to run
-	# for real -- same "controller must actually reconcile" reasoning as VPA above. No cloud
-	# provider is installed: the test Composition composes plain in-cluster Kubernetes
-	# resources (ConfigMap/Deployment), which Crossplane v2 supports natively.
-	helm repo add crossplane-stable https://charts.crossplane.io/stable
-	helm repo update crossplane-stable
-	$(E2E_KUBECONFIG_ENV) helm upgrade --install crossplane crossplane-stable/crossplane --version $(CROSSPLANE_VERSION) -n crossplane-system --create-namespace --wait --timeout 5m
-	# function-patch-and-transform renders the test Composition's child resources,
-	# function-auto-ready derives the XR's readiness from them. Versions pinned in the
-	# manifest itself (not hack/versions.env) since they're only used here.
-	$(E2E_KUBECONFIG_ENV) kubectl apply -f tests/e2e-artifacts/crossplane-functions.yaml
-	$(E2E_KUBECONFIG_ENV) kubectl wait --for=condition=Healthy --timeout=180s function.pkg.crossplane.io --all
 
 .PHONY: test-e2e
 ifeq ($(ASSUME_MINIKUBE_IS_CONFIGURED),true)
