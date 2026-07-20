@@ -2,6 +2,7 @@
 XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
   InProgress: Unready resources: blocked-workload, config
     Reconciling: Creating, Unready resources: blocked-workload, config
+  Composition: status-probe, revision status-probe-[a-z0-9]+, update policy Automatic
   Composed resources:
     Deployment/probe-a-blocked -n e2e-crossplane-xr, created 1m ago by XStatusProbe/probe-a, gen:1 rev:1
       InProgress: Available: 0/1
@@ -37,6 +38,7 @@ XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
         XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
           InProgress: Unready resources: blocked-workload, config
             Reconciling: Creating, Unready resources: blocked-workload, config
+          Composition: status-probe, revision status-probe-[a-z0-9]+, update policy Automatic
           Composed resources:
             Deployment/probe-a-blocked\[e2e-crossplane-xr\] is already printed
             ConfigMap/probe-a-config -n e2e-crossplane-xr, created 1m ago by XStatusProbe/probe-a
@@ -44,6 +46,7 @@ XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
                 XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
                   InProgress: Unready resources: blocked-workload, config
                     Reconciling: Creating, Unready resources: blocked-workload, config
+                  Composition: status-probe, revision status-probe-[a-z0-9]+, update policy Automatic
                   Composed resources:
                     Deployment/probe-a-blocked\[e2e-crossplane-xr\] is already printed
                     ConfigMap/probe-a-config\[e2e-crossplane-xr\] is already printed

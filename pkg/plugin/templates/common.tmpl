@@ -7,8 +7,10 @@
     {{- template "application_details" . }}
     {{- template "replicas_status" . }}
     {{- template "suspended" . }}
+    {{- template "crossplane_composition_ref" . }}
     {{- template "crossplane_composed_resources" . }}
     {{- template "crossplane_managed_resource_drift" . }}
+    {{- template "crossplane_managed_resource_details" . }}
     {{- template "conditions_summary" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
@@ -208,6 +210,33 @@
     {{- end }}
 {{- end -}}
 
+{{- define "crossplane_composition_ref" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* A Crossplane composite resource (XR) or claim records which Composition it's bound to
+           in spec.compositionRef (v1, cluster-scoped XRs and their claims) or
+           spec.crossplane.compositionRef (v2, namespaced XRs). Neither path is set by any other
+           kind of object, so this is safe to invoke unconditionally from DefaultResource. */ -}}
+    {{- $ref := .Spec.compositionRef }}
+    {{- $revisionRef := .Spec.compositionRevisionRef }}
+    {{- $updatePolicy := .Spec.compositionUpdatePolicy }}
+    {{- $crossplane := .Spec.crossplane }}
+    {{- if kindIs "map" $crossplane }}
+        {{- with $crossplane.compositionRef }}{{ $ref = . }}{{ end }}
+        {{- with $crossplane.compositionRevisionRef }}{{ $revisionRef = . }}{{ end }}
+        {{- with $crossplane.compositionUpdatePolicy }}{{ $updatePolicy = . }}{{ end }}
+    {{- end }}
+    {{- $refIsValid := and (kindIs "map" $ref) (kindIs "string" $ref.name) }}
+    {{- $revisionRefIsValid := and (kindIs "map" $revisionRef) (kindIs "string" $revisionRef.name) }}
+    {{- if or $refIsValid $revisionRefIsValid $updatePolicy }}
+        {{- "Composition" | bold | nindent 2 }}:
+        {{- if $refIsValid }} {{ $ref.name | cyan }}{{ end }}
+        {{- if $revisionRefIsValid }}, revision {{ $revisionRef.name | cyan }}{{ end }}
+        {{- with $updatePolicy }}, update policy {{ . | redBoldIf (eq . "Manual") }}
+            {{- if eq . "Manual" }} (pinned; won't move to newer Composition revisions automatically){{ end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
 {{- define "crossplane_composed_resources" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* A Crossplane composite resource (XR) lists the resources it composes in
@@ -288,6 +317,50 @@
                         {{- printf "Observed-only fields: %d (hidden; provider defaults/computed state)" . | nindent 4 }}
                     {{- end }}
                 {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "crossplane_managed_resource_details" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Eligibility mirrors crossplane_managed_resource_drift: a non-empty spec.forProvider is
+           the signal that this is a Crossplane managed resource. Surfaces the operationally
+           high-signal external-name/composition-resource-name/external-create annotations and the
+           providerConfigRef/managementPolicies/initProvider spec fields, all only when present so
+           non-Crossplane resources and vanilla managed resources without these fields set stay
+           quiet. */ -}}
+    {{- $forProvider := .Spec.forProvider }}
+    {{- if and (kindIs "map" $forProvider) $forProvider }}
+        {{- $annotations := .Annotations }}
+        {{- with get $annotations "crossplane.io/external-name" }}
+            {{- "External name" | bold | nindent 2 }}: {{ . | cyan }}
+        {{- end }}
+        {{- with get $annotations "crossplane.io/composition-resource-name" }}
+            {{- "Composition resource name" | bold | nindent 2 }}: {{ . | cyan }}
+        {{- end }}
+        {{- $pending := get $annotations "crossplane.io/external-create-pending" }}
+        {{- $succeeded := get $annotations "crossplane.io/external-create-succeeded" }}
+        {{- if $pending }}
+            {{- if not $succeeded }}
+                {{- "External create" | red | bold | nindent 2 }}: pending since {{ $pending | colorAgo }}{{ agoSuffix }}, {{ "external-create-succeeded not set yet" | yellow }}
+            {{- else }}
+                {{- $pendingAt := $pending | toDate "2006-01-02T15:04:05Z" }}
+                {{- $succeededAt := $succeeded | toDate "2006-01-02T15:04:05Z" }}
+                {{- "External create" | bold | nindent 2 }}: succeeded, took {{ ($succeededAt.Sub $pendingAt) | colorDuration }}
+            {{- end }}
+        {{- end }}
+        {{- with .Spec.providerConfigRef }}
+            {{- "ProviderConfig" | bold | nindent 2 }}: {{ .kind | default "ProviderConfig" | cyan }}/{{ .name | cyan }}
+        {{- end }}
+        {{- $policies := .Spec.managementPolicies }}
+        {{- if kindIs "slice" $policies }}
+            {{- $isFullControl := and (eq (len $policies) 1) (eq (index $policies 0) "*") }}
+            {{- "Management policies" | bold | nindent 2 }}: {{ if $isFullControl }}{{ "* (full control)" | cyan }}{{ else }}{{ $policies | join ", " | yellow }}{{ end }}
+        {{- end }}
+        {{- with .Spec.initProvider }}
+            {{- if kindIs "map" . }}
+                {{- "initProvider" | bold | nindent 2 }}: {{ keys . | sortAlpha | join ", " | cyan }} (applied only at creation time)
             {{- end }}
         {{- end }}
     {{- end }}

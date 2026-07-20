@@ -1,0 +1,12 @@
+
+Bucket/checkout-bucket, created 1m ago, gen:1
+  Current: Resource is Ready
+  Drift: none across 1 configured fields
+  External name: my-bucket-9f3a1c
+  Composition resource name: bucket
+  External create: succeeded, took 1m
+  ProviderConfig: ProviderConfig/aws-provider
+  Management policies: Observe, LateInitialize
+  initProvider: tags (applied only at creation time)
+  Synced ReconcileSuccess for 1m
+  Ready Available for 1m

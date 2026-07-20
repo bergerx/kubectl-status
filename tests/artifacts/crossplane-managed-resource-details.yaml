@@ -1,0 +1,40 @@
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  annotations:
+    crossplane.io/external-name: my-bucket-9f3a1c
+    crossplane.io/composition-resource-name: bucket
+    crossplane.io/external-create-pending: "2026-05-01T09:00:00Z"
+    crossplane.io/external-create-succeeded: "2026-05-01T09:02:15Z"
+  creationTimestamp: "2026-05-01T09:00:00Z"
+  finalizers:
+  - finalizer.managedresource.crossplane.io
+  generation: 1
+  name: checkout-bucket
+  resourceVersion: "882210"
+  uid: 3f6d9e2a-9d0e-4a1b-9d3f-8e6a1c2b4d5e
+spec:
+  forProvider:
+    region: us-east-1
+  providerConfigRef:
+    kind: ProviderConfig
+    name: aws-provider
+  managementPolicies:
+  - Observe
+  - LateInitialize
+  initProvider:
+    tags:
+      team: platform
+status:
+  observedGeneration: 1
+  conditions:
+  - lastTransitionTime: "2026-05-01T09:02:15Z"
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2026-05-01T09:02:15Z"
+    reason: Available
+    status: "True"
+    type: Ready
+  atProvider:
+    region: us-east-1
