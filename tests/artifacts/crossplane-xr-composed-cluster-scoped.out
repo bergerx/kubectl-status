@@ -1,0 +1,10 @@
+
+XStatusProbe/probe-a, created 1m ago, gen:3
+  InProgress: Unready resources: blocked-workload, config
+    Reconciling: Creating, Unready resources: blocked-workload, config
+  Composed resources:
+    Deployment/probe-a-blocked
+    ConfigMap/probe-a-config
+  Synced ReconcileSuccess for 1m
+  Ready Creating, Unready resources: blocked-workload, config for 1m
+  Responsive WatchCircuitClosed for 1m
