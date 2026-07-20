@@ -1,0 +1,10 @@
+
+NodeClaim/default-fghij, created 1m ago by NodePool/default, gen:1
+  InProgress: NodeClaim is not initialized
+    Reconciling: NodeClaimNotInitialized, NodeClaim is not initialized
+  NodeClass: EC2NodeClass/default
+  Capacity: (spot)
+  Launched LaunchFailed, InsufficientInstanceCapacity: We currently do not have sufficient m5.large capacity in the Availability Zone you requested for 1m
+  Registered AwaitingLaunch for 1m
+  Initialized AwaitingRegistration for 1m
+  Ready NodeClaimNotInitialized, NodeClaim is not initialized for 1m

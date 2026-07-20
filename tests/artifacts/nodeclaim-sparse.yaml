@@ -1,0 +1,13 @@
+apiVersion: karpenter.sh/v1
+kind: NodeClaim
+metadata:
+  name: pending-abcde
+  generation: 1
+  creationTimestamp: "2026-07-19T20:00:00Z"
+  uid: 77777777-7777-7777-7777-777777777777
+  resourceVersion: "970"
+spec:
+  nodeClassRef:
+    group: karpenter.k8s.aws
+    kind: EC2NodeClass
+    name: default

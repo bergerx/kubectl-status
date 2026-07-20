@@ -1,0 +1,10 @@
+
+NodeClaim/default-klmno, created 1m ago by NodePool/default, gen:1
+  InProgress: NodeClaim is not initialized
+    Reconciling: NodeClaimNotInitialized, NodeClaim is not initialized
+  NodeClass: EC2NodeClass/default
+  Capacity: m5.large (on-demand) in us-east-1b
+  Launched Launched for 1m
+  Registered NodeNotFound, node object not found for provider ID aws:///us-east-1b/i-0fedcba9876543210 after 15m0s for 1m
+  Initialized AwaitingRegistration for 1m
+  Ready NodeClaimNotInitialized, NodeClaim is not initialized for 1m

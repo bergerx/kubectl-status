@@ -1,0 +1,65 @@
+{{- define "NodePool" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: karpenter.sh/v1, Kind=NodePool */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.template.spec.nodeClassRef }}
+        {{- "NodeClass" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" .kind "name" .name) }}
+    {{- end }}
+    {{- /* Only render requirements that constrain scheduling in ways operators typically care
+           about when debugging "why won't this pool provision compatible capacity" -- template
+           labels/annotations, taints and disruption settings are configuration, not capacity
+           envelope, so they're intentionally left out. */ -}}
+    {{- $relevantKeys := list "node.kubernetes.io/instance-type" "karpenter.k8s.aws/instance-category" "karpenter.k8s.aws/instance-family" "topology.kubernetes.io/zone" "kubernetes.io/arch" "kubernetes.io/os" "karpenter.sh/capacity-type" }}
+    {{- $requirements := list }}
+    {{- range .Spec.template.spec.requirements }}
+        {{- if has .key $relevantKeys }}{{ $requirements = append $requirements . }}{{ end }}
+    {{- end }}
+    {{- with $requirements }}
+        {{- "Requirements" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- $line := "" }}
+            {{- if eq .operator "Exists" }}
+                {{- $line = printf "%s exists" .key }}
+            {{- else if eq .operator "DoesNotExist" }}
+                {{- $line = printf "%s does not exist" .key }}
+            {{- else }}
+                {{- $line = printf "%s %s [%s]" .key .operator (.values | default list | join ", ") }}
+            {{- end }}
+            {{- with .minValues }}{{ $line = printf "%s (min %d values)" $line . }}{{ end }}
+            {{- $line | cyan | nindent 4 }}
+        {{- end }}
+    {{- end }}
+    {{- $spec := .Spec | default dict }}
+    {{- if hasKey $spec "replicas" }}
+        {{- "Replicas" | bold | nindent 2 }}: {{ $spec.replicas | toString | cyan }}
+    {{- else if hasKey (.Status | default dict) "nodes" }}
+        {{- "Nodes" | bold | nindent 2 }}: {{ .Status.nodes | toString | cyan }}
+    {{- end }}
+    {{- $limits := $spec.limits }}
+    {{- $resources := (.Status | default dict).resources }}
+    {{- if or (and (kindIs "map" $limits) $limits) (and (kindIs "map" $resources) $resources) }}
+        {{- $keys := list }}
+        {{- range keys ($limits | default dict) }}{{ if not (has . $keys) }}{{ $keys = append $keys . }}{{ end }}{{ end }}
+        {{- range keys ($resources | default dict) }}{{ if not (has . $keys) }}{{ $keys = append $keys . }}{{ end }}{{ end }}
+        {{- "Resources" | bold | nindent 2 }}: (current/limit)
+        {{- range ($keys | sortAlpha) }}
+            {{- $key := . }}
+            {{- $isBytes := or (hasSuffix "memory" $key) (hasSuffix "storage" $key) }}
+            {{- $usedRaw := index ($resources | default dict) $key }}
+            {{- $limitRaw := index ($limits | default dict) $key }}
+            {{- $usedStr := "n/a" }}
+            {{- with $usedRaw }}{{ $usedStr = . | toString }}{{ if $isBytes }}{{ $usedStr = $usedStr | quantityToFloat64 | humanizeSI "B" }}{{ end }}{{ end }}
+            {{- $limitStr := "unlimited" }}
+            {{- with $limitRaw }}{{ $limitStr = . | toString }}{{ if $isBytes }}{{ $limitStr = $limitStr | quantityToFloat64 | humanizeSI "B" }}{{ end }}{{ end }}
+            {{- printf "%s: %s/%s" $key $usedStr $limitStr | cyan | nindent 4 }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

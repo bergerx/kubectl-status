@@ -1,0 +1,31 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: static-pool
+  generation: 1
+  creationTimestamp: "2026-07-10T10:00:00Z"
+  uid: 33333333-3333-3333-3333-333333333333
+  resourceVersion: "700"
+spec:
+  replicas: 0
+  template:
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      requirements:
+        - key: kubernetes.io/os
+          operator: In
+          values:
+            - linux
+  limits:
+    nodes: "5"
+status:
+  nodes: 0
+  conditions:
+    - type: Ready
+      status: "False"
+      reason: NodeClassNotReady
+      message: "EC2NodeClass default is not ready"
+      lastTransitionTime: "2026-07-19T18:00:00Z"
