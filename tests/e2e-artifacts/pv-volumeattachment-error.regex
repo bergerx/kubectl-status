@@ -1,0 +1,8 @@
+\A
+PersistentVolume/\S+, created 1m ago Bound
+  Current: Resource is current
+  PV is Bound, since 1m ago managed by StorageClass/standard provisioned by \S+ with ReadWriteOnce mode, reclaim: Delete
+  Created for PersistentVolumeClaim/e2e-attach-error-pvc -n e2e-volumeattachment
+  VolumeAttachment: VolumeAttachment/e2e-fake-attach-error, node Node/\S+, not attached
+    Attach error: rpc error: code = Internal desc = fake attach failure for e2e test
+\z

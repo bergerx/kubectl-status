@@ -44,6 +44,7 @@
         {{- with .shareName }}, share name is {{ . | bold }}{{end}}
         {{- with .readOnly }}, in {{ "RO" | bold | yellow }} mode{{ end }}
     {{- end }}
+    {{- $.Include "volumeattachment_diagnosis" (dict "ctx" $ "pvName" $.Name) }}
     {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}

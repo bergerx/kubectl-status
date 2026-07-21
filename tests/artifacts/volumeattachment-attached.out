@@ -1,0 +1,4 @@
+
+VolumeAttachment/csi-1a2b3c4d5e6f7890, created 1m ago
+  Current: Resource is current
+  Attacher: ebs.csi.aws.com, volume PersistentVolume/pvc-23498768-c86b-4102-a660-139ed9044bc1, node Node/ip-10-0-0-1.ec2.internal, attached

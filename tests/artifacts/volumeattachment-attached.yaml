@@ -1,0 +1,14 @@
+apiVersion: storage.k8s.io/v1
+kind: VolumeAttachment
+metadata:
+  creationTimestamp: "2026-07-10T14:52:59Z"
+  name: csi-1a2b3c4d5e6f7890
+  resourceVersion: "317051"
+  uid: b2c3d4e5-f6a7-8901-bcde-f12345678901
+spec:
+  attacher: ebs.csi.aws.com
+  nodeName: ip-10-0-0-1.ec2.internal
+  source:
+    persistentVolumeName: pvc-23498768-c86b-4102-a660-139ed9044bc1
+status:
+  attached: true

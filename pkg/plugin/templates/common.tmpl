@@ -100,6 +100,59 @@
     {{- end }}
 {{- end -}}
 
+{{- define "volumeattachment_diagnosis" }}
+    {{- /* Expects dict "ctx" (RenderableObject, used for KubeGet/Include/Config/
+           LiveQueriesDisabled) "pvName" (the PersistentVolume's own name -- VolumeAttachment is
+           cluster-scoped and keyed by spec.source.persistentVolumeName, not by claim, so this is
+           only callable with a PV name in hand; PersistentVolumeClaim.tmpl resolves its bound PV
+           first rather than duplicating this lookup). VolumeAttachment has zero references
+           anywhere else in the templates -- without this, a PVC/PV pair can show fully Bound
+           while the actual CSI attach/detach is stuck, erroring, or left over on a stale node,
+           and nothing on the Pod or PVC/PV views surfaces that. Silent when unfetchable
+           (--shallow/--local) or when every matching attachment looks healthy: a nominal
+           "attached: true" record is not worth a line by default. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $pvName := .pvName }}
+    {{- if not $ctx.LiveQueriesDisabled }}
+        {{- $matching := list }}
+        {{- range $ctx.KubeGet "" "VolumeAttachment" }}
+            {{- if eq (.Spec.source.persistentVolumeName | default "") $pvName }}
+                {{- $matching = append $matching . }}
+            {{- end }}
+        {{- end }}
+        {{- $attachedCount := 0 }}
+        {{- range $matching }}
+            {{- if and .Status.attached (not .Metadata.deletionTimestamp) }}{{ $attachedCount = add $attachedCount 1 }}{{ end }}
+        {{- end }}
+        {{- range $matching }}
+            {{- $va := . }}
+            {{- $hasProblem := or $va.Metadata.deletionTimestamp (not $va.Status.attached) $va.Status.attachError $va.Status.detachError (gt $attachedCount 1) }}
+            {{- if $hasProblem }}
+                {{- "VolumeAttachment" | bold | nindent 2 }}: {{ $ctx.Include "resource_ref" (dict "kind" "VolumeAttachment" "name" $va.Name) }}, node {{ $ctx.Include "resource_ref" (dict "kind" "Node" "name" $va.Spec.nodeName) }}
+                {{- if $va.Metadata.deletionTimestamp }}
+                    {{- ", " }}{{ "detaching" | yellow | bold }} (deletion in progress)
+                {{- else if $va.Status.attached }}
+                    {{- ", " }}{{ "attached" | green }}
+                {{- else }}
+                    {{- ", " }}{{ "not attached" | red | bold }}
+                {{- end }}
+                {{- if gt $attachedCount 1 }}
+                    {{- ", " }}{{ "conflict" | red | bold }}: volume is attached on more than one node at once
+                {{- end }}
+                {{- with $va.Status.attachError }}
+                    {{- "Attach error" | red | bold | nindent 4 }}: {{ .message }}
+                {{- end }}
+                {{- with $va.Status.detachError }}
+                    {{- "Detach error" | red | bold | nindent 4 }}: {{ .message }}
+                {{- end }}
+                {{- if $ctx.Config.GetBool "deep" }}
+                    {{- $ctx.Include "VolumeAttachment" $va | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
 {{- define "certificate_validity_line" }}
     {{- /* Expects dict "cert" (a parsed-certificate entry from parseTLSSecretCertificate /
            certificatesInSecret / certificatesInConfigMap / certificateInCSR -- all of which set
