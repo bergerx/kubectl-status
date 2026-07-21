@@ -20,4 +20,4 @@ dist/
 .idea/
 
 CLAUDE.md
-.claude/
+.claude/settings.local.json
