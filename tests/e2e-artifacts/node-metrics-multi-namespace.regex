@@ -19,11 +19,11 @@ Node/[a-z0-9.-]+, created \d+[a-z]+ ago
     eviction-hard: nodefs.available<\d+% nodefs.inodesFree<\d+% imagefs.available<\d+%
     container log rotation: [\d.]+[A-Za-z]+ cap, \d+ files, \d+ worker, \S+ monitor
   kubelet-api/stats/summary:
-    node overall: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+, processes \S+/\S+ \(rlimit\)
+    node overall: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+, processes \S+/\S+ \(rlimit\)
       network: rx/tx [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, rx/tx errors \d+/\d+
       rootfs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free; \S+/\S+ inode, \S+ inode still free
       imagefs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free; \S+/\S+ inode, \S+ inode still free
-    (?:pods: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+
-    kubelet: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+|kubelet: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+
-    pods: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+, pageFaults/major \S+/\S+)
+    (?:pods: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+
+    kubelet: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+|kubelet: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+
+    pods: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+)
 \z
