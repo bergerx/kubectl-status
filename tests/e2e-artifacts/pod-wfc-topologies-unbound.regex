@@ -1,0 +1,12 @@
+\A
+Pod/e2e-pod-wfc-topologies -n e2e-pv-zone-wfc, created 1m ago, gen:1 Pending BestEffort
+  Failed: Pod could not be scheduled
+    Stalled: PodUnschedulable, Pod could not be scheduled
+  Managed by e2e-pod-wfc-topologies application
+  Not PodScheduled -> Not Initialized -> Not ContainersReady -> Not Ready
+    PodScheduled Unschedulable, 0/1 nodes are available: 1 node\(s\) didn't match Pod's node affinity/selector\. no new claims to deallocate, preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling\. for 1m
+  node selector: e2e-no-such-label=true
+  Standalone POD\.
+  Volumes: data \(PersistentVolumeClaim/e2e-wfc-topologies-pvc, asked 1Gi\)
+  PV locality: PersistentVolumeClaim/e2e-wfc-topologies-pvc isn't zone-pinned yet \(WaitForFirstConsumer via StorageClass/e2e-wfc-topologies\), but its provisioning topology may still constrain candidate nodes
+\z

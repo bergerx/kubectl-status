@@ -1,0 +1,7 @@
+\A
+PersistentVolume/e2e-pv-zone-restricted, created 1m ago Bound
+  Current: Resource is current
+  PV is Bound, since 1m ago with ReadWriteOnce mode, reclaim: Retain
+  Node affinity: restricts placement to topology\.kubernetes\.io/zone in \(e2e-no-such-zone\)
+  Created for PersistentVolumeClaim/e2e-pvc-zone-restricted -n e2e-pv-zone
+\z

@@ -1,0 +1,5 @@
+
+PersistentVolume/pv-nodeaffinity-zone, created 1m ago Available
+  Current: Resource is current
+  PV is Available managed by StorageClass/fast-ebs with ReadWriteOnce mode, reclaim: Delete
+  Node affinity: restricts placement to topology.kubernetes.io/zone in (us-east-1a,us-east-1b)

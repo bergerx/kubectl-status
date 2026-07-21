@@ -74,23 +74,33 @@
            provisioning/binding actually depends on this class, e.g. a still-Pending PVC, so a
            missing class is worth flagging rather than silently ignored; PV.tmpl leaves this
            unset since a legacy PV can be valid without one). Fetches the StorageClass object to
-           surface the provisioner (when not already on screen) and volumeBindingMode/
+           surface the provisioner (when not already on screen), volumeBindingMode/
            allowVolumeExpansion, which explain stuck/delayed binding and scheduling-before-
-           binding behavior. Silent when unfetchable (--shallow/--local) or when everything it
-           would show is either unremarkable (Immediate binding, no expansion) or already on
-           screen. */ -}}
+           binding behavior, and allowedTopologies, which explains where WaitForFirstConsumer
+           dynamic provisioning is permitted to place the volume. Silent when unfetchable
+           (--shallow/--local) or when everything it would show is either unremarkable (Immediate
+           binding, no expansion, no allowedTopologies) or already on screen. */ -}}
     {{- $ctx := .ctx }}
     {{- $sc := $ctx.KubeGetFirst "" "StorageClass" .name }}
     {{- if $sc.Object }}
         {{- $bindingMode := $sc.Object.volumeBindingMode | default "Immediate" }}
         {{- $expandable := $sc.Object.allowVolumeExpansion }}
+        {{- $topologies := $sc.Object.allowedTopologies }}
         {{- $showProvisioner := not .provisionerShown }}
-        {{- if or $showProvisioner (ne $bindingMode "Immediate") $expandable }}
+        {{- if or $showProvisioner (ne $bindingMode "Immediate") $expandable $topologies }}
             {{- "StorageClass" | bold | nindent 2 }}:
             {{- $needsComma := false }}
             {{- if $showProvisioner }} {{ $sc.Object.provisioner | cyan }}{{ $needsComma = true }}{{ end }}
             {{- if ne $bindingMode "Immediate" }}{{ if $needsComma }},{{ end }} volumeBindingMode: {{ $bindingMode | colorKeyword }}{{ $needsComma = true }}{{ end }}
             {{- if $expandable }}{{ if $needsComma }},{{ end }} allows volume expansion{{ end }}
+        {{- end }}
+        {{- with $topologies }}
+            {{- "Allowed topologies" | bold | nindent 4 }}
+            {{- range . }}
+                {{- range .matchLabelExpressions }}
+                    {{- "" | nindent 6 }}{{ .key }} in [{{ .values | join ", " }}]
+                {{- end }}
+            {{- end }}
         {{- end }}
         {{- if $ctx.Config.GetBool "deep" }}
             {{- $ctx.Include "StorageClass" $sc | nindent 4 }}

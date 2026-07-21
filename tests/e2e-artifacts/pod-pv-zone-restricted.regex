@@ -1,0 +1,11 @@
+\A
+Pod/e2e-pod-zone-restricted -n e2e-pv-zone, created 1m ago, gen:1 Pending BestEffort
+  Failed: Pod could not be scheduled
+    Stalled: PodUnschedulable, Pod could not be scheduled
+  Managed by e2e-pod-zone-restricted application
+  Not PodScheduled -> Not Initialized -> Not ContainersReady -> Not Ready
+    PodScheduled Unschedulable, 0/1 nodes are available: 1 node\(s\) didn't match PersistentVolume's node affinity\. no new claims to deallocate, preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling\. for 1m
+  Standalone POD\.
+  Volumes: data \(PersistentVolumeClaim/e2e-pvc-zone-restricted, asked 1Gi\)
+  PV node affinity: PersistentVolume/e2e-pv-zone-restricted \(backing PersistentVolumeClaim/e2e-pvc-zone-restricted\) restricts placement to topology\.kubernetes\.io/zone in \(e2e-no-such-zone\)
+\z

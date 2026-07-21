@@ -50,6 +50,7 @@
     {{- template "pod_runtimeclass_overhead" . }}
     {{- template "pod_ephemeral_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
     {{- template "pod_volumes" . }}
+    {{- template "pod_storage_locality" . }}
     {{- template "matching_services" (dict "ctx" . "namespace" .Namespace "svcs" (.KubeGetServicesMatchingPod .Namespace .Name)) }}
     {{- template "matching_pdbs" (dict "ctx" . "namespace" .Namespace "labels" .Labels) }}
     {{- template "matching_network_policies" (dict "ctx" . "namespace" .Namespace "labels" .Labels) }}
@@ -485,6 +486,55 @@
         {{- else }}
             {{- "Volumes:" | nindent 2 }}
             {{- range $entries }}{{ . | nindent 4 }}{{ end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "pod_storage_locality" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* For each persistentVolumeClaim volume, resolves PVC -> (if bound) PV -> its
+           nodeAffinity, and the PVC's storageClassName -> StorageClass volumeBindingMode/
+           allowedTopologies -- cross-checking zone/node locality the PV or its class may impose
+           against this Pod's own placement. Renders facts side by side, same restraint already
+           used by rwop_holder_diagnosis/volumeattachment_diagnosis: this never asserts a
+           conflict with the Pod's own constraints (shown by pod_placement_constraints) or claims
+           the scheduler's PodScheduled message (shown by pod_conditions_summary) is explained by
+           it -- multiple predicates can be failing at once. An unbound claim against a
+           WaitForFirstConsumer class with allowedTopologies is worded as "not yet zone-pinned",
+           never as an unconditional zone claim, since dynamic provisioning hasn't run yet. Gated
+           on PodScheduled=False only, mirroring pod_placement_constraints -- a healthy/scheduled
+           Pod's --deep render already gets the same PV/StorageClass facts inline via
+           pod_volumes's deep branch and storageclass_summary's own deep inline, so repeating them
+           here would just duplicate that. Needs live PVC/PV/StorageClass fetches, so
+           --shallow/--local render nothing here. */ -}}
+    {{- $podScheduledCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
+    {{- if not (isStatusConditionHealthy $podScheduledCondition) }}
+        {{- range $.Spec.volumes }}
+            {{- if hasKey . "persistentVolumeClaim" }}
+                {{- $claimName := .persistentVolumeClaim.claimName }}
+                {{- $pvc := $.KubeGetFirst $.Namespace "PersistentVolumeClaim" $claimName }}
+                {{- if $pvc.Object }}
+                    {{- $pvcSpec := $pvc.Spec | default dict }}
+                    {{- if $pvcSpec.volumeName }}
+                        {{- $pv := $.KubeGetFirst "" "PersistentVolume" $pvcSpec.volumeName }}
+                        {{- if $pv.Object }}
+                            {{- $nodeAffinity := $pv.Spec.nodeAffinity | default dict }}
+                            {{- $terms := ($nodeAffinity.required | default dict).nodeSelectorTerms | default list }}
+                            {{- if $terms }}
+                                {{- "PV node affinity:" | bold | nindent 2 }} {{ $.Include "resource_ref" (dict "kind" "PersistentVolume" "name" $pv.Name) }} (backing {{ $.Include "resource_ref" (dict "kind" "PersistentVolumeClaim" "name" $claimName "namespace" $.Namespace "callerNamespace" $.Namespace) }}) restricts placement to {{ formatNodeSelectorTerms $terms | cyan }}
+                            {{- end }}
+                        {{- end }}
+                    {{- else if $pvcSpec.storageClassName }}
+                        {{- $sc := $.KubeGetFirst "" "StorageClass" $pvcSpec.storageClassName }}
+                        {{- if $sc.Object }}
+                            {{- $bindingMode := $sc.Object.volumeBindingMode | default "Immediate" }}
+                            {{- if and (eq $bindingMode "WaitForFirstConsumer") $sc.Object.allowedTopologies }}
+                                {{- "PV locality:" | yellow | nindent 2 }} {{ $.Include "resource_ref" (dict "kind" "PersistentVolumeClaim" "name" $claimName "namespace" $.Namespace "callerNamespace" $.Namespace) }} isn't zone-pinned yet ({{ "WaitForFirstConsumer" | colorKeyword }} via {{ $.Include "resource_ref" (dict "kind" "StorageClass" "name" $pvcSpec.storageClassName) }}), but its provisioning topology may still constrain candidate nodes
+                            {{- end }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
         {{- end }}
     {{- end }}
 {{- end }}
