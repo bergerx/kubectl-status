@@ -225,6 +225,17 @@ func TestE2EDynamicManifests(t *testing.T) {
 			Provisioner:          provisioner,
 			VolumeBindingMode:    &bindingMode,
 			AllowVolumeExpansion: &allowExpansion,
+			// Issue #738: this is the only e2e path that renders storageclass_summary (used by
+			// PersistentVolumeClaim.tmpl below) against a live class, so allowedTopologies is
+			// added here rather than to a separate StorageClass -- a dedicated fixture would only
+			// exercise the already-covered standalone StorageClass.tmpl render, not this compact
+			// partial's new branch.
+			AllowedTopologies: []corev1.TopologySelectorTerm{{
+				MatchLabelExpressions: []corev1.TopologySelectorLabelRequirement{{
+					Key:    "topology.kubernetes.io/zone",
+					Values: []string{"e2e-zone-a", "e2e-zone-b"},
+				}},
+			}},
 		}, metav1.CreateOptions{})
 		require.NoError(t, err)
 		t.Cleanup(func() {
@@ -643,6 +654,194 @@ func TestE2EDynamicManifests(t *testing.T) {
 		cmdTest{
 			args:            []string{"volumesnapshotcontent/" + vscName, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/volumesnapshotcontent-bound-deep.regex",
+		}.assert(t, nil, opts...)
+	})
+	t.Run("Pod surfaces a bound PV's zone-restricting nodeAffinity when it can't be scheduled", func(t *testing.T) {
+		// Issue #738: pod_storage_locality resolves a Pod's PVC-backed volume to its bound PV and
+		// surfaces the PV's spec.nodeAffinity when the Pod itself can't be scheduled -- a fact
+		// PersistentVolume.tmpl, StorageClass.tmpl, and Pod.tmpl never connected before. There's
+		// no live cluster mechanism that reliably produces a real zone-restricted CSI PV on
+		// minikube (its hostpath storage-provisioner isn't zone-aware), so -- same "create
+		// directly against the API" trick the VolumeAttachment/RWOP-conflict subtests above use
+		// -- we hand-craft a PV with a nodeAffinity requirement no real minikube Node label
+		// satisfies, and a PVC statically bound to it via spec.volumeName (bypassing dynamic
+		// provisioning). The kube-scheduler's VolumeBinding plugin still evaluates a bound PVC's
+		// PV nodeAffinity against candidate Nodes for real, so the consuming Pod below stays
+		// genuinely Pending -- not a simulated state.
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-pv-zone"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		pvName := "e2e-pv-zone-restricted"
+		_, err = clientset.CoreV1().PersistentVolumes().Create(context.TODO(), &corev1.PersistentVolume{
+			ObjectMeta: metav1.ObjectMeta{Name: pvName},
+			Spec: corev1.PersistentVolumeSpec{
+				Capacity:                      corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				AccessModes:                   []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				PersistentVolumeReclaimPolicy: corev1.PersistentVolumeReclaimRetain,
+				PersistentVolumeSource: corev1.PersistentVolumeSource{
+					HostPath: &corev1.HostPathVolumeSource{Path: "/tmp/e2e-pv-zone-restricted"},
+				},
+				NodeAffinity: &corev1.VolumeNodeAffinity{
+					Required: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+							MatchExpressions: []corev1.NodeSelectorRequirement{{
+								Key:      "topology.kubernetes.io/zone",
+								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{"e2e-no-such-zone"},
+							}},
+						}},
+					},
+				},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().PersistentVolumes().Delete(context.TODO(), pvName, metav1.DeleteOptions{})
+		})
+
+		// An explicit "" (not nil) opts this PVC out of the default-StorageClass admission
+		// controller, which would otherwise stamp the cluster's default class onto it and make
+		// static binding to our classless PV fail on a class mismatch.
+		noClass := ""
+		pvcName := "e2e-pvc-zone-restricted"
+		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+				VolumeName:       pvName,
+				StorageClassName: &noClass,
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		waitForInNamespace(t, "pvc/"+pvcName, "jsonpath={.status.phase}=Bound", ns)
+
+		podName := "e2e-pod-zone-restricted"
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: podName, Labels: map[string]string{"app": podName}},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name: "main", Image: "busybox", Command: []string{"sleep", "infinity"},
+					VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data"}},
+				}},
+				Volumes: []corev1.Volume{{
+					Name:         "data",
+					VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}},
+				}},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Pods(ns).Delete(context.TODO(), podName, metav1.DeleteOptions{})
+		})
+		waitForInNamespace(t, "pod/"+podName,
+			`jsonpath={.status.conditions[?(@.type=="PodScheduled")].status}=False`, ns)
+		// Fixture pins kstatus's own summary line, which only reports Unschedulable as Failed
+		// once the Pod is past its 15s ScheduleWindow -- same wait the Crossplane XR subtest
+		// above uses for the same reason.
+		waitForPodScheduleWindow(t, ns, "app="+podName)
+
+		cmdTest{
+			args:            []string{"pod/" + podName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-pv-zone-restricted.regex",
+		}.assert(t, nil, opts...)
+
+		cmdTest{
+			args:            []string{"pv/" + pvName, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pv-zone-restricted-standalone.regex",
+		}.assert(t, nil, opts...)
+	})
+	t.Run("Pod hedges on an unbound WaitForFirstConsumer PVC's allowedTopologies", func(t *testing.T) {
+		// Issue #738: an unbound claim against a WaitForFirstConsumer class with
+		// allowedTopologies has no PV yet to cross-check, so pod_storage_locality must hedge
+		// ("isn't zone-pinned yet ... may still constrain") instead of asserting a zone. Reuses
+		// the same custom StorageClass pattern as the "PersistentVolumeClaim fetches its
+		// StorageClass" subtest above, adding allowedTopologies to it.
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-pv-zone-wfc"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		storageClasses, err := clientset.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
+		require.NoError(t, err)
+		require.NotEmpty(t, storageClasses.Items, "expected minikube's default storage-provisioner addon to have registered a StorageClass")
+		provisioner := storageClasses.Items[0].Provisioner
+
+		scName := "e2e-wfc-topologies"
+		bindingMode := storagev1.VolumeBindingWaitForFirstConsumer
+		_, err = clientset.StorageV1().StorageClasses().Create(context.TODO(), &storagev1.StorageClass{
+			ObjectMeta:        metav1.ObjectMeta{Name: scName},
+			Provisioner:       provisioner,
+			VolumeBindingMode: &bindingMode,
+			AllowedTopologies: []corev1.TopologySelectorTerm{{
+				MatchLabelExpressions: []corev1.TopologySelectorLabelRequirement{{
+					Key:    "topology.kubernetes.io/zone",
+					Values: []string{"e2e-zone-a", "e2e-zone-b"},
+				}},
+			}},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.StorageV1().StorageClasses().Delete(context.TODO(), scName, metav1.DeleteOptions{})
+		})
+
+		pvcName := "e2e-wfc-topologies-pvc"
+		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				StorageClassName: &scName,
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		podName := "e2e-pod-wfc-topologies"
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: podName, Labels: map[string]string{"app": podName}},
+			Spec: corev1.PodSpec{
+				// An unsatisfiable nodeSelector unrelated to storage guarantees this Pod's own
+				// PodScheduled=False deterministically, without racing whether minikube's
+				// topology-unaware hostpath provisioner would otherwise happily bind the
+				// WaitForFirstConsumer claim once the scheduler picks a node for it -- the
+				// node-selector filter rejects every Node before scheduling ever reaches volume
+				// binding, so the claim also stays reliably unbound.
+				NodeSelector: map[string]string{"e2e-no-such-label": "true"},
+				Containers: []corev1.Container{{
+					Name: "main", Image: "busybox", Command: []string{"sleep", "infinity"},
+					VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data"}},
+				}},
+				Volumes: []corev1.Volume{{
+					Name:         "data",
+					VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}},
+				}},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Pods(ns).Delete(context.TODO(), podName, metav1.DeleteOptions{})
+		})
+		waitForInNamespace(t, "pod/"+podName,
+			`jsonpath={.status.conditions[?(@.type=="PodScheduled")].status}=False`, ns)
+		waitForPodScheduleWindow(t, ns, "app="+podName)
+
+		cmdTest{
+			args:            []string{"pod/" + podName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-wfc-topologies-unbound.regex",
 		}.assert(t, nil, opts...)
 	})
 }

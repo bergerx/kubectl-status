@@ -13,6 +13,11 @@
     {{- with .Spec.persistentVolumeReclaimPolicy }}, reclaim: {{ . | cyan }}{{ end }}
     {{- with .Status.reason }}{{ "reason" | bold }}: {{ . }}{{ end }}
     {{- with .Status.message }}{{ "message" | red | bold | nindent 2 }}: {{ . }}{{- end }}{{/* Exists usually when there is problem */}}
+    {{- $nodeAffinity := .Spec.nodeAffinity | default dict }}
+    {{- $requiredTerms := ($nodeAffinity.required | default dict).nodeSelectorTerms | default list }}
+    {{- if $requiredTerms }}
+        {{- "Node affinity:" | bold | nindent 2 }} restricts placement to {{ formatNodeSelectorTerms $requiredTerms | cyan }}
+    {{- end }}
     {{- /* Placed after every same-line field above (not inline where the class is named) --
            its --deep branch can inline a multi-line StorageClass block, and anything appended
            on the same line after that would land glued onto its last line instead of the

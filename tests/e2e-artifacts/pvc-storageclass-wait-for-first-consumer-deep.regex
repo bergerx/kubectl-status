@@ -4,7 +4,11 @@ PersistentVolumeClaim/e2e-wfc-pvc -n e2e-storageclass, created 1m ago Pending
     Reconciling: NotBound, PVC is not Bound\. phase: Pending
   PVC via StorageClass/e2e-wait-for-first-consumer, with Filesystem mode, Pending: no paired PV yet
   StorageClass: \S+, volumeBindingMode: WaitForFirstConsumer, allows volume expansion
+    Allowed topologies
+      topology\.kubernetes\.io/zone in \[e2e-zone-a, e2e-zone-b\]
     StorageClass/e2e-wait-for-first-consumer, created 1m ago
       Current: Resource is current
       Provisioner: \S+, volumeBindingMode: WaitForFirstConsumer, allows volume expansion
+      Allowed topologies
+        topology\.kubernetes\.io/zone in \[e2e-zone-a, e2e-zone-b\]
 \z

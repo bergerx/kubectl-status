@@ -1,0 +1,6 @@
+
+StorageClass/zonal-ebs, created 1m ago
+  Current: Resource is current
+  Provisioner: ebs.csi.aws.com, volumeBindingMode: WaitForFirstConsumer
+  Allowed topologies
+    topology.kubernetes.io/zone in [us-east-1a, us-east-1b]
