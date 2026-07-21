@@ -3,9 +3,9 @@ Deployment/web -n e2e-web-policies, created 1m ago, gen:1 rev:1
   Current: Deployment is available\. Replicas: 3
   desired:3, existing:3, ready:3, updated:3, available:3
   Selector: app=web
-    Pod/web-[a-z0-9]+-[a-z0-9]+ -n e2e-web-policies, created 1m ago Running, 1/1 ready, netpol: ingress restricted
-    Pod/web-[a-z0-9]+-[a-z0-9]+ -n e2e-web-policies, created 1m ago Running, 1/1 ready, netpol: ingress restricted
-    Pod/web-[a-z0-9]+-[a-z0-9]+ -n e2e-web-policies, created 1m ago Running, 1/1 ready, netpol: ingress restricted
+    Pod/web-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready, netpol: ingress restricted
+    Pod/web-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready, netpol: ingress restricted
+    Pod/web-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready, netpol: ingress restricted
   Not matched by any Service
   PodDisruptionBudgets: PodDisruptionBudget/web, created 1m ago, min available=1, disruptions allowed
   NetworkPolicy: selected by NetworkPolicy web \(ingress restricted\)

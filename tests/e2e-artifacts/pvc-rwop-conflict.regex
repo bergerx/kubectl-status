@@ -3,9 +3,9 @@ PersistentVolumeClaim/e2e-rwop-conflict-pvc -n e2e-rwop-conflict, created 1m ago
   Current: PVC is Bound
   PVC uses PersistentVolume/\S+ via StorageClass/standard, with Filesystem mode, asks for 1Gi, provisioned by \S+
   Pods:
-    Pod/e2e-rwop-conflict-a -n e2e-rwop-conflict, created 1m ago Pending
-    Pod/e2e-rwop-conflict-b -n e2e-rwop-conflict, created 1m ago Pending
+    Pod/e2e-rwop-conflict-a, created 1m ago Pending
+    Pod/e2e-rwop-conflict-b, created 1m ago Pending
   RWOP: conflict: more than one non-terminal Pod is scheduled against this ReadWriteOncePod claim:
-    Pod/e2e-rwop-conflict-a -n e2e-rwop-conflict, created 1m ago Pending, node Node/e2e-rwop-conflict-no-such-node
-    Pod/e2e-rwop-conflict-b -n e2e-rwop-conflict, created 1m ago Pending, node Node/e2e-rwop-conflict-no-such-node
+    Pod/e2e-rwop-conflict-a, created 1m ago Pending, node Node/e2e-rwop-conflict-no-such-node
+    Pod/e2e-rwop-conflict-b, created 1m ago Pending, node Node/e2e-rwop-conflict-no-such-node
 \z

@@ -180,12 +180,12 @@
         {{- if gt (len $scheduled) 1 }}
             {{- "RWOP" | bold | nindent 2 }}: {{ "conflict" | red | bold }}: more than one non-terminal Pod is scheduled against this ReadWriteOncePod claim:
             {{- range $scheduled }}
-                {{- $ctx.Include "pod_health_summary" . | nindent 4 }}
+                {{- $ctx.Include "pod_health_summary" (dict "pod" . "callerNamespace" $ctx.Namespace) | nindent 4 }}
                 {{- with .Spec.nodeName }}, node {{ $ctx.Include "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}
             {{- end }}
         {{- else if eq (len $scheduled) 1 }}
             {{- $holder := index $scheduled 0 }}
-            {{- "RWOP holder" | bold | nindent 2 }}: {{ $ctx.Include "pod_health_summary" $holder }}
+            {{- "RWOP holder" | bold | nindent 2 }}: {{ $ctx.Include "pod_health_summary" (dict "pod" $holder "callerNamespace" $ctx.Namespace) }}
             {{- with $holder.Spec.nodeName }}, node {{ $ctx.Include "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}
         {{- end }}
         {{- /* Checked independently of the holder/conflict branches above: a Pod can be Pending
@@ -195,7 +195,7 @@
             {{- $pod := . }}
             {{- with $pod.StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
                 {{- if and (eq .status "False") (contains "ReadWriteOncePod" (.message | default "")) }}
-                    {{- "RWOP" | bold | nindent 2 }}: {{ $ctx.Include "pod_health_summary" $pod }}, {{ "blocked" | red | bold }}: {{ .message }}
+                    {{- "RWOP" | bold | nindent 2 }}: {{ $ctx.Include "pod_health_summary" (dict "pod" $pod "callerNamespace" $ctx.Namespace) }}, {{ "blocked" | red | bold }}: {{ .message }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -563,12 +563,16 @@
 {{- end }}
 
 {{- define "pod_health_summary" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
-    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- with .Status.phase }} {{ . | colorKeyword }}{{ end }}
+    {{- /* Expects dict "pod" (Pod RenderableObject) "callerNamespace" (optional -- the namespace
+           of the object this summary is rendered under, e.g. a Job/PVC/PodDisruptionBudget;
+           passed through to resource_ref so the pod's own namespace is dropped from the summary
+           when it's redundant). */ -}}
+    {{- $pod := .pod }}
+    {{- template "resource_ref" (dict "kind" $pod.Kind "name" $pod.Name "namespace" $pod.Namespace "callerNamespace" .callerNamespace) }}
+    {{- with $pod.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with $pod.Status.phase }} {{ . | colorKeyword }}{{ end }}
     {{- $total := 0 }}{{ $ready := 0 }}{{ $restarts := 0 }}{{ $waitingReasons := list }}
-    {{- range .Status.containerStatuses }}
+    {{- range $pod.Status.containerStatuses }}
         {{- $total = add1 $total }}
         {{- if .ready }}{{ $ready = add1 $ready }}{{ end }}
         {{- $restarts = $restarts | add (.restartCount | int) }}
@@ -582,9 +586,9 @@
            milder one than being stuck waiting (see #178). */ -}}
     {{- with $waitingReasons }} {{ . | join "," | red | bold }}{{ end }}
     {{- if gt $restarts 0 }} restarts:{{ $restarts | toString | yellow | bold }}{{ end }}
-    {{- $nodeProblems := .Include "pod_node_problem_flags" . }}
+    {{- $nodeProblems := $pod.Include "pod_node_problem_flags" $pod }}
     {{- with $nodeProblems }}, {{ . }}{{ end }}
-    {{- $netpolFlag := .Include "pod_network_policy_flags" . }}
+    {{- $netpolFlag := $pod.Include "pod_network_policy_flags" $pod }}
     {{- with $netpolFlag }}, {{ . }}{{ end }}
 {{- end }}
 
@@ -861,7 +865,7 @@
                 {{- end }}
             {{- else }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
-                    {{- $.Include "pod_health_summary" . | nindent 4 }}
+                    {{- $.Include "pod_health_summary" (dict "pod" . "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}

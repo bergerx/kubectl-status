@@ -4,7 +4,7 @@ PodDisruptionBudget/sts-with-nodeport -n e2e-sts-nodeport, created 1m ago, gen:1
   Budget: min available=1, Constrained
   Selector: app=sts-with-nodeport
     Service/sts-with-nodeport, created 1m ago, NodePort, 1 ready, http\(80/TCP\)→30081
-    Pod/sts-with-nodeport-0 -n e2e-sts-nodeport, created 1m ago Running, 1/1 ready
+    Pod/sts-with-nodeport-0, created 1m ago Running, 1/1 ready
   healthy:1/expected:1, disruptions allowed:0
     no disruptions allowed — all pods must stay healthy to meet the budget
   DisruptionAllowed InsufficientPods for 1m

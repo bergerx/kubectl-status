@@ -191,7 +191,7 @@
                    Pending/NotReady. */ -}}
             {{- "pods needing attention" | bold | nindent 2 }}:
             {{- range . | sortMapListByKeysValue "key" }}
-                {{- "" | nindent 4 }}{{ template "pod_health_summary" .pod }}
+                {{- "" | nindent 4 }}{{ template "pod_health_summary" (dict "pod" .pod) }}
             {{- end }}
         {{- end }}
         {{- $inferredBurstableMemLimit := .Status.allocatable.memory | quantityToFloat64 | subFloat64 $podsTotalMemRequestsGuaranteed }}
