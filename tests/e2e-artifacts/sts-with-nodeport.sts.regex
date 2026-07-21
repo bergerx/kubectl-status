@@ -1,4 +1,4 @@
   Selector: app=sts-with-nodeport
-    Pod/sts-with-nodeport-0, created 1m ago Running, 1/1 ready
+    Pod/sts-with-nodeport-0 -n e2e-sts-nodeport, created 1m ago Running, 1/1 ready
   Services: Service/sts-with-nodeport, created 1m ago, NodePort, 1 ready, http\(80/TCP\)→30081
   PodDisruptionBudgets: PodDisruptionBudget/sts-with-nodeport, created 1m ago, min available=1, evictions/drains currently blocked

@@ -3,6 +3,6 @@ PersistentVolumeClaim/e2e-rwop-pvc -n e2e-rwop, created 1m ago Bound
   Current: PVC is Bound
   PVC uses PersistentVolume/\S+ via StorageClass/standard, with Filesystem mode, asks for 1Gi, provisioned by \S+
   Pods:
-    Pod/e2e-rwop-holder, created 1m ago Running, 1/1 ready
-  RWOP holder: Pod/e2e-rwop-holder, created 1m ago Running, 1/1 ready, node Node/\S+
+    Pod/e2e-rwop-holder -n e2e-rwop, created 1m ago Running, 1/1 ready
+  RWOP holder: Pod/e2e-rwop-holder -n e2e-rwop, created 1m ago Running, 1/1 ready, node Node/\S+
 \z

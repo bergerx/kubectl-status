@@ -564,15 +564,24 @@
 
 {{- define "pod_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name "namespace" .Namespace) }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with .Status.phase }} {{ . | colorKeyword }}{{ end }}
-    {{- $total := 0 }}{{ $ready := 0 }}
+    {{- $total := 0 }}{{ $ready := 0 }}{{ $restarts := 0 }}{{ $waitingReasons := list }}
     {{- range .Status.containerStatuses }}
         {{- $total = add1 $total }}
         {{- if .ready }}{{ $ready = add1 $ready }}{{ end }}
+        {{- $restarts = $restarts | add (.restartCount | int) }}
+        {{- with .state.waiting.reason }}
+            {{- if not ($waitingReasons | has .) }}{{ $waitingReasons = append $waitingReasons . }}{{ end }}
+        {{- end }}
     {{- end }}
     {{- if $total }}, {{ if lt $ready $total }}{{ printf "%d/%d" $ready $total | red | bold }}{{ else }}{{ printf "%d/%d" $ready $total | green }}{{ end }} ready{{ end }}
+    {{- /* A Running/Ready pod with a past restart is still worth flagging here -- restart count
+           is a signal worth an operator's attention even once the pod has recovered, just a
+           milder one than being stuck waiting (see #178). */ -}}
+    {{- with $waitingReasons }} {{ . | join "," | red | bold }}{{ end }}
+    {{- if gt $restarts 0 }} restarts:{{ $restarts | toString | yellow | bold }}{{ end }}
     {{- $nodeProblems := .Include "pod_node_problem_flags" . }}
     {{- with $nodeProblems }}, {{ . }}{{ end }}
     {{- $netpolFlag := .Include "pod_network_policy_flags" . }}

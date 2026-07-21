@@ -1,6 +1,6 @@
 
 Node/aks-cpuworkers-41776494-vmss00006u, created 1m ago
-  linux Ubuntu 16.04.6 LTS (amd64), kernel 4.15.0-1066-azure, kubelet v1.15.7, kube-proxy v1.15.7
+  linux Ubuntu 16.04.6 LTS (amd64), kernel 4.15.0-1066-azure, kubelet v1.15.7, kube-proxy v1.15.7, runtime docker://3.0.8
   cloudprovider eastus0 Standard_D8s_v3, agentpool:cpuworkers, role:agent
   images 50 volumes inuse=1/16, attached=1
   Current: Resource is Ready

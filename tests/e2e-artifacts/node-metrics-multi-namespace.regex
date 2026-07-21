@@ -1,6 +1,6 @@
 \A
 Node/[a-z0-9.-]+, created \d+[a-z]+ ago
-  linux .+, kernel \S+, kubelet v[\d.]+, kube-proxy ?\S*
+  linux .+, kernel \S+, kubelet v[\d.]+, kube-proxy ?\S*, runtime \S+
   images \d+
   Current: Resource is Ready
   MemoryPressure KubeletHasSufficientMemory, kubelet has sufficient memory available for \d+[a-z]+
@@ -9,15 +9,16 @@ Node/[a-z0-9.-]+, created \d+[a-z]+ ago
   Ready KubeletReady, kubelet is posting ready status for \d+[a-z]+
   addresses: InternalIP=[\d.]+ Hostname=[a-z0-9.-]+
   allocatable/capacity: pods \d+/\d+, cpu [\d.]+/[\d.]+, mem [\d.]+/[\d.]+[A-Za-z]+, ephemeral-storage [\d.]+/[\d.]+[A-Za-z]+
-(?:  pod status:
-(?:    \S+/\S+ .+
+(?:  pods needing attention:
+(?:    \S+/\S+(?: -n \S+)?, .+
 )+)?  Inferred memory limits for BestEffort: [\d.]+[A-Za-z]+, for Burstable: [\d.]+[A-Za-z]+
   pods: usage/allocatable:\d+/\d+\(\d+%\)
   cpu: usage/allocatable:[\d.]+/\d+\(\d+%\), allocated usage:[\d.]+\(\d+% of allocatable\)/\[req:[\d.]+\(\d+% of allocatable\), lim:[\d.]+\(\d+% of allocatable\)\]
   mem: usage/allocatable:[\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+\(\d+%\), allocated usage:[\d.]+[A-Za-z]+\(\d+% of allocatable\)/\[req:[\d.]+[A-Za-z]+\(\d+% of allocatable\), lim:[\d.]+[A-Za-z]+\(\d+% of allocatable\)\]
   ephemeral-storage: [\d.]+[A-Za-z]+
   pods by usage: \(most memory first\)
-(?:    \S+/\S+: cpu [\d.]+, mem [\d.]+[A-Za-z]+
+    pod\s+cpu use/req/lim \(%allocatable\)\s+mem use/req/lim \(%allocatable\)
+(?:    \S+/\S+(?: -n \S+)?\s+[\d.]+\(\d+%\)\s+[\d.]+\(\d+%\)\s+[\d.]+\(\d+%\)\s+[\d.]+[A-Za-z]+\(\d+%\)\s+[\d.]+[A-Za-z]+\(\d+%\)\s+[\d.]+[A-Za-z]+\(\d+%\)
 )+  kubelet-api/healthz: ok
   kubelet-api/configz:
     eviction-hard: nodefs.available<\d+% nodefs.inodesFree<\d+% imagefs.available<\d+%
