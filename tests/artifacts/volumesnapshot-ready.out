@@ -1,0 +1,4 @@
+
+VolumeSnapshot/web-data-snap -n default, created 1m ago
+  Current: Resource is current
+  VolumeSnapshot: ReadyToUse, class csi-snapclass, source PersistentVolumeClaim/web-data, bound to VolumeSnapshotContent/snapcontent-11111111-2222-3333-4444-555555555555, snapshot taken 1m ago, restoreSize 10.7GB

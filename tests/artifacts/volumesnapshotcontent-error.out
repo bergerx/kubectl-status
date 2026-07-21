@@ -1,0 +1,5 @@
+
+VolumeSnapshotContent/snapcontent-error-example, created 1m ago
+  Current: Resource is current
+  VolumeSnapshotContent: NotReadyToUse, driver ebs.csi.aws.com, deletionPolicy: Retain, class csi-snapclass, for VolumeSnapshot/web-data-snap-failed -n default, volumeHandle vol-fedcba9876543210
+  Error: rpc error: code = ResourceExhausted desc = snapshot limit exceeded for volume vol-fedcba9876543210 (1m ago)

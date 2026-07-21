@@ -715,6 +715,39 @@ func ensureCiliumCalicoCRDs(t *testing.T) {
 	})
 }
 
+var volumeSnapshotCRDsInstaller onceInstaller
+
+// ensureVolumeSnapshotCRDs installs the VolumeSnapshot/VolumeSnapshotContent CRDs (snapshot.
+// storage.k8s.io), needed by TestE2EDynamicManifests' VolumeSnapshot(Content) subtests. Same
+// "CRDs only" reasoning as Gateway API/Cilium/Calico above: minikube's hostpath
+// storage-provisioner has no CSI snapshot support, and getting a real snapshot to reach
+// ReadyToUse deterministically would need a real CSI driver + external-snapshotter controller
+// running, which isn't available here -- so the subtests create VolumeSnapshot/
+// VolumeSnapshotContent objects (and their status) directly against the API instead (same trick
+// as the VolumeAttachment subtest uses), and only need the CRDs' shape validated by the
+// apiserver, not a controller actually reconciling them. VolumeSnapshotClass isn't installed:
+// nothing here creates one, spec.volumeSnapshotClassName is just a free-form string reference.
+func ensureVolumeSnapshotCRDs(t *testing.T) {
+	t.Helper()
+	volumeSnapshotCRDsInstaller.ensure(t, func() error {
+		version, err := versionsEnvValue("EXTERNAL_SNAPSHOTTER_VERSION")
+		if err != nil {
+			return err
+		}
+		urls := []string{
+			fmt.Sprintf("https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/%s/client/config/crd/snapshot.storage.k8s.io_volumesnapshots.yaml", version),
+			fmt.Sprintf("https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/%s/client/config/crd/snapshot.storage.k8s.io_volumesnapshotcontents.yaml", version),
+		}
+		for _, url := range urls {
+			output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("kubectl apply %s: %w: %s", url, err, output)
+			}
+		}
+		return nil
+	})
+}
+
 var vpaInstaller onceInstaller
 
 // ensureVPA installs VerticalPodAutoscaler, needed by TestE2EDynamicManifests' VPA subtest.

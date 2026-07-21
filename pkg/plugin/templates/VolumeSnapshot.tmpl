@@ -1,0 +1,51 @@
+{{- define "VolumeSnapshot" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: snapshot.storage.k8s.io/v1, Kind=VolumeSnapshot (namespaced). Optional CRD from
+           the external-snapshotter project -- not built into core Kubernetes, so every live
+           lookup below degrades to silence rather than an error when the CRD/API isn't
+           installed, same as any other optional-CRD template in this codebase. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- $spec := .Spec }}
+    {{- $status := .Status | default dict }}
+    {{- "VolumeSnapshot" | bold | nindent 2 }}:
+    {{- if not (hasKey $status "readyToUse") }} {{ "Provisioning" | yellow }}
+    {{- else if $status.readyToUse }} {{ "ReadyToUse" | green }}
+    {{- else }} {{ "NotReadyToUse" | red | bold }}{{ end }}
+    {{- with $spec.volumeSnapshotClassName }}, class {{ . | cyan }}{{ end }}
+    {{- with $spec.source.persistentVolumeClaimName }}, source {{ $.Include "resource_ref" (dict "kind" "PersistentVolumeClaim" "name" .) }}{{ end }}
+    {{- with $spec.source.volumeSnapshotContentName }}, pre-provisioned from {{ $.Include "resource_ref" (dict "kind" "VolumeSnapshotContent" "name" .) }}{{ end }}
+    {{- with $status.boundVolumeSnapshotContentName }}, bound to {{ $.Include "resource_ref" (dict "kind" "VolumeSnapshotContent" "name" .) }}{{ end }}
+    {{- with $status.creationTime }}, snapshot taken {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with $status.restoreSize }}, restoreSize {{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
+    {{- with $status.error }}
+        {{- "Error" | red | bold | nindent 2 }}: {{ .message }}
+        {{- with .time }} ({{ . | colorAgo }}{{ agoSuffix }}){{ end }}
+    {{- end }}
+    {{- /* Restore-target context: PVCs in this namespace requesting to restore from this
+           snapshot (spec.dataSourceRef supersedes the older spec.dataSource when both are set
+           and point at the same object, so only one is checked, preferring the newer field). */ -}}
+    {{- $restoringPVCs := list }}
+    {{- range $.KubeGet $.Namespace "persistentvolumeclaims" }}
+        {{- $ref := .Spec.dataSourceRef | default .Spec.dataSource }}
+        {{- if and (kindIs "map" $ref) (eq $ref.kind "VolumeSnapshot") (eq $ref.name $.Name) }}
+            {{- $restoringPVCs = append $restoringPVCs . }}
+        {{- end }}
+    {{- end }}
+    {{- if $restoringPVCs }}
+        {{- "Restore targets" | bold | nindent 2 }}:
+        {{- range $restoringPVCs }}
+            {{- $.Include "resource_ref" (dict "kind" "PersistentVolumeClaim" "name" .Name) | nindent 4 }}
+        {{- end }}
+    {{- end }}
+    {{- if and $status.boundVolumeSnapshotContentName ($.Config.GetBool "deep") }}
+        {{- $vsc := $.KubeGetFirst "" "VolumeSnapshotContent" $status.boundVolumeSnapshotContentName }}
+        {{- if $vsc.Object }}
+            {{- $.Include "VolumeSnapshotContent" $vsc | nindent 4 }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

@@ -1,0 +1,14 @@
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: web-data-snap-new
+  namespace: default
+  creationTimestamp: "2026-07-21T02:00:00Z"
+  finalizers:
+  - snapshot.storage.kubernetes.io/volumesnapshot-as-source-protection
+  resourceVersion: "654322"
+  uid: 22222222-3333-4444-5555-666666666666
+spec:
+  volumeSnapshotClassName: csi-snapclass
+  source:
+    persistentVolumeClaimName: web-data

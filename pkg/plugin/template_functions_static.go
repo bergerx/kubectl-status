@@ -91,6 +91,7 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"blue":                           color.BlueString,
 		"bold":                           color.New(color.Bold).SprintfFunc(),
 		"colorAgo":                       cfg.colorAgo,
+		"colorAgoUnixNano":               cfg.colorAgoUnixNano,
 		"colorDuration":                  cfg.colorDuration,
 		"startedAfterClause":             cfg.startedAfterClause,
 		"colorBool":                      colorBool,
@@ -609,6 +610,18 @@ func colorKeyword(phase string) string {
 
 func (cfg *RenderConfig) colorAgo(kubeDate string) string {
 	t, _ := time.ParseInLocation("2006-01-02T15:04:05Z", kubeDate, time.UTC)
+	if cfg.Viper.GetBool("absolute-time") {
+		return t.Format("2006-01-02T15:04:05Z")
+	}
+	duration := cfg.Now().Sub(t).Round(time.Second)
+	return cfg.colorDuration(duration)
+}
+
+// colorAgoUnixNano is colorAgo for VolumeSnapshotContent's status.creationTime, which the
+// external-snapshotter API represents as raw Unix nanoseconds (int64) rather than the RFC3339
+// metav1.Time string every other timestamp in this codebase uses.
+func (cfg *RenderConfig) colorAgoUnixNano(unixNano interface{}) string {
+	t := time.Unix(0, cast.ToInt64(unixNano)).UTC()
 	if cfg.Viper.GetBool("absolute-time") {
 		return t.Format("2006-01-02T15:04:05Z")
 	}
