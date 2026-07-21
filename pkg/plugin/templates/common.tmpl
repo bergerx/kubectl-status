@@ -153,6 +153,55 @@
     {{- end }}
 {{- end -}}
 
+{{- define "rwop_holder_diagnosis" }}
+    {{- /* Expects dict "ctx" (RenderableObject, used for Include) "pods" ([]RenderableObject --
+           the Pods in the claim's namespace that mount it, already resolved by the caller since
+           PersistentVolumeClaim.tmpl needs that same Pod scan for its disk-usage stats and this
+           reuses it rather than running a second KubeGet pass) "accessModes" (the PVC's
+           spec.accessModes list). A no-op unless the claim uses the ReadWriteOncePod access
+           mode, which the apiserver/scheduler enforce as at most one non-terminal Pod using the
+           claim at a time. Silent when there's no non-terminal Pod yet (nothing to report) or
+           when a lone Pending Pod's own PodScheduled condition doesn't establish that RWOP is
+           what's blocking it -- guessing here would blame the wrong cause for an unscheduled
+           Pod. */ -}}
+    {{- $ctx := .ctx }}
+    {{- if has "ReadWriteOncePod" .accessModes }}
+        {{- $scheduled := list }}
+        {{- $pending := list }}
+        {{- range .pods }}
+            {{- if not (has .Status.phase (list "Succeeded" "Failed")) }}
+                {{- if .Spec.nodeName }}
+                    {{- $scheduled = append $scheduled . }}
+                {{- else }}
+                    {{- $pending = append $pending . }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+        {{- if gt (len $scheduled) 1 }}
+            {{- "RWOP" | bold | nindent 2 }}: {{ "conflict" | red | bold }}: more than one non-terminal Pod is scheduled against this ReadWriteOncePod claim:
+            {{- range $scheduled }}
+                {{- $ctx.Include "pod_health_summary" . | nindent 4 }}
+                {{- with .Spec.nodeName }}, node {{ $ctx.Include "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}
+            {{- end }}
+        {{- else if eq (len $scheduled) 1 }}
+            {{- $holder := index $scheduled 0 }}
+            {{- "RWOP holder" | bold | nindent 2 }}: {{ $ctx.Include "pod_health_summary" $holder }}
+            {{- with $holder.Spec.nodeName }}, node {{ $ctx.Include "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}
+        {{- end }}
+        {{- /* Checked independently of the holder/conflict branches above: a Pod can be Pending
+               behind an already-scheduled holder, and that's the common real-world shape of this
+               (one Pod running, a second stuck waiting for it), not an either/or with it. */ -}}
+        {{- range $pending }}
+            {{- $pod := . }}
+            {{- with $pod.StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
+                {{- if and (eq .status "False") (contains "ReadWriteOncePod" (.message | default "")) }}
+                    {{- "RWOP" | bold | nindent 2 }}: {{ $ctx.Include "pod_health_summary" $pod }}, {{ "blocked" | red | bold }}: {{ .message }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
 {{- define "certificate_validity_line" }}
     {{- /* Expects dict "cert" (a parsed-certificate entry from parseTLSSecretCertificate /
            certificatesInSecret / certificatesInConfigMap / certificateInCSR -- all of which set

@@ -70,6 +70,7 @@
             {{- $.Include "pod_health_summary" . | nindent 4 }}
         {{- end }}
     {{- end }}
+    {{- $.Include "rwop_holder_diagnosis" (dict "ctx" $ "pods" $usingPods "accessModes" (.Spec.accessModes | default list)) }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
