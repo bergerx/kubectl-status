@@ -1,0 +1,4 @@
+
+VolumeSnapshot/web-data-snap-new -n default, created 1m ago
+  Current: Resource is current
+  VolumeSnapshot: Provisioning, class csi-snapclass, source PersistentVolumeClaim/web-data

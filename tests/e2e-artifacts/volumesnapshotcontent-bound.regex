@@ -1,0 +1,5 @@
+\A
+VolumeSnapshotContent/e2e-vsc, created 1m ago, gen:1
+  Current: Resource is current
+  VolumeSnapshotContent: ReadyToUse, driver fake\.csi\.kubectl-status\.io, class e2e-snapclass, for VolumeSnapshot/e2e-vs -n e2e-volumesnapshot, volumeHandle vol-e2e-fake, snapshot taken 1m ago, restoreSize 5.3GB
+\z

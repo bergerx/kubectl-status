@@ -1,0 +1,4 @@
+
+VolumeSnapshotContent/snapcontent-11111111-2222-3333-4444-555555555555, created 1m ago
+  Current: Resource is current
+  VolumeSnapshotContent: ReadyToUse, driver ebs.csi.aws.com, class csi-snapclass, for VolumeSnapshot/web-data-snap -n default, volumeHandle vol-0123456789abcdef0, snapshot taken 1m ago, restoreSize 10.7GB

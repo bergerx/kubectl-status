@@ -1,0 +1,38 @@
+{{- define "VolumeSnapshotContent" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: snapshot.storage.k8s.io/v1, Kind=VolumeSnapshotContent (cluster-scoped). Optional
+           CRD from the external-snapshotter project -- not built into core Kubernetes, so every
+           live lookup below degrades to silence rather than an error when the CRD/API isn't
+           installed, same as any other optional-CRD template in this codebase. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- $spec := .Spec }}
+    {{- $status := .Status | default dict }}
+    {{- "VolumeSnapshotContent" | bold | nindent 2 }}:
+    {{- if not (hasKey $status "readyToUse") }} {{ "Provisioning" | yellow }}
+    {{- else if $status.readyToUse }} {{ "ReadyToUse" | green }}
+    {{- else }} {{ "NotReadyToUse" | red | bold }}{{ end }}
+    {{- with $spec.driver }}, driver {{ . | cyan }}{{ end }}
+    {{- $deletionPolicy := $spec.deletionPolicy | default "Delete" }}
+    {{- if ne $deletionPolicy "Delete" }}, deletionPolicy: {{ $deletionPolicy | colorKeyword }}{{ end }}
+    {{- with $spec.volumeSnapshotClassName }}, class {{ . | cyan }}{{ end }}
+    {{- with $spec.volumeSnapshotRef }}, for {{ $.Include "resource_ref" (dict "kind" "VolumeSnapshot" "name" .name "namespace" .namespace) }}{{ end }}
+    {{- with $spec.source.volumeHandle }}, volumeHandle {{ . | cyan }}{{ end }}
+    {{- with $spec.source.snapshotHandle }}, pre-provisioned snapshotHandle {{ . | cyan }}{{ end }}
+    {{- with $status.creationTime }}, snapshot taken {{ . | colorAgoUnixNano }}{{ agoSuffix }}{{ end }}
+    {{- with $status.restoreSize }}, restoreSize {{ . | float64 | humanizeSI "B" }}{{ end }}
+    {{- with $status.error }}
+        {{- "Error" | red | bold | nindent 2 }}: {{ .message }}
+        {{- with .time }} ({{ . | colorAgo }}{{ agoSuffix }}){{ end }}
+    {{- end }}
+    {{- if and $spec.volumeSnapshotRef ($.Config.GetBool "deep") }}
+        {{- $vs := $.KubeGetFirst $spec.volumeSnapshotRef.namespace "VolumeSnapshot" $spec.volumeSnapshotRef.name }}
+        {{- if $vs.Object }}
+            {{- $.Include "VolumeSnapshot" $vs | nindent 4 }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

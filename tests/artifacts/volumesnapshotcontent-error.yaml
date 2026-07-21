@@ -1,0 +1,22 @@
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotContent
+metadata:
+  name: snapcontent-error-example
+  creationTimestamp: "2026-07-21T02:00:00Z"
+  resourceVersion: "654324"
+  uid: 44444444-5555-6666-7777-888888888888
+spec:
+  deletionPolicy: Retain
+  driver: ebs.csi.aws.com
+  volumeSnapshotClassName: csi-snapclass
+  volumeSnapshotRef:
+    name: web-data-snap-failed
+    namespace: default
+    uid: 55555555-6666-7777-8888-999999999999
+  source:
+    volumeHandle: vol-fedcba9876543210
+status:
+  readyToUse: false
+  error:
+    time: "2026-07-21T02:05:00Z"
+    message: "rpc error: code = ResourceExhausted desc = snapshot limit exceeded for volume vol-fedcba9876543210"

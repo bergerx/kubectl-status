@@ -1,0 +1,25 @@
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotContent
+metadata:
+  name: snapcontent-11111111-2222-3333-4444-555555555555
+  creationTimestamp: "2026-07-10T14:52:59Z"
+  finalizers:
+  - snapshot.storage.kubernetes.io/volumesnapshotcontent-bound-protection
+  resourceVersion: "654323"
+  uid: 33333333-4444-5555-6666-777777777777
+spec:
+  deletionPolicy: Delete
+  driver: ebs.csi.aws.com
+  volumeSnapshotClassName: csi-snapclass
+  volumeSnapshotRef:
+    name: web-data-snap
+    namespace: default
+    resourceVersion: "654321"
+    uid: 11111111-2222-3333-4444-555555555555
+  source:
+    volumeHandle: vol-0123456789abcdef0
+status:
+  snapshotHandle: snap-0123456789abcdef0
+  readyToUse: true
+  creationTime: 1783695185000000000
+  restoreSize: 10737418240
