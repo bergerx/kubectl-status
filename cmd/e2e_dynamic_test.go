@@ -513,4 +513,136 @@ func TestE2EDynamicManifests(t *testing.T) {
 			stdoutRegexPath: "e2e-artifacts/pv-volumeattachment-error-deep.regex",
 		}.assert(t, nil, opts...)
 	})
+	t.Run("VolumeSnapshot and VolumeSnapshotContent surface readiness, bound linkage, and restore-target context", func(t *testing.T) {
+		// Issue #669: VolumeSnapshot/VolumeSnapshotContent (snapshot.storage.k8s.io) had no
+		// standalone templates -- `kubectl status volumesnapshot/x` fell through to
+		// DefaultResource. minikube's hostpath storage-provisioner has no CSI snapshot support,
+		// so getting a real snapshot to reach ReadyToUse deterministically isn't possible here;
+		// instead (same trick as the VolumeAttachment subtest above) the objects and their
+		// status are created directly against the API -- the apiserver only validates their
+		// shape, not that a real external-snapshotter controller is behind them.
+		ensureVolumeSnapshotCRDs(t)
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-volumesnapshot"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		// Source PVC the snapshot is (nominally) taken from.
+		sourcePVCName := "e2e-vs-source-pvc"
+		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: sourcePVCName, Namespace: ns},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("5Gi")},
+				},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		vsGVR := schema.GroupVersionResource{Group: "snapshot.storage.k8s.io", Version: "v1", Resource: "volumesnapshots"}
+		vscGVR := schema.GroupVersionResource{Group: "snapshot.storage.k8s.io", Version: "v1", Resource: "volumesnapshotcontents"}
+		vsName := "e2e-vs"
+		vscName := "e2e-vsc"
+
+		vs := &unstructured.Unstructured{Object: map[string]interface{}{
+			"apiVersion": "snapshot.storage.k8s.io/v1",
+			"kind":       "VolumeSnapshot",
+			"metadata":   map[string]interface{}{"name": vsName, "namespace": ns},
+			"spec": map[string]interface{}{
+				"volumeSnapshotClassName": "e2e-snapclass",
+				"source": map[string]interface{}{
+					"persistentVolumeClaimName": sourcePVCName,
+				},
+			},
+		}}
+		createdVS, err := dynamicClient.Resource(vsGVR).Namespace(ns).Create(context.TODO(), vs, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			dynamicClient.Resource(vsGVR).Namespace(ns).Delete(context.TODO(), vsName, metav1.DeleteOptions{})
+		})
+
+		vsc := &unstructured.Unstructured{Object: map[string]interface{}{
+			"apiVersion": "snapshot.storage.k8s.io/v1",
+			"kind":       "VolumeSnapshotContent",
+			"metadata":   map[string]interface{}{"name": vscName},
+			"spec": map[string]interface{}{
+				"deletionPolicy":          "Delete",
+				"driver":                  "fake.csi.kubectl-status.io",
+				"volumeSnapshotClassName": "e2e-snapclass",
+				"volumeSnapshotRef": map[string]interface{}{
+					"name":      vsName,
+					"namespace": ns,
+					"uid":       string(createdVS.GetUID()),
+				},
+				"source": map[string]interface{}{
+					"volumeHandle": "vol-e2e-fake",
+				},
+			},
+		}}
+		createdVSC, err := dynamicClient.Resource(vscGVR).Create(context.TODO(), vsc, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			dynamicClient.Resource(vscGVR).Delete(context.TODO(), vscName, metav1.DeleteOptions{})
+		})
+
+		// Bind them to each other and mark both ready -- status is a subresource, set via
+		// UpdateStatus rather than at creation time.
+		require.NoError(t, unstructured.SetNestedField(createdVS.Object, true, "status", "readyToUse"))
+		require.NoError(t, unstructured.SetNestedField(createdVS.Object, vscName, "status", "boundVolumeSnapshotContentName"))
+		require.NoError(t, unstructured.SetNestedField(createdVS.Object, "2026-07-21T02:00:00Z", "status", "creationTime"))
+		require.NoError(t, unstructured.SetNestedField(createdVS.Object, "5Gi", "status", "restoreSize"))
+		_, err = dynamicClient.Resource(vsGVR).Namespace(ns).UpdateStatus(context.TODO(), createdVS, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		require.NoError(t, unstructured.SetNestedField(createdVSC.Object, true, "status", "readyToUse"))
+		require.NoError(t, unstructured.SetNestedField(createdVSC.Object, "snap-e2e-fake-handle", "status", "snapshotHandle"))
+		require.NoError(t, unstructured.SetNestedField(createdVSC.Object, int64(1784599200000000000), "status", "creationTime"))
+		require.NoError(t, unstructured.SetNestedField(createdVSC.Object, int64(5368709120), "status", "restoreSize"))
+		_, err = dynamicClient.Resource(vscGVR).UpdateStatus(context.TODO(), createdVSC, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		// A second PVC requesting to restore FROM the snapshot -- restore-target context.
+		restorePVCName := "e2e-vs-restore-pvc"
+		apiGroup := "snapshot.storage.k8s.io"
+		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: restorePVCName, Namespace: ns},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("5Gi")},
+				},
+				DataSourceRef: &corev1.TypedObjectReference{
+					APIGroup: &apiGroup,
+					Kind:     "VolumeSnapshot",
+					Name:     vsName,
+				},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		cmdTest{
+			args:            []string{"volumesnapshot/" + vsName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/volumesnapshot-bound.regex",
+		}.assert(t, nil, opts...)
+		// --deep inlines the bound VolumeSnapshotContent in full -- offline artifact tests can't
+		// reach this branch either, since --shallow/--local (used by every offline test) makes
+		// the KubeGetFirst behind it a no-op.
+		cmdTest{
+			args:            []string{"volumesnapshot/" + vsName, "-n", ns, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/volumesnapshot-bound-deep.regex",
+		}.assert(t, nil, opts...)
+		cmdTest{
+			args:            []string{"volumesnapshotcontent/" + vscName, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/volumesnapshotcontent-bound.regex",
+		}.assert(t, nil, opts...)
+		cmdTest{
+			args:            []string{"volumesnapshotcontent/" + vscName, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/volumesnapshotcontent-bound-deep.regex",
+		}.assert(t, nil, opts...)
+	})
 }

@@ -1,0 +1,7 @@
+\A
+VolumeSnapshot/e2e-vs -n e2e-volumesnapshot, created 1m ago, gen:1
+  Current: Resource is current
+  VolumeSnapshot: ReadyToUse, class e2e-snapclass, source PersistentVolumeClaim/e2e-vs-source-pvc, bound to VolumeSnapshotContent/e2e-vsc, snapshot taken 1m ago, restoreSize 5.3GB
+  Restore targets:
+    PersistentVolumeClaim/e2e-vs-restore-pvc
+\z
