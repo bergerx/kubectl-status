@@ -117,8 +117,13 @@
         {{- $podsTotalMemRequestsBurstable := 0.0 }}
         {{- $podsTotalMemRequestsGuaranteed := 0.0 }}
         {{- $podsTotalMemLimits := 0.0 }}
+        {{- $podIssues := list }}
+        {{- $podUsageRows := list }}
         {{- range $pod := .KubeGetNonTerminatedPodsOnNode .Name }}
             {{- $podCount = $podCount | add 1 }}
+            {{- $podCpuUsage := 0.0 }}
+            {{- $podMemUsage := 0.0 }}
+            {{- $podHasMetrics := false }}
             {{- range $containerSpec := $pod.Spec.containers | default list }}
                 {{- if $containerSpec.resources.requests.cpu }}
                     {{- $podsTotalCpuRequests = $podsTotalCpuRequests | addFloat64 ($containerSpec.resources.requests.cpu | quantityToFloat64) }}
@@ -142,11 +147,44 @@
                     {{- if $podMetrics.Object }}{{- if $podMetrics.Object.containers }}
                         {{- $containerMetrics := $podMetrics.Object.containers | getMatchingItemInMapList (dict "name" .name) }}
                         {{- if $containerMetrics }}
+                            {{- $podHasMetrics = true }}
                             {{- $podsTotalCpuUsage = $podsTotalCpuUsage | addFloat64 ($containerMetrics.usage.cpu | quantityToFloat64) }}
                             {{- $podsTotalMemUsage = $podsTotalMemUsage | addFloat64 ($containerMetrics.usage.memory | quantityToFloat64) }}
+                            {{- $podCpuUsage = $podCpuUsage | addFloat64 ($containerMetrics.usage.cpu | quantityToFloat64) }}
+                            {{- $podMemUsage = $podMemUsage | addFloat64 ($containerMetrics.usage.memory | quantityToFloat64) }}
                         {{- end }}
                     {{- end }}{{ end }}
                 {{- end }}
+            {{- end }}
+            {{- if $podHasMetrics }}
+                {{- $podUsageRows = append $podUsageRows (dict "ref" (printf "%s/%s" $pod.Namespace $pod.Name) "cpuUsage" $podCpuUsage "memUsage" $podMemUsage) }}
+            {{- end }}
+            {{- $readyContainers := 0 }}
+            {{- $totalContainers := $pod.Status.containerStatuses | default list | len }}
+            {{- $restarts := 0 }}
+            {{- $waitingReasons := list }}
+            {{- range $cs := $pod.Status.containerStatuses | default list }}
+                {{- if $cs.ready }}{{ $readyContainers = $readyContainers | add 1 }}{{ end }}
+                {{- $restarts = $restarts | add ($cs.restartCount | int) }}
+                {{- with $cs.state.waiting.reason }}
+                    {{- if not ($waitingReasons | has .) }}{{ $waitingReasons = append $waitingReasons . }}{{ end }}
+                {{- end }}
+            {{- end }}
+            {{- if or (ne $pod.Status.phase "Running") (lt $readyContainers $totalContainers) (gt $restarts 0) }}
+                {{- $issue := printf "%s/%s %s ready:%d/%d" $pod.Namespace $pod.Name ($pod.Status.phase | colorKeyword) $readyContainers $totalContainers }}
+                {{- with $waitingReasons }}{{ $issue = printf "%s %s" $issue (. | join "," | red | bold) }}{{ end }}
+                {{- if gt $restarts 0 }}{{ $issue = printf "%s restarts:%s" $issue ($restarts | toString | yellow | bold) }}{{ end }}
+                {{- $podIssues = append $podIssues (dict "key" (printf "%s/%s" $pod.Namespace $pod.Name) "text" $issue) }}
+            {{- end }}
+        {{- end }}
+        {{- with $podIssues }}
+            {{- /* Not all entries here are unhealthy right now: a Running/Ready pod with a past
+                   restart is included too, since restart count is itself a signal worth a node
+                   operator's attention (see #178), just a milder one than being stuck
+                   Pending/NotReady -- hence "pod status" rather than "pod issues" as the header. */ -}}
+            {{- "pod status" | bold | nindent 2 }}:
+            {{- range . | sortMapListByKeysValue "key" }}
+                {{- .text | nindent 4 }}
             {{- end }}
         {{- end }}
         {{- $inferredBurstableMemLimit := .Status.allocatable.memory | quantityToFloat64 | subFloat64 $podsTotalMemRequestsGuaranteed }}
@@ -185,6 +223,12 @@
                 {{- "Memory overcommitted" | red | bold | nindent 4 }}: Application may be OOMKilled. Expect BestEffort and then Burstable pods to have OOMKill due to overcommitted memory on the node.
             {{- end }}
             {{- with index .Status.allocatable "ephemeral-storage" }}{{ "ephemeral-storage" | bold | nindent 2 }}: {{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
+            {{- with $podUsageRows }}
+                {{- "pods by usage" | bold | nindent 2 }}: (most memory first)
+                {{- range . | sortMapListByFloatKeysValueDesc "memUsage" }}
+                    {{- .ref | nindent 4 }}: cpu {{ .cpuUsage | printf "%.3g" }}, mem {{ .memUsage | humanizeSI "B" }}
+                {{- end }}
+            {{- end }}
         {{- else if not (.LiveQueriesDisabled) }}
             {{- $metricsUnavailableReason := $.KubeMetricsUnavailableReason | default "no metrics yet" }}
             {{- "cpu" | bold | nindent 2 }}: [req:{{ $podsTotalCpuRequests | printf "%.3g" }}, lim:{{ $podsTotalCpuLimits | printf "%.3g" }}]
