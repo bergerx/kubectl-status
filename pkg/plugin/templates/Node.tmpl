@@ -219,8 +219,8 @@
         mem {{ .usageBytes | float64 | humanizeSI "B" -}}
         , workingSet {{ .workingSetBytes | float64 | humanizeSI "B" -}}
         , rss {{ .rssBytes | float64 | humanizeSI "B" -}}
-        {{- if .available -}}
-        , available {{ .available | float64 | humanizeSI "B" -}}
+        {{- if .availableBytes -}}
+        , available {{ .availableBytes | float64 | humanizeSI "B" -}}
         {{- end -}}
         , pageFaults/major {{ .pageFaults | float64 | humanizeSI "" }}/{{ .majorPageFaults | float64 | humanizeSI "" }}
     {{- end }}
