@@ -81,9 +81,13 @@
                 {{- .IncludeRenderableObject $node | nindent 4 }}
             {{- else }}
                 {{- $unhealthy := list }}
+                {{- $memoryPressure := false }}
                 {{- range $node.StatusConditions }}
                     {{- if not (isStatusConditionHealthy .) }}
                         {{- $unhealthy = append $unhealthy . }}
+                        {{- if and (eq .type "MemoryPressure") (eq .status "True") }}
+                            {{- $memoryPressure = true }}
+                        {{- end }}
                     {{- end }}
                 {{- end }}
                 {{- $blockingTaints := taintsNotToleratedByPod ($node.Spec.taints | default list) (.Spec.tolerations | default list) }}
@@ -98,6 +102,54 @@
                         {{- $val := "" }}{{ with .value }}{{ $val = printf "=%s" . }}{{ end }}
                         {{- printf "taint %s%s:%s (not tolerated)" .key $val .effect | red | bold | nindent 4 }}
                     {{- end }}
+                {{- end }}
+                {{- template "pod_memory_eviction_risk" (dict "pod" . "node" $node "memoryPressure" $memoryPressure) }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "pod_memory_eviction_risk" }}
+    {{- /* Expects a dict "pod" (Pod RenderableObject) "node" (Node RenderableObject) "memoryPressure"
+           (bool, node's MemoryPressure condition is True). Warns BestEffort/Burstable Pods: these
+           QoS classes are kubelet's first node-pressure-eviction candidates and get little to no
+           kernel OOM-killer protection (oom_score_adj 1000 / 2-999 vs Guaranteed's -997). Pod
+           Priority only affects kubelet eviction *order* within a QoS tier, it is not OOM
+           protection, so it never suppresses this warning. Guaranteed and system-node-critical
+           Pods stay silent: they're evicted last, if at all. Deliberately keyed off the node's
+           MemoryPressure condition (kubelet's own memory.available-crossed-threshold signal)
+           rather than a raw utilization percentage, per https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/. */ -}}
+    {{- $pod := .pod }}
+    {{- if and .memoryPressure (ne ($pod.Spec.priorityClassName | default "") "system-node-critical") }}
+        {{- with $pod.Status.qosClass }}
+            {{- $qos := . }}
+            {{- if eq $qos "BestEffort" }}
+                {{- "OOM / eviction risk" | red | bold | nindent 2 }}: Node {{ $.node.Name | cyan }} has {{ "MemoryPressure" | red | bold }}. Pod is {{ $qos | colorKeyword }}, the first kubelet eviction candidate under node memory pressure and has essentially no kernel-OOM protection. Pod Priority affects eviction order, not OOM protection.
+            {{- else if eq $qos "Burstable" }}
+                {{- $reqMem := 0.0 }}
+                {{- range $pod.Spec.containers }}
+                    {{- with .resources.requests.memory }}
+                        {{- $reqMem = $reqMem | addFloat64 (. | quantityToFloat64) }}
+                    {{- end }}
+                {{- end }}
+                {{- $podMetrics := $pod.KubeGetPodMetrics $pod.Namespace $pod.Name }}
+                {{- $usedMem := 0.0 }}
+                {{- $haveMetrics := false }}
+                {{- if ($podMetrics.Object | default dict).containers }}
+                    {{- $haveMetrics = true }}
+                    {{- range $podMetrics.Object.containers }}
+                        {{- with .usage.memory }}
+                            {{- $usedMem = $usedMem | addFloat64 (. | quantityToFloat64) }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+                {{- if and $haveMetrics (le $reqMem 0.0) }}
+                    {{- "OOM / eviction risk" | red | bold | nindent 2 }}: Node {{ $.node.Name | cyan }} has {{ "MemoryPressure" | red | bold }}. Pod is {{ $qos | colorKeyword }} with no memory request, using {{ $usedMem | humanizeSI "B" }}, a kubelet eviction candidate. Pod Priority affects eviction order, not OOM protection.
+                {{- else if and $haveMetrics (gt $usedMem $reqMem) }}
+                    {{- $percent := percent $usedMem $reqMem }}
+                    {{- "OOM / eviction risk" | red | bold | nindent 2 }}: Node {{ $.node.Name | cyan }} has {{ "MemoryPressure" | red | bold }}. Pod is {{ $qos | colorKeyword }}, using {{ $usedMem | humanizeSI "B" }} of its {{ $reqMem | humanizeSI "B" }} request ({{ $percent | colorPercent "%.0f%%" }}), a kubelet eviction candidate. Pod Priority affects eviction order, not OOM protection.
+                {{- else if not $haveMetrics }}
+                    {{- "Elevated memory-pressure risk" | yellow | nindent 2 }}: Node {{ $.node.Name | cyan }} has {{ "MemoryPressure" | red | bold }} and Pod is {{ $qos | colorKeyword }}. Usage vs its memory request is unknown (no metrics); eviction is governed by usage relative to request, not by this note alone.
                 {{- end }}
             {{- end }}
         {{- end }}
