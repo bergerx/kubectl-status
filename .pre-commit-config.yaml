@@ -20,14 +20,15 @@ repos:
 -   repo: local
     hooks:
 
-    # Usual pre-commit install only installs the pre-commit hook, trying to get
-    # them installed through this hook.
-    -   id: install-pre-push-hook
-        name: install-pre-push-hook
-        entry: pre-commit install -t pre-push
-        language: system
-        always_run: true
-        pass_filenames: false
+    # install-pre-push-hook and make-test-e2e are commented out: they got too
+    # heavyweight for a local pre-push hook. Delegating to CI for now until
+    # their runtime is sorted out.
+    # -   id: install-pre-push-hook
+    #     name: install-pre-push-hook
+    #     entry: pre-commit install -t pre-push
+    #     language: system
+    #     always_run: true
+    #     pass_filenames: false
 
     -   id: make-test
         name: make test
@@ -36,10 +37,10 @@ repos:
         always_run: true
         pass_filenames: false
 
-    -   id: make-test-e2e
-        name: make test-e2e
-        stages: [pre-push]
-        entry: make test-e2e
-        language: system
-        always_run: true
-        pass_filenames: false
+    # -   id: make-test-e2e
+    #     name: make test-e2e
+    #     stages: [pre-push]
+    #     entry: make test-e2e
+    #     language: system
+    #     always_run: true
+    #     pass_filenames: false
