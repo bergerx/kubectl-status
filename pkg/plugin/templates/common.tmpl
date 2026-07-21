@@ -66,6 +66,40 @@
     {{- end }}
 {{- end -}}
 
+{{- define "storageclass_summary" }}
+    {{- /* Expects dict "ctx" (RenderableObject, used for KubeGetFirst/Include/Config) "name"
+           (the storageClassName from a PV or PVC spec) "provisionerShown" (optional bool -- true
+           when the caller already printed the provisioner from an annotation, so this doesn't
+           repeat it) "warnMissing" (optional bool -- true when the caller's state indicates
+           provisioning/binding actually depends on this class, e.g. a still-Pending PVC, so a
+           missing class is worth flagging rather than silently ignored; PV.tmpl leaves this
+           unset since a legacy PV can be valid without one). Fetches the StorageClass object to
+           surface the provisioner (when not already on screen) and volumeBindingMode/
+           allowVolumeExpansion, which explain stuck/delayed binding and scheduling-before-
+           binding behavior. Silent when unfetchable (--shallow/--local) or when everything it
+           would show is either unremarkable (Immediate binding, no expansion) or already on
+           screen. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $sc := $ctx.KubeGetFirst "" "StorageClass" .name }}
+    {{- if $sc.Object }}
+        {{- $bindingMode := $sc.Object.volumeBindingMode | default "Immediate" }}
+        {{- $expandable := $sc.Object.allowVolumeExpansion }}
+        {{- $showProvisioner := not .provisionerShown }}
+        {{- if or $showProvisioner (ne $bindingMode "Immediate") $expandable }}
+            {{- "StorageClass" | bold | nindent 2 }}:
+            {{- $needsComma := false }}
+            {{- if $showProvisioner }} {{ $sc.Object.provisioner | cyan }}{{ $needsComma = true }}{{ end }}
+            {{- if ne $bindingMode "Immediate" }}{{ if $needsComma }},{{ end }} volumeBindingMode: {{ $bindingMode | colorKeyword }}{{ $needsComma = true }}{{ end }}
+            {{- if $expandable }}{{ if $needsComma }},{{ end }} allows volume expansion{{ end }}
+        {{- end }}
+        {{- if $ctx.Config.GetBool "deep" }}
+            {{- $ctx.Include "StorageClass" $sc | nindent 4 }}
+        {{- end }}
+    {{- else if and .warnMissing (not $ctx.LiveQueriesDisabled) }}
+        {{- "" | nindent 2 }}{{ $ctx.Include "resource_ref" (dict "kind" "StorageClass" "name" .name) }} {{ "not found" | red | bold }}: binding/provisioning cannot proceed without it
+    {{- end }}
+{{- end -}}
+
 {{- define "certificate_validity_line" }}
     {{- /* Expects dict "cert" (a parsed-certificate entry from parseTLSSecretCertificate /
            certificatesInSecret / certificatesInConfigMap / certificateInCSR -- all of which set

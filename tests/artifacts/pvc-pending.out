@@ -2,4 +2,4 @@
 PersistentVolumeClaim/pvc-pending -n pvc-test, created 1m ago Pending
   InProgress: PVC is not Bound. phase: Pending
     Reconciling: NotBound, PVC is not Bound. phase: Pending
-  PVC, with Filesystem mode, Pending: no paired PV yet
+  PVC via StorageClass/no-such-class, with Filesystem mode, Pending: no paired PV yet

@@ -1,0 +1,7 @@
+\A
+PersistentVolumeClaim/e2e-wfc-pvc -n e2e-storageclass, created 1m ago Pending
+  InProgress: PVC is not Bound\. phase: Pending
+    Reconciling: NotBound, PVC is not Bound\. phase: Pending
+  PVC via StorageClass/e2e-wait-for-first-consumer, with Filesystem mode, Pending: no paired PV yet
+  StorageClass: \S+, volumeBindingMode: WaitForFirstConsumer, allows volume expansion
+\z
