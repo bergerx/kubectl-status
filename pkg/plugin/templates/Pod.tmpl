@@ -5,6 +5,7 @@
     {{- template "finalizer_details_on_termination" . }}
     {{- template "application_details" . }}
     {{- .Include "pod_conditions_summary" . | nindent 2 }}
+    {{- template "pod_placement_constraints" . }}
     {{- template "pod_node_problems" . }}
     {{- $secCtx := .Spec.securityContext | default dict }}
     {{- $seccomp := index $secCtx "seccompProfile" | default dict }}
@@ -65,6 +66,31 @@
     {{- with .Status.qosClass }} {{ if ($.Object | default dict).inline }}{{ . }}{{ else }}{{ . | colorKeyword }}{{ end }}{{ end }}
     {{- with .Status.message }}, message: {{ . }}{{ end }}
 {{- end -}}
+
+{{- define "pod_placement_constraints" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Renders the hard placement constraints (nodeSelector, required nodeAffinity) that
+           restrict which Nodes this Pod can land on, gated on PodScheduled=False. The scheduler's
+           own message (already shown by pod_conditions_summary) stays the causal anchor -- this
+           states "restricts placement to..." as a declared fact, not "this is why it's
+           unschedulable", since multiple predicates can be failing simultaneously. Preferred
+           nodeAffinity is a scoring hint, not a blocker, and is deliberately never rendered here.
+           Spec-only: no live Node fetch, so this renders identically in --shallow/--local/--deep. */ -}}
+    {{- $podScheduledCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
+    {{- if not (isStatusConditionHealthy $podScheduledCondition) }}
+        {{- $nodeSelector := .Spec.nodeSelector | default dict }}
+        {{- $affinity := .Spec.affinity | default dict }}
+        {{- $nodeAffinity := $affinity.nodeAffinity | default dict }}
+        {{- $required := $nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution | default dict }}
+        {{- $terms := $required.nodeSelectorTerms | default list }}
+        {{- if $nodeSelector }}
+            {{- "node selector:" | bold | nindent 2 }} {{ formatNodeSelector $nodeSelector | cyan }}
+        {{- end }}
+        {{- if $terms }}
+            {{- "required node affinity:" | bold | nindent 2 }} {{ formatNodeSelectorTerms $terms | cyan }}
+        {{- end }}
+    {{- end }}
+{{- end }}
 
 {{- define "pod_node_problems" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}

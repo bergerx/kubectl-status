@@ -15,6 +15,7 @@ XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
           Managed by probe-a-blocked application
           Not PodScheduled -> Not Initialized -> Not ContainersReady -> Not Ready
             PodScheduled Unschedulable, [^\n]*node\(s\) didn't match Pod's node affinity/selector[^\n]* for 1m
+          node selector: kubectl-status\.io/e2e-never-schedules=true
           Volumes: kube-api-access-[a-z0-9]+ \(Projected\)
           Owners:
             ReplicaSet/probe-a-blocked-[a-z0-9]+ -n e2e-crossplane-xr, created 1m ago by Deployment/probe-a-blocked, gen:1
