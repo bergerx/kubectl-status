@@ -7,13 +7,17 @@
     {{- "PV" | nindent 2 }} is {{- with .Status.phase }} {{ . | colorKeyword }}{{ end }}
     {{- with .Status.lastPhaseTransitionTime }}, since {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with .Spec.storageClassName  }} managed by {{ $.Include "resource_ref" (dict "kind" "StorageClass" "name" .) }}{{ end }}
-    {{- with .Spec.storageClassName }}{{ $.Include "storageclass_summary" (dict "ctx" $ "name" . "provisionerShown" (hasKey $.Annotations "pv.kubernetes.io/provisioned-by")) }}{{ end }}
     {{- with index .Annotations "kubernetes.io/createdby" }} created by {{ . | bold }}{{ end }}
     {{- with $provisionedByAnnotation }} provisioned by {{ . | bold }}{{ end }}
     {{- with .Spec.accessModes }}{{- with index . 0 }} with {{ . | bold }} mode{{ end }}{{- end }}
     {{- with .Spec.persistentVolumeReclaimPolicy }}, reclaim: {{ . | cyan }}{{ end }}
     {{- with .Status.reason }}{{ "reason" | bold }}: {{ . }}{{ end }}
     {{- with .Status.message }}{{ "message" | red | bold | nindent 2 }}: {{ . }}{{- end }}{{/* Exists usually when there is problem */}}
+    {{- /* Placed after every same-line field above (not inline where the class is named) --
+           its --deep branch can inline a multi-line StorageClass block, and anything appended
+           on the same line after that would land glued onto its last line instead of the
+           original PV status line. */ -}}
+    {{- with .Spec.storageClassName }}{{ $.Include "storageclass_summary" (dict "ctx" $ "name" . "provisionerShown" (hasKey $.Annotations "pv.kubernetes.io/provisioned-by")) }}{{ end }}
     {{- with .Spec.claimRef }}
         {{- "Created" | nindent 2 }} for {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" .namespace) }}
         {{- $pvc := $.KubeGetFirst .namespace .kind .name }}
