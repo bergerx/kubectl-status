@@ -281,6 +281,154 @@ func TestE2EDynamicManifests(t *testing.T) {
 			stdoutRegexPath: "e2e-artifacts/pvc-storageclass-missing.regex",
 		}.assert(t, nil, opts...)
 	})
+	t.Run("PersistentVolumeClaim surfaces its ReadWriteOncePod holder and a scheduling conflict", func(t *testing.T) {
+		// Issue #669: a ReadWriteOncePod claim allows only one non-terminal Pod to use it at a
+		// time -- enforced by the kube-scheduler's built-in VolumeRestrictions plugin, no CSI
+		// driver involved, so this is fully deterministic on minikube's default scheduler.
+		// Before this, PersistentVolumeClaim.tmpl gave no indication of which Pod currently
+		// holds the claim, nor any explicit signal when a second Pod is stuck behind it.
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-rwop"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		// No storageClassName -- picks up the cluster's default class (Immediate binding), so
+		// the claim binds to a real PV before any Pod exists.
+		pvcName := "e2e-rwop-pvc"
+		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		waitForInNamespace(t, "pvc/"+pvcName, "jsonpath={.status.phase}=Bound", ns)
+
+		podSpec := func(pvcName string) corev1.PodSpec {
+			return corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name: "main", Image: "busybox", Command: []string{"sleep", "infinity"},
+					VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data"}},
+				}},
+				Volumes: []corev1.Volume{{
+					Name: "data",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName},
+					},
+				}},
+			}
+		}
+
+		holderName := "e2e-rwop-holder"
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: holderName},
+			Spec:       podSpec(pvcName),
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Pods(ns).Delete(context.TODO(), holderName, metav1.DeleteOptions{})
+		})
+		waitForInNamespace(t, "pod/"+holderName, "condition=Ready", ns)
+
+		cmdTest{
+			args:            []string{"pvc/" + pvcName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pvc-rwop-holder.regex",
+		}.assert(t, nil, opts...)
+
+		// A second Pod referencing the same ReadWriteOncePod claim can't be scheduled while the
+		// first is non-terminal -- the scheduler's VolumeRestrictions plugin rejects it and
+		// records that in the Pod's own PodScheduled condition, which is what
+		// rwop_holder_diagnosis keys off to avoid guessing at the cause of an unrelated pending
+		// Pod.
+		conflictName := "e2e-rwop-conflict"
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: conflictName},
+			Spec:       podSpec(pvcName),
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Pods(ns).Delete(context.TODO(), conflictName, metav1.DeleteOptions{})
+		})
+		waitForInNamespace(t, "pod/"+conflictName,
+			`jsonpath={.status.conditions[?(@.type=="PodScheduled")].status}=False`, ns)
+
+		cmdTest{
+			args:            []string{"pvc/" + pvcName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pvc-rwop-blocked.regex",
+		}.assert(t, nil, opts...)
+	})
+	t.Run("PersistentVolumeClaim renders an explicit conflict when two non-terminal Pods are scheduled against one ReadWriteOncePod claim", func(t *testing.T) {
+		// Issue #669: rwop_holder_diagnosis must never pick one Pod arbitrarily when more than
+		// one non-terminal Pod is scheduled against the same RWOP claim -- it has to render an
+		// explicit conflict instead. The kube-scheduler's VolumeRestrictions plugin normally
+		// prevents this from happening for real (see the subtest above), so to exercise the
+		// conflict branch deterministically we set spec.nodeName at Pod creation time, which
+		// skips the scheduler (and its RWOP check) entirely -- same "create it directly against
+		// the API" trick the VolumeAttachment subtest below uses to bypass needing a real CSI
+		// driver behind it. Pointed at a node name that doesn't exist rather than a real one: no
+		// kubelet ever claims the Pod, so phase stays Pending with no containerStatuses forever,
+		// instead of racing a real kubelet's admission/scheduling of the render against the
+		// test -- which flipped phase and readiness between runs when tried against a real node.
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-rwop-conflict"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		const nodeName = "e2e-rwop-conflict-no-such-node"
+
+		pvcName := "e2e-rwop-conflict-pvc"
+		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		waitForInNamespace(t, "pvc/"+pvcName, "jsonpath={.status.phase}=Bound", ns)
+
+		for _, name := range []string{"e2e-rwop-conflict-a", "e2e-rwop-conflict-b"} {
+			_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: name},
+				Spec: corev1.PodSpec{
+					NodeName: nodeName,
+					Containers: []corev1.Container{{
+						Name: "main", Image: "busybox", Command: []string{"sleep", "infinity"},
+						VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data"}},
+					}},
+					Volumes: []corev1.Volume{{
+						Name: "data",
+						VolumeSource: corev1.VolumeSource{
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName},
+						},
+					}},
+				},
+			}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			podName := name
+			t.Cleanup(func() {
+				clientset.CoreV1().Pods(ns).Delete(context.TODO(), podName, metav1.DeleteOptions{})
+			})
+		}
+
+		cmdTest{
+			args:            []string{"pvc/" + pvcName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pvc-rwop-conflict.regex",
+		}.assert(t, nil, opts...)
+	})
 	t.Run("PersistentVolume surfaces a VolumeAttachment attach error", func(t *testing.T) {
 		// Issue #669: VolumeAttachment has zero references anywhere in the templates today, so a
 		// PV/PVC pair can render fully Bound while the actual CSI attach/detach is stuck or

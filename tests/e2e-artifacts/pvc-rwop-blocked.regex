@@ -1,0 +1,10 @@
+\A
+PersistentVolumeClaim/e2e-rwop-pvc -n e2e-rwop, created 1m ago Bound
+  Current: PVC is Bound
+  PVC uses PersistentVolume/\S+ via StorageClass/standard, with Filesystem mode, asks for 1Gi, provisioned by \S+
+  Pods:
+    Pod/e2e-rwop-holder, created 1m ago Running, 1/1 ready
+    Pod/e2e-rwop-conflict, created 1m ago Pending
+  RWOP holder: Pod/e2e-rwop-holder, created 1m ago Running, 1/1 ready, node Node/\S+
+  RWOP: Pod/e2e-rwop-conflict, created 1m ago Pending, blocked: 0/1 nodes are available: 1 node\(s\) unavailable due to PersistentVolumeClaim with ReadWriteOncePod access mode already in-use by another pod\. no new claims to deallocate, preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod\.
+\z
