@@ -84,64 +84,65 @@ func ApplyTestHack(cfg *RenderConfig) {
 
 func (cfg *RenderConfig) funcMap() template.FuncMap {
 	return template.FuncMap{
-		"green":                          color.GreenString,
-		"yellow":                         color.YellowString,
-		"red":                            color.RedString,
-		"cyan":                           color.CyanString,
-		"blue":                           color.BlueString,
-		"bold":                           color.New(color.Bold).SprintfFunc(),
-		"colorAgo":                       cfg.colorAgo,
-		"colorAgoUnixNano":               cfg.colorAgoUnixNano,
-		"colorDuration":                  cfg.colorDuration,
-		"startedAfterClause":             cfg.startedAfterClause,
-		"colorBool":                      colorBool,
-		"colorKeyword":                   colorKeyword,
-		"markRed":                        markRed,
-		"markYellow":                     markYellow,
-		"markGreen":                      markGreen,
-		"redIf":                          redIf,
-		"redBoldIf":                      redBoldIf,
-		"signalName":                     signalName,
-		"isStatusConditionHealthy":       isStatusConditionHealthy,
-		"quantityToFloat64":              quantityToFloat64,
-		"quantityToInt64":                quantityToInt64,
-		"percent":                        percent,
-		"colorPercent":                   colorPercent,
-		"humanizeSI":                     humanizeSI,
-		"humanizeSIPair":                 humanizeSIPair,
-		"getMatchingItemInMapList":       getMatchingItemInMapList,
-		"sortMapListByKeysValue":         sortMapListByKeysValue,
-		"fieldsV1Paths":                  fieldsV1Paths,
-		"sortByRevisionAnnotation":       sortByRevisionAnnotation,
-		"sortByRevisionField":            sortByRevisionField,
-		"addFloat64":                     addFloat64,
-		"subFloat64":                     subFloat64,
-		"divFloat64":                     divFloat64,
-		"ip":                             cfg.ip,
-		"agoSuffix":                      cfg.agoSuffix,
-		"forOrSince":                     cfg.forOrSince,
-		"relativeTime":                   cfg.relativeTime,
-		"untilClause":                    cfg.untilClause,
-		"labelSelector":                  labelSelector,
-		"taintsNotToleratedByPod":        taintsNotToleratedByPod,
-		"networkPolicyPolicyTypes":       networkPolicyPolicyTypes,
-		"calicoPolicyTypes":              calicoPolicyTypes,
-		"ciliumPolicyDirections":         ciliumPolicyDirectionsForTemplate,
-		"cronNextTime":                   cfg.cronNextTime,
-		"withinLastHour":                 cfg.withinLastHour,
-		"parseTLSSecretCertificate":      cfg.parseTLSSecretCertificate,
-		"certificatesInSecret":           cfg.certificatesInSecret,
-		"certificatesInConfigMap":        cfg.certificatesInConfigMap,
-		"certificateInCSR":               cfg.certificateInCSR,
-		"certificateRequestInCSR":        certificateRequestInCSR,
-		"parseDockerConfigSecret":        parseDockerConfigSecret,
-		"parseBasicAuthSecret":           parseBasicAuthSecret,
-		"parseSSHAuthSecret":             parseSSHAuthSecret,
-		"parseServiceAccountTokenSecret": parseServiceAccountTokenSecret,
-		"parseBootstrapTokenSecret":      cfg.parseBootstrapTokenSecret,
-		"secretDataKeys":                 secretDataKeys,
-		"crossplaneManagedResourceDrift": crossplaneManagedResourceDrift,
-		"crossplaneDriftLabel":           crossplaneDriftLabel,
+		"green":                           color.GreenString,
+		"yellow":                          color.YellowString,
+		"red":                             color.RedString,
+		"cyan":                            color.CyanString,
+		"blue":                            color.BlueString,
+		"bold":                            color.New(color.Bold).SprintfFunc(),
+		"colorAgo":                        cfg.colorAgo,
+		"colorAgoUnixNano":                cfg.colorAgoUnixNano,
+		"colorDuration":                   cfg.colorDuration,
+		"startedAfterClause":              cfg.startedAfterClause,
+		"colorBool":                       colorBool,
+		"colorKeyword":                    colorKeyword,
+		"markRed":                         markRed,
+		"markYellow":                      markYellow,
+		"markGreen":                       markGreen,
+		"redIf":                           redIf,
+		"redBoldIf":                       redBoldIf,
+		"signalName":                      signalName,
+		"isStatusConditionHealthy":        isStatusConditionHealthy,
+		"quantityToFloat64":               quantityToFloat64,
+		"quantityToInt64":                 quantityToInt64,
+		"percent":                         percent,
+		"colorPercent":                    colorPercent,
+		"humanizeSI":                      humanizeSI,
+		"humanizeSIPair":                  humanizeSIPair,
+		"getMatchingItemInMapList":        getMatchingItemInMapList,
+		"sortMapListByKeysValue":          sortMapListByKeysValue,
+		"sortMapListByFloatKeysValueDesc": sortMapListByFloatKeysValueDesc,
+		"fieldsV1Paths":                   fieldsV1Paths,
+		"sortByRevisionAnnotation":        sortByRevisionAnnotation,
+		"sortByRevisionField":             sortByRevisionField,
+		"addFloat64":                      addFloat64,
+		"subFloat64":                      subFloat64,
+		"divFloat64":                      divFloat64,
+		"ip":                              cfg.ip,
+		"agoSuffix":                       cfg.agoSuffix,
+		"forOrSince":                      cfg.forOrSince,
+		"relativeTime":                    cfg.relativeTime,
+		"untilClause":                     cfg.untilClause,
+		"labelSelector":                   labelSelector,
+		"taintsNotToleratedByPod":         taintsNotToleratedByPod,
+		"networkPolicyPolicyTypes":        networkPolicyPolicyTypes,
+		"calicoPolicyTypes":               calicoPolicyTypes,
+		"ciliumPolicyDirections":          ciliumPolicyDirectionsForTemplate,
+		"cronNextTime":                    cfg.cronNextTime,
+		"withinLastHour":                  cfg.withinLastHour,
+		"parseTLSSecretCertificate":       cfg.parseTLSSecretCertificate,
+		"certificatesInSecret":            cfg.certificatesInSecret,
+		"certificatesInConfigMap":         cfg.certificatesInConfigMap,
+		"certificateInCSR":                cfg.certificateInCSR,
+		"certificateRequestInCSR":         certificateRequestInCSR,
+		"parseDockerConfigSecret":         parseDockerConfigSecret,
+		"parseBasicAuthSecret":            parseBasicAuthSecret,
+		"parseSSHAuthSecret":              parseSSHAuthSecret,
+		"parseServiceAccountTokenSecret":  parseServiceAccountTokenSecret,
+		"parseBootstrapTokenSecret":       cfg.parseBootstrapTokenSecret,
+		"secretDataKeys":                  secretDataKeys,
+		"crossplaneManagedResourceDrift":  crossplaneManagedResourceDrift,
+		"crossplaneDriftLabel":            crossplaneDriftLabel,
 	}
 }
 
@@ -299,6 +300,25 @@ func sortMapListByKeysValue(key string, mapList []interface{}) (result []interfa
 			typedMapListItemJ, _ = mapJ[key].(string)
 		}
 		return typedMapListItemI < typedMapListItemJ
+	})
+	return
+}
+
+// sortMapListByFloatKeysValueDesc returns a sorted copy of mapList in descending order of the
+// given key's float64 value, e.g. ranking a node's pods by measured resource usage without a
+// second apiserver round trip: callers accumulate the usage as a float64 while they already have
+// the metrics at hand, and only need the ordering applied once, at render time.
+func sortMapListByFloatKeysValueDesc(key string, mapList []interface{}) (result []interface{}) {
+	result = append(result, mapList...)
+	sort.SliceStable(result, func(i, j int) bool {
+		var typedMapListItemI, typedMapListItemJ float64
+		if mapI, ok := result[i].(map[string]interface{}); ok {
+			typedMapListItemI, _ = mapI[key].(float64)
+		}
+		if mapJ, ok := result[j].(map[string]interface{}); ok {
+			typedMapListItemJ, _ = mapJ[key].(float64)
+		}
+		return typedMapListItemI > typedMapListItemJ
 	})
 	return
 }

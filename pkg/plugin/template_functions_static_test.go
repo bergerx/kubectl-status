@@ -168,6 +168,24 @@ func TestSortMapListByKeysValueIsStableOnTies(t *testing.T) {
 	}
 }
 
+func TestSortMapListByFloatKeysValueDescIsStableOnTies(t *testing.T) {
+	// Mirrors TestSortMapListByKeysValueIsStableOnTies: ties (e.g. two pods reporting the same
+	// usage) must preserve original relative order rather than reordering arbitrarily, otherwise
+	// a Node's "pods by usage" ranking becomes flaky between otherwise identical runs.
+	mapList := []interface{}{
+		map[string]interface{}{"ref": "ns/a", "memUsage": 5.0},
+		map[string]interface{}{"ref": "ns/b", "memUsage": 10.0},
+		map[string]interface{}{"ref": "ns/c", "memUsage": 10.0},
+	}
+	for i := 0; i < 10; i++ {
+		got := sortMapListByFloatKeysValueDesc("memUsage", mapList)
+		want := []interface{}{mapList[1], mapList[2], mapList[0]}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("sortMapListByFloatKeysValueDesc() = %v, want %v", got, want)
+		}
+	}
+}
+
 func TestFieldsV1Paths(t *testing.T) {
 	tests := []struct {
 		name     string
