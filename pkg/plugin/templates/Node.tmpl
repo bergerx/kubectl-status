@@ -238,13 +238,21 @@
                 {{- $groupSpans := list 3 3 }}
                 {{- $tableRows := list }}
                 {{- range . | sortMapListByFloatKeysValueDesc "memUsage" }}
-                    {{- $tableRows = append $tableRows (list .ref
+                    {{- /* Appending a row here via sprout's "append" would misfire: append's
+                           old/new-signature detection keys off whether its first argument is
+                           slice-kind, and a row is itself a list, so it flip-flops forever
+                           between the two argument orders instead of ever landing on the new
+                           signature (a stack-overflowing infinite loop). concat doesn't have
+                           that ambiguity -- wrapping the row in a single-element list and
+                           concatenating appends it as one row rather than flattening its
+                           cells into $tableRows. */ -}}
+                    {{- $tableRows = concat $tableRows (list (list .ref
                         (printf "%s(%s)" (.cpuUsage | printf "%.3g") (percent .cpuUsage $allocCpu | colorPercent "%.0f%%"))
                         (printf "%s(%s)" (.cpuReq | printf "%.3g") (percent .cpuReq $allocCpu | colorPercent "%.0f%%"))
                         (printf "%s(%s)" (.cpuLim | printf "%.3g") (percent .cpuLim $allocCpu | colorPercent "%.0f%%"))
                         (printf "%s(%s)" (.memUsage | humanizeSI "B") (percent .memUsage $allocMem | colorPercent "%.0f%%"))
                         (printf "%s(%s)" (.memReq | humanizeSI "B") (percent .memReq $allocMem | colorPercent "%.0f%%"))
-                        (printf "%s(%s)" (.memLim | humanizeSI "B") (percent .memLim $allocMem | colorPercent "%.0f%%"))) }}
+                        (printf "%s(%s)" (.memLim | humanizeSI "B") (percent .memLim $allocMem | colorPercent "%.0f%%")))) }}
                 {{- end }}
                 {{- renderGroupedTable "pod" $groupLabels $groupSpans $tableRows | nindent 4 }}
             {{- end }}
