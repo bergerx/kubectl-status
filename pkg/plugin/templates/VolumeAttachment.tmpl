@@ -1,0 +1,26 @@
+{{- define "VolumeAttachment" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: storage.k8s.io/v1, Kind=VolumeAttachment */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- "Attacher" | bold | nindent 2 }}: {{ .Spec.attacher | cyan }}
+    {{- with .Spec.source.persistentVolumeName }}, volume {{ $.Include "resource_ref" (dict "kind" "PersistentVolume" "name" .) }}{{ end }}
+    {{- with .Spec.nodeName }}, node {{ $.Include "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}
+    {{- if .Status.attached }}
+        {{- ", " }}{{ "attached" | green }}
+    {{- else }}
+        {{- ", " }}{{ "not attached" | red | bold }}
+    {{- end }}
+    {{- with .Status.attachError }}
+        {{- "Attach error" | red | bold | nindent 2 }}: {{ .message }}
+        {{- with .time }} ({{ . | colorAgo }}{{ agoSuffix }}){{ end }}
+    {{- end }}
+    {{- with .Status.detachError }}
+        {{- "Detach error" | red | bold | nindent 2 }}: {{ .message }}
+        {{- with .time }} ({{ . | colorAgo }}{{ agoSuffix }}){{ end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

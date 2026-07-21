@@ -281,4 +281,88 @@ func TestE2EDynamicManifests(t *testing.T) {
 			stdoutRegexPath: "e2e-artifacts/pvc-storageclass-missing.regex",
 		}.assert(t, nil, opts...)
 	})
+	t.Run("PersistentVolume surfaces a VolumeAttachment attach error", func(t *testing.T) {
+		// Issue #669: VolumeAttachment has zero references anywhere in the templates today, so a
+		// PV/PVC pair can render fully Bound while the actual CSI attach/detach is stuck or
+		// erroring -- invisible from both the Pod and PVC/PV views. minikube's own
+		// storage-provisioner addon isn't a real CSI driver (hostpath needs no attacher), so it
+		// never creates VolumeAttachment objects itself -- there's nothing to wait on
+		// deterministically. Instead we create the VolumeAttachment object directly against the
+		// API (same trick as the StorageClass subtest above): the apiserver only validates the
+		// object's shape, not that a driver is actually behind it, so this is fully
+		// deterministic and not flaky.
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		// Its own namespace, not the "e2e-storageclass" one the subtest above uses: reusing it
+		// raced against that subtest's own namespace deletion still being in flight ("unable to
+		// create new content ... because it is being terminated") when both ran in the same
+		// process.
+		ns := "e2e-volumeattachment"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+		require.NoError(t, err)
+		require.NotEmpty(t, nodes.Items)
+		nodeName := nodes.Items[0].Name
+
+		// No storageClassName -- picks up the cluster's default class (Immediate binding), so
+		// this actually provisions and binds a real PV to attach the fake VolumeAttachment to.
+		pvcName := "e2e-attach-error-pvc"
+		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		waitForInNamespace(t, "pvc/"+pvcName, "jsonpath={.status.phase}=Bound", ns)
+
+		pvc, err := clientset.CoreV1().PersistentVolumeClaims(ns).Get(context.TODO(), pvcName, metav1.GetOptions{})
+		require.NoError(t, err)
+		pvName := pvc.Spec.VolumeName
+		require.NotEmpty(t, pvName)
+
+		vaName := "e2e-fake-attach-error"
+		va := &storagev1.VolumeAttachment{
+			ObjectMeta: metav1.ObjectMeta{Name: vaName},
+			Spec: storagev1.VolumeAttachmentSpec{
+				Attacher: "fake.csi.kubectl-status.io",
+				NodeName: nodeName,
+				Source:   storagev1.VolumeAttachmentSource{PersistentVolumeName: &pvName},
+			},
+		}
+		created, err := clientset.StorageV1().VolumeAttachments().Create(context.TODO(), va, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.StorageV1().VolumeAttachments().Delete(context.TODO(), vaName, metav1.DeleteOptions{})
+		})
+		created.Status = storagev1.VolumeAttachmentStatus{
+			Attached: false,
+			AttachError: &storagev1.VolumeError{
+				Time:    metav1.Now(),
+				Message: "rpc error: code = Internal desc = fake attach failure for e2e test",
+			},
+		}
+		_, err = clientset.StorageV1().VolumeAttachments().UpdateStatus(context.TODO(), created, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		cmdTest{
+			args:            []string{"pv/" + pvName, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pv-volumeattachment-error.regex",
+		}.assert(t, nil, opts...)
+		// --deep inlines the matching VolumeAttachment in full -- offline artifact tests can't
+		// reach this branch either, since --shallow/--local (used by every offline test) makes
+		// the KubeGet behind it a no-op.
+		cmdTest{
+			args:            []string{"pv/" + pvName, "--deep", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pv-volumeattachment-error-deep.regex",
+		}.assert(t, nil, opts...)
+	})
 }

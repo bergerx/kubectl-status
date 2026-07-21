@@ -1,0 +1,17 @@
+apiVersion: storage.k8s.io/v1
+kind: VolumeAttachment
+metadata:
+  creationTimestamp: "2026-07-10T14:52:59Z"
+  name: csi-9f8e7d6c5b4a3210
+  resourceVersion: "317052"
+  uid: c3d4e5f6-a7b8-9012-cdef-123456789012
+spec:
+  attacher: ebs.csi.aws.com
+  nodeName: ip-10-0-0-2.ec2.internal
+  source:
+    persistentVolumeName: pvc-fedcba98-7654-3210-fedc-ba9876543210
+status:
+  attached: false
+  attachError:
+    time: "2026-07-10T14:53:59Z"
+    message: "rpc error: code = Internal desc = Could not attach volume \"vol-0123456789abcdef0\" to node \"i-0123456789abcdef0\": attachment limit exceeded"
