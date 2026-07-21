@@ -125,6 +125,8 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"untilClause":                     cfg.untilClause,
 		"labelSelector":                   labelSelector,
 		"taintsNotToleratedByPod":         taintsNotToleratedByPod,
+		"formatNodeSelector":              formatNodeSelector,
+		"formatNodeSelectorTerms":         formatNodeSelectorTerms,
 		"networkPolicyPolicyTypes":        networkPolicyPolicyTypes,
 		"calicoPolicyTypes":               calicoPolicyTypes,
 		"ciliumPolicyDirections":          ciliumPolicyDirectionsForTemplate,
@@ -847,6 +849,200 @@ func taintsNotToleratedByPod(nodeTaints, tolerations []interface{}) (result []in
 		}
 	}
 	return result
+}
+
+// formatNodeSelector renders spec.nodeSelector, a flat key/value map, as "k=v,k2=v2" -- the same
+// comma-joined "k=v" convention used elsewhere for rendered label selectors, keys sorted for
+// stable output.
+func formatNodeSelector(nodeSelector map[string]interface{}) string {
+	keys := make([]string, 0, len(nodeSelector))
+	for k := range nodeSelector {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		v, _ := nodeSelector[k].(string)
+		parts = append(parts, fmt.Sprintf("%s=%s", k, v))
+	}
+	return strings.Join(parts, ",")
+}
+
+// toInterfaceMapSlice converts an unstructured field (expected to be a []interface{} of
+// map[string]interface{} elements, e.g. matchExpressions/matchFields) into []map[string]interface{},
+// tolerating (by skipping) any element that isn't shaped like one -- unstructured content from the
+// API server is never guaranteed to match the expected shape.
+func toInterfaceMapSlice(field interface{}) []map[string]interface{} {
+	items, _ := field.([]interface{})
+	result := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		if m, ok := item.(map[string]interface{}); ok {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+// toStringSlice converts an unstructured []interface{} of strings (e.g. a NodeSelectorRequirement
+// "values" field) into a []string, skipping any non-string element.
+func toStringSlice(values interface{}) []string {
+	items, _ := values.([]interface{})
+	result := make([]string, 0, len(items))
+	for _, v := range items {
+		if s, ok := v.(string); ok {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// formatNodeSelectorRequirement renders a single matchExpressions/matchFields entry from
+// spec.affinity.nodeAffinity, mirroring the compact style of
+// k8s.io/apimachinery/pkg/labels.Requirement.String() ("key in (a,b)", "!key", "key>5") but
+// extended with Gt/Lt, which LabelSelectorRequirement doesn't support -- this is deliberately not
+// routed through the labelSelector pipe function, since NodeSelectorRequirement isn't
+// metav1.LabelSelector-shaped and silently dropping Gt/Lt would misrepresent the constraint.
+func formatNodeSelectorRequirement(expr map[string]interface{}) string {
+	key, _ := expr["key"].(string)
+	operator, _ := expr["operator"].(string)
+	values := toStringSlice(expr["values"])
+	joined := strings.Join(values, ",")
+	switch operator {
+	case "Exists":
+		return key
+	case "DoesNotExist":
+		return "!" + key
+	case "In":
+		return fmt.Sprintf("%s in (%s)", key, joined)
+	case "NotIn":
+		return fmt.Sprintf("%s notin (%s)", key, joined)
+	case "Gt":
+		return fmt.Sprintf("%s>%s", key, joined)
+	case "Lt":
+		return fmt.Sprintf("%s<%s", key, joined)
+	default:
+		return fmt.Sprintf("%s %s (%s)", key, operator, joined)
+	}
+}
+
+// formatNodeSelectorTerm renders one nodeSelectorTerm as the AND of its matchExpressions and
+// matchFields requirements.
+func formatNodeSelectorTerm(term map[string]interface{}) string {
+	var parts []string
+	for _, e := range toInterfaceMapSlice(term["matchExpressions"]) {
+		parts = append(parts, formatNodeSelectorRequirement(e))
+	}
+	for _, e := range toInterfaceMapSlice(term["matchFields"]) {
+		parts = append(parts, formatNodeSelectorRequirement(e))
+	}
+	return strings.Join(parts, ",")
+}
+
+// formatNodeSelectorTerms renders
+// spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms as
+// the OR of its terms, each an AND of its requirements. Multiple terms are parenthesized so the
+// OR/AND nesting stays unambiguous.
+func formatNodeSelectorTerms(terms []interface{}) string {
+	rendered := make([]string, 0, len(terms))
+	for _, t := range terms {
+		term, ok := t.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if r := formatNodeSelectorTerm(term); r != "" {
+			rendered = append(rendered, r)
+		}
+	}
+	if len(rendered) > 1 {
+		for i, r := range rendered {
+			rendered[i] = fmt.Sprintf("(%s)", r)
+		}
+	}
+	return strings.Join(rendered, " or ")
+}
+
+// nodeSelectorRequirementMatches reports whether values (nodeLabels or nodeFields) satisfies a
+// single matchExpressions/matchFields requirement, mirroring
+// k8s.io/apimachinery/pkg/labels.Requirement.Matches: NotIn and DoesNotExist are satisfied when
+// the key is absent; In, Exists, Gt and Lt all require the key to be present.
+func nodeSelectorRequirementMatches(expr map[string]interface{}, values map[string]string) bool {
+	key, _ := expr["key"].(string)
+	operator, _ := expr["operator"].(string)
+	val, exists := values[key]
+	reqValues := toStringSlice(expr["values"])
+	switch operator {
+	case "In":
+		return exists && stringSliceContains(reqValues, val)
+	case "NotIn":
+		return !exists || !stringSliceContains(reqValues, val)
+	case "Exists":
+		return exists
+	case "DoesNotExist":
+		return !exists
+	case "Gt":
+		return exists && len(reqValues) == 1 && numericLess(reqValues[0], val)
+	case "Lt":
+		return exists && len(reqValues) == 1 && numericLess(val, reqValues[0])
+	default:
+		return false
+	}
+}
+
+// stringSliceContains reports whether s is present in values.
+func stringSliceContains(values []string, s string) bool {
+	for _, v := range values {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// numericLess reports whether a < b, treating both as base-10 integers. A non-integer operand
+// (malformed input) never satisfies the comparison, matching Requirement.Matches' behavior of
+// treating unparsable Gt/Lt values as non-matching rather than erroring.
+func numericLess(a, b string) bool {
+	aInt, aErr := strconv.ParseInt(a, 10, 64)
+	bInt, bErr := strconv.ParseInt(b, 10, 64)
+	return aErr == nil && bErr == nil && aInt < bInt
+}
+
+// nodeSelectorTermMatches reports whether nodeLabels/nodeFields satisfy a single nodeSelectorTerm:
+// AND across its matchExpressions (checked against nodeLabels) and matchFields (checked against
+// nodeFields).
+func nodeSelectorTermMatches(term map[string]interface{}, nodeLabels, nodeFields map[string]string) bool {
+	for _, e := range toInterfaceMapSlice(term["matchExpressions"]) {
+		if !nodeSelectorRequirementMatches(e, nodeLabels) {
+			return false
+		}
+	}
+	for _, e := range toInterfaceMapSlice(term["matchFields"]) {
+		if !nodeSelectorRequirementMatches(e, nodeFields) {
+			return false
+		}
+	}
+	return true
+}
+
+// nodeSelectorTermsMatch reports whether nodeLabels/nodeFields satisfy at least one of terms (OR
+// across terms), implementing required-during-scheduling node affinity semantics. An empty terms
+// list is unconstrained and matches everything -- mirroring
+// k8s.io/component-helpers/scheduling/corev1/nodeaffinity's treatment of an absent
+// nodeAffinity/nodeSelector as "no constraint" rather than "matches nothing".
+func nodeSelectorTermsMatch(terms []interface{}, nodeLabels, nodeFields map[string]string) bool {
+	if len(terms) == 0 {
+		return true
+	}
+	for _, t := range terms {
+		term, ok := t.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if nodeSelectorTermMatches(term, nodeLabels, nodeFields) {
+			return true
+		}
+	}
+	return false
 }
 
 // networkPolicySelectsPod reports whether a NetworkPolicy's spec.podSelector matches podLabels.

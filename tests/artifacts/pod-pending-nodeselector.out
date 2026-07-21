@@ -1,0 +1,8 @@
+
+Pod/pod-pending-nodeselector -n default, created 1m ago, gen:1 Pending Burstable
+  Failed: Pod could not be scheduled
+    Stalled: PodUnschedulable, Pod could not be scheduled
+  Not PodScheduled -> Not Initialized -> Not ContainersReady -> Not Ready
+    PodScheduled Unschedulable, 0/3 nodes are available: 3 node(s) didn't match Pod's node affinity/selector. for 1m
+  node selector: disktype=ssd,kubernetes.io/arch=arm64
+  Standalone POD.

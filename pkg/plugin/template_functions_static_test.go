@@ -334,6 +334,278 @@ func TestTaintsNotToleratedByPod(t *testing.T) {
 	}
 }
 
+func TestFormatNodeSelector(t *testing.T) {
+	tests := []struct {
+		name         string
+		nodeSelector map[string]interface{}
+		want         string
+	}{
+		{
+			name:         "empty",
+			nodeSelector: map[string]interface{}{},
+			want:         "",
+		},
+		{
+			name:         "single key",
+			nodeSelector: map[string]interface{}{"disktype": "ssd"},
+			want:         "disktype=ssd",
+		},
+		{
+			name:         "multiple keys are sorted",
+			nodeSelector: map[string]interface{}{"zone": "us-east-1a", "disktype": "ssd"},
+			want:         "disktype=ssd,zone=us-east-1a",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatNodeSelector(tt.nodeSelector); got != tt.want {
+				t.Errorf("formatNodeSelector() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatNodeSelectorTerms(t *testing.T) {
+	tests := []struct {
+		name  string
+		terms []interface{}
+		want  string
+	}{
+		{
+			name:  "no terms",
+			terms: nil,
+			want:  "",
+		},
+		{
+			name: "single term, single expression",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "disktype", "operator": "In", "values": []interface{}{"ssd"}},
+				}},
+			},
+			want: "disktype in (ssd)",
+		},
+		{
+			name: "single term, multiple AND'd expressions and fields",
+			terms: []interface{}{
+				map[string]interface{}{
+					"matchExpressions": []interface{}{
+						map[string]interface{}{"key": "zone", "operator": "In", "values": []interface{}{"a", "b"}},
+						map[string]interface{}{"key": "gpu", "operator": "DoesNotExist"},
+					},
+					"matchFields": []interface{}{
+						map[string]interface{}{"key": "metadata.name", "operator": "NotIn", "values": []interface{}{"node-1"}},
+					},
+				},
+			},
+			want: "zone in (a,b),!gpu,metadata.name notin (node-1)",
+		},
+		{
+			name: "multiple OR'd terms are parenthesized",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "zone", "operator": "In", "values": []interface{}{"a"}},
+				}},
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "zone", "operator": "In", "values": []interface{}{"b"}},
+				}},
+			},
+			want: "(zone in (a)) or (zone in (b))",
+		},
+		{
+			name: "Gt and Lt operators",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "cores", "operator": "Gt", "values": []interface{}{"4"}},
+					map[string]interface{}{"key": "cores", "operator": "Lt", "values": []interface{}{"32"}},
+				}},
+			},
+			want: "cores>4,cores<32",
+		},
+		{
+			name: "Exists operator",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "gpu", "operator": "Exists"},
+				}},
+			},
+			want: "gpu",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatNodeSelectorTerms(tt.terms); got != tt.want {
+				t.Errorf("formatNodeSelectorTerms() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNodeSelectorTermsMatch(t *testing.T) {
+	inTerm := func(key string, values ...string) map[string]interface{} {
+		vs := make([]interface{}, len(values))
+		for i, v := range values {
+			vs[i] = v
+		}
+		return map[string]interface{}{"key": key, "operator": "In", "values": vs}
+	}
+
+	tests := []struct {
+		name       string
+		terms      []interface{}
+		nodeLabels map[string]string
+		nodeFields map[string]string
+		want       bool
+	}{
+		{
+			name:       "empty selector matches everything",
+			terms:      nil,
+			nodeLabels: map[string]string{},
+			want:       true,
+		},
+		{
+			name: "single term matches",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{inTerm("zone", "a")}},
+			},
+			nodeLabels: map[string]string{"zone": "a"},
+			want:       true,
+		},
+		{
+			name: "single term does not match",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{inTerm("zone", "a")}},
+			},
+			nodeLabels: map[string]string{"zone": "b"},
+			want:       false,
+		},
+		{
+			name: "multiple OR'd terms, second matches",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{inTerm("zone", "a")}},
+				map[string]interface{}{"matchExpressions": []interface{}{inTerm("zone", "b")}},
+			},
+			nodeLabels: map[string]string{"zone": "b"},
+			want:       true,
+		},
+		{
+			name: "multiple AND'd expressions within a term, one fails",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					inTerm("zone", "a"),
+					map[string]interface{}{"key": "gpu", "operator": "Exists"},
+				}},
+			},
+			nodeLabels: map[string]string{"zone": "a"},
+			want:       false,
+		},
+		{
+			name: "matchFields checked against nodeFields, not nodeLabels",
+			terms: []interface{}{
+				map[string]interface{}{"matchFields": []interface{}{inTerm("metadata.name", "node-1")}},
+			},
+			nodeFields: map[string]string{"metadata.name": "node-1"},
+			want:       true,
+		},
+		{
+			name: "In: key absent does not match",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{inTerm("zone", "a")}},
+			},
+			nodeLabels: map[string]string{},
+			want:       false,
+		},
+		{
+			name: "NotIn: key absent matches",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "zone", "operator": "NotIn", "values": []interface{}{"a"}},
+				}},
+			},
+			nodeLabels: map[string]string{},
+			want:       true,
+		},
+		{
+			name: "NotIn: key present with excluded value matches",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "zone", "operator": "NotIn", "values": []interface{}{"a"}},
+				}},
+			},
+			nodeLabels: map[string]string{"zone": "b"},
+			want:       true,
+		},
+		{
+			name: "NotIn: key present with excluded value list member does not match",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "zone", "operator": "NotIn", "values": []interface{}{"a"}},
+				}},
+			},
+			nodeLabels: map[string]string{"zone": "a"},
+			want:       false,
+		},
+		{
+			name: "Exists: key present matches",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "gpu", "operator": "Exists"},
+				}},
+			},
+			nodeLabels: map[string]string{"gpu": ""},
+			want:       true,
+		},
+		{
+			name: "DoesNotExist: key absent matches",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "gpu", "operator": "DoesNotExist"},
+				}},
+			},
+			nodeLabels: map[string]string{},
+			want:       true,
+		},
+		{
+			name: "Gt: value greater matches",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "cores", "operator": "Gt", "values": []interface{}{"4"}},
+				}},
+			},
+			nodeLabels: map[string]string{"cores": "8"},
+			want:       true,
+		},
+		{
+			name: "Gt: value not greater does not match",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "cores", "operator": "Gt", "values": []interface{}{"4"}},
+				}},
+			},
+			nodeLabels: map[string]string{"cores": "2"},
+			want:       false,
+		},
+		{
+			name: "Lt: value less matches",
+			terms: []interface{}{
+				map[string]interface{}{"matchExpressions": []interface{}{
+					map[string]interface{}{"key": "cores", "operator": "Lt", "values": []interface{}{"4"}},
+				}},
+			},
+			nodeLabels: map[string]string{"cores": "2"},
+			want:       true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := nodeSelectorTermsMatch(tt.terms, tt.nodeLabels, tt.nodeFields)
+			if got != tt.want {
+				t.Errorf("nodeSelectorTermsMatch() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNetworkPolicySelectsPod(t *testing.T) {
 	tests := []struct {
 		name      string

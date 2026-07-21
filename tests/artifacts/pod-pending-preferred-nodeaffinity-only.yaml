@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: "2026-06-28T21:13:57Z"
+  generation: 1
+  name: pod-pending-preferred-nodeaffinity-only
+  namespace: default
+  resourceVersion: "182454"
+  uid: 50285956-11ff-446f-9854-46f94842fe13
+spec:
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - preference:
+          matchExpressions:
+          - key: topology.kubernetes.io/zone
+            operator: In
+            values:
+            - us-east-1a
+        weight: 50
+  containers:
+  - image: nginx:alpine
+    imagePullPolicy: IfNotPresent
+    name: main
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2026-06-28T21:13:57Z"
+    message: '0/3 nodes are available: 3 node(s) didn''t match Pod''s node affinity/selector.'
+    reason: Unschedulable
+    status: "False"
+    type: PodScheduled
+  phase: Pending
+  qosClass: Burstable
