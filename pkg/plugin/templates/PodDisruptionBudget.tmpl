@@ -53,7 +53,7 @@
                     {{- end }}
                 {{- else }}
                     {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
-                        {{- $.Include "pod_health_summary" . | nindent 4 }}
+                        {{- $.Include "pod_health_summary" (dict "pod" . "callerNamespace" $.Namespace) | nindent 4 }}
                     {{- end }}
                 {{- end }}
             {{- end }}

@@ -1,6 +1,6 @@
 
 Node/minikube, created 1m ago
-  linux Ubuntu 22.04.4 LTS (amd64), kernel 6.6.41-1-MANJARO, kubelet v1.30.0, kube-proxy v1.30.0
+  linux Ubuntu 22.04.4 LTS (amd64), kernel 6.6.41-1-MANJARO, kubelet v1.30.0, kube-proxy v1.30.0, runtime docker://26.1.1
   images 8
   Current: Resource is Ready
   MemoryPressure KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m

@@ -583,6 +583,10 @@ func (r *ResourceRepo) NonTerminatedPodsOnTheNode(nodeName string) (Objects, err
 	}
 	pods := Objects{}
 	for _, pod := range nodeNonTerminatedPodsList.Items {
+		// The typed clientset's List() leaves TypeMeta empty on individual items, but
+		// templates render the Kind (e.g. resource_ref), so it must be set explicitly here.
+		pod.Kind = "Pod"
+		pod.APIVersion = "v1"
 		unstructuredPod, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&pod)
 		pods = append(pods, unstructuredPod)
 	}

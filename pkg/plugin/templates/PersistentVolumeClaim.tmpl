@@ -67,7 +67,7 @@
     {{- if $usingPods }}
         {{- "Pods" | bold | nindent 2 }}:
         {{- range $usingPods }}
-            {{- $.Include "pod_health_summary" . | nindent 4 }}
+            {{- $.Include "pod_health_summary" (dict "pod" . "callerNamespace" $.Namespace) | nindent 4 }}
         {{- end }}
     {{- end }}
     {{- $.Include "rwop_holder_diagnosis" (dict "ctx" $ "pods" $usingPods "accessModes" (.Spec.accessModes | default list)) }}

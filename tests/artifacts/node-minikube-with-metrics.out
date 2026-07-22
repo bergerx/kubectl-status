@@ -1,6 +1,6 @@
 
 Node/minikube, created 1m ago
-  linux Buildroot 2019.02.9 (amd64), kernel 4.19.94, kubelet v1.17.3, kube-proxy v1.17.3
+  linux Buildroot 2019.02.9 (amd64), kernel 4.19.94, kubelet v1.17.3, kube-proxy v1.17.3, runtime docker://19.3.6
   images 13
   Current: Resource is Ready
   MemoryPressure KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m
