@@ -11,12 +11,15 @@ import (
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/bergerx/kubectl-status/pkg/plugin"
 )
 
-func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), clientset *kubernetes.Clientset) {
+func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), clientset *kubernetes.Clientset, dynamicClient dynamic.Interface) {
 	t.Run("pod on a cordoned node with an untolerated taint and a bad condition", func(t *testing.T) {
 		t.Parallel()
 		opts := combineOpts(hackOpts, viperTestHackOpts())
@@ -305,6 +308,98 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		cmdTest{
 			args:            []string{"rs/bad-rs", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node-for-rs.regex",
+		}.assert(t, nil, opts...)
+	})
+	t.Run("pod nodeSelector key no NodePool declares surfaces a Karpenter incompatibility, a satisfiable one stays silent", func(t *testing.T) {
+		t.Parallel()
+		// No real Karpenter controller runs here (CRDs only, see ensureKarpenterCRDs), so neither
+		// Pod below is ever actually provisioned for -- ordinary real-node scheduling failure
+		// (no matching Node exists in this minikube cluster either) is what keeps them Pending,
+		// which is all that's needed to exercise the render path: it only reads the NodePool's
+		// declared spec.requirements, never its status/conditions (never populated without a
+		// reconciler) or whether a NodeClaim was actually created.
+		ensureKarpenterCRDs(t)
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-karpenter-pod"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		// This NodePool only declares a zone requirement -- it says nothing about the custom
+		// label the first Pod below hard-requires (so every NodePool disqualifies on that key),
+		// and its only allowed zone value is exactly what the second Pod requires (so no key
+		// disqualifies every NodePool for that Pod).
+		nodePoolGVR := schema.GroupVersionResource{Group: "karpenter.sh", Version: "v1", Resource: "nodepools"}
+		nodePoolName := "e2e-karpenter-pool-" + ns
+		nodePool := &unstructured.Unstructured{Object: map[string]interface{}{
+			"apiVersion": "karpenter.sh/v1",
+			"kind":       "NodePool",
+			"metadata":   map[string]interface{}{"name": nodePoolName},
+			"spec": map[string]interface{}{
+				"template": map[string]interface{}{
+					"spec": map[string]interface{}{
+						"nodeClassRef": map[string]interface{}{
+							"group": "karpenter.k8s.aws", "kind": "EC2NodeClass", "name": "default",
+						},
+						"requirements": []interface{}{
+							map[string]interface{}{
+								"key": "topology.kubernetes.io/zone", "operator": "In",
+								"values": []interface{}{"e2e-zone-a"},
+							},
+						},
+					},
+				},
+			},
+		}}
+		_, err = dynamicClient.Resource(nodePoolGVR).Create(context.TODO(), nodePool, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			dynamicClient.Resource(nodePoolGVR).Delete(context.TODO(), nodePoolName, metav1.DeleteOptions{})
+		})
+
+		unsatisfiablePodName := "karpenter-unsatisfiable-pod"
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: unsatisfiablePodName, Labels: map[string]string{"app": unsatisfiablePodName}},
+			Spec: corev1.PodSpec{
+				NodeSelector: map[string]string{"workload.example.com/tier": "stateful"},
+				Containers:   []corev1.Container{{Name: "app", Image: "busybox"}},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Pods(ns).Delete(context.TODO(), unsatisfiablePodName, metav1.DeleteOptions{})
+		})
+		waitForInNamespace(t, "pod/"+unsatisfiablePodName,
+			`jsonpath={.status.conditions[?(@.type=="PodScheduled")].status}=False`, ns)
+		waitForPodScheduleWindow(t, ns, "app="+unsatisfiablePodName)
+
+		cmdTest{
+			args:            []string{"pod/" + unsatisfiablePodName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-karpenter-unsatisfiable.regex",
+		}.assert(t, nil, opts...)
+
+		satisfiablePodName := "karpenter-satisfiable-pod"
+		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: satisfiablePodName, Labels: map[string]string{"app": satisfiablePodName}},
+			Spec: corev1.PodSpec{
+				NodeSelector: map[string]string{"topology.kubernetes.io/zone": "e2e-zone-a"},
+				Containers:   []corev1.Container{{Name: "app", Image: "busybox"}},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Pods(ns).Delete(context.TODO(), satisfiablePodName, metav1.DeleteOptions{})
+		})
+		waitForInNamespace(t, "pod/"+satisfiablePodName,
+			`jsonpath={.status.conditions[?(@.type=="PodScheduled")].status}=False`, ns)
+		waitForPodScheduleWindow(t, ns, "app="+satisfiablePodName)
+
+		cmdTest{
+			args:            []string{"pod/" + satisfiablePodName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/pod-karpenter-satisfiable.regex",
 		}.assert(t, nil, opts...)
 	})
 }

@@ -746,6 +746,34 @@ func ensureVolumeSnapshotCRDs(t *testing.T) {
 	})
 }
 
+var karpenterCRDsInstaller onceInstaller
+
+// ensureKarpenterCRDs installs the NodePool/NodeClaim CRDs (karpenter.sh/v1), needed by
+// runKarpenterSubtests. kubectl-status only reads/renders these objects client-side and never
+// relies on the Karpenter controller actually provisioning nodes, so the CRDs alone (no Karpenter
+// controller installed) are enough -- same "CRDs only" reasoning as ensureCiliumCalicoCRDs/
+// ensureVolumeSnapshotCRDs above.
+func ensureKarpenterCRDs(t *testing.T) {
+	t.Helper()
+	karpenterCRDsInstaller.ensure(t, func() error {
+		version, err := versionsEnvValue("KARPENTER_VERSION")
+		if err != nil {
+			return err
+		}
+		urls := []string{
+			fmt.Sprintf("https://raw.githubusercontent.com/kubernetes-sigs/karpenter/%s/pkg/apis/crds/karpenter.sh_nodepools.yaml", version),
+			fmt.Sprintf("https://raw.githubusercontent.com/kubernetes-sigs/karpenter/%s/pkg/apis/crds/karpenter.sh_nodeclaims.yaml", version),
+		}
+		for _, url := range urls {
+			output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("kubectl apply %s: %w: %s", url, err, output)
+			}
+		}
+		return nil
+	})
+}
+
 var vpaInstaller onceInstaller
 
 // ensureVPA installs VerticalPodAutoscaler, needed by TestE2EDynamicManifests' VPA subtest.

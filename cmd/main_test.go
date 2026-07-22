@@ -39,7 +39,7 @@ func TestE2EParallel(t *testing.T) {
 	e2eMinikubeTest(t)
 	hackOpts, clientset, dynamicClient := e2eClients(t)
 	runOwnersSubtests(t, hackOpts, clientset)
-	runPodSchedulingSubtests(t, hackOpts, clientset)
+	runPodSchedulingSubtests(t, hackOpts, clientset, dynamicClient)
 	runNetworkPolicySubtests(t, hackOpts, clientset, dynamicClient)
 	runRolloutSubtests(t, hackOpts, clientset)
 	runServiceRoutingSubtests(t, hackOpts, clientset)
