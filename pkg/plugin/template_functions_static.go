@@ -273,7 +273,7 @@ func renderGroupedTable(leadingHeader string, groupLabels []interface{}, groupSp
 		label := fmt.Sprint(groupLabel)
 		sb.WriteString("  ")
 		sb.WriteString(label)
-		if pad := groupWidth - visibleWidth(label); pad > 0 {
+		if pad := groupWidth - visibleWidth(label); pad > 0 && gi < len(groupLabels)-1 {
 			sb.WriteString(strings.Repeat(" ", pad))
 		}
 		col += span

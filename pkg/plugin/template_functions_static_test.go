@@ -198,7 +198,7 @@ func TestRenderGroupedTableAlignsOnVisibleWidthNotByteLength(t *testing.T) {
 		[]interface{}{"xyz", "5", "6"},
 	}
 	got := renderGroupedTable("pod", []interface{}{"grp"}, []interface{}{3}, rows)
-	want := "pod  grp  \n" + short + "   1  22\nxyz  5  6"
+	want := "pod  grp\n" + short + "   1  22\nxyz  5  6"
 	if got != want {
 		t.Fatalf("renderGroupedTable() = %q, want %q", got, want)
 	}
