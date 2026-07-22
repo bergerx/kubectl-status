@@ -5,8 +5,16 @@
     {{- template "finalizer_details_on_termination" . }}
     {{- template "application_details" . }}
     {{- .Include "pod_conditions_summary" . | nindent 2 }}
-    {{- template "pod_placement_constraints" . }}
+    {{- $podScheduledCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
+    {{- $podUnscheduled := not (isStatusConditionHealthy $podScheduledCondition) }}
+    {{- $hardNodeSelector := .Spec.nodeSelector | default dict }}
+    {{- $hardAffinity := .Spec.affinity | default dict }}
+    {{- $hardNodeAffinity := $hardAffinity.nodeAffinity | default dict }}
+    {{- $hardRequired := $hardNodeAffinity.requiredDuringSchedulingIgnoredDuringExecution | default dict }}
+    {{- $hardTerms := $hardRequired.nodeSelectorTerms | default list }}
+    {{- template "pod_placement_constraints" (dict "podUnscheduled" $podUnscheduled "nodeSelector" $hardNodeSelector "terms" $hardTerms) }}
     {{- template "pod_topology_constraints" . }}
+    {{- template "pod_karpenter_compatibility" (dict "ctx" . "podUnscheduled" $podUnscheduled "nodeSelector" $hardNodeSelector "terms" $hardTerms) }}
     {{- template "pod_node_problems" . }}
     {{- $secCtx := .Spec.securityContext | default dict }}
     {{- $seccomp := index $secCtx "seccompProfile" | default dict }}
@@ -70,26 +78,59 @@
 {{- end -}}
 
 {{- define "pod_placement_constraints" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* Renders the hard placement constraints (nodeSelector, required nodeAffinity) that
            restrict which Nodes this Pod can land on, gated on PodScheduled=False. The scheduler's
            own message (already shown by pod_conditions_summary) stays the causal anchor -- this
            states "restricts placement to..." as a declared fact, not "this is why it's
            unschedulable", since multiple predicates can be failing simultaneously. Preferred
            nodeAffinity is a scoring hint, not a blocker, and is deliberately never rendered here.
-           Spec-only: no live Node fetch, so this renders identically in --shallow/--local/--deep. */ -}}
-    {{- $podScheduledCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
-    {{- if not (isStatusConditionHealthy $podScheduledCondition) }}
-        {{- $nodeSelector := .Spec.nodeSelector | default dict }}
-        {{- $affinity := .Spec.affinity | default dict }}
-        {{- $nodeAffinity := $affinity.nodeAffinity | default dict }}
-        {{- $required := $nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution | default dict }}
-        {{- $terms := $required.nodeSelectorTerms | default list }}
-        {{- if $nodeSelector }}
-            {{- "node selector:" | bold | nindent 2 }} {{ formatNodeSelector $nodeSelector | cyan }}
+           Spec-only: no live Node fetch, so this renders identically in --shallow/--local/--deep.
+           Expects a dict (podUnscheduled, nodeSelector, terms) computed once by the caller, shared
+           with pod_karpenter_compatibility, rather than re-parsing .Spec.affinity here too. */ -}}
+    {{- if .podUnscheduled }}
+        {{- if .nodeSelector }}
+            {{- "node selector:" | bold | nindent 2 }} {{ formatNodeSelector .nodeSelector | cyan }}
         {{- end }}
-        {{- if $terms }}
-            {{- "required node affinity:" | bold | nindent 2 }} {{ formatNodeSelectorTerms $terms | cyan }}
+        {{- if .terms }}
+            {{- "required node affinity:" | bold | nindent 2 }} {{ formatNodeSelectorTerms .terms | cyan }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "pod_karpenter_compatibility" }}
+    {{- /* Cross-checks the Pod's hard node-selection constraints (nodeSelector + required
+           nodeAffinity, resolved by the caller -- see pod_placement_constraints above) against
+           every cluster NodePool's spec.template.spec.requirements, to catch the case where no
+           NodePool is even configured to consider provisioning against one of them (e.g. a custom
+           nodeSelector label no NodePool requirements declares). Renders only a negative claim
+           ("no NodePool can satisfy"), never a positive one: silence covers both "at least one
+           NodePool plausibly qualifies" and "can't tell" (no NodePools visible -- Karpenter not
+           installed, RBAC denies list, or genuinely none configured all look identical here, same
+           as every other KubeGet call being silent-on-403). spec.weight is never consulted --
+           it's a scoring hint among qualifying pools, not a capacity-envelope signal. */ -}}
+    {{- $ctx := .ctx }}
+    {{- if and .podUnscheduled (not $ctx.LiveQueriesDisabled) }}
+        {{- $podRequirements := podHardConstraintRequirements .nodeSelector .terms }}
+        {{- if $podRequirements }}
+            {{- $nodePools := $ctx.KubeGet "" "NodePool" }}
+            {{- if $nodePools }}
+                {{- $nodePoolReqSets := list }}
+                {{- range $nodePools }}
+                    {{- $nodePoolReqSets = append $nodePoolReqSets (dict "name" .Name "requirements" (.Spec.template.spec.requirements | default list)) }}
+                {{- end }}
+                {{- $unsatisfiableKeys := karpenterUnsatisfiableKeys $podRequirements $nodePoolReqSets }}
+                {{- if $unsatisfiableKeys }}
+                    {{- printf "No NodePool can satisfy: %s" (join ", " $unsatisfiableKeys) | red | bold | nindent 2 }}
+                    {{- if $ctx.Config.GetBool "deep" }}
+                        {{- range $nodePoolReqSets }}
+                            {{- $reason := karpenterDisqualifyingKey .requirements $podRequirements }}
+                            {{- if $reason }}
+                                {{- printf "%s: no requirement satisfying %s" .name $reason | cyan | nindent 4 }}
+                            {{- end }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
         {{- end }}
     {{- end }}
 {{- end }}

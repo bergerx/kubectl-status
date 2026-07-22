@@ -1,0 +1,10 @@
+\A
+Pod/karpenter-satisfiable-pod -n e2e-karpenter-pod, created 1m ago, gen:1 Pending BestEffort
+  Failed: Pod could not be scheduled
+    Stalled: PodUnschedulable, Pod could not be scheduled
+  Managed by karpenter-satisfiable-pod application
+  Not PodScheduled -> Not Initialized -> Not ContainersReady -> Not Ready
+    PodScheduled Unschedulable, 0/1 nodes are available: 1 node\(s\) didn't match Pod's node affinity/selector\. no new claims to deallocate, preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling\. for 1m
+  node selector: topology\.kubernetes\.io/zone=e2e-zone-a
+  Standalone POD\.
+\z
