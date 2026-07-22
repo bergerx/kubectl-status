@@ -214,16 +214,28 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
 ### Running e2e Tests Locally
 
 `make test-e2e` runs the `TestE2E*` suite against a real cluster (see `cmd/main_test.go`). It
-manages its own minikube cluster, named and isolated by an `E2E_PROFILE` the Makefile computes
-from your current git branch (plus, when running under Claude Code, `CLAUDE_CODE_SESSION_ID`) —
-so parallel worktrees/branches, and even multiple sessions working the same branch, never share a
-profile or step on each other's cluster. Run `make print-e2e-profile` to see the profile name and
-kubeconfig path (`.e2e/<profile>.kubeconfig`, gitignored) it'll use. `install-e2e-deps` (cert-manager,
-Gateway API CRDs) runs against that same cluster right after it's created, so deps always land on
-the cluster the tests actually use. The cluster is left running after the tests finish, for fast
-reruns; delete it explicitly with `make e2e-minikube-down` when you're done with the branch, or
-run `make install-hooks` once (installs a `reference-transaction` git hook, shared across all
-worktrees of the clone) to have it deleted automatically whenever you delete the local branch.
+manages one **shared** minikube cluster/profile (`kstat-e2e-shared`), reused across every
+worktree, branch, and session on your machine — not one per branch/session. Run
+`make print-e2e-profile` to see the profile name and kubeconfig path (`~/.kstat-e2e/shared.kubeconfig`)
+it uses. `install-e2e-deps` (cert-manager, Gateway API CRDs) runs against that same cluster right
+after it's created, so deps always land on the cluster the tests actually use. The cluster is left
+running after the tests finish, for fast reruns from any worktree/session; delete it explicitly
+with `make e2e-minikube-down` when you're sure no other worktree/session still needs it — this
+tears it down for everyone sharing it, not just you.
+
+Because the cluster is shared and the e2e suite uses fixed (not generated) scratch namespace
+names, two `test-e2e`/`test-e2e-quick` runs against it at the same time would collide with
+"already exists" errors. Both targets guard against that with `flock` on a host-global lockfile:
+a second invocation (from another worktree, another terminal, a background Claude Code task)
+simply waits for the first to finish rather than racing it or getting its own cluster. This trades
+some concurrency for a much smaller footprint — one 4 CPU/6 GB VM total instead of one per
+worktree/branch/session, which is what actually hogs the host if left unchecked. `flock` (from
+`util-linux`) is required; it's standard on Linux but not present on macOS by default.
+
+If a run is killed ungracefully (Ctrl+C, OOM) mid-subtest, its cleanup won't run and it can leave
+a stale namespace behind that collides with the next run's fixed name. Recover with
+`kubectl --kubeconfig ~/.kstat-e2e/shared.kubeconfig delete ns <name>`, or nuke and recreate the
+whole cluster with `make e2e-minikube-down e2e-minikube-up`.
 
 CI instead sets `ASSUME_MINIKUBE_IS_CONFIGURED=true`, which makes `make test-e2e` skip all of the
 above and use whatever cluster your current kubeconfig context already points at (that's what
@@ -238,8 +250,32 @@ stays in sync automatically.
 
 Note: `TestE2E*` functions invoked directly via `go test -run TestE2E...` (bypassing the
 Makefile) fall back to using the bare test function name as the minikube profile if `E2E_PROFILE`
-isn't set in the environment, so ad hoc runs across worktrees can still collide — export
-`E2E_PROFILE` yourself (e.g. from `make print-e2e-profile`) to isolate those too.
+isn't set in the environment, which starts (and leaks) a one-off cluster instead of using the
+shared one — export `E2E_PROFILE` yourself (e.g. from `make print-e2e-profile`) to land on the
+shared cluster too.
+
+#### Fast Iteration: `make test-e2e-quick`
+
+`make test-e2e` reruns `vet`/`staticcheck`/`install-e2e-deps` and the whole ~60-subtest `TestE2E*`
+pattern every time, which is wasteful while iterating on a single scenario. Once you have a cluster
+up (`make e2e-minikube-up install-e2e-deps`, one time — it's left running afterwards, see above),
+use `make test-e2e-quick RUN='<pattern>'` to rerun just the subtest(s) you're working on against
+that same cluster, skipping the lint steps and the deps install:
+
+```bash
+make e2e-minikube-up install-e2e-deps   # once per shared cluster
+make test-e2e-quick RUN='TestE2EParallel/podscheduling'
+```
+
+`TestE2EParallel`'s subtests are grouped topically by the `runXSubtests` functions in
+`cmd/e2e_*_test.go` (e.g. `runPodSchedulingSubtests`, `runNetworkPolicySubtests`) — match the
+`-run` pattern to whichever group (or specific subtest name within it) covers the template/package
+you touched, rather than rerunning the full pattern. This is also the right tool for Claude Code to
+verify an e2e-covered change before committing: run the narrowest `RUN` pattern that covers the
+touched scenario instead of the full suite, so a dev-loop check doesn't tie up the shared cluster
+or the machine's resources for longer than necessary. `make test-e2e` (the full suite) stays the
+pre-push/CI gate — the targeted `test-e2e-quick` checks above are what a dev-loop/commit-time
+check should use, not the full suite.
 
 When a template change adds or touches `$.KubeGetFirst`, `$.IncludeRenderableObject`/`$.Include`,
 or any other interaction with a live cluster, add or extend a case in `TestE2EDynamicManifests`
