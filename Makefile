@@ -46,29 +46,22 @@ test: vet staticcheck
 #--------------------------
 # E2E cluster identity
 #--------------------------
-# Local test-e2e runs get their own minikube profile/kubeconfig, isolated by git
-# branch (worktrees can't share a branch, so this covers parallel worktrees) and,
-# when running under Claude Code, by session id too (so two sessions working the
-# same branch/worktree don't step on each other's cluster either). The branch name
-# is kept as a readable prefix (cosmetic only, safe to truncate). Uniqueness comes
-# from two hashes: BRANCH_HASH is a function of the branch name alone, so the
-# reference-transaction hook -- which only ever sees a deleted branch name, never a
-# session id -- can recompute it and match *only* that branch's profiles, even when
-# several branches share a truncated slug (e.g. worktree-*-<ulid> branches all
-# collapse to the same 20-char prefix). SESSION_HASH additionally folds in the
-# session id so parallel sessions on the same branch still get separate clusters.
-E2E_GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
-ifeq ($(E2E_GIT_BRANCH),HEAD)
-E2E_GIT_BRANCH := $(shell git rev-parse --short HEAD 2>/dev/null)
-endif
-ifeq ($(E2E_GIT_BRANCH),)
-E2E_GIT_BRANCH := local
-endif
-E2E_BRANCH_SLUG := $(shell ./hack/e2e-branch-slug.sh '$(E2E_GIT_BRANCH)')
-E2E_BRANCH_HASH := $(shell ./hack/e2e-hash.sh '$(E2E_GIT_BRANCH)')
-E2E_SESSION_HASH := $(shell ./hack/e2e-hash.sh '$(E2E_GIT_BRANCH):$(CLAUDE_CODE_SESSION_ID)')
-E2E_PROFILE := kstat-e2e-$(E2E_BRANCH_SLUG)-$(E2E_BRANCH_HASH)-$(E2E_SESSION_HASH)
-E2E_KUBECONFIG := $(CURDIR)/.e2e/$(E2E_PROFILE).kubeconfig
+# All local test-e2e/test-e2e-quick runs share one minikube profile, across every
+# worktree/branch/session on this machine -- a profile per branch/session (the
+# previous scheme) meant every worktree you'd touched left its own 4 CPU/6 GB VM
+# running, which piles up fast and starves the host. Trade-off: since the profile
+# is shared, concurrent runs (two worktrees, two Claude Code sessions, a background
+# task) must be serialized -- see the `flock $(E2E_LOCKFILE)` in test-e2e/
+# test-e2e-quick below, which makes a second invocation wait for the first instead
+# of racing it (the e2e suite uses fixed, not generated, scratch namespace names,
+# so two concurrent runs would otherwise collide with "already exists" errors).
+# E2E_HOME/E2E_KUBECONFIG/E2E_LOCKFILE are deliberately host-global ($(HOME)-based),
+# not $(CURDIR)-relative -- each worktree has a different CURDIR, and sharing
+# requires them to all agree on the same paths regardless of which one invokes make.
+E2E_PROFILE := kstat-e2e-shared
+E2E_HOME := $(HOME)/.kstat-e2e
+E2E_KUBECONFIG := $(E2E_HOME)/shared.kubeconfig
+E2E_LOCKFILE := $(E2E_HOME)/shared.lock
 
 # CI (and anyone else who already has a suitable cluster configured) sets
 # ASSUME_MINIKUBE_IS_CONFIGURED=true, in which case we deliberately fall back to the
@@ -105,20 +98,28 @@ install-hooks:
 
 .PHONY: e2e-minikube-up
 e2e-minikube-up:
-	@mkdir -p $(dir $(E2E_KUBECONFIG))
-	# Wipe any previous cluster for this profile first: reusing one leaks resources from a
-	# prior run (e.g. killed mid-suite) into this run, causing spurious "already exists"
-	# failures and cluster-load-related flakiness unrelated to the code under test.
-	-$(E2E_KUBECONFIG_ENV) minikube delete -p $(E2E_PROFILE)
-	# --cpus/--memory: TestE2EParallel's subtests run with -parallel=4 (see test-e2e below),
-	# each doing real cluster work (pod scheduling, image pulls, rollouts) concurrently --
-	# minikube's own defaults are sized for serial usage and get overwhelmed (widespread
-	# `kubectl wait` timeouts) under that load.
-	$(E2E_KUBECONFIG_ENV) minikube start -p $(E2E_PROFILE) --addons=metrics-server --cpus=4 --memory=6g
+	@mkdir -p $(E2E_HOME)
+	# Reuse the shared cluster if it's already up instead of wiping it first (the old
+	# per-branch profile could safely delete-first since nothing else depended on it;
+	# this one is shared across worktrees/sessions, so deleting it here could yank it
+	# out from under another session's run).
+	@if $(E2E_KUBECONFIG_ENV) minikube status -p $(E2E_PROFILE) >/dev/null 2>&1; then \
+		echo "Shared e2e cluster '$(E2E_PROFILE)' already running, reusing it."; \
+	else \
+		echo "$(E2E_KUBECONFIG_ENV) minikube start -p $(E2E_PROFILE) --addons=metrics-server --cpus=4 --memory=6g"; \
+		$(E2E_KUBECONFIG_ENV) minikube start -p $(E2E_PROFILE) --addons=metrics-server --cpus=4 --memory=6g; \
+	fi
+	# --cpus/--memory above: TestE2EParallel's subtests run with -parallel=4 (see test-e2e
+	# below), each doing real cluster work (pod scheduling, image pulls, rollouts)
+	# concurrently -- minikube's own defaults are sized for serial usage and get
+	# overwhelmed (widespread `kubectl wait` timeouts) under that load.
 
 .PHONY: e2e-minikube-down
 e2e-minikube-down:
-	$(E2E_KUBECONFIG_ENV) minikube delete -p $(E2E_PROFILE)
+	# Tears down the cluster every worktree/session on this machine shares -- only run
+	# this when you're sure nobody else (another worktree, another Claude Code session)
+	# still needs it. `flock`ed like test-e2e/test-e2e-quick so it can't race a live run.
+	$(E2E_KUBECONFIG_ENV) flock $(E2E_LOCKFILE) minikube delete -p $(E2E_PROFILE)
 	@rm -f $(E2E_KUBECONFIG)
 
 .PHONY: install-e2e-deps
@@ -152,20 +153,49 @@ test-e2e: vet staticcheck install-e2e-deps
 	# -parallel=4: bounds how many TestE2EParallel subtests hit the cluster at once. Go's
 	# default (GOMAXPROCS, i.e. host core count) can far exceed what the e2e-minikube-up VM
 	# above is sized for, causing widespread `kubectl wait` timeouts instead of a speedup.
-	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
+	# flock: harmless here (CI runs one job at a time anyway) but keeps this branch
+	# consistent with the shared-cluster branch below. mkdir: this branch skips
+	# e2e-minikube-up (the only other target that creates $(E2E_HOME)), so on a bare
+	# CI runner $(E2E_LOCKFILE)'s parent dir wouldn't otherwise exist and flock would
+	# fail outright.
+	@mkdir -p $(E2E_HOME)
+	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
-	# The isolated cluster (profile: $(E2E_PROFILE)) is torn down afterwards whether the suite
-	# passes or fails, so local/pre-push runs don't leak minikube profiles. Its exit status is
-	# preserved so a failing suite still fails the target (and blocks the push).
+	# The cluster (profile: $(E2E_PROFILE)) is shared across every worktree/branch/session on
+	# this machine and is left running afterwards -- run `make e2e-minikube-down` yourself when
+	# you're sure nothing else still needs it. `flock $(E2E_LOCKFILE)` serializes this against
+	# any other test-e2e/test-e2e-quick run on the machine (the suite uses fixed scratch
+	# namespace names, so two concurrent runs would otherwise collide).
 	# using count to prevent caching; see the timeout note in the ASSUME_MINIKUBE_IS_CONFIGURED
 	# branch above.
 	# See the gotestsum note, and the -parallel=4 note above the other branch's go test invocation.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'; \
-	status=$$?; \
-	$(MAKE) e2e-minikube-down; \
-	exit $$status
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
 endif
+
+.PHONY: test-e2e-quick
+test-e2e-quick:
+	@if [ -z "$(RUN)" ]; then \
+		echo "Usage: make test-e2e-quick RUN='<go test -run pattern>'"; \
+		echo "Example: make test-e2e-quick RUN='TestE2EParallel/podscheduling'"; \
+		exit 1; \
+	fi
+	@if [ "$(ASSUME_MINIKUBE_IS_CONFIGURED)" != "true" ] && [ ! -f "$(E2E_KUBECONFIG)" ]; then \
+		echo "No shared e2e cluster found ($(E2E_KUBECONFIG))."; \
+		echo "Run 'make e2e-minikube-up install-e2e-deps' once first, then reuse it with test-e2e-quick."; \
+		exit 1; \
+	fi
+	# mkdir: mirrors the CI branch of test-e2e -- when ASSUME_MINIKUBE_IS_CONFIGURED=true
+	# this target (like that one) never runs e2e-minikube-up, the only other target that
+	# creates $(E2E_HOME), so $(E2E_LOCKFILE)'s parent dir could otherwise be missing.
+	@mkdir -p $(E2E_HOME)
+	# Skips vet/staticcheck/install-e2e-deps and the minikube up/down that test-e2e does --
+	# for iterating on a single scenario against the shared cluster you already brought up
+	# (and are leaving up) with e2e-minikube-up/install-e2e-deps. Same -parallel=4 as test-e2e:
+	# sized for the e2e-minikube-up VM (see that target's comment), not worth changing for a
+	# narrower -run since it's still the same cluster taking the load. flock $(E2E_LOCKFILE):
+	# see the comment on the shared-cluster branch of test-e2e above.
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=10m -parallel=4 -run '$(RUN)'
 
 #--------------------------
 # Test Artifacts
