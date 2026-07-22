@@ -154,7 +154,11 @@ test-e2e: vet staticcheck install-e2e-deps
 	# default (GOMAXPROCS, i.e. host core count) can far exceed what the e2e-minikube-up VM
 	# above is sized for, causing widespread `kubectl wait` timeouts instead of a speedup.
 	# flock: harmless here (CI runs one job at a time anyway) but keeps this branch
-	# consistent with the shared-cluster branch below.
+	# consistent with the shared-cluster branch below. mkdir: this branch skips
+	# e2e-minikube-up (the only other target that creates $(E2E_HOME)), so on a bare
+	# CI runner $(E2E_LOCKFILE)'s parent dir wouldn't otherwise exist and flock would
+	# fail outright.
+	@mkdir -p $(E2E_HOME)
 	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
@@ -181,6 +185,10 @@ test-e2e-quick:
 		echo "Run 'make e2e-minikube-up install-e2e-deps' once first, then reuse it with test-e2e-quick."; \
 		exit 1; \
 	fi
+	# mkdir: mirrors the CI branch of test-e2e -- when ASSUME_MINIKUBE_IS_CONFIGURED=true
+	# this target (like that one) never runs e2e-minikube-up, the only other target that
+	# creates $(E2E_HOME), so $(E2E_LOCKFILE)'s parent dir could otherwise be missing.
+	@mkdir -p $(E2E_HOME)
 	# Skips vet/staticcheck/install-e2e-deps and the minikube up/down that test-e2e does --
 	# for iterating on a single scenario against the shared cluster you already brought up
 	# (and are leaving up) with e2e-minikube-up/install-e2e-deps. Same -parallel=4 as test-e2e:
