@@ -6,6 +6,7 @@
     {{- template "application_details" . }}
     {{- .Include "pod_conditions_summary" . | nindent 2 }}
     {{- template "pod_placement_constraints" . }}
+    {{- template "pod_topology_constraints" . }}
     {{- template "pod_node_problems" . }}
     {{- $secCtx := .Spec.securityContext | default dict }}
     {{- $seccomp := index $secCtx "seccompProfile" | default dict }}
@@ -89,6 +90,37 @@
         {{- end }}
         {{- if $terms }}
             {{- "required node affinity:" | bold | nindent 2 }} {{ formatNodeSelectorTerms $terms | cyan }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "pod_topology_constraints" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Renders required topologySpreadConstraints (whenUnsatisfiable: DoNotSchedule) and
+           required podAffinity/podAntiAffinity terms, gated on PodScheduled=False like
+           pod_placement_constraints -- these are hard scheduling blockers, orthogonal to the
+           node-level nodeSelector/nodeAffinity rendered there. Stated as declarative facts
+           ("required spread:", "required anti-affinity:"), never claimed as *the* blocker, since
+           the scheduler's own message (shown by pod_conditions_summary) stays the causal anchor
+           and multiple predicates can be failing simultaneously. ScheduleAnyway spread
+           constraints and preferred pod (anti-)affinity are soft preferences/scoring hints and
+           are deliberately never rendered here. Spec-only: no live fetch, so this renders
+           identically in --shallow/--local/--deep. */ -}}
+    {{- $podScheduledCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
+    {{- if not (isStatusConditionHealthy $podScheduledCondition) }}
+        {{- range .Spec.topologySpreadConstraints }}
+            {{- if eq .whenUnsatisfiable "DoNotSchedule" }}
+                {{- "required spread:" | bold | nindent 2 }} max skew {{ .maxSkew }} across {{ .topologyKey }} for {{ .labelSelector | default dict | labelSelector | cyan }}
+            {{- end }}
+        {{- end }}
+        {{- $affinity := .Spec.affinity | default dict }}
+        {{- $podAffinity := $affinity.podAffinity | default dict }}
+        {{- range $podAffinity.requiredDuringSchedulingIgnoredDuringExecution }}
+            {{- "required affinity:" | bold | nindent 2 }} {{ .labelSelector | default dict | labelSelector | cyan }} across {{ .topologyKey }}
+        {{- end }}
+        {{- $podAntiAffinity := $affinity.podAntiAffinity | default dict }}
+        {{- range $podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution }}
+            {{- "required anti-affinity:" | bold | nindent 2 }} {{ .labelSelector | default dict | labelSelector | cyan }} across {{ .topologyKey }}
         {{- end }}
     {{- end }}
 {{- end }}
