@@ -16,7 +16,7 @@
             {{- end }}
         {{- end }}
     {{- end }}
-    {{- $routeHostnames := .Spec.hostnames }}
+    {{- $routeHostnames := .Spec.hostnames | default (list) }}
     {{- $routeHostname := "" }}
     {{- if eq (len $routeHostnames) 1 }}{{ $routeHostname = index $routeHostnames 0 }}{{ end }}
     {{- with .Spec.parentRefs }}
