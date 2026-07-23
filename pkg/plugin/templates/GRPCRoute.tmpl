@@ -26,8 +26,9 @@
                         {{- $gw := $.KubeGetFirst $gwNs "Gateway" .name }}
                         {{- if $gw.Object }}
                             {{- /* if the route has exactly one hostname, use it for hostname-match checks; skip strictness otherwise */}}
+                            {{- $routeHostnames := $.Spec.hostnames | default (list) }}
                             {{- $routeHostname := "" }}
-                            {{- if eq (len $.Spec.hostnames) 1 }}{{ $routeHostname = index $.Spec.hostnames 0 }}{{ end }}
+                            {{- if eq (len $routeHostnames) 1 }}{{ $routeHostname = index $routeHostnames 0 }}{{ end }}
                             {{- range $gw.Spec.listeners }}
                                 {{- $isMatch := false }}
                                 {{- if $parentRef.sectionName }}
@@ -35,7 +36,7 @@
                                 {{- else if eq .protocol "HTTPS" }}
                                     {{- $hostOk := true }}
                                     {{- with .hostname }}
-                                        {{- if and (gt (len $.Spec.hostnames) 0) (not (has . $.Spec.hostnames)) }}{{ $hostOk = false }}{{ end }}
+                                        {{- if and (gt (len $routeHostnames) 0) (not (has . $routeHostnames)) }}{{ $hostOk = false }}{{ end }}
                                     {{- end }}
                                     {{- if $hostOk }}{{ $isMatch = true }}{{ end }}
                                 {{- end }}

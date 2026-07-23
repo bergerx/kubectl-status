@@ -1,0 +1,60 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  creationTimestamp: "2026-07-20T18:21:38Z"
+  generation: 1
+  labels:
+    myapp.comp.com/mirror-of: prom.prom-prometheus-prometheus
+  name: myapp-prom-prometheus-prometheus
+  namespace: prom
+  ownerReferences:
+  - apiVersion: gateway.networking.k8s.io/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: HTTPRoute
+    name: prom-prometheus-prometheus
+    uid: 7b20e026-5f51-4395-b3da-5aed7ddd84d9
+  resourceVersion: "3210583"
+  uid: 99f0016a-6fbe-475e-a0f9-953b080bf5a0
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: myapp-envoy-gateway
+    namespace: infra-envoy-gateway
+  rules:
+  - backendRefs:
+    - group: ""
+      kind: Service
+      name: prom-prometheus
+      port: 9090
+      weight: 1
+    matches:
+    - headers:
+      - name: Host
+        type: RegularExpression
+        value: ^prom\.app\..*
+      path:
+        type: PathPrefix
+        value: /
+status:
+  parents:
+  - conditions:
+    - lastTransitionTime: "2026-07-22T11:53:18Z"
+      message: Route is accepted
+      observedGeneration: 1
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: "2026-07-22T11:53:18Z"
+      message: Resolved all the Object references for the Route
+      observedGeneration: 1
+      reason: ResolvedRefs
+      status: "True"
+      type: ResolvedRefs
+    controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    parentRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: myapp-envoy-gateway
+      namespace: infra-envoy-gateway
