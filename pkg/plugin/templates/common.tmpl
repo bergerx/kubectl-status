@@ -544,7 +544,11 @@
         {{- $instance := coalesce (get $annotations "meta.helm.sh/release-name") $labels.release (get $labels "app.kubernetes.io/instance") }}
         {{- $releaseNamespace := get $annotations "meta.helm.sh/release-namespace" }}
         {{- $namespace := eq $releaseNamespace .Namespace | ternary "" $releaseNamespace }}
-        {{- $version := coalesce (get $labels "app.kubernetes.io/version") $labels.version }}
+        {{- /* Helm's own release-storage Secret (type helm.sh/release.v1) carries a "version"
+               label too, but there it's the release revision number, not an app version -- the
+               dedicated Helm section in Secret.tmpl already reports the revision explicitly, so
+               falling back to it here would print a misleading "using version 1" line. */ -}}
+        {{- $version := coalesce (get $labels "app.kubernetes.io/version") (ternary "" $labels.version (eq .Object.type "helm.sh/release.v1")) }}
         {{- if or $clusterService $addonManager $managedBy $createdBy $name $partOf $component $instance $namespace $version }}
             {{- "Managed" | nindent 2 }}
             {{- with $addonManager }} by {{ "AddonManager" | bold | yellow }} in {{ . | redBoldIf (eq . "Reconcile") }} mode{{ end }}
