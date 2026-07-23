@@ -917,3 +917,153 @@ func TestManagedResourceDetailsTemplate_NotAManagedResource(t *testing.T) {
 		t.Errorf("expected no output for a non-managed-resource object, got = %q", got)
 	}
 }
+
+// renderObjHealthSummary renders "generic_health_summary" or "resource_health_summary" -- both
+// expect dict "obj" (RenderableObject) "callerNamespace" (optional) rather than the bare object
+// renderCrossplaneTemplate's callers pass.
+func renderObjHealthSummary(t *testing.T, templateName string, obj map[string]interface{}, callerNamespace string) (string, error) {
+	t.Helper()
+	v := viper.New()
+	cfg := NewRenderConfig(v)
+	tmpl, _ := getTemplate(cfg)
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	t.Cleanup(func() { f.Cleanup() })
+	repo, _ := input.NewResourceRepo(f, cfg.Viper)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+	e.Template = *tmpl
+	r := newRenderableObject(obj, e, repo)
+	return r.renderTemplate(templateName, map[string]interface{}{"obj": r, "callerNamespace": callerNamespace})
+}
+
+func TestGenericHealthSummaryTemplate(t *testing.T) {
+	tests := []struct {
+		name string
+		obj  map[string]interface{}
+		want string
+	}{
+		{
+			name: "Ready condition true falls back to kstatus Current",
+			obj: map[string]interface{}{
+				"kind":     "Widget",
+				"metadata": map[string]interface{}{"name": "my-widget", "generation": int64(2)},
+				"status": map[string]interface{}{
+					"observedGeneration": int64(2),
+					"conditions": []interface{}{
+						map[string]interface{}{"type": "Ready", "status": "True"},
+					},
+				},
+			},
+			want: "Current: Resource is Ready",
+		},
+		{
+			name: "Ready condition false surfaces its message as InProgress",
+			obj: map[string]interface{}{
+				"kind":     "Widget",
+				"metadata": map[string]interface{}{"name": "my-widget"},
+				"status": map[string]interface{}{
+					"conditions": []interface{}{
+						map[string]interface{}{"type": "Ready", "status": "False", "reason": "Blocked", "message": "still blocked"},
+					},
+				},
+			},
+			want: "InProgress: still blocked",
+		},
+		{
+			name: "bare status.ready boolean is surfaced even without a Ready condition",
+			obj: map[string]interface{}{
+				"kind":     "Widget",
+				"metadata": map[string]interface{}{"name": "my-widget"},
+				"status":   map[string]interface{}{"ready": false},
+			},
+			want: "ready:",
+		},
+		{
+			name: "observedGeneration mismatch at status.observedGeneration is flagged",
+			obj: map[string]interface{}{
+				"kind":     "Widget",
+				"metadata": map[string]interface{}{"name": "my-widget", "generation": int64(3)},
+				"status":   map[string]interface{}{"observedGeneration": int64(2)},
+			},
+			want: "!= gen",
+		},
+		{
+			name: "observedGeneration recorded only on the Ready condition is still flagged (#kstatus doesn't check this)",
+			obj: map[string]interface{}{
+				"kind":     "Widget",
+				"metadata": map[string]interface{}{"name": "my-widget", "generation": int64(5)},
+				"status": map[string]interface{}{
+					"conditions": []interface{}{
+						map[string]interface{}{"type": "Ready", "status": "True", "observedGeneration": int64(4)},
+					},
+				},
+			},
+			want: "!= gen",
+		},
+		{
+			name: "matching observedGeneration on the Ready condition is silent",
+			obj: map[string]interface{}{
+				"kind":     "Widget",
+				"metadata": map[string]interface{}{"name": "my-widget", "generation": int64(4)},
+				"status": map[string]interface{}{
+					"conditions": []interface{}{
+						map[string]interface{}{"type": "Ready", "status": "True", "observedGeneration": int64(4)},
+					},
+				},
+			},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := renderObjHealthSummary(t, "generic_health_summary", tt.obj, "")
+			if err != nil {
+				t.Fatalf("renderTemplate() error = %v", err)
+			}
+			if tt.want == "" {
+				if strings.Contains(got, "!=") {
+					t.Errorf("got = %q, want no observed-generation mismatch flag", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("got = %q, want it to contain %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResourceHealthSummaryTemplate_DispatchesToKnownKind(t *testing.T) {
+	obj := map[string]interface{}{
+		"kind":     "Job",
+		"metadata": map[string]interface{}{"name": "my-job", "namespace": "test"},
+		"status":   map[string]interface{}{"succeeded": float64(1)},
+	}
+	got, err := renderObjHealthSummary(t, "resource_health_summary", obj, "test")
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, "Succeeded") {
+		t.Errorf("got = %q, want job_health_summary's Succeeded flag, not the generic fallback", got)
+	}
+}
+
+func TestResourceHealthSummaryTemplate_FallsBackToGenericForUnknownKind(t *testing.T) {
+	obj := map[string]interface{}{
+		"kind":     "Widget",
+		"metadata": map[string]interface{}{"name": "my-widget", "namespace": "test"},
+		"status": map[string]interface{}{
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "Ready", "status": "True"},
+			},
+		},
+	}
+	got, err := renderObjHealthSummary(t, "resource_health_summary", obj, "test")
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, "Current: Resource is Ready") {
+		t.Errorf("got = %q, want the generic_health_summary fallback", got)
+	}
+}
