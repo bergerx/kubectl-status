@@ -2,11 +2,13 @@ package plugin
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -30,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/yaml"
 
 	"github.com/bergerx/kubectl-status/pkg/plugin/calicoselector"
 	"github.com/bergerx/kubectl-status/pkg/plugin/crossplanedrift"
@@ -145,6 +148,8 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"parseSSHAuthSecret":              parseSSHAuthSecret,
 		"parseServiceAccountTokenSecret":  parseServiceAccountTokenSecret,
 		"parseBootstrapTokenSecret":       cfg.parseBootstrapTokenSecret,
+		"parseHelmReleaseSecret":          parseHelmReleaseSecret,
+		"helmReleaseManifestResources":    helmReleaseManifestResources,
 		"secretDataKeys":                  secretDataKeys,
 		"crossplaneManagedResourceDrift":  crossplaneManagedResourceDrift,
 		"crossplaneDriftLabel":            crossplaneDriftLabel,
@@ -713,11 +718,11 @@ func colorKeyword(phase string) string {
 	    * pvc: .status.phase Bound
 	*/
 	switch phase {
-	case "Running", "Succeeded", "Available", "Bound", "valid", "Guaranteed", "Completed", "Current":
+	case "Running", "Succeeded", "Available", "Bound", "valid", "Guaranteed", "Completed", "Current", "deployed":
 		return color.GreenString(phase)
-	case "Pending", "Released", "Burstable", "Active", "InProgress":
+	case "Pending", "Released", "Burstable", "Active", "InProgress", "superseded", "pending-install", "pending-upgrade", "pending-rollback", "uninstalling":
 		return color.YellowString(phase)
-	case "Failed", "Unknown", "Terminating", "Evicted", "BestEffort", "OOMKilled", "ContainerCannotRun", "Error", "NotFound":
+	case "Failed", "Unknown", "Terminating", "Evicted", "BestEffort", "OOMKilled", "ContainerCannotRun", "Error", "NotFound", "failed", "unknown":
 		return color.New(color.FgRed, color.Bold).Sprintf("%s", phase)
 	default:
 		return phase
@@ -1876,6 +1881,136 @@ func (cfg *RenderConfig) parseBootstrapTokenSecret(secret RenderableObject) map[
 	}
 
 	return result
+}
+
+// helmReleaseDataStruct is the subset of Helm's release.v1 JSON payload this template needs --
+// intentionally not the full helm.sh/helm/v3/pkg/release.Release struct, to avoid pulling in the
+// Helm SDK as a dependency just to read a handful of fields.
+type helmReleaseDataStruct struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Version   int    `json:"version"`
+	Manifest  string `json:"manifest"`
+	Info      struct {
+		Status      string `json:"status"`
+		Description string `json:"description"`
+	} `json:"info"`
+	Chart struct {
+		Metadata struct {
+			Name       string `json:"name"`
+			Version    string `json:"version"`
+			AppVersion string `json:"appVersion"`
+		} `json:"metadata"`
+	} `json:"chart"`
+}
+
+// parseHelmReleaseSecret decodes a Secret of type helm.sh/release.v1 -- Helm (v3+)'s default
+// release storage backend, one Secret per (release name, revision) -- into the fields the
+// template needs. data.release is encoded twice: once as an ordinary Secret data entry (plain
+// base64, per the Kubernetes API convention every Secret data value uses), then again by Helm's
+// own storage driver as base64(gzip(JSON)); see decodeRelease/encodeRelease in
+// https://github.com/helm/helm/blob/main/pkg/storage/driver/util.go.
+func parseHelmReleaseSecret(secret RenderableObject) map[string]interface{} {
+	result := map[string]interface{}{
+		"Exists":       false,
+		"ParseError":   "",
+		"ReleaseName":  "",
+		"Namespace":    "",
+		"Revision":     0,
+		"Status":       "",
+		"Description":  "",
+		"ChartName":    "",
+		"ChartVersion": "",
+		"AppVersion":   "",
+		"Manifest":     "",
+	}
+	if secret.Object == nil {
+		return result
+	}
+	data, _ := secret.Object["data"].(map[string]interface{})
+	encoded, ok := data["release"].(string)
+	if !ok {
+		result["ParseError"] = "missing data.release"
+		return result
+	}
+	result["Exists"] = true
+	outer, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to base64-decode release: %v", err)
+		return result
+	}
+	inner, err := base64.StdEncoding.DecodeString(string(outer))
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to base64-decode release payload: %v", err)
+		return result
+	}
+	gzReader, err := gzip.NewReader(bytes.NewReader(inner))
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to gzip-decode release payload: %v", err)
+		return result
+	}
+	defer gzReader.Close()
+	plain, err := io.ReadAll(gzReader)
+	if err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to decompress release payload: %v", err)
+		return result
+	}
+	var release helmReleaseDataStruct
+	if err := json.Unmarshal(plain, &release); err != nil {
+		result["ParseError"] = fmt.Sprintf("failed to parse release JSON: %v", err)
+		return result
+	}
+	result["ReleaseName"] = release.Name
+	result["Namespace"] = release.Namespace
+	result["Revision"] = release.Version
+	result["Status"] = release.Info.Status
+	result["Description"] = release.Info.Description
+	result["ChartName"] = release.Chart.Metadata.Name
+	result["ChartVersion"] = release.Chart.Metadata.Version
+	result["AppVersion"] = release.Chart.Metadata.AppVersion
+	result["Manifest"] = release.Manifest
+	return result
+}
+
+// helmManifestDocSeparator matches Helm's own document separator convention: each rendered
+// template in release.manifest is joined with a "---" line of its own (usually followed by a
+// "# Source: <chart>/templates/..." comment), the same convention plain multi-document YAML uses.
+var helmManifestDocSeparator = regexp.MustCompile(`(?m)^---\s*$`)
+
+// helmReleaseManifestResources splits a Helm release's rendered manifest into its individual
+// Kubernetes objects and extracts just enough (apiVersion/kind/name/namespace) to look each one
+// up live -- never re-rendering the full object spec here, since $.KubeGetFirst below fetches the
+// object's actual current state rather than trusting what Helm last applied. Malformed or
+// non-object documents (stray comments, empty docs from a trailing separator) are skipped rather
+// than failing the whole list.
+func helmReleaseManifestResources(manifest string) []map[string]interface{} {
+	var out []map[string]interface{}
+	for _, doc := range helmManifestDocSeparator.Split(manifest, -1) {
+		if strings.TrimSpace(doc) == "" {
+			continue
+		}
+		var parsed struct {
+			APIVersion string `json:"apiVersion"`
+			Kind       string `json:"kind"`
+			Metadata   struct {
+				Name      string `json:"name"`
+				Namespace string `json:"namespace"`
+			} `json:"metadata"`
+		}
+		if err := yaml.Unmarshal([]byte(doc), &parsed); err != nil {
+			continue
+		}
+		if parsed.Kind == "" || parsed.Metadata.Name == "" {
+			continue
+		}
+		out = append(out, map[string]interface{}{
+			"apiVersion": parsed.APIVersion,
+			"kind":       parsed.Kind,
+			"name":       parsed.Metadata.Name,
+			"namespace":  parsed.Metadata.Namespace,
+		})
+	}
+	return out
 }
 
 // secretDataKeys returns the sorted union of a Secret's data and stringData key names, for
