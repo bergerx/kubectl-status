@@ -421,9 +421,10 @@
                 {{- end }}
             {{- else }}
                 {{- $obj := $.KubeGetFirst $ns .kind .name }}
-                {{- $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" $ns "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- if $obj.Object }}
-                    {{- with $obj.KStatus }}, {{ .Status.String | colorKeyword }}{{ with .Message }}: {{ . }}{{ end }}{{ end }}
+                    {{- $.Include "resource_health_summary" (dict "obj" $obj "callerNamespace" $.Namespace) | nindent 4 }}
+                {{- else }}
+                    {{- $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" $ns "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -1204,5 +1205,71 @@
         {{- $ready := .Status.readyReplicas | default 0 | int }}
         {{- if lt $ready $desired }}{{ printf ", %d/%d" $ready $desired | red | bold }}{{ else }}{{ printf ", %d/%d" $ready $desired | green }}{{ end }} ready
         {{- with .RolloutStatus . }}{{ if not .done }}, {{ "rolling out" | yellow }}{{ end }}{{ end }}
+    {{- end }}
+{{- end }}
+
+{{- define "generic_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects dict "obj" (RenderableObject of any kind) "callerNamespace" (optional, forwarded
+           to resource_ref so obj's own namespace is dropped when it's redundant). Fallback one-
+           line summary for kinds with no dedicated *_health_summary template -- used by
+           resource_health_summary for kinds it doesn't recognize. Rather than anything kind-
+           specific, this leans on the same conventions kstatus.Compute already uses to make sense
+           of arbitrary/CRD kinds (a status.conditions[type=Ready] entry, status.observedGeneration
+           vs metadata.generation), plus a couple of widely-used conventions kstatus doesn't check:
+           a bare status.ready boolean, and an observedGeneration recorded on the Ready condition
+           itself rather than at status.observedGeneration (controller-runtime's metav1.Condition
+           carries its own per-condition observedGeneration; some operators only set it there). */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
+    {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with $obj.KStatus }}, {{ .Status.String | colorKeyword }}{{ with .Message }}: {{ . }}{{ end }}{{ end }}
+    {{- if hasKey $obj.Status "ready" }}
+        {{- $ready := $obj.Status.ready }}
+        {{- if kindIs "bool" $ready }}
+            {{- ", ready:" }}{{ if $ready }}{{ "true" | green }}{{ else }}{{ "false" | red | bold }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- $readyCond := getMatchingItemInMapList (dict "type" "Ready") $obj.StatusConditions }}
+    {{- $observedGen := 0 }}{{ $haveObservedGen := false }}
+    {{- if hasKey $obj.Status "observedGeneration" }}
+        {{- $observedGen = $obj.Status.observedGeneration }}{{ $haveObservedGen = true }}
+    {{- else if and $readyCond (hasKey $readyCond "observedGeneration") }}
+        {{- $observedGen = $readyCond.observedGeneration }}{{ $haveObservedGen = true }}
+    {{- end }}
+    {{- if and $haveObservedGen $obj.Metadata.generation (ne $observedGen $obj.Metadata.generation) }}
+        {{- ", observed gen " }}{{ $observedGen | toString | red | bold }}{{ " != gen " }}{{ $obj.Metadata.generation | toString | red | bold }}
+    {{- end }}
+{{- end }}
+
+{{- define "resource_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects dict "obj" (RenderableObject of any kind) "callerNamespace" (optional, forwarded
+           through to pod_health_summary/generic_health_summary). Dispatches to the same compact
+           one-line summary the caller would reach for if it knew obj's kind ahead of time, falling
+           back to generic_health_summary for anything else. For use where a list mixes resources
+           of a kind that isn't known ahead of time, e.g. crossplane_composed_resources. */ -}}
+    {{- $obj := .obj }}
+    {{- $callerNamespace := .callerNamespace }}
+    {{- if eq $obj.Kind "Pod" }}
+        {{- template "pod_health_summary" (dict "pod" $obj "callerNamespace" $callerNamespace) }}
+    {{- else if eq $obj.Kind "Service" }}
+        {{- template "service_health_summary" $obj }}
+    {{- else if eq $obj.Kind "Ingress" }}
+        {{- template "ingress_health_summary" $obj }}
+    {{- else if has $obj.Kind (list "HTTPRoute" "GRPCRoute" "TCPRoute" "UDPRoute" "TLSRoute") }}
+        {{- template "route_health_summary" $obj }}
+    {{- else if eq $obj.Kind "Job" }}
+        {{- template "job_health_summary" $obj }}
+    {{- else if eq $obj.Kind "PodDisruptionBudget" }}
+        {{- template "pdb_health_summary" $obj }}
+    {{- else if has $obj.Kind (list "Deployment" "StatefulSet" "DaemonSet" "ReplicaSet") }}
+        {{- template "workload_health_summary" $obj }}
+    {{- else if eq $obj.Kind "HorizontalPodAutoscaler" }}
+        {{- template "hpa_health_summary" $obj }}
+    {{- else if eq $obj.Kind "VerticalPodAutoscaler" }}
+        {{- template "vpa_health_summary" $obj }}
+    {{- else }}
+        {{- template "generic_health_summary" (dict "obj" $obj "callerNamespace" $callerNamespace) }}
     {{- end }}
 {{- end }}
