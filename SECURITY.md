@@ -6,6 +6,12 @@ kubectl-status only supports the latest released version. Security fixes are
 made against `master` and shipped in the next release; older versions are not
 patched separately.
 
+## Project Continuity
+
+kubectl-status is maintained by a single person, with no formal succession
+plan. If the project goes dormant, forking is the expected path for continued
+maintenance.
+
 ## Reporting a Vulnerability
 
 **Please do not report security vulnerabilities through public GitHub issues,
