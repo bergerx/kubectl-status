@@ -599,7 +599,7 @@ func TestKubeletConfigzSummaryTemplateAKSEvictionHard(t *testing.T) {
 
 func TestKubeletConfigzSummaryTemplateAKSContainerLogRotation(t *testing.T) {
 	got := renderConfigzSummary(t, aksKubeletConfigzObj())
-	want := "container log rotation: 50M cap, 5 files, 1 worker, 10s monitor"
+	want := "container logs: retains up to 250MB per container (50M x 5 files)"
 	if !strings.Contains(got, want) {
 		t.Errorf("got = %q, want substring %q", got, want)
 	}
@@ -607,12 +607,15 @@ func TestKubeletConfigzSummaryTemplateAKSContainerLogRotation(t *testing.T) {
 
 func TestKubeletConfigzSummaryTemplateAKSKubeReservedWithoutEphemeralStorage(t *testing.T) {
 	got := renderConfigzSummary(t, aksKubeletConfigzObj())
-	want := "kubeReserved: cpu:180m mem:650Mi pid:1000"
+	want := "reserved: cpu:180m(kube) mem:650Mi(kube) pid:1000(kube)"
 	if !strings.Contains(got, want) {
 		t.Errorf("got = %q, want substring %q", got, want)
 	}
-	if strings.Contains(got, "systemReserved") {
-		t.Errorf("expected no systemReserved line when absent from configz, got = %q", got)
+	if strings.Contains(got, "(system)") {
+		t.Errorf("expected no (system) contribution when systemReserved is absent from configz, got = %q", got)
+	}
+	if strings.Contains(got, "ephemeral-storage") {
+		t.Errorf("expected no ephemeral-storage reserved clause when absent from both maps, got = %q", got)
 	}
 }
 
@@ -640,7 +643,7 @@ func renderConfigzSummary(t *testing.T, configz map[string]interface{}) string {
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
 	e.Template = *tmpl
 	r := newRenderableObject(map[string]interface{}{}, e, repo)
-	got, err := r.renderTemplate("kubelet_configz_summary", configz)
+	got, err := r.renderTemplate("kubelet_configz_summary", map[string]interface{}{"configz": configz})
 	if err != nil {
 		t.Fatalf("renderTemplate() error = %v", err)
 	}

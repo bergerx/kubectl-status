@@ -186,6 +186,59 @@ func TestSortMapListByFloatKeysValueDescIsStableOnTies(t *testing.T) {
 	}
 }
 
+func TestEvictionHeadroomPercentThreshold(t *testing.T) {
+	// nodefs.available<10%, actual disk currently 73.6% free (34.8GB/47.3GB): plenty of headroom.
+	got := evictionHeadroom("10%", 34.8e9, 47.3e9, "B")
+	if !got.OK || got.Tripped || got.AtRisk {
+		t.Fatalf("evictionHeadroom() = %+v, want OK, not tripped, not at risk", got)
+	}
+	if got.Current != "74% free" {
+		t.Errorf("Current = %q, want %q", got.Current, "74% free")
+	}
+}
+
+func TestEvictionHeadroomPercentThresholdAtRisk(t *testing.T) {
+	// threshold 10%, currently 12% free: above the threshold but within 1.5x of tripping it.
+	got := evictionHeadroom("10%", 1.2, 10, "")
+	if !got.OK || got.Tripped || !got.AtRisk {
+		t.Fatalf("evictionHeadroom() = %+v, want OK, not tripped, at risk", got)
+	}
+}
+
+func TestEvictionHeadroomPercentThresholdTripped(t *testing.T) {
+	// threshold 10%, currently 5% free: already past the threshold.
+	got := evictionHeadroom("10%", 0.5, 10, "")
+	if !got.OK || !got.Tripped {
+		t.Fatalf("evictionHeadroom() = %+v, want OK and tripped", got)
+	}
+}
+
+func TestEvictionHeadroomAbsoluteThreshold(t *testing.T) {
+	// memory.available<100Mi, node currently reports 11.4GB available: no total needed.
+	got := evictionHeadroom("100Mi", 11.4e9, 0, "B")
+	if !got.OK || got.Tripped || got.AtRisk {
+		t.Fatalf("evictionHeadroom() = %+v, want OK, not tripped, not at risk", got)
+	}
+}
+
+func TestEvictionHeadroomPercentThresholdWithoutTotalIsNotOK(t *testing.T) {
+	// A percent threshold can't be normalized without knowing the resource's total capacity.
+	got := evictionHeadroom("10%", 34.8e9, 0, "B")
+	if got.OK {
+		t.Fatalf("evictionHeadroom() = %+v, want OK=false when total is unknown", got)
+	}
+	if got.Threshold != "10%" {
+		t.Errorf("Threshold = %q, want %q (raw threshold preserved for fallback display)", got.Threshold, "10%")
+	}
+}
+
+func TestEvictionHeadroomUnparseableThresholdIsNotOK(t *testing.T) {
+	got := evictionHeadroom("not-a-number", 1, 1, "")
+	if got.OK {
+		t.Fatalf("evictionHeadroom() = %+v, want OK=false for an unparseable threshold", got)
+	}
+}
+
 func TestRenderGroupedTableAlignsOnVisibleWidthNotByteLength(t *testing.T) {
 	// Data column widths must be computed from each cell's visible (ANSI-escape-stripped) width,
 	// not its byte length: fatih/color's escape codes add bytes a real terminal doesn't render,

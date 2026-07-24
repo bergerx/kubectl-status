@@ -110,6 +110,7 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"quantityToInt64":                 quantityToInt64,
 		"percent":                         percent,
 		"colorPercent":                    colorPercent,
+		"evictionHeadroom":                evictionHeadroom,
 		"humanizeSI":                      humanizeSI,
 		"humanizeSIPair":                  humanizeSIPair,
 		"getMatchingItemInMapList":        getMatchingItemInMapList,
@@ -207,6 +208,66 @@ func quantityToInt64(str string) int64 {
 
 func percent(x, y float64) float64 {
 	return x / y * 100
+}
+
+// evictionSignal correlates one kubelet eviction-hard threshold against the node's current
+// headroom for that resource -- e.g. the "nodefs.available<10%" config value against the node's
+// actual free disk right now. The two numbers otherwise live in separate kubelet API responses
+// (configz vs stats/summary), so this lets a template render them as one line instead of forcing
+// the reader to cross-reference two blocks. OK is false when there wasn't enough data to correlate
+// (an unparseable threshold, or a percent-form threshold with no known total to normalize against);
+// callers should fall back to showing Threshold alone in that case.
+type evictionSignal struct {
+	Threshold string
+	Current   string
+	AtRisk    bool // current headroom is within 1.5x of tripping the threshold
+	Tripped   bool // current headroom is already at or past the threshold
+	OK        bool
+}
+
+// evictionHeadroom builds an evictionSignal for one eviction-hard threshold. threshold is the raw
+// configured value as kubelet reports it, either a percentage ("10%") or a resource.Quantity
+// ("100Mi"). current is how much of that resource is free right now -- pass a negative value when
+// this isn't actually known (e.g. stats/summary wasn't fetched), so a missing measurement isn't
+// mistaken for a real zero and reported as an imminent eviction. total is current's capacity, only
+// used to normalize a percentage threshold ("10%" of what?); pass 0 for total when unknown or when
+// threshold isn't a percentage. unit is "B" for byte quantities or "" for bare counts.
+func evictionHeadroom(threshold string, current, total float64, unit string) evictionSignal {
+	sig := evictionSignal{Threshold: threshold}
+	if current < 0 {
+		return sig
+	}
+	isPercent := strings.HasSuffix(threshold, "%")
+	var thresholdValue float64
+	if isPercent {
+		v, err := strconv.ParseFloat(strings.TrimSuffix(threshold, "%"), 64)
+		if err != nil {
+			return sig
+		}
+		thresholdValue = v
+	} else {
+		quantity, err := resource2.ParseQuantity(threshold)
+		if err != nil {
+			return sig
+		}
+		thresholdValue = float64(quantity.MilliValue()) / 1000
+	}
+	currentValue := current
+	if isPercent {
+		if total <= 0 {
+			return sig
+		}
+		currentValue = percent(current, total)
+		sig.Current = fmt.Sprintf("%.0f%% free", currentValue)
+	} else if unit == "B" {
+		sig.Current = humanizeSI("B", current) + " free"
+	} else {
+		sig.Current = humanizeSI("", current) + " free"
+	}
+	sig.Tripped = currentValue <= thresholdValue
+	sig.AtRisk = currentValue <= thresholdValue*1.5
+	sig.OK = true
+	return sig
 }
 
 func colorPercent(format string, percent float64) string {
