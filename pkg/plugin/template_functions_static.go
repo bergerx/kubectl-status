@@ -111,6 +111,7 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"percent":                         percent,
 		"colorPercent":                    colorPercent,
 		"evictionHeadroom":                evictionHeadroom,
+		"evictionAnnotation":              evictionAnnotation,
 		"humanizeSI":                      humanizeSI,
 		"humanizeSIPair":                  humanizeSIPair,
 		"getMatchingItemInMapList":        getMatchingItemInMapList,
@@ -268,6 +269,27 @@ func evictionHeadroom(threshold string, current, total float64, unit string) evi
 	sig.AtRisk = currentValue <= thresholdValue*1.5
 	sig.OK = true
 	return sig
+}
+
+// evictionAnnotation renders evictionHeadroom's verdict for one eviction-hard signal as a
+// ready-to-print, already-colored suffix (e.g. " (10% TRIPPED: 5% free)"), or "" when the signal
+// isn't at risk or there's nothing to correlate against -- a healthy node gets no annotation at
+// all. Colored here with color.New(...).Sprint rather than the template-level "bold" func: the
+// message always contains a literal "%" (from the threshold/current percentages), and "bold"
+// unconditionally calls fmt.Sprintf even with no extra args, which misparses "% " followed by
+// certain letters (T, f, s, ...) as a format verb with a missing argument and corrupts the output
+// (e.g. "10% TRIPPED" -> "10%!T(MISSING)RIPPED"). Sprint never parses verbs, so it's safe here
+// regardless of what the message happens to contain.
+func evictionAnnotation(threshold string, current, total float64, unit string) string {
+	sig := evictionHeadroom(threshold, current, total, unit)
+	switch {
+	case sig.Tripped:
+		return color.New(color.FgRed, color.Bold).Sprint(fmt.Sprintf(" (%s TRIPPED: %s)", sig.Threshold, sig.Current))
+	case sig.AtRisk:
+		return color.New(color.FgYellow).Sprint(fmt.Sprintf(" (nearing %s: %s)", sig.Threshold, sig.Current))
+	default:
+		return ""
+	}
 }
 
 func colorPercent(format string, percent float64) string {

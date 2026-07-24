@@ -589,12 +589,134 @@ func aksKubeletConfigzObj() map[string]interface{} {
 	}
 }
 
-func TestKubeletConfigzSummaryTemplateAKSEvictionHard(t *testing.T) {
-	got := renderConfigzSummary(t, aksKubeletConfigzObj())
-	want := "eviction-hard: mem.available<100Mi nodefs.available<10% nodefs.inodesFree<5% pid.available<2000"
-	if !strings.Contains(got, want) {
-		t.Errorf("got = %q, want substring %q", got, want)
+// TestNodeStatsSummaryFsNoEvictionAnnotationWhenHealthy covers the common case: an eviction-hard
+// threshold is configured, but the node isn't anywhere near it. There must be no separate
+// "eviction-hard:" block and no annotation on the rootfs line either -- kubectl-status only calls
+// out eviction risk where the raw free-space figure already sits, and only when it's actually
+// close, per Node.tmpl's node_eviction_annotation doc comment.
+func TestNodeStatsSummaryFsNoEvictionAnnotationWhenHealthy(t *testing.T) {
+	got := renderNodeStatsSummaryFs(t, map[string]interface{}{
+		"fs": map[string]interface{}{
+			"usedBytes": 1.0e9, "capacityBytes": 10.0e9, "availableBytes": 9.0e9,
+			"inodesUsed": 1.0e5, "inodes": 1.0e6, "inodesFree": 9.0e5,
+		},
+		"availableThreshold": "10%",
+		"inodesThreshold":    "5%",
+	})
+	want := "1GB/10GB, 9GB still free; 100k/1M inode, 900k inode still free"
+	if got != want {
+		t.Errorf("got = %q, want %q", got, want)
 	}
+}
+
+func TestNodeStatsSummaryFsAnnotatesWhenNearingEvictionThreshold(t *testing.T) {
+	// threshold 10% free, currently 12% free (900MB/7.5GB): above the threshold but within 1.5x.
+	got := renderNodeStatsSummaryFs(t, map[string]interface{}{
+		"fs": map[string]interface{}{
+			"usedBytes": 6.6e9, "capacityBytes": 7.5e9, "availableBytes": 0.9e9,
+			"inodesUsed": 0.0, "inodes": 1.0, "inodesFree": 1.0,
+		},
+		"availableThreshold": "10%",
+		"inodesThreshold":    "",
+	})
+	if !strings.Contains(got, "nearing 10%: 12% free") {
+		t.Errorf("got = %q, want a nearing-threshold annotation on the free-space figure", got)
+	}
+}
+
+func TestNodeStatsSummaryFsAnnotatesWhenEvictionThresholdTripped(t *testing.T) {
+	// threshold 10% free, currently 5% free: already past it.
+	got := renderNodeStatsSummaryFs(t, map[string]interface{}{
+		"fs": map[string]interface{}{
+			"usedBytes": 9.5e9, "capacityBytes": 10.0e9, "availableBytes": 0.5e9,
+			"inodesUsed": 0.0, "inodes": 1.0, "inodesFree": 1.0,
+		},
+		"availableThreshold": "10%",
+		"inodesThreshold":    "",
+	})
+	if !strings.Contains(got, "10% TRIPPED: 5% free") {
+		t.Errorf("got = %q, want a tripped-threshold annotation on the free-space figure", got)
+	}
+}
+
+func TestNodeStatsSummaryFsNoAnnotationWhenThresholdUnconfigured(t *testing.T) {
+	// Even a node that's essentially out of disk gets no annotation when eviction-hard doesn't
+	// set a threshold for this fs -- there's nothing to correlate the free-space figure against.
+	got := renderNodeStatsSummaryFs(t, map[string]interface{}{
+		"fs": map[string]interface{}{
+			"usedBytes": 9.99e9, "capacityBytes": 10.0e9, "availableBytes": 0.01e9,
+			"inodesUsed": 0.0, "inodes": 1.0, "inodesFree": 1.0,
+		},
+		"availableThreshold": "",
+		"inodesThreshold":    "",
+	})
+	if strings.Contains(got, "nearing") || strings.Contains(got, "TRIPPED") {
+		t.Errorf("got = %q, want no eviction annotation when threshold is unconfigured", got)
+	}
+}
+
+// TestNodeStatsSummaryResourcesAnnotatesMemAvailableAndProcesses covers the two other lines
+// node_eviction_annotation is wired into (besides rootfs/imagefs, covered above): the "available"
+// figure on the memory line (mem.available) and the "processes" line (pid.available), both fed
+// from the same dict node_stats_summary_resources receives from kubelet_api_summary.
+func TestNodeStatsSummaryResourcesAnnotatesMemAvailableAndProcesses(t *testing.T) {
+	got := renderNodeStatsSummaryResources(t, map[string]interface{}{
+		"data": map[string]interface{}{
+			"memory": map[string]interface{}{
+				"usageBytes": 1.0e9, "workingSetBytes": 1.0e9, "rssBytes": 1.0e9,
+				"availableBytes": 0.05e9, "pageFaults": 0.0, "majorPageFaults": 0.0,
+			},
+			"rlimit": map[string]interface{}{"curproc": 988.0, "maxpid": 1000.0},
+		},
+		"full":              false,
+		"memAvailThreshold": "100Mi",
+		"memAvailTotal":     0.0,
+		"pidAvailThreshold": "10",
+	})
+	if !strings.Contains(got, "TRIPPED") {
+		t.Errorf("got = %q, want a tripped annotation on the available-memory figure (50MB free < 100Mi threshold)", got)
+	}
+	if !strings.Contains(got, "nearing 10: 12 free") {
+		t.Errorf("got = %q, want a nearing-threshold annotation on the processes figure (12 pids free vs threshold 10)", got)
+	}
+}
+
+func renderNodeStatsSummaryResources(t *testing.T, data map[string]interface{}) string {
+	t.Helper()
+	cfg := NewRenderConfig(viper.New())
+	tmpl, _ := getTemplate(cfg)
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	t.Cleanup(func() { f.Cleanup() })
+	repo, _ := input.NewResourceRepo(f, cfg.Viper)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+	e.Template = *tmpl
+	r := newRenderableObject(map[string]interface{}{}, e, repo)
+	got, err := r.renderTemplate("node_stats_summary_resources", data)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	return got
+}
+
+func renderNodeStatsSummaryFs(t *testing.T, data map[string]interface{}) string {
+	t.Helper()
+	cfg := NewRenderConfig(viper.New())
+	tmpl, _ := getTemplate(cfg)
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	t.Cleanup(func() { f.Cleanup() })
+	repo, _ := input.NewResourceRepo(f, cfg.Viper)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+	e.Template = *tmpl
+	r := newRenderableObject(map[string]interface{}{}, e, repo)
+	got, err := r.renderTemplate("node_stats_summary_fs", data)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	return got
 }
 
 func TestKubeletConfigzSummaryTemplateAKSContainerLogRotation(t *testing.T) {
@@ -643,7 +765,7 @@ func renderConfigzSummary(t *testing.T, configz map[string]interface{}) string {
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
 	e.Template = *tmpl
 	r := newRenderableObject(map[string]interface{}{}, e, repo)
-	got, err := r.renderTemplate("kubelet_configz_summary", map[string]interface{}{"configz": configz})
+	got, err := r.renderTemplate("kubelet_configz_summary", configz)
 	if err != nil {
 		t.Fatalf("renderTemplate() error = %v", err)
 	}

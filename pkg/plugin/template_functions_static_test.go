@@ -239,6 +239,34 @@ func TestEvictionHeadroomUnparseableThresholdIsNotOK(t *testing.T) {
 	}
 }
 
+func TestEvictionAnnotationTrippedDoesNotCorruptOnPercentSign(t *testing.T) {
+	// Regression test: the message always contains a literal "%" from the threshold/current
+	// percentages. evictionAnnotation must build it with Sprint, not Sprintf -- piping the composed
+	// string back through a Sprintf-based colorer (as an earlier version of this code did via the
+	// template's "bold" func) misparses "% " followed by a verb letter (T, f, s, ...) as a format
+	// verb with a missing argument, e.g. "10% TRIPPED" corrupts to "10%!T(MISSING)RIPPED".
+	got := evictionAnnotation("10%", 0.5, 10, "")
+	want := " (10% TRIPPED: 5% free)"
+	if got != want {
+		t.Fatalf("evictionAnnotation() = %q, want %q", got, want)
+	}
+}
+
+func TestEvictionAnnotationAtRisk(t *testing.T) {
+	got := evictionAnnotation("10%", 1.2, 10, "")
+	want := " (nearing 10%: 12% free)"
+	if got != want {
+		t.Fatalf("evictionAnnotation() = %q, want %q", got, want)
+	}
+}
+
+func TestEvictionAnnotationEmptyWhenHealthy(t *testing.T) {
+	got := evictionAnnotation("10%", 9.0, 10, "")
+	if got != "" {
+		t.Fatalf("evictionAnnotation() = %q, want empty string when not at risk", got)
+	}
+}
+
 func TestRenderGroupedTableAlignsOnVisibleWidthNotByteLength(t *testing.T) {
 	// Data column widths must be computed from each cell's visible (ANSI-escape-stripped) width,
 	// not its byte length: fatih/color's escape codes add bytes a real terminal doesn't render,
