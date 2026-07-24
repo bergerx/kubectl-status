@@ -133,9 +133,15 @@ func newRenderEngine(streams genericiooptions.IOStreams, cfg *RenderConfig) (*re
 // could be beneficial in the future. But we parse them all once and re-use again for all template executions.
 func getTemplate(cfg *RenderConfig) (*template.Template, error) {
 	klog.V(5).InfoS("Creating new template instance...")
+	sprigFuncMap := sprigin.TxtFuncMap()
+	// env/expandEnv let a template read the process environment, which isn't needed by any
+	// built-in template and would let a stray template dropped into ~/.kubectl-status/templates
+	// leak env vars (e.g. cloud credentials) into rendered output.
+	delete(sprigFuncMap, "env")
+	delete(sprigFuncMap, "expandEnv")
 	tmpl := template.
 		New("templates").
-		Funcs(sprigin.TxtFuncMap()).
+		Funcs(sprigFuncMap).
 		Funcs(cfg.funcMap())
 	return parseTemplates(tmpl)
 }
