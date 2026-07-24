@@ -32,3 +32,16 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
+sboms:
+  - artifacts: archive
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - --yes
+    artifacts: checksum
+    output: true
