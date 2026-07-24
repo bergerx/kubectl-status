@@ -14,7 +14,13 @@
     {{- end }}
     {{- with .Status.images }}{{ "images" | bold | nindent 2 }} {{ . | len }}{{ end }}
     {{- if .Status.volumesInUse }} {{ "volumes" | bold }} inuse={{ .Status.volumesInUse | len }}
-        {{- with index .Status.allocatable "attachable-volumes-azure-disk" }}/{{ . }}{{ end }}, attached={{ .Status.volumesAttached | default list | len }}
+        {{- $volCapacity := 0.0 }}
+        {{- range $k, $v := .Status.allocatable }}
+            {{- if hasPrefix "attachable-volumes-" $k }}
+                {{- $volCapacity = $volCapacity | addFloat64 ($v | quantityToFloat64) }}
+            {{- end }}
+        {{- end }}
+        {{- if gt $volCapacity 0.0 }}/{{ $volCapacity | printf "%g" }}{{ end }}, attached={{ .Status.volumesAttached | default list | len }}
     {{- end }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
@@ -45,56 +51,136 @@
 {{- define "kubelet_api_summary" }}
     {{- if .Config.GetBool "include-node-kubelet-api-summary" }}
         {{- with .KubeGetNodeHealthz .Name }}
-            {{- "kubelet-api/healthz" | nindent 2 }}: {{ if eq . "ok" }}{{ . }}{{ else }}{{ . | red | bold }}{{ end }}
+            {{- "kubelet health" | nindent 2 }}: {{ if eq . "ok" }}{{ . }}{{ else }}{{ . | red | bold }}{{ end }}
         {{- end }}
+        {{- /* Fetched once and threaded into both sub-sections below: the eviction-hard thresholds
+               (from configz) and the fs/memory/rlimit numbers that give them meaning (from
+               stats/summary) come from two different kubelet API calls, but are shown correlated
+               in one place rather than as two separate raw dumps. */ -}}
+        {{- $nodeMetrics := .KubeGetNodeMetrics .Name }}
+        {{- $nodeMetricsHasUsage := ($nodeMetrics.Object | default dict).usage }}
+        {{- $statsSummary := .KubeGetNodeStatsSummary .Name | default dict }}
+        {{- $nodeStats := $statsSummary.node | default dict }}
+        {{- $allocCpu := .Status.allocatable.cpu | quantityToFloat64 }}
+        {{- $allocMem := .Status.allocatable.memory | quantityToFloat64 }}
         {{- with .KubeGetNodeConfigz .Name }}
-            {{- template "kubelet_configz_summary" . }}
+            {{- template "kubelet_configz_summary" (dict "configz" . "nodeStats" $nodeStats "allocMem" $allocMem) }}
         {{- end }}
-        {{- with .KubeGetNodeStatsSummary .Name }}
-            {{- "kubelet-api/stats/summary"  | nindent 2 }}:
-            {{- "node overall" | nindent 4 }}: {{ template "node_stats_summary_resources" .node }}
-            {{- range .node.systemContainers }}
-                {{- .name | nindent 4 }}: {{ template "node_stats_summary_resources" . }}
+        {{- with $statsSummary }}
+            {{- "kubelet stats" | nindent 2 }}:
+            {{- /* "full" suppresses cpu/mem/workingSet on the node-level entry when
+                   node_pod_details' metrics-server-backed cpu:/mem: lines already reported them --
+                   otherwise (no metrics-server) this is the only usage source, so show it in full. */ -}}
+            {{- "node overall" | nindent 4 }}: {{ template "node_stats_summary_resources" (dict "data" $nodeStats "full" (not $nodeMetricsHasUsage)) }}
+            {{- range $nodeStats.systemContainers }}
+                {{- .name | nindent 4 }}: {{ template "node_stats_summary_resources" (dict "data" . "full" true "allocCpu" $allocCpu "allocMem" $allocMem) }}
             {{- end }}
         {{- end }}
     {{- end }}
 {{- end -}}
 
 {{- define "kubelet_configz_summary" }}
-    {{- /* Expects kubelet-api/configz -> kubeletconfig */ -}}
-    {{- with $kc := .kubeletconfig }}
-        {{- "kubelet-api/configz" | nindent 2 }}:
+    {{- /* Expects a dict: "configz" = kubelet-api/configz response (-> kubeletconfig), "nodeStats"
+           = kubelet-api/stats/summary -> node (used to correlate eviction-hard thresholds against
+           actual current headroom), "allocMem" = node Status.allocatable.memory as float64 */ -}}
+    {{- with $kc := .configz.kubeletconfig }}
+        {{- "kubelet config" | nindent 2 }}:
         {{- with $kc.podPidsLimit }}{{ if ge (. | float64) 0.0 }} podPidsLimit:{{ . }}{{ end }}{{ end }}
         {{- with $kc.cpuManagerPolicy }}{{ if ne . "none" }} cpuManager:{{ . }}{{ end }}{{ end }}
         {{- with $kc.memoryManagerPolicy }}{{ if ne . "None" }} memoryManager:{{ . }}{{ end }}{{ end }}
         {{- with $kc.topologyManagerPolicy }}{{ if ne . "none" }} topologyManager:{{ . }}{{ end }}{{ end }}
         {{- with $kc.shutdownGracePeriod }}{{ if ne . "0s" }} shutdownGracePeriod:{{ . }}{{ with $kc.shutdownGracePeriodCriticalPods }}/{{ . }}{{ end }}(critical){{ end }}{{ end }}
         {{- with $kc.evictionHard }}
+            {{- $nodeStats := $.nodeStats | default dict }}
+            {{- $fs := $nodeStats.fs | default dict }}
+            {{- $runtime := $nodeStats.runtime | default dict }}
+            {{- $imagefs := $runtime.imageFs | default dict }}
+            {{- $mem := $nodeStats.memory | default dict }}
+            {{- $rlimit := $nodeStats.rlimit | default dict }}
+            {{- /* -1 means "not known" (stats/summary wasn't fetched, or this field is absent from
+                   it) -- evictionHeadroom treats that as uncorrelatable and falls back to showing
+                   the raw threshold, rather than mistaking a missing measurement for a real zero
+                   and reporting a false "tripped" alarm. */ -}}
+            {{- $memCurrent := -1.0 }}
+            {{- if hasKey $mem "availableBytes" }}{{ $memCurrent = $mem.availableBytes | float64 }}{{ end }}
+            {{- $nodefsAvailCurrent := -1.0 }}
+            {{- if hasKey $fs "availableBytes" }}{{ $nodefsAvailCurrent = $fs.availableBytes | float64 }}{{ end }}
+            {{- $nodefsAvailTotal := 0.0 }}
+            {{- if hasKey $fs "capacityBytes" }}{{ $nodefsAvailTotal = $fs.capacityBytes | float64 }}{{ end }}
+            {{- $nodefsInodesCurrent := -1.0 }}
+            {{- if hasKey $fs "inodesFree" }}{{ $nodefsInodesCurrent = $fs.inodesFree | float64 }}{{ end }}
+            {{- $nodefsInodesTotal := 0.0 }}
+            {{- if hasKey $fs "inodes" }}{{ $nodefsInodesTotal = $fs.inodes | float64 }}{{ end }}
+            {{- $imagefsAvailCurrent := -1.0 }}
+            {{- if hasKey $imagefs "availableBytes" }}{{ $imagefsAvailCurrent = $imagefs.availableBytes | float64 }}{{ end }}
+            {{- $imagefsAvailTotal := 0.0 }}
+            {{- if hasKey $imagefs "capacityBytes" }}{{ $imagefsAvailTotal = $imagefs.capacityBytes | float64 }}{{ end }}
+            {{- $imagefsInodesCurrent := -1.0 }}
+            {{- if hasKey $imagefs "inodesFree" }}{{ $imagefsInodesCurrent = $imagefs.inodesFree | float64 }}{{ end }}
+            {{- $imagefsInodesTotal := 0.0 }}
+            {{- if hasKey $imagefs "inodes" }}{{ $imagefsInodesTotal = $imagefs.inodes | float64 }}{{ end }}
+            {{- $pidCurrent := -1.0 }}
+            {{- $pidTotal := 0.0 }}
+            {{- if and (hasKey $rlimit "curproc") (hasKey $rlimit "maxpid") }}
+                {{- $pidTotal = $rlimit.maxpid | float64 }}
+                {{- $pidCurrent = subFloat64 ($rlimit.curproc | float64) $pidTotal }}
+            {{- end }}
             {{- "eviction-hard" | nindent 4 }}:
-            {{- if hasKey . "memory.available" }} mem.available<{{ index . "memory.available" }}{{ end }}
-            {{- if hasKey . "nodefs.available" }} nodefs.available<{{ index . "nodefs.available" }}{{ end }}
-            {{- if hasKey . "nodefs.inodesFree" }} nodefs.inodesFree<{{ index . "nodefs.inodesFree" }}{{ end }}
-            {{- if hasKey . "imagefs.available" }} imagefs.available<{{ index . "imagefs.available" }}{{ end }}
-            {{- if hasKey . "imagefs.inodesFree" }} imagefs.inodesFree<{{ index . "imagefs.inodesFree" }}{{ end }}
-            {{- if hasKey . "pid.available" }} pid.available<{{ index . "pid.available" }}{{ end }}
+            {{- if hasKey . "memory.available" }} mem.available<{{ template "node_eviction_clause" (dict "threshold" (index . "memory.available") "current" $memCurrent "total" ($.allocMem | default 0.0) "unit" "B") }}{{ end }}
+            {{- if hasKey . "nodefs.available" }} nodefs.available<{{ template "node_eviction_clause" (dict "threshold" (index . "nodefs.available") "current" $nodefsAvailCurrent "total" $nodefsAvailTotal "unit" "B") }}{{ end }}
+            {{- if hasKey . "nodefs.inodesFree" }} nodefs.inodesFree<{{ template "node_eviction_clause" (dict "threshold" (index . "nodefs.inodesFree") "current" $nodefsInodesCurrent "total" $nodefsInodesTotal "unit" "") }}{{ end }}
+            {{- if hasKey . "imagefs.available" }} imagefs.available<{{ template "node_eviction_clause" (dict "threshold" (index . "imagefs.available") "current" $imagefsAvailCurrent "total" $imagefsAvailTotal "unit" "B") }}{{ end }}
+            {{- if hasKey . "imagefs.inodesFree" }} imagefs.inodesFree<{{ template "node_eviction_clause" (dict "threshold" (index . "imagefs.inodesFree") "current" $imagefsInodesCurrent "total" $imagefsInodesTotal "unit" "") }}{{ end }}
+            {{- if hasKey . "pid.available" }} pid.available<{{ template "node_eviction_clause" (dict "threshold" (index . "pid.available") "current" $pidCurrent "total" $pidTotal "unit" "") }}{{ end }}
         {{- end }}
         {{- with $kc.containerLogMaxSize }}
-            {{- "container log rotation" | nindent 4 }}: {{ . }} cap, {{ $kc.containerLogMaxFiles }} files, {{ $kc.containerLogMaxWorkers }} worker, {{ $kc.containerLogMonitorInterval }} monitor
+            {{- $retained := mulf (. | quantityToFloat64) $kc.containerLogMaxFiles }}
+            {{- "container logs" | nindent 4 }}: retains up to {{ $retained | humanizeSI "B" }} per container ({{ . }} x {{ $kc.containerLogMaxFiles | toString }} files)
         {{- end }}
-        {{- with $kc.systemReserved }}
-            {{- "systemReserved" | nindent 4 }}:
-            {{- with .cpu }} cpu:{{ . }}{{ end }}
-            {{- with .memory }} mem:{{ . }}{{ end }}
-            {{- with index . "ephemeral-storage" }} ephemeral-storage:{{ . }}{{ end }}
-            {{- with .pid }} pid:{{ . }}{{ end }}
+        {{- $sysRes := $kc.systemReserved | default dict }}
+        {{- $kubeRes := $kc.kubeReserved | default dict }}
+        {{- $sysEph := index $sysRes "ephemeral-storage" }}
+        {{- $kubeEph := index $kubeRes "ephemeral-storage" }}
+        {{- if or $sysRes $kubeRes }}
+            {{- /* Merged into one line (rather than separate systemReserved/kubeReserved blocks):
+                   these are what explain the capacity -> allocatable gap shown earlier in
+                   node_capacity, so showing the two contributions side by side is more useful than
+                   splitting them across two headers the reader has to add up themselves. */ -}}
+            {{- "reserved" | nindent 4 }}:
+            {{- if or $sysRes.cpu $kubeRes.cpu }} cpu:
+                {{- with $sysRes.cpu }}{{ . }}(system){{ end }}
+                {{- if and $sysRes.cpu $kubeRes.cpu }}+{{ end }}
+                {{- with $kubeRes.cpu }}{{ . }}(kube){{ end }}
+            {{- end }}
+            {{- if or $sysRes.memory $kubeRes.memory }} mem:
+                {{- with $sysRes.memory }}{{ . }}(system){{ end }}
+                {{- if and $sysRes.memory $kubeRes.memory }}+{{ end }}
+                {{- with $kubeRes.memory }}{{ . }}(kube){{ end }}
+            {{- end }}
+            {{- if or $sysEph $kubeEph }} ephemeral-storage:
+                {{- with $sysEph }}{{ . }}(system){{ end }}
+                {{- if and $sysEph $kubeEph }}+{{ end }}
+                {{- with $kubeEph }}{{ . }}(kube){{ end }}
+            {{- end }}
+            {{- if or $sysRes.pid $kubeRes.pid }} pid:
+                {{- with $sysRes.pid }}{{ . }}(system){{ end }}
+                {{- if and $sysRes.pid $kubeRes.pid }}+{{ end }}
+                {{- with $kubeRes.pid }}{{ . }}(kube){{ end }}
+            {{- end }}
         {{- end }}
-        {{- with $kc.kubeReserved }}
-            {{- "kubeReserved" | nindent 4 }}:
-            {{- with .cpu }} cpu:{{ . }}{{ end }}
-            {{- with .memory }} mem:{{ . }}{{ end }}
-            {{- with index . "ephemeral-storage" }} ephemeral-storage:{{ . }}{{ end }}
-            {{- with .pid }} pid:{{ . }}{{ end }}
-        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "node_eviction_clause" }}
+    {{- /* Expects a dict: "threshold" (raw kubelet-configured value), "current" (float64, how much
+           of this resource is free right now), "total" (float64, this resource's capacity -- only
+           needed to normalize a percent-form threshold), "unit" ("B" or ""). Renders the raw
+           threshold alone when there isn't enough data to correlate it against current headroom. */ -}}
+    {{- $sig := evictionHeadroom .threshold .current .total .unit }}
+    {{- if not $sig.OK }}{{ $sig.Threshold }}
+    {{- else if $sig.Tripped }}{{ printf "%s (%s)" $sig.Threshold $sig.Current | red | bold }}
+    {{- else if $sig.AtRisk }}{{ printf "%s (%s)" $sig.Threshold $sig.Current | yellow }}
+    {{- else }}{{ $sig.Threshold }} ({{ $sig.Current }})
     {{- end }}
 {{- end -}}
 
@@ -282,28 +368,41 @@
 {{- end -}}
 
 {{- define "node_stats_summary_resources" }}
-    {{- /* Expects one of:
-           * kubelet-api/stats/summary -> node
-           * kubelet-api/stats/summary -> node.systemContainers */ -}}
-    {{- with .cpu }}{{ with .usageNanoCores }}cpu {{ . | float64 | divFloat64 1000000000 | printf "%.2g" }}core/sec, {{ end }}{{ end }}
-    {{- with .memory -}}
-        mem {{ .usageBytes | float64 | humanizeSI "B" -}}
+    {{- /* Expects a dict:
+           "data" = kubelet-api/stats/summary -> node, or -> node.systemContainers entry
+           "full" = when true, include cpu/mem/workingSet totals. For the node-level entry these
+             duplicate what node_pod_details' metrics-server-backed cpu:/mem: lines already report
+             as this node's overall usage -- pass false there once that line has rendered.
+             rss/available/pageFaults/rlimit/network/fs aren't shown anywhere else and always
+             render regardless of "full".
+           "allocCpu"/"allocMem" = optional node Status.allocatable cpu/mem (float64) -- when set,
+             annotates this entry's cpu/mem with its share of total node capacity, e.g. how much of
+             the node kubelet's own overhead is consuming. */ -}}
+    {{- $data := .data }}
+    {{- if .full }}
+        {{- with $data.cpu }}{{ with .usageNanoCores }}{{ $cores := . | float64 | divFloat64 1000000000 }}cpu {{ $cores | printf "%.2g" }}core/sec{{ with $.allocCpu }} ({{ percent $cores . | colorPercent "%.0f%%" }} of node){{ end }}, {{ end }}{{ end }}
+    {{- end }}
+    {{- with $data.memory -}}
+        {{- if $.full }}{{ $used := .usageBytes | float64 -}}
+        mem {{ $used | humanizeSI "B" -}}
+        {{- with $.allocMem }} ({{ percent $used . | colorPercent "%.0f%%" }} of node){{ end -}}
         , workingSet {{ .workingSetBytes | float64 | humanizeSI "B" -}}
-        , rss {{ .rssBytes | float64 | humanizeSI "B" -}}
+        , {{ end }}rss {{ .rssBytes | float64 | humanizeSI "B" -}}
         {{- if .availableBytes -}}
         , available {{ .availableBytes | float64 | humanizeSI "B" -}}
         {{- end -}}
         , pageFaults/major {{ .pageFaults | float64 | humanizeSI "" }}/{{ .majorPageFaults | float64 | humanizeSI "" }}
     {{- end }}
-    {{- with .rlimit -}}
-    , processes {{ .curproc | float64  | humanizeSI "" }}/{{ .maxpid | float64  | humanizeSI "" }} (rlimit)
+    {{- with $data.rlimit -}}
+        {{- $procPercent := percent (.curproc | float64) (.maxpid | float64) -}}
+    , processes {{ .curproc | float64  | humanizeSI "" }}/{{ .maxpid | float64  | humanizeSI "" }} ({{ $procPercent | colorPercent "%.0f%%" }}, rlimit)
     {{- end }}
-    {{- with .network }}
-      network: rx/tx {{ .rxBytes | float64 | humanizeSI "B" }}/{{ .txBytes | float64 | humanizeSI "B" }}, rx/tx errors {{ .rxErrors | float64 | humanizeSI "" }}/{{ .txErrors | float64 | humanizeSI "" }}
+    {{- with $data.network }}
+      network: rx/tx {{ .rxBytes | float64 | humanizeSI "B" }}/{{ .txBytes | float64 | humanizeSI "B" }}, rx/tx errors {{ .rxErrors | float64 | humanizeSI "" | redIf (gt (.rxErrors | float64) 0.0) }}/{{ .txErrors | float64 | humanizeSI "" | redIf (gt (.txErrors | float64) 0.0) }}
     {{- end }}
-    {{- if .fs }}
-      {{ "rootfs" | bold }}: {{ template "node_stats_summary_fs" .fs }}
-        {{- with .runtime.imageFs }}
+    {{- if $data.fs }}
+      {{ "rootfs" | bold }}: {{ template "node_stats_summary_fs" $data.fs }}
+        {{- with $data.runtime.imageFs }}
       {{ "imagefs" | bold }}: {{ template "node_stats_summary_fs" . }}
         {{- end }}
       {{- end }}
