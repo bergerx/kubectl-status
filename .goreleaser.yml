@@ -39,6 +39,8 @@ signs:
     certificate: "${artifact}.pem"
     args:
       - sign-blob
+      - "--new-bundle-format=false"
+      - "--use-signing-config=false"
       - "--output-signature=${signature}"
       - "--output-certificate=${certificate}"
       - "${artifact}"
