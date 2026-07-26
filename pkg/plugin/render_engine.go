@@ -136,9 +136,13 @@ func getTemplate(cfg *RenderConfig) (*template.Template, error) {
 	sprigFuncMap := sprigin.TxtFuncMap()
 	// env/expandEnv let a template read the process environment, which isn't needed by any
 	// built-in template and would let a stray template dropped into ~/.kubectl-status/templates
-	// leak env vars (e.g. cloud credentials) into rendered output.
+	// leak env vars (e.g. cloud credentials) into rendered output. sprigin's sprig-compat layer
+	// also registers "expandenv" as a separate lowercase alias for the same function (see
+	// bc_registerSprigFuncs in go-sprout/sprout/sprigin), so it must be deleted too or it'd
+	// still let a template read the environment despite the deletions above.
 	delete(sprigFuncMap, "env")
 	delete(sprigFuncMap, "expandEnv")
+	delete(sprigFuncMap, "expandenv")
 	tmpl := template.
 		New("templates").
 		Funcs(sprigFuncMap).
