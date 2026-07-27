@@ -183,7 +183,10 @@
                 {{- $unhealthy := list }}
                 {{- $memoryPressure := false }}
                 {{- range $node.StatusConditions }}
-                    {{- if not (isStatusConditionHealthy .) }}
+                    {{- /* Skip content-free placeholder entries (empty type, no reason/message),
+                           same as conditions_summary in common.tmpl -- flagging the Node as
+                           problematic over one would be a false alarm. */ -}}
+                    {{- if and (or .type .reason .message) (not (isStatusConditionHealthy .)) }}
                         {{- $unhealthy = append $unhealthy . }}
                         {{- if and (eq .type "MemoryPressure") (eq .status "True") }}
                             {{- $memoryPressure = true }}

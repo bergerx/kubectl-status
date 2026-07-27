@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -48,6 +49,23 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 			args:            []string{"pod/pod-on-bad-node", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-on-bad-node.regex",
 		}.assert(t, nil, opts...)
+
+		// The Node also carries a content-free placeholder condition (empty type, nothing but a
+		// status and heartbeats -- see createBadNode and #768). It must stay invisible in both
+		// the Pod's node-problem flags and the Node's own conditions summary, so that a Node
+		// genuinely worth flagging isn't also reported with problems it doesn't have. These are
+		// absence assertions, which a .regex fixture can't express (assert.Regexp only says what
+		// the output must contain), hence the inline checks.
+		for _, args := range [][]string{
+			{"pod/pod-on-bad-node", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			{"node/" + nodeName, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+		} {
+			stdout, _, err := executeCMD(t, args, opts...)
+			require.NoError(t, err)
+			assert.Contains(t, stdout, "Ready:False", "the node's real conditions should still render")
+			assert.NotContains(t, stdout, "empty condition type")
+			assert.NotContains(t, stdout, "node :False")
+		}
 	})
 	t.Run("pod's serviceAccountName resolves to the ServiceAccount and surfaces automount/imagePullSecrets", func(t *testing.T) {
 		t.Parallel()
