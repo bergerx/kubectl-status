@@ -213,9 +213,14 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
 
 ### Running e2e Tests Locally
 
-`make test-e2e` runs the `TestE2E*` suite against a real cluster (see `cmd/main_test.go`). It
-manages one **shared** minikube cluster/profile (`kstat-e2e-shared`), reused across every
-worktree, branch, and session on your machine — not one per branch/session. Run
+`make test-e2e` runs the `TestE2E*` suite against a real cluster. That suite has two top-level
+entry points — `TestE2EParallel` (`cmd/main_test.go`), which calls one topical `runXSubtests`
+function per `cmd/e2e_*_test.go` file, and `TestE2EDynamicManifests` (`cmd/e2e_dynamic_test.go`) —
+sharing the harness in `cmd/e2e_helpers_test.go` (`cmdTest`, `applyManifest`/`waitFor`, the
+`ensureX` dependency installers). `cmd/local_test.go` holds the tests that need no cluster and so
+run under plain `make test` instead. `make test-e2e` manages one **shared** minikube
+cluster/profile (`kstat-e2e-shared`), reused across every worktree, branch, and session on your
+machine — not one per branch/session. Run
 `make print-e2e-profile` to see the profile name and kubeconfig path (`~/.kstat-e2e/shared.kubeconfig`)
 it uses. `install-e2e-deps` (cert-manager, Gateway API CRDs) runs against that same cluster right
 after it's created, so deps always land on the cluster the tests actually use. The cluster is left
@@ -279,15 +284,16 @@ check should use, not the full suite.
 
 When a template change adds or touches `$.KubeGetFirst`, `$.IncludeRenderableObject`/`$.Include`,
 or any other interaction with a live cluster, add or extend a case in `TestE2EDynamicManifests`
-(`cmd/main_test.go`) plus matching manifests/regex fixtures under `tests/e2e-artifacts/`. The
+(`cmd/e2e_dynamic_test.go`) plus matching manifests/regex fixtures under `tests/e2e-artifacts/`. The
 offline golden-file tests (`TestAllArtifactsLocal*`) run with `--shallow` (alongside `--local`,
 since there's no live cluster to query either way), which makes `KubeGetFirst` a no-op — they
 can't exercise the "found the related object" or `--deep` include branches, so the live e2e suite
 is the only place that covers them.
 
-Prefer a whole-output `.regex` fixture (`stdoutRegexPath`) over ad hoc `assert.Contains`/
-`assert.Regexp` calls scattered through the subtest, unless you're only asserting on a couple of
-one-off lines. A single regex covering the full rendered output, matched with `\A`...`\z` anchors
+Assert on stdout with a whole-output `.regex` fixture (`stdoutRegexPath`, or
+`assertStdoutMatchesRegexFixture` when the subtest also needs to assert something the fixture can't
+express) rather than ad hoc `assert.Contains`/`assert.Regexp` calls scattered through the subtest.
+A single regex covering the full rendered output, matched with `\A`...`\z` anchors
 (see the existing `tests/e2e-artifacts/*.regex` files for the pattern), lets a reviewer diff the
 expected output like a golden `.out` file and catches regressions anywhere in the render, not just
 in the specific substrings an inline assertion happens to check. Use `[0-9.]+[A-Za-z]+` and similar
@@ -300,17 +306,16 @@ text. One gotcha: the regex file must not have a trailing newline after the fina
 asserts absolute end-of-text, so a trailing newline in the fixture file makes the pattern
 impossible to satisfy.
 
-A fixture is either a whole-output match, anchored at both ends with `\A`...`\z`, or a deliberately
-partial one-off-lines match, anchored at neither end — never just one of the two anchors. A lone
-`\A` (or a lone `\z`) almost always means the fixture was meant to be a whole-output match but lost
-its other anchor while being edited, silently stopped verifying whatever now falls outside the
-anchored end, and started rendering the file misleading to read as "full output" when it isn't.
-`TestE2ERegexFixturesAreAnchored` in `cmd/main_test.go` enforces this pairing across every fixture
-under `tests/e2e-artifacts/`; it doesn't need a live cluster, so it also runs in `make test`/CI.
-If some part of an object's output is noisy or not worth pinning, don't drop to a partial fixture
-to dodge it — trim that section from the render instead with the relevant `--include-*` flag
-(`--include-events=false`, `--include-managed-fields=false`, etc.) and keep the fixture anchored
-and whole.
+Every fixture is a whole-output match, anchored at both ends with `\A`...`\z` — partial fixtures
+that pin a line or two out of the middle of the render aren't allowed. A partial fixture silently
+stops verifying everything outside what it happens to match, and reads to the next person like
+"this is the full output" when it isn't. `TestE2ERegexFixturesAreAnchored` in `cmd/local_test.go`
+enforces both anchors across every fixture under `tests/e2e-artifacts/`; it doesn't need a live
+cluster, so it also runs in `make test`/CI. If some part of an object's output is noisy or not
+worth pinning, don't drop to a partial fixture to dodge it — trim that section from the render
+instead with the relevant `--include-*` flag (`--include-events=false`,
+`--include-managed-fields=false`, etc.), or match it with a tolerant pattern, and keep the fixture
+anchored and whole.
 
 Pass `--include-events=false --include-managed-fields=false` on every e2e `cmdTest` unless the
 subtest is specifically exercising events or managed fields. Both sections list real cluster data

@@ -1,0 +1,17 @@
+\A
+Pod/pods-in-namespace-first -n e2e-pods-in-namespace, created 1m ago, gen:1 Pending BestEffort
+  InProgress: Pod is in the Pending phase
+    Reconciling: PodPending, Pod is in the Pending phase
+  PodScheduled:False -> Initialized:Unknown -> ContainersReady:Unknown -> Ready:Unknown
+    PodScheduled:False SchedulingGated, Scheduling is blocked due to non-empty scheduling gates for 1m
+    Scheduling gate: kubectl-status\.example\.com/never-schedule
+  Standalone POD\.
+
+Pod/pods-in-namespace-second -n e2e-pods-in-namespace, created 1m ago, gen:1 Pending BestEffort
+  InProgress: Pod is in the Pending phase
+    Reconciling: PodPending, Pod is in the Pending phase
+  PodScheduled:False -> Initialized:Unknown -> ContainersReady:Unknown -> Ready:Unknown
+    PodScheduled:False SchedulingGated, Scheduling is blocked due to non-empty scheduling gates for 1m
+    Scheduling gate: kubectl-status\.example\.com/never-schedule
+  Standalone POD\.
+\z

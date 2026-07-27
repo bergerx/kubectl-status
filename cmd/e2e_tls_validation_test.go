@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
-	"path"
 	"strings"
 	"testing"
 
@@ -44,9 +42,7 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		t.Run("secret/leaf shows full non-self-signed certificate detail", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"secret/e2e-tls-leaf-tls", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
-			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-secret-leaf.regex"))
-			require.NoError(t, rerr)
-			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-secret-leaf.regex")
 			// The secret also carries a ca.crt (the self-signed root CA cert), which
 			// legitimately renders its own "Self-signed:" line further down -- scope the
 			// check to the leaf cert's own block, which precedes it.
@@ -68,9 +64,7 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		t.Run("ingress with matching hostname is healthy", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"ingress/e2e-tls-ingress-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
-			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-ingress-healthy.regex"))
-			require.NoError(t, rerr)
-			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-ingress-healthy.regex")
 			for _, problem := range []string{
 				"doesn't exist",
 				"wrong type:",
@@ -103,9 +97,7 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		t.Run("gateway with matching hostname is healthy", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"gateway/e2e-tls-gw-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
-			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-gateway-healthy.regex"))
-			require.NoError(t, rerr)
-			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-gateway-healthy.regex")
 			for _, problem := range []string{", self-signed", ", hostname mismatch", "wrong type:", "missing keys:", "parse error:"} {
 				assert.NotContains(t, stdout, problem)
 			}
@@ -120,9 +112,7 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		t.Run("grpcroute attached to healthy gateway listener shows no cert flags", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"grpcroute/e2e-tls-grpcroute-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
-			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-grpcroute-healthy.regex"))
-			require.NoError(t, rerr)
-			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-grpcroute-healthy.regex")
 			for _, problem := range []string{", self-signed", ", hostname mismatch", "wrong type:", "missing keys:", "parse error:", "doesn't exist"} {
 				assert.NotContains(t, stdout, problem)
 			}
@@ -137,9 +127,7 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		t.Run("tlsroute attached to Terminate listener with matching hostname is healthy", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
-			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-tlsroute-healthy.regex"))
-			require.NoError(t, rerr)
-			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-tlsroute-healthy.regex")
 			for _, problem := range []string{", self-signed", ", hostname mismatch", "wrong type:", "missing keys:", "parse error:", "doesn't exist"} {
 				assert.NotContains(t, stdout, problem)
 			}
@@ -153,9 +141,7 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		t.Run("tlsroute attached to a Passthrough listener shows no cert flags", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-passthrough", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
-			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-tlsroute-passthrough.regex"))
-			require.NoError(t, rerr)
-			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-tlsroute-passthrough.regex")
 			for _, problem := range []string{", self-signed", ", hostname mismatch", "wrong type:", "missing keys:", "parse error:", "doesn't exist"} {
 				assert.NotContains(t, stdout, problem)
 			}
@@ -164,9 +150,7 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		t.Run("httproute attached to a healthy listener is healthy", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
-			regexBytes, rerr := os.ReadFile(path.Join("..", "tests", "e2e-artifacts", "tls-validation-httproute-healthy.regex"))
-			require.NoError(t, rerr)
-			assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-httproute-healthy.regex")
 			for _, problem := range []string{"doesn't exist", "wrong type:", "missing keys:", "parse error:", "self-signed", "hostname mismatch"} {
 				assert.NotContains(t, stdout, problem)
 			}

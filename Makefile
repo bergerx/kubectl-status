@@ -148,7 +148,7 @@ test-e2e: vet staticcheck install-e2e-deps
 	# gotestsum runs go test with -v under the hood (so full per-subtest logs are still
 	# captured) but only prints them for failing tests, collapsing a green run to one line
 	# per package (default --format=pkgname) -- the ~60 fixture/scenario subtests in
-	# cmd/main_test.go otherwise flood the terminal with "=== RUN"/"--- PASS" and t.Logf
+	# cmd/e2e_*_test.go otherwise flood the terminal with "=== RUN"/"--- PASS" and t.Logf
 	# noise on every green run.
 	# -parallel=4: bounds how many TestE2EParallel subtests hit the cluster at once. Go's
 	# default (GOMAXPROCS, i.e. host core count) can far exceed what the e2e-minikube-up VM

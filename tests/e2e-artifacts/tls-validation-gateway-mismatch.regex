@@ -1,1 +1,10 @@
-TLS mode:Terminate, cert:Secret/e2e-tls-leaf-tls, hostname mismatch
+\A
+Gateway/e2e-tls-gw-mismatch -n e2e-tls-validation, created 1m ago, gen:1
+  Current: Resource is current
+  Class: e2e-tls-unused-gwc
+  Accepted:Unknown Pending, Waiting for controller for 1m
+  Programmed:Unknown Pending, Waiting for controller for 1m
+  Listeners:
+    https: port=443/HTTPS, host=wrong-host\.example\.com, namespaces=Same
+      TLS mode:Terminate, cert:Secret/e2e-tls-leaf-tls, hostname mismatch
+\z

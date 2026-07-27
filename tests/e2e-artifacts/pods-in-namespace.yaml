@@ -1,0 +1,36 @@
+# Fixture for the "pods in a namespace" list query in TestE2EAgainstVanillaMinikube: a namespace
+# holding more than one Pod, so the query renders several objects in one go.
+#
+# Both Pods carry the never-removed scheduling gate from cmd/e2e_helpers_test.go
+# (neverSchedulingGate), which parks them in Pending forever. That's what makes the render
+# reproducible: an ungated busybox Pod would race the scheduler and kubelet through
+# ContainerCreating -> Running -> exited -> CrashLoopBackOff while the suite runs, and none of
+# those states can be pinned in a whole-output fixture.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: e2e-pods-in-namespace
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pods-in-namespace-first
+  namespace: e2e-pods-in-namespace
+spec:
+  schedulingGates:
+    - name: kubectl-status.example.com/never-schedule
+  containers:
+    - name: app
+      image: busybox
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pods-in-namespace-second
+  namespace: e2e-pods-in-namespace
+spec:
+  schedulingGates:
+    - name: kubectl-status.example.com/never-schedule
+  containers:
+    - name: app
+      image: busybox

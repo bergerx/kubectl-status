@@ -27,6 +27,26 @@ import (
 	"github.com/bergerx/kubectl-status/pkg/plugin"
 )
 
+// neverSchedulingGate is a spec.schedulingGates entry nothing ever removes, which parks a Pod in
+// Pending indefinitely: PodScheduled:False SchedulingGated, no container statuses, no node. A
+// subtest that only cares about a spec-driven section (the ServiceAccount/PriorityClass/
+// RuntimeClass lookups) gates its Pod so the whole-output fixture isn't racing the scheduler and
+// kubelet through Scheduled -> ContainerCreating -> Running -> the exit/restart cycle of whatever
+// image it used. Preferred over pointing spec.nodeName at a Node that doesn't exist, which parks
+// the Pod just as well but leaves it for the pod-GC controller to reap on its own ~40s timer.
+const neverSchedulingGate = "kubectl-status.example.com/never-schedule"
+
+// gatedPodSpecWith returns a PodSpec for a Pod that stays Pending forever (see
+// neverSchedulingGate), with the field the caller's subtest is actually about set on it.
+func gatedPodSpecWith(set func(*corev1.PodSpec)) corev1.PodSpec {
+	spec := corev1.PodSpec{
+		SchedulingGates: []corev1.PodSchedulingGate{{Name: neverSchedulingGate}},
+		Containers:      []corev1.Container{{Name: "app", Image: "busybox"}},
+	}
+	set(&spec)
+	return spec
+}
+
 type cmdTest struct {
 	name            string
 	args            []string
@@ -85,11 +105,49 @@ func createBadNode(t *testing.T, clientset *kubernetes.Clientset) string {
 		return err
 	})
 	require.NoError(t, err)
+	// The node-lifecycle-controller mirrors the conditions set above into taints, and callers pin
+	// the full rendered taint list -- so wait for it to have caught up rather than racing it.
+	// node.kubernetes.io/unschedulable comes from Spec.Unschedulable and is already there.
+	wantTaints := []string{
+		"dedicated",
+		corev1.TaintNodeUnschedulable,
+		corev1.TaintNodeNotReady,
+		corev1.TaintNodeMemoryPressure,
+	}
+	require.Eventuallyf(t, func() bool {
+		latest, err := clientset.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
+		if err != nil {
+			return false
+		}
+		have := map[string]bool{}
+		for _, taint := range latest.Spec.Taints {
+			have[taint.Key] = true
+		}
+		for _, key := range wantTaints {
+			if !have[key] {
+				return false
+			}
+		}
+		return true
+	}, time.Minute, time.Second, "Node/%s never got all of the expected taints %v", node.Name, wantTaints)
 	return node.Name
 }
 
 func nodeNameModifier(stdout string) string {
 	return string(regexp.MustCompile(`Node/[a-z0-9-]+`).ReplaceAll([]byte(stdout), []byte(`Node/minikube`)))
+}
+
+// assertStdoutMatchesRegexFixture matches stdout against the regex in tests/<fixture> (a path
+// relative to tests/, e.g. "e2e-artifacts/node-query.regex"). Fixtures are whole-output matches
+// anchored with \A...\z (see CONTRIBUTING.md), and are matched in (?ms) mode so `.` spans the
+// newlines between output lines. Subtests that assert on stdout beyond the fixture match (an
+// extra NotContains sweep, say) call this directly; the rest go through cmdTest.stdoutRegexPath.
+func assertStdoutMatchesRegexFixture(t *testing.T, stdout, fixture string) {
+	t.Helper()
+	outFile := path.Join("..", "tests", fixture)
+	regexBytes, err := os.ReadFile(outFile)
+	assert.NoErrorf(t, err, "failed to read test artifact file: %s", outFile)
+	assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
 }
 
 func (c cmdTest) assert(t *testing.T, stdoutModifier func(string) string, opts ...func(*plugin.RenderConfig)) {
@@ -108,11 +166,7 @@ func (c cmdTest) assert(t *testing.T, stdoutModifier func(string) string, opts .
 		assert.NoErrorf(t, err, "failed to read test artifact file: %s", outFile)
 		assert.Equal(t, string(out), stdout)
 	case c.stdoutRegexPath != "":
-		outFile := path.Join("..", "tests", c.stdoutRegexPath)
-		regexBytes, err := os.ReadFile(outFile)
-		assert.NoErrorf(t, err, "failed to read test artifact file: %s", outFile)
-		regex := `(?ms)` + string(regexBytes)
-		assert.Regexp(t, regex, stdout)
+		assertStdoutMatchesRegexFixture(t, stdout, c.stdoutRegexPath)
 	}
 	switch {
 	case c.stderrRegex == "" && c.stderrEqual == "":

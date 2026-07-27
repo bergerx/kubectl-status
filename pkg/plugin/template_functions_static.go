@@ -85,7 +85,7 @@ var testHackNow = time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC)
 // appears is otherwise a coin flip; this forces it present whenever Status.startTime is set.
 //
 // Both the "--test-hack" CLI flag (cmd/main.go, used by `make update-artifacts`/`make
-// new-artifact`) and the e2e test suite (cmd/main_test.go) call this, so the artifacts generated
+// new-artifact`) and the e2e test suite (cmd/e2e_*_test.go) call this, so the artifacts generated
 // on disk and the output the tests compare against can never drift apart.
 func ApplyTestHack(cfg *RenderConfig) {
 	cfg.Now = func() time.Time { return testHackNow }

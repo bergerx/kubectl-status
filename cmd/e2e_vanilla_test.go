@@ -11,6 +11,7 @@ func TestE2EAgainstVanillaMinikube(t *testing.T) {
 	hackOpts := testHackOpts(t)
 	klog.InitFlags(nil)
 	t.Log("starting tests...")
+	applyManifest(t, "e2e-artifacts/pods-in-namespace.yaml")
 	tests := []cmdTest{
 		{
 			name:        "empty call should print an error and usage",
@@ -22,13 +23,23 @@ func TestE2EAgainstVanillaMinikube(t *testing.T) {
 			stderrRegex: `error: no resources found\n$`,
 		},
 		{
-			name:            "pods on kube-system ns should return storage-provisioner",
-			args:            []string{"pods", "-n", "kube-system", "--include-events=false", "--include-managed-fields=false"},
-			stdoutRegexPath: "e2e-artifacts/pods-kube-system.regex",
+			// Renders against a namespace this test owns rather than kube-system: the pods there
+			// belong to the cluster, so their images, replica-hash names, restart counts and live
+			// usage all move with the minikube/Kubernetes version and with whatever else the
+			// shared cluster has been doing, none of which a whole-output fixture can pin.
+			name:            "pods in a namespace should render every pod in it",
+			args:            []string{"pods", "-n", "e2e-pods-in-namespace", "--include-events=false", "--include-managed-fields=false"},
+			stdoutRegexPath: "e2e-artifacts/pods-in-namespace.regex",
 		},
 		{
-			name:            "node query should return at least a node",
-			args:            []string{"node", "--include-events=false", "--include-managed-fields=false"},
+			// The kubelet-api-summary and detailed-usage sections are per-pod views of whatever
+			// else happens to be running on the shared cluster (a "pods needing attention" list
+			// keyed off restart counts, a pod-by-usage table ordered by live memory), so they
+			// can't be pinned in a whole-output fixture -- turn them off rather than settle for
+			// matching only the parts of the Node render that are stable.
+			name: "node query should return at least a node",
+			args: []string{"node", "--include-events=false", "--include-managed-fields=false",
+				"--include-node-kubelet-api-summary=false", "--include-node-detailed-usage=false"},
 			stdoutRegexPath: "e2e-artifacts/node-query.regex",
 		},
 		{

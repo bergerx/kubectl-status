@@ -1,1 +1,9 @@
-Gateway/e2e-tls-gw-tlsroute \[tls-term\], hostname mismatch
+\A
+TLSRoute/e2e-tlsroute-mismatch -n e2e-tls-validation, created 1m ago, gen:1
+  Current: Resource is current
+  Hostnames: wrong-host\.example\.com
+  Parents:
+    Gateway/e2e-tls-gw-tlsroute \[tls-term\], hostname mismatch
+  Rules:
+    → Service/e2e-tls-svc:80
+\z
