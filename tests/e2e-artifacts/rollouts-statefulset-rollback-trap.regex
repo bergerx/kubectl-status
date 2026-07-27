@@ -13,6 +13,7 @@ StatefulSet/e2e-rollouts-statefulset-rollback-trap -n e2e-rollouts-statefulset-r
     If the Pod template was already fixed or reverted, the StatefulSet controller will keep waiting on this Pod -- delete it to recreate it on the target revision:
       kubectl delete pod/e2e-rollouts-statefulset-rollback-trap-0 -n e2e-rollouts-statefulset-rollback-trap
     Inspect the Pod first to confirm the original rollout failure\.
+    Long standing upstream issue, closed as intended behavior: https://github\.com/kubernetes/kubernetes/issues/67250
   Rollouts: Use the `--include-rollout-diffs` flag to see the diff between each rollout!
     1m ago used ControllerRevision/e2e-rollouts-statefulset-rollback-trap-[a-z0-9]+\.
     1m ago used ControllerRevision/e2e-rollouts-statefulset-rollback-trap-[a-z0-9]+\.

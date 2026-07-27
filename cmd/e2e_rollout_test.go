@@ -141,10 +141,11 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 			}.assert(t, nil, opts...)
 		})
 		t.Run("statefulset rollback recovery trap (#169)", func(t *testing.T) {
-			// Reproduces the kubernetes/kubernetes#78709 trap: an updated Pod that never becomes
+			// Reproduces the kubernetes/kubernetes#67250 trap: an updated Pod that never becomes
 			// Ready blocks the rollout even after spec.template is reverted to the known-good
 			// image, because the StatefulSet controller keeps waiting on that specific Pod. Only
-			// deleting the Pod itself unsticks it.
+			// deleting the Pod itself unsticks it. Relies on the defaulted RollingUpdate strategy
+			// and OrderedReady Pod management -- the trap needs both.
 			opts := combineOpts(hackOpts, viperTestHackOpts())
 			ns := "e2e-rollouts-statefulset-rollback-trap"
 			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),

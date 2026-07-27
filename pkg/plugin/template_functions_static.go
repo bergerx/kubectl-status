@@ -49,7 +49,7 @@ type RenderConfig struct {
 	DurationRound      func(duration interface{}) string
 	StartedAfterClause func(createdKubeDate, startedKubeDate string) string
 	// StatefulSetRollbackTrapThreshold is how long a StatefulSet-owned Pod must have been unready
-	// before StatefulSetRollbackTrap treats it as evidence of the kubernetes/kubernetes#78709
+	// before StatefulSetRollbackTrap treats it as evidence of the kubernetes/kubernetes#67250
 	// "stuck rollback" trap, rather than ordinary image-pull/startup latency. Deliberately
 	// compared against real wall-clock time (not Now, which tests freeze to a fixed date for
 	// deterministic rendering) and left overridable here so e2e tests don't need to wait out the
