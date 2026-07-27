@@ -3,32 +3,27 @@ Node/[a-z0-9.-]+, created \d+[a-z]+ ago
   linux .+, kernel \S+, kubelet v[\d.]+, kube-proxy ?\S*, runtime \S+
   images \d+
   Current: Resource is Ready
+  kubelet ok(?:, \S+:\S+)*, container logs: retains up to [\d.]+[A-Za-z]+ per container \(\S+ x \d+ files\)
   MemoryPressure KubeletHasSufficientMemory, kubelet has sufficient memory available for \d+[a-z]+
   DiskPressure KubeletHasNoDiskPressure, kubelet has no disk pressure for \d+[a-z]+
   PIDPressure KubeletHasSufficientPID, kubelet has sufficient PID available for \d+[a-z]+
   Ready KubeletReady, kubelet is posting ready status for \d+[a-z]+
   addresses: InternalIP=[\d.]+ Hostname=[a-z0-9.-]+
+    network: rx/tx [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, rx/tx errors \d+/\d+
   allocatable/capacity: pods \d+/\d+, cpu [\d.]+/[\d.]+, mem [\d.]+/[\d.]+[A-Za-z]+, ephemeral-storage [\d.]+/[\d.]+[A-Za-z]+
 (?:  pods needing attention:
 (?:    \S+/\S+(?: -n \S+)?, .+
 )+)?  Inferred memory limits for BestEffort: [\d.]+[A-Za-z]+, for Burstable: [\d.]+[A-Za-z]+
-  pods: usage/allocatable:\d+/\d+\(\d+%\)
-  cpu: usage/allocatable:[\d.]+/\d+\(\d+%\), allocated usage:[\d.]+\(\d+% of allocatable\)/\[req:[\d.]+\(\d+% of allocatable\), lim:[\d.]+\(\d+% of allocatable\)\]
-  mem: usage/allocatable:[\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+\(\d+%\), allocated usage:[\d.]+[A-Za-z]+\(\d+% of allocatable\)/\[req:[\d.]+[A-Za-z]+\(\d+% of allocatable\), lim:[\d.]+[A-Za-z]+\(\d+% of allocatable\)\]
-  ephemeral-storage: [\d.]+[A-Za-z]+
+  pods: usage/allocatable:\d+/\d+\(\d+%\), processes \S+/\S+ \(\d+%, rlimit\)(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?
+  cpu: usage/allocatable:[\d.]+/\d+\(\d+%\), allocated usage:[\d.]+\(\d+% of allocatable\)/\[req:[\d.]+\(\d+% of allocatable\), lim:[\d.]+\(\d+% of allocatable\)\](?:, reserved:\S+)?
+  mem: usage/allocatable:[\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+\(\d+%\), allocated usage:[\d.]+[A-Za-z]+\(\d+% of allocatable\)/\[req:[\d.]+[A-Za-z]+\(\d+% of allocatable\), lim:[\d.]+[A-Za-z]+\(\d+% of allocatable\)\](?:, reserved:\S+)?
+    rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?)?, pageFaults/major \S+/\S+
+(?:  [a-z-]+: cpu [\d.]+core/sec \(\d+% of node\), mem [\d.]+[A-Za-z]+ \(\d+% of node\), workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+
+)*  ephemeral-storage: [\d.]+[A-Za-z]+(?:, reserved:\S+)?
+(?:    rootfs/imagefs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+ used of [\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))*; \S+/\S+ of \S+ inode, \S+ inode still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))*|    rootfs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?; \S+/\S+ inode, \S+ inode still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?(?:
+    imagefs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?; \S+/\S+ inode, \S+ inode still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?)?)
+  pods: cpu [\d.]+core/sec \(\d+% of node\), mem [\d.]+[A-Za-z]+ \(\d+% of node\), workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+
   pods by usage: \(most memory first\)
     pod\s+cpu use/req/lim \(%allocatable\)\s+mem use/req/lim \(%allocatable\)
 (?:    \S+/\S+(?: -n \S+)?\s+[\d.]+\(\d+%\)\s+[\d.]+\(\d+%\)\s+[\d.]+\(\d+%\)\s+[\d.]+[A-Za-z]+\(\d+%\)\s+[\d.]+[A-Za-z]+\(\d+%\)\s+[\d.]+[A-Za-z]+\(\d+%\)
-)+  kubelet-api/healthz: ok
-  kubelet-api/configz:
-    eviction-hard: nodefs.available<\d+% nodefs.inodesFree<\d+% imagefs.available<\d+%
-    container log rotation: [\d.]+[A-Za-z]+ cap, \d+ files, \d+ worker, \S+ monitor
-  kubelet-api/stats/summary:
-    node overall: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+, processes \S+/\S+ \(rlimit\)
-      network: rx/tx [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, rx/tx errors \d+/\d+
-      rootfs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free; \S+/\S+ inode, \S+ inode still free
-      imagefs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free; \S+/\S+ inode, \S+ inode still free
-    (?:pods: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+
-    kubelet: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+|kubelet: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+
-    pods: cpu [\d.]+core/sec, mem [\d.]+[A-Za-z]+, workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+)
-\z
+)+\z
