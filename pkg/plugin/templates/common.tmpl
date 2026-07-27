@@ -318,7 +318,13 @@
 {{- define "conditions_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- range .StatusConditions }}
+        {{- /* Some controllers leave placeholder entries in status.conditions carrying neither a
+               type nor a status; they hold no information, so drop them silently rather than
+               rendering an "<empty condition type!>" warning. A typeless entry that does have a
+               status is a real, if malformed, condition and still gets the warning. */ -}}
+        {{- if or .type (hasKey (. | default dict) "status") }}
   {{ template "condition_summary" . }}
+        {{- end }}
     {{- end }}
 {{- end -}}
 

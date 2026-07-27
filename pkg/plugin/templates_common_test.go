@@ -23,6 +23,15 @@ func checkTemplate(t *testing.T, templateName string, obj map[string]interface{}
 
 func checkTemplateWithViper(t *testing.T, templateName string, obj map[string]interface{}, shouldContain string, useRenderable bool, v *viper.Viper) {
 	t.Helper()
+	got := renderTemplateWithViper(t, templateName, obj, useRenderable, v)
+	if !strings.Contains(got, shouldContain) {
+		t.Errorf("template 'suspended' got = %v, shouldContain = %v", got, shouldContain)
+		return
+	}
+}
+
+func renderTemplateWithViper(t *testing.T, templateName string, obj map[string]interface{}, useRenderable bool, v *viper.Viper) string {
+	t.Helper()
 	cfg := NewRenderConfig(v)
 	tmpl, _ := getTemplate(cfg)
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
@@ -41,13 +50,9 @@ func checkTemplateWithViper(t *testing.T, templateName string, obj map[string]in
 	}
 	got, err := r.renderTemplate(templateName, objToPassTemplate)
 	if err != nil {
-		t.Errorf("renderTemplate() error = %v", err)
-		return
+		t.Fatalf("renderTemplate() error = %v", err)
 	}
-	if !strings.Contains(got, shouldContain) {
-		t.Errorf("template 'suspended' got = %v, shouldContain = %v", got, shouldContain)
-		return
-	}
+	return got
 }
 
 func TestObservedGenerationSummaryTemplate(t *testing.T) {
@@ -95,6 +100,51 @@ func TestObservedGenerationSummaryTemplate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			checkTemplate(t, "observed_generation_summary", tt.obj, tt.want, true)
+		})
+	}
+}
+
+func TestConditionsSummaryTemplate(t *testing.T) {
+	tests := []struct {
+		name       string
+		conditions []interface{}
+		want       string
+		notWant    string
+	}{
+		{
+			name:       "regular condition is rendered",
+			conditions: []interface{}{map[string]interface{}{"type": "Ready", "status": "True"}},
+			want:       "Ready",
+		}, {
+			name:       "condition with neither type nor status is silently skipped",
+			conditions: []interface{}{map[string]interface{}{"message": "no type here"}},
+			notWant:    "empty condition type",
+		}, {
+			name:       "typeless condition with a status still warns",
+			conditions: []interface{}{map[string]interface{}{"status": "True"}},
+			want:       "empty condition type",
+		}, {
+			name: "skipping one condition keeps the others",
+			conditions: []interface{}{
+				map[string]interface{}{"message": "no type here"},
+				map[string]interface{}{"type": "Ready", "status": "True"},
+			},
+			want:    "Ready",
+			notWant: "empty condition type",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obj := map[string]interface{}{
+				"status": map[string]interface{}{"conditions": tt.conditions},
+			}
+			got := renderTemplateWithViper(t, "conditions_summary", obj, true, viper.New())
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("conditions_summary got = %q, should contain %q", got, tt.want)
+			}
+			if tt.notWant != "" && strings.Contains(got, tt.notWant) {
+				t.Errorf("conditions_summary got = %q, should not contain %q", got, tt.notWant)
+			}
 		})
 	}
 }
@@ -281,21 +331,7 @@ func TestOwnersTemplate(t *testing.T) {
 // directly, so callers can assert both presence and absence of substrings.
 func renderTemplateForTest(t *testing.T, templateName string, obj map[string]interface{}) string {
 	t.Helper()
-	cfg := NewRenderConfig(viper.New())
-	tmpl, _ := getTemplate(cfg)
-	f := cmdtesting.NewTestFactory().WithNamespace("test")
-	f.Client = &fake.RESTClient{}
-	f.UnstructuredClient = f.Client
-	t.Cleanup(func() { f.Cleanup() })
-	repo, _ := input.NewResourceRepo(f, cfg.Viper)
-	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
-	r := newRenderableObject(map[string]interface{}{}, e, repo)
-	got, err := r.renderTemplate(templateName, obj)
-	if err != nil {
-		t.Fatalf("renderTemplate() error = %v", err)
-	}
-	return got
+	return renderTemplateWithViper(t, templateName, obj, false, viper.New())
 }
 
 func TestContainerStatusSummaryImagePullBackoffHintTemplate(t *testing.T) {
