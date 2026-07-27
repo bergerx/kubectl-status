@@ -1,1 +1,9 @@
-Pod/pod-on-bad-node-for-rs[^\n]*, node cordoned, node Ready:False, node MemoryPressure:True, untolerated node taint
+\A
+ReplicaSet/bad-rs -n e2e-bad-node-rs, created 1m ago, gen:1
+  InProgress: Available: 0/1
+    Reconciling: LessAvailable, Available: 0/1
+  Selector: app=kubectl-status-test-bad-rs
+    Pod/pod-on-bad-node-for-rs, created 1m ago Pending, node cordoned & Ready:False & MemoryPressure:True, untolerated node taint
+  Not matched by any Service
+  Outage: ReplicaSet has no Ready replicas\.
+\z

@@ -39,7 +39,10 @@ type cmdTest struct {
 
 // createBadNode creates a synthetic Node (no real kubelet backs it) that's cordoned, tainted,
 // and reporting NotReady/MemoryPressure -- everything pod_node_problems/pod_node_problem_flags
-// are meant to surface. It registers cleanup and returns the Node's name.
+// are meant to surface. It also carries the content-free placeholder condition real clusters are
+// seen leaving behind (an empty type with nothing but a status and heartbeats, see #768), which
+// must stay invisible in every render; that rides along here rather than on the cluster's own
+// Node, which no test ever mutates. It registers cleanup and returns the Node's name.
 func createBadNode(t *testing.T, clientset *kubernetes.Clientset) string {
 	t.Helper()
 	node := &corev1.Node{
@@ -78,6 +81,12 @@ func createBadNode(t *testing.T, clientset *kubernetes.Clientset) string {
 				Status:             corev1.ConditionTrue,
 				Reason:             "KubeletHasInsufficientMemory",
 				Message:            "kubelet has insufficient memory available",
+				LastTransitionTime: metav1.Now(),
+			},
+			{
+				Type:               "",
+				Status:             corev1.ConditionFalse,
+				LastHeartbeatTime:  metav1.Now(),
 				LastTransitionTime: metav1.Now(),
 			},
 		}
