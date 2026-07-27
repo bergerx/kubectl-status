@@ -93,12 +93,11 @@ func TestDeepRespectsExplicitIncludeFalse(t *testing.T) {
 }
 
 // TestE2ERegexFixturesAreAnchored guards the whole-output convention documented in
-// CONTRIBUTING.md: a fixture under tests/e2e-artifacts/ either pins the full rendered output,
-// anchored at both ends with `\A`...`\z`, or is a deliberately partial one-off-lines match with
-// neither anchor. A fixture with only one of the two anchors is neither -- almost always a fixture
-// that was meant to be anchored but lost its `\z` (or gained a stray `\A`) while being edited, so
-// it silently stopped verifying the parts of the output past/before the missing anchor. This
-// doesn't require a live cluster, so it runs unconditionally.
+// CONTRIBUTING.md: every fixture under tests/e2e-artifacts/ pins the full rendered output, anchored
+// at both ends with `\A`...`\z`. A fixture missing either anchor is a partial match -- it silently
+// stops verifying whatever falls outside the part it happens to match, while still reading like the
+// full output to the next person who edits it. This doesn't require a live cluster, so it runs
+// unconditionally.
 func TestE2ERegexFixturesAreAnchored(t *testing.T) {
 	fixtures, err := filepath.Glob("../tests/e2e-artifacts/*.regex")
 	require.NoError(t, err)
@@ -110,11 +109,11 @@ func TestE2ERegexFixturesAreAnchored(t *testing.T) {
 			require.NoError(t, err)
 			startsAnchored := bytes.HasPrefix(content, []byte(`\A`))
 			endsAnchored := bytes.HasSuffix(content, []byte(`\z`))
-			if startsAnchored != endsAnchored {
-				t.Errorf("%s: has `\\A` at the start=%v but `\\z` at the end=%v -- a whole-output "+
-					"fixture needs both anchors (see CONTRIBUTING.md), a partial one-off-lines "+
-					"fixture needs neither; use the --include-* flags to trim sections you don't "+
-					"want to pin instead of matching only part of the output",
+			if !startsAnchored || !endsAnchored {
+				t.Errorf("%s: starts with `\\A`=%v, ends with `\\z`=%v -- every fixture must pin "+
+					"the whole rendered output between both anchors (see CONTRIBUTING.md); use the "+
+					"--include-* flags to trim sections you don't want to pin, or a tolerant "+
+					"pattern to match them, instead of matching only part of the output",
 					fixture, startsAnchored, endsAnchored)
 			}
 		})

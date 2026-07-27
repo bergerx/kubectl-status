@@ -1,1 +1,10 @@
-Priority: PriorityClass/e2e-test-priority \(value: 1000000, global default, preemptionPolicy: Never\)
+\A
+Pod/pod-with-priorityclass -n e2e-pod-priorityclass, created 1m ago, gen:1 Pending BestEffort
+  InProgress: Pod is in the Pending phase
+    Reconciling: PodPending, Pod is in the Pending phase
+  PodScheduled:False -> Initialized:Unknown -> ContainersReady:Unknown -> Ready:Unknown
+    PodScheduled:False SchedulingGated, Scheduling is blocked due to non-empty scheduling gates for 1m
+    Scheduling gate: kubectl-status\.example\.com/never-schedule
+  Standalone POD\.
+  Priority: PriorityClass/e2e-test-priority \(value: 1000000, global default, preemptionPolicy: Never\)
+\z

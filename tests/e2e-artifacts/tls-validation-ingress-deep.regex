@@ -1,3 +1,25 @@
-Ingress/e2e-tls-ingress-healthy -n e2e-tls-validation, created .* ago, gen:1.*
-    Secret/e2e-tls-leaf-tls -n e2e-tls-validation, created .* ago.*
+\A
+Ingress/e2e-tls-ingress-healthy -n e2e-tls-validation, created 1m ago, gen:1
+  Current: Resource is current
+  Service/e2e-tls-svc, created 1m ago, ClusterIP, no matching pods, http\(80/TCP\)
+    Secret/e2e-tls-leaf-tls -n e2e-tls-validation, created 1m ago
+      Managed by
+        Certificate/e2e-tls-leaf -n e2e-tls-validation, created 1m ago, gen:1
+          Current: Resource is Ready
+          Issued by Issuer/e2e-tls-ca-issuer for "e2e-tls\.example\.com" · stored in Secret/e2e-tls-leaf-tls
+            Also valid for: e2e-tls-alt\.example\.com
+          Issued [0-9]{4}-[0-9]{2}-[0-9]{2} \(1m ago\), expires [0-9]{4}-[0-9]{2}-[0-9]{2}, auto-renews [0-9]{4}-[0-9]{2}-[0-9]{2} · rev 1
+          Ready:True Ready, Certificate is up to date and has not expired for 1m
+        Issuer/e2e-tls-ca-issuer -n e2e-tls-validation, created 1m ago, gen:1
+          Current: Resource is Ready
+          Backend: CA · signing key in Secret/e2e-tls-root-ca-secret
+          Ready:True KeyPairVerified, Signing CA verified for 1m
       Certificate for CN=e2e-tls\.example\.com · issued by CN=e2e-tls-root-ca
+        Also valid for: e2e-tls-alt\.example\.com
+        Valid 1m ago, expires [0-9]{4}-[0-9]{2}-[0-9]{2} \(in 1m\)
+        Key: RSA · serial [0-9]+
+      Certificate \(ca\.crt\) for CN=e2e-tls-root-ca · issued by CN=e2e-tls-root-ca
+        Self-signed: issuer and subject match, not issued by a separate CA
+        Valid 1m ago, expires [0-9]{4}-[0-9]{2}-[0-9]{2} \(in 1m\)
+        Key: RSA · serial [0-9]+
+\z

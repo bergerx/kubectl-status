@@ -1,1 +1,14 @@
-Node/
+\A
+Node/[a-z0-9-]+, created 1m ago
+  linux [^\n]+ \(amd64\), kernel [^\n,]+, kubelet v[0-9][^\n,]*, kube-proxy , runtime [a-z]+://[0-9][^\n,]*
+  images [0-9]+
+  Current: Resource is Ready
+  MemoryPressure:False KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m
+  DiskPressure:False KubeletHasNoDiskPressure, kubelet has no disk pressure for 1m
+  PIDPressure:False KubeletHasSufficientPID, kubelet has sufficient PID available for 1m
+  Ready:True KubeletReady, kubelet is posting ready status for 1m
+  addresses: InternalIP=[0-9.]+ Hostname=[a-z0-9-]+
+  allocatable/capacity: pods [0-9]+/[0-9]+, cpu [0-9]+/[0-9]+, mem [0-9.]+/[0-9.]+[A-Za-z]+, ephemeral-storage [0-9.]+/[0-9.]+[A-Za-z]+
+  cpu: usage/allocatable:[0-9.]+/[0-9]+\([0-9]+%\)
+  mem: usage/allocatable:[0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\([0-9]+%\)
+\z

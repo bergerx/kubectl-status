@@ -69,7 +69,7 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 	})
 	t.Run("pod's serviceAccountName resolves to the ServiceAccount and surfaces automount/imagePullSecrets", func(t *testing.T) {
 		t.Parallel()
-		opts := combineOpts(viperTestHackOpts())
+		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-pod-custom-sa"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
@@ -108,10 +108,9 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 				Name:      "pod-with-custom-sa",
 				Namespace: ns,
 			},
-			Spec: corev1.PodSpec{
-				ServiceAccountName: sa.Name,
-				Containers:         []corev1.Container{{Name: "app", Image: "busybox"}},
-			},
+			Spec: gatedPodSpecWith(func(spec *corev1.PodSpec) {
+				spec.ServiceAccountName = sa.Name
+			}),
 		}
 		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
@@ -131,7 +130,7 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		// serviceAccountName after admission, so the Pod is left referencing a name that no
 		// longer resolves, which is exactly the "doesn't exist" case being tested -- just
 		// reached via drift instead of an upfront invalid manifest.
-		opts := combineOpts(viperTestHackOpts())
+		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-pod-missing-sa"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
@@ -151,10 +150,9 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 				Name:      "pod-missing-service-account",
 				Namespace: ns,
 			},
-			Spec: corev1.PodSpec{
-				ServiceAccountName: sa.Name,
-				Containers:         []corev1.Container{{Name: "app", Image: "busybox"}},
-			},
+			Spec: gatedPodSpecWith(func(spec *corev1.PodSpec) {
+				spec.ServiceAccountName = sa.Name
+			}),
 		}
 		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
@@ -181,7 +179,7 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		// plugin will also copy overhead.podFixed into this Pod's own spec.overhead, but Pod.tmpl
 		// reads it from the fetched RuntimeClass object, not spec.overhead, so that duplication
 		// doesn't undermine what's being verified here.
-		opts := combineOpts(viperTestHackOpts())
+		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-pod-runtimeclass-overhead"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
@@ -211,10 +209,9 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 				Name:      "pod-with-runtimeclass-overhead",
 				Namespace: ns,
 			},
-			Spec: corev1.PodSpec{
-				RuntimeClassName: &rc.Name,
-				Containers:       []corev1.Container{{Name: "app", Image: "busybox"}},
-			},
+			Spec: gatedPodSpecWith(func(spec *corev1.PodSpec) {
+				spec.RuntimeClassName = &rc.Name
+			}),
 		}
 		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
@@ -227,7 +224,7 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 	})
 	t.Run("pod's priorityClassName resolves to the PriorityClass and surfaces value/globalDefault/preemptionPolicy", func(t *testing.T) {
 		t.Parallel()
-		opts := combineOpts(viperTestHackOpts())
+		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-pod-priorityclass"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
@@ -256,10 +253,9 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 				Name:      "pod-with-priorityclass",
 				Namespace: ns,
 			},
-			Spec: corev1.PodSpec{
-				PriorityClassName: pc.Name,
-				Containers:        []corev1.Container{{Name: "app", Image: "busybox"}},
-			},
+			Spec: gatedPodSpecWith(func(spec *corev1.PodSpec) {
+				spec.PriorityClassName = pc.Name
+			}),
 		}
 		_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
@@ -319,6 +315,12 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		_, err = clientset.AppsV1().ReplicaSets(ns).Create(context.TODO(), rs, metav1.CreateOptions{})
 		require.NoError(t, err)
 		defer clientset.AppsV1().ReplicaSets(ns).Delete(context.TODO(), rs.Name, metav1.DeleteOptions{})
+
+		// The status summary reports the first count that falls short, so it reads "Labelled: 0/1"
+		// until the ReplicaSet controller has counted the (already existing) matching Pod into
+		// fullyLabeledReplicas and only then settles on "Available: 0/1" -- wait for that, rather
+		// than pinning whichever of the two the render happened to catch.
+		waitForInNamespace(t, "rs/bad-rs", "jsonpath={.status.fullyLabeledReplicas}=1", ns)
 
 		cmdTest{
 			args:            []string{"rs/bad-rs", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},

@@ -1,1 +1,10 @@
-Overhead: RuntimeClass/e2e-test-gvisor \(cpu: [0-9.]+, memory: [0-9.]+[A-Za-z]+\)
+\A
+Pod/pod-with-runtimeclass-overhead -n e2e-pod-runtimeclass-overhead, created 1m ago, gen:1 Pending BestEffort
+  InProgress: Pod is in the Pending phase
+    Reconciling: PodPending, Pod is in the Pending phase
+  PodScheduled:False -> Initialized:Unknown -> ContainersReady:Unknown -> Ready:Unknown
+    PodScheduled:False SchedulingGated, Scheduling is blocked due to non-empty scheduling gates for 1m
+    Scheduling gate: kubectl-status\.example\.com/never-schedule
+  Standalone POD\.
+  Overhead: RuntimeClass/e2e-test-gvisor \(cpu: 0\.2, memory: 67\.1MB\)
+\z
