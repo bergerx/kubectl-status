@@ -6,5 +6,5 @@ Deployment/vpa-burner -n e2e-vpa, created 1m ago, gen:1 rev:1
     Pod/vpa-burner-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready
   Not matched by any Service
   VerticalPodAutoscaler: VerticalPodAutoscaler/vpa-burner, Recreate, burner: cpu=\d+m mem=\d+Mi
-  (?:Available MinimumReplicasAvailable, Deployment has minimum availability\. for 1m\n  Progressing NewReplicaSetAvailable, ReplicaSet "vpa-burner-[a-z0-9]+" has successfully progressed\. for 1m|Progressing NewReplicaSetAvailable, ReplicaSet "vpa-burner-[a-z0-9]+" has successfully progressed\. for 1m\n  Available MinimumReplicasAvailable, Deployment has minimum availability\. for 1m)
+  (?:Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for 1m\n  Progressing:True NewReplicaSetAvailable, ReplicaSet "vpa-burner-[a-z0-9]+" has successfully progressed\. for 1m|Progressing:True NewReplicaSetAvailable, ReplicaSet "vpa-burner-[a-z0-9]+" has successfully progressed\. for 1m\n  Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for 1m)
 \z

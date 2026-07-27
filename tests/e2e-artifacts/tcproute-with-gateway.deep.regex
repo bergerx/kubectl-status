@@ -4,8 +4,8 @@ TCPRoute/e2e-tcproute -n e2e-tcproute, created 1m ago, gen:1
   Parents:
     Gateway/e2e-tcp-gw -n e2e-tcproute, created 1m ago, gen:1
       Current: Resource is current
-      Accepted Pending, Waiting for controller for 1m
-      Programmed Pending, Waiting for controller for 1m
+      Accepted:Unknown Pending, Waiting for controller for 1m
+      Programmed:Unknown Pending, Waiting for controller for 1m
       Listeners:
         tcp: port=8080/TCP, namespaces=Same
   Rules:

@@ -7,5 +7,5 @@ TCPRoute/tcp-backend-route -n default, created 1m ago, gen:1
     → Service/tcp-backend:8080
   Status:
     Gateway/multi-proto-gw [tcp] (gateway.envoyproxy.io/gatewayclass-controller)
-      Accepted Accepted, Route is accepted for 1m
-      ResolvedRefs ResolvedRefs, Resolved all the Object references for the Route for 1m
+      Accepted:True Accepted, Route is accepted for 1m
+      ResolvedRefs:True ResolvedRefs, Resolved all the Object references for the Route for 1m

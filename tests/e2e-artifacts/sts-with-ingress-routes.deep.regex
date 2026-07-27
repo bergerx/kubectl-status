@@ -13,8 +13,8 @@ Service/sts-with-ingress -n e2e-sts-with-ingress-routes, created 1m ago, last en
       Parents:
         Gateway/sts-gw -n e2e-sts-with-ingress-routes, created 1m ago, gen:1
           Current: Resource is current
-          Accepted Pending, Waiting for controller for 1m
-          Programmed Pending, Waiting for controller for 1m
+          Accepted:Unknown Pending, Waiting for controller for 1m
+          Programmed:Unknown Pending, Waiting for controller for 1m
           Listeners:
             http: port=80/HTTP, namespaces=Same
             tcp: port=8080/TCP, namespaces=Same

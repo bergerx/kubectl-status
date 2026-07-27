@@ -2,17 +2,17 @@
 Gateway/eg -n default, created 1m ago, gen:1
   Current: Resource is current
   Class: eg
-  Accepted Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
+  Accepted:True Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
   Listeners:
     self-signed: port=446/HTTPS, namespaces=Same, routes=1
       TLS mode:Terminate, cert:Secret/selfsigned-tls
-      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+      ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
     hostname-mismatch: port=447/HTTPS, host=wrong-host.example.com, namespaces=Same, routes=1
       TLS mode:Terminate, cert:Secret/gateway-tls
-      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+      ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
     missing-secret: port=448/HTTPS, namespaces=Same, routes=1
       TLS mode:Terminate, cert:Secret/does-not-exist
-      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+      ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
 
 Secret/selfsigned-tls -n default, created 1m ago
   Certificate for CN=other.example.com · issued by CN=other.example.com
@@ -32,16 +32,16 @@ HTTPRoute/app -n default, created 1m ago, gen:1
   Parents:
     Gateway/eg [self-signed]
       controller: gateway.envoyproxy.io/gatewayclass-controller
-      Accepted Accepted, Route is accepted for 1m
-      ResolvedRefs ResolvedRefs, Resolved all the Object references for the Route for 1m
+      Accepted:True Accepted, Route is accepted for 1m
+      ResolvedRefs:True ResolvedRefs, Resolved all the Object references for the Route for 1m
     Gateway/eg [hostname-mismatch]
       controller: gateway.envoyproxy.io/gatewayclass-controller
-      Accepted Accepted, Route is accepted for 1m
-      ResolvedRefs ResolvedRefs, Resolved all the Object references for the Route for 1m
+      Accepted:True Accepted, Route is accepted for 1m
+      ResolvedRefs:True ResolvedRefs, Resolved all the Object references for the Route for 1m
     Gateway/eg [missing-secret]
       controller: gateway.envoyproxy.io/gatewayclass-controller
-      Accepted Accepted, Route is accepted for 1m
-      ResolvedRefs ResolvedRefs, Resolved all the Object references for the Route for 1m
+      Accepted:True Accepted, Route is accepted for 1m
+      ResolvedRefs:True ResolvedRefs, Resolved all the Object references for the Route for 1m
   Rules:
     PathPrefix /
     → Service/app-svc:8080

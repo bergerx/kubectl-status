@@ -5,4 +5,4 @@ PodDisruptionBudget/prometheus-pdb -n default, created 1m ago, gen:1
   Selector: app.kubernetes.io/name=prometheus
   healthy:1/expected:1, disruptions allowed:0
     no disruptions allowed — all pods must stay healthy to meet the budget
-  DisruptionAllowed InsufficientPods for 1m
+  DisruptionAllowed:False InsufficientPods for 1m

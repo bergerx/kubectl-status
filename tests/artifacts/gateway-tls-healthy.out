@@ -2,11 +2,11 @@
 Gateway/eg -n default, created 1m ago, gen:1
   Current: Resource is current
   Class: eg
-  Accepted Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
+  Accepted:True Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
   Listeners:
     https: port=443/HTTPS, host=gateway.example.com, namespaces=Same, accepts=HTTPRoute, routes=1
       TLS mode:Terminate, cert:Secret/gateway-tls
-      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+      ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
 
 Secret/gateway-tls -n default, created 1m ago
   Certificate for CN=example.com · issued by CN=Test CA

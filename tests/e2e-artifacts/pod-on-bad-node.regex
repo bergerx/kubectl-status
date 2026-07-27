@@ -1,5 +1,5 @@
 Node/kubectl-status-test-bad-node-[a-z0-9]+ cordoned \(unschedulable\)
-.*Ready KubeletNotReady, kubelet is not ready.*
-.*MemoryPressure KubeletHasInsufficientMemory, kubelet has insufficient memory available.*
+.*Ready:False KubeletNotReady, kubelet is not ready.*
+.*MemoryPressure:True KubeletHasInsufficientMemory, kubelet has insufficient memory available.*
 .*taint dedicated=gpu:NoSchedule \(not tolerated\)
 .*OOM / eviction risk.*Node kubectl-status-test-bad-node-[a-z0-9]+ has MemoryPressure.*Pod is BestEffort.*

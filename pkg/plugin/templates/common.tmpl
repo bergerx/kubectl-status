@@ -329,14 +329,25 @@
 {{- end -}}
 
 {{- define "condition_summary" }}
+    {{- /* The condition's own status ("True"/"False"/"Unknown") is always shown as part of the
+           type label (e.g. "Ready:False"), never collapsed away or reworded (e.g. "NotReady") --
+           status:"Unknown" in particular means the controller couldn't determine the condition,
+           not that it confirmed a fault, so it needs to read differently from a confirmed
+           True/False, see #173. */ -}}
     {{- $notHealthy := not (isStatusConditionHealthy .) }}
+    {{- $unknown := or (eq .status "Unknown") (not .status) }}
     {{- if .type }}
-        {{- .type | redIf $notHealthy | bold }}
+        {{- $label := printf "%s:%s" .type (.status | default "Unknown" | toString) }}
+        {{- if $unknown }}
+            {{- $label | yellow | bold }}
+        {{- else }}
+            {{- $label | redIf $notHealthy | bold }}
+        {{- end }}
     {{- else }}
         {{- "<empty condition type!>" | red | bold }}
     {{- end }}
-    {{- with .reason }} {{ . | redBoldIf $notHealthy }}{{ end }}
-    {{- with .message }}, {{ . | redIf $notHealthy }}{{ end }}
+    {{- with .reason }} {{ if $unknown }}{{ . | yellow | bold }}{{ else }}{{ . | redBoldIf $notHealthy }}{{ end }}{{ end }}
+    {{- with .message }}, {{ if $unknown }}{{ . | yellow }}{{ else }}{{ . | redIf $notHealthy }}{{ end }}{{ end }}
     {{- with .lastTransitionTime }} {{ forOrSince }} {{ . | colorAgo }}{{ end }}
     {{- if .lastUpdateTime }}
         {{- if ne (.lastUpdateTime | colorAgo) (.lastTransitionTime | colorAgo) -}}
@@ -628,12 +639,17 @@
             {{- if $node.Spec.unschedulable }}{{ $flags = append $flags ("node cordoned" | red | bold) }}{{ end }}
             {{- range $node.StatusConditions }}
                 {{- if not (isStatusConditionHealthy .) }}
-                    {{- /* Bare condition types read "abnormal-true" (e.g. MemoryPressure), except
-                           Ready, which is "normal-true" -- name that one explicitly so plain-text
-                           output doesn't read as healthy when it isn't. */ -}}
-                    {{- $label := .type }}
-                    {{- if eq $label "Ready" }}{{ $label = "NotReady" }}{{ end }}
-                    {{- $flags = append $flags (printf "node %s" $label | red | bold) }}
+                    {{- /* Always show the raw type:status pair (e.g. "Ready:False",
+                           "MemoryPressure:True") rather than a reworded label like "NotReady" --
+                           status:"Unknown" is missing information, not a confirmed fault, so it's
+                           flagged separately in yellow rather than folded into the same red
+                           "confirmed bad" label, see #173. */ -}}
+                    {{- $entry := printf "node %s:%s" .type (.status | toString) }}
+                    {{- if eq .status "Unknown" }}
+                        {{- $flags = append $flags ($entry | yellow | bold) }}
+                    {{- else }}
+                        {{- $flags = append $flags ($entry | red | bold) }}
+                    {{- end }}
                 {{- end }}
             {{- end }}
             {{- if taintsNotToleratedByPod ($node.Spec.taints | default list) (.Spec.tolerations | default list) }}

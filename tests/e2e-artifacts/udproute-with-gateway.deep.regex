@@ -4,8 +4,8 @@ UDPRoute/e2e-udproute -n e2e-udproute, created 1m ago, gen:1
   Parents:
     Gateway/e2e-udp-gw -n e2e-udproute, created 1m ago, gen:1
       Current: Resource is current
-      Accepted Pending, Waiting for controller for 1m
-      Programmed Pending, Waiting for controller for 1m
+      Accepted:Unknown Pending, Waiting for controller for 1m
+      Programmed:Unknown Pending, Waiting for controller for 1m
       Listeners:
         udp: port=9090/UDP, namespaces=Same
   Rules:

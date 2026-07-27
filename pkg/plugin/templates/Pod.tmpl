@@ -612,34 +612,41 @@
     {{- end }}
 {{- end }}
 
+{{- define "pod_condition_arrow_label" }}
+    {{- /* args: dict "condition" <condition map> "label" <e.g. "PodScheduled">
+           Always shows the raw "Label:Status" pair (e.g. "PodScheduled:False") rather than a
+           reworded "Not X" -- status:"Unknown" is missing information, not a confirmed fault, so
+           it gets its own yellow rather than being folded into the red used for a confirmed
+           False, see #173. A condition that hasn't been reported at all yet (e.g. Initialized
+           before the kubelet gets that far) has no .status either, and is just as much "we don't
+           know" as an explicit status:"Unknown", so it's treated the same way here. */ -}}
+    {{- $unknown := or (eq .condition.status "Unknown") (not .condition.status) }}
+    {{- $entry := printf "%s:%s" .label (.condition.status | default "Unknown" | toString) }}
+    {{- if isStatusConditionHealthy .condition }}
+        {{- $entry | bold }}
+    {{- else if $unknown }}
+        {{- $entry | yellow | bold }}
+    {{- else }}
+        {{- $entry | red | bold }}
+    {{- end }}
+{{- end -}}
+
 {{- define "pod_conditions_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- $podScheduledCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
     {{- $readyCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "Ready") }}
-    {{- if (isStatusConditionHealthy $podScheduledCondition) }}
-        {{- "PodScheduled" | bold }}
-    {{- else }}
-        {{- "Not PodScheduled" | red | bold }}
-    {{- end }}
+    {{- $.Include "pod_condition_arrow_label" (dict "condition" $podScheduledCondition "label" "PodScheduled") }}
     {{- " -> "}}
     {{- $initializedCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "Initialized") }}
-    {{- if (isStatusConditionHealthy $initializedCondition) }}
-        {{- "Initialized" | bold }}
-    {{- else }}
-        {{- "Not Initialized" | red | bold }}
-    {{- end }}
+    {{- $.Include "pod_condition_arrow_label" (dict "condition" $initializedCondition "label" "Initialized") }}
     {{- " -> "}}
     {{- $containersReadyCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "ContainersReady") }}
-    {{- if (isStatusConditionHealthy $containersReadyCondition) }}
-        {{- "ContainersReady" | bold }}
-    {{- else }}
-        {{- "Not ContainersReady" | red | bold }}
-    {{- end }}
+    {{- $.Include "pod_condition_arrow_label" (dict "condition" $containersReadyCondition "label" "ContainersReady") }}
     {{- " -> "}}
     {{- if (isStatusConditionHealthy $readyCondition) }}
         {{- template "condition_summary" $readyCondition }}
     {{- else }}
-        {{- "Not Ready" | red | bold }}
+        {{- $.Include "pod_condition_arrow_label" (dict "condition" $readyCondition "label" "Ready") }}
     {{- end }}
     {{- range .Status.conditions }}
         {{- /* show details for only unhealthy conditions */ -}}
