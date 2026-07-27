@@ -22,23 +22,43 @@
         {{- end }}
         {{- if gt $volCapacity 0.0 }}/{{ $volCapacity | printf "%g" }}{{ end }}, attached={{ .Status.volumesAttached | default list | len }}
     {{- end }}
+    {{- /* The kubelet API (healthz/configz/stats/summary) is read once, here, and threaded into
+           whichever section below already has a line carrying the same resource from another
+           source (the Node object's allocatable, metrics-server). There is deliberately no
+           standalone kubelet dump section: every figure it returns is only meaningful next to the
+           capacity/usage number it should be compared against. */ -}}
+    {{- $kubeletConfig := dict }}
+    {{- $kubeletStats := dict }}
+    {{- $kubeletHealth := "" }}
+    {{- if .Config.GetBool "include-node-kubelet-api-summary" }}
+        {{- $kubeletConfig = (.KubeGetNodeConfigz .Name | default dict).kubeletconfig | default dict }}
+        {{- $kubeletStats = (.KubeGetNodeStatsSummary .Name | default dict).node | default dict }}
+        {{- $kubeletHealth = .KubeGetNodeHealthz .Name }}
+    {{- end }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
+    {{- template "node_kubelet_summary" (dict "health" $kubeletHealth "kubeletconfig" $kubeletConfig) }}
     {{- template "conditions_summary" . }}
     {{- template "taints" . }}
-    {{- template "node_addresses" . }}
+    {{- template "node_addresses" (dict "r" . "network" $kubeletStats.network) }}
     {{- template "node_lease" . }}
     {{- template "node_capacity" . }}
-    {{- template "node_pod_details" . }}
-    {{- template "kubelet_api_summary" . }}
+    {{- template "node_pod_details" (dict "r" . "kubeletconfig" $kubeletConfig "stats" $kubeletStats) }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
 
 {{- define "node_addresses" }}
-    {{- with .Status.addresses }}
+    {{- /* Expects a dict: "r" (the Node RenderableObject) and "network" (kubelet-api/stats/summary
+           -> node.network, absent when the kubelet API isn't included/reachable). The kubelet's
+           interface counters hang off the addresses line because that's the node's other
+           network-facing field, rather than sitting in a separate kubelet stats dump. */ -}}
+    {{- with .r.Status.addresses }}
         {{- "addresses" | nindent 2 }}:{{ range . }}{{ if .address }} {{ .type }}={{ .address }}{{ end }}{{ end }}
+        {{- with $.network }}
+            {{- "network" | nindent 4 }}: rx/tx {{ .rxBytes | float64 | humanizeSI "B" }}/{{ .txBytes | float64 | humanizeSI "B" }}, rx/tx errors {{ .rxErrors | float64 | humanizeSI "" | redIf (gt (.rxErrors | float64) 0.0) }}/{{ .txErrors | float64 | humanizeSI "" | redIf (gt (.txErrors | float64) 0.0) }}
+        {{- end }}
     {{- end }}
 {{- end -}}
 
@@ -48,85 +68,33 @@
     {{- end }}
 {{- end -}}
 
-{{- define "kubelet_api_summary" }}
-    {{- if .Config.GetBool "include-node-kubelet-api-summary" }}
-        {{- with .KubeGetNodeHealthz .Name }}
-            {{- "kubelet health" | nindent 2 }}: {{ if eq . "ok" }}{{ . }}{{ else }}{{ . | red | bold }}{{ end }}
-        {{- end }}
-        {{- $nodeMetrics := .KubeGetNodeMetrics .Name }}
-        {{- $nodeMetricsHasUsage := ($nodeMetrics.Object | default dict).usage }}
-        {{- $configz := .KubeGetNodeConfigz .Name | default dict }}
-        {{- /* evictionHard's thresholds have no standalone display of their own -- see the comment
-               on node_eviction_annotation for why. Extracted once here and threaded into whichever
-               line already shows the corresponding raw figure below. */ -}}
-        {{- $evictionHard := ($configz.kubeletconfig | default dict).evictionHard | default dict }}
-        {{- $allocCpu := .Status.allocatable.cpu | quantityToFloat64 }}
-        {{- $allocMem := .Status.allocatable.memory | quantityToFloat64 }}
-        {{- with $configz }}
-            {{- template "kubelet_configz_summary" . }}
-        {{- end }}
-        {{- with .KubeGetNodeStatsSummary .Name }}
-            {{- "kubelet stats" | nindent 2 }}:
-            {{- /* "full" suppresses cpu/mem/workingSet on the node-level entry when
-                   node_pod_details' metrics-server-backed cpu:/mem: lines already reported them --
-                   otherwise (no metrics-server) this is the only usage source, so show it in full. */ -}}
-            {{- "node overall" | nindent 4 }}: {{ template "node_stats_summary_resources" (dict "data" .node "full" (not $nodeMetricsHasUsage)
-                "memAvailThreshold" (index $evictionHard "memory.available") "memAvailTotal" $allocMem
-                "pidAvailThreshold" (index $evictionHard "pid.available")
-                "nodefsAvailThreshold" (index $evictionHard "nodefs.available") "nodefsInodesThreshold" (index $evictionHard "nodefs.inodesFree")
-                "imagefsAvailThreshold" (index $evictionHard "imagefs.available") "imagefsInodesThreshold" (index $evictionHard "imagefs.inodesFree")) }}
-            {{- range .node.systemContainers }}
-                {{- .name | nindent 4 }}: {{ template "node_stats_summary_resources" (dict "data" . "full" true "allocCpu" $allocCpu "allocMem" $allocMem) }}
-            {{- end }}
+{{- define "node_kubelet_summary" }}
+    {{- /* Expects a dict: "health" (kubelet-api/healthz body) and "kubeletconfig"
+           (kubelet-api/configz -> kubeletconfig). Everything the kubelet reports about itself that
+           has no other line to correlate with -- is it reachable, and which of its knobs deviate
+           from the defaults -- collapses into this one line right above the node's conditions,
+           since that's the other "is this kubelet behaving" signal on the object.
+           systemReserved/kubeReserved and evictionHard are deliberately not here: they belong on
+           the cpu:/mem:/ephemeral-storage: lines whose numbers they explain. */ -}}
+    {{- $kc := .kubeletconfig | default dict }}
+    {{- $parts := list }}
+    {{- with .health }}{{ $parts = append $parts (ternary . (. | red | bold) (eq . "ok")) }}{{ end }}
+    {{- with $kc.podPidsLimit }}{{ if ge (. | float64) 0.0 }}{{ $parts = append $parts (printf "podPidsLimit:%s" (. | toString)) }}{{ end }}{{ end }}
+    {{- with $kc.cpuManagerPolicy }}{{ if ne . "none" }}{{ $parts = append $parts (printf "cpuManager:%s" .) }}{{ end }}{{ end }}
+    {{- with $kc.memoryManagerPolicy }}{{ if ne . "None" }}{{ $parts = append $parts (printf "memoryManager:%s" .) }}{{ end }}{{ end }}
+    {{- with $kc.topologyManagerPolicy }}{{ if ne . "none" }}{{ $parts = append $parts (printf "topologyManager:%s" .) }}{{ end }}{{ end }}
+    {{- with $kc.shutdownGracePeriod }}
+        {{- if ne . "0s" }}
+            {{- $grace := printf "shutdownGracePeriod:%s" . }}
+            {{- with $kc.shutdownGracePeriodCriticalPods }}{{ $grace = printf "%s/%s(critical)" $grace . }}{{ end }}
+            {{- $parts = append $parts $grace }}
         {{- end }}
     {{- end }}
-{{- end -}}
-
-{{- define "kubelet_configz_summary" }}
-    {{- /* Expects kubelet-api/configz -> kubeletconfig */ -}}
-    {{- with $kc := .kubeletconfig }}
-        {{- "kubelet config" | nindent 2 }}:
-        {{- with $kc.podPidsLimit }}{{ if ge (. | float64) 0.0 }} podPidsLimit:{{ . }}{{ end }}{{ end }}
-        {{- with $kc.cpuManagerPolicy }}{{ if ne . "none" }} cpuManager:{{ . }}{{ end }}{{ end }}
-        {{- with $kc.memoryManagerPolicy }}{{ if ne . "None" }} memoryManager:{{ . }}{{ end }}{{ end }}
-        {{- with $kc.topologyManagerPolicy }}{{ if ne . "none" }} topologyManager:{{ . }}{{ end }}{{ end }}
-        {{- with $kc.shutdownGracePeriod }}{{ if ne . "0s" }} shutdownGracePeriod:{{ . }}{{ with $kc.shutdownGracePeriodCriticalPods }}/{{ . }}{{ end }}(critical){{ end }}{{ end }}
-        {{- with $kc.containerLogMaxSize }}
-            {{- $retained := mulf (. | quantityToFloat64) $kc.containerLogMaxFiles }}
-            {{- "container logs" | nindent 4 }}: retains up to {{ $retained | humanizeSI "B" }} per container ({{ . }} x {{ $kc.containerLogMaxFiles | toString }} files)
-        {{- end }}
-        {{- $sysRes := $kc.systemReserved | default dict }}
-        {{- $kubeRes := $kc.kubeReserved | default dict }}
-        {{- $sysEph := index $sysRes "ephemeral-storage" }}
-        {{- $kubeEph := index $kubeRes "ephemeral-storage" }}
-        {{- if or $sysRes $kubeRes }}
-            {{- /* Merged into one line (rather than separate systemReserved/kubeReserved blocks):
-                   these are what explain the capacity -> allocatable gap shown earlier in
-                   node_capacity, so showing the two contributions side by side is more useful than
-                   splitting them across two headers the reader has to add up themselves. */ -}}
-            {{- "reserved" | nindent 4 }}:
-            {{- if or $sysRes.cpu $kubeRes.cpu }} cpu:
-                {{- with $sysRes.cpu }}{{ . }}(system){{ end }}
-                {{- if and $sysRes.cpu $kubeRes.cpu }}+{{ end }}
-                {{- with $kubeRes.cpu }}{{ . }}(kube){{ end }}
-            {{- end }}
-            {{- if or $sysRes.memory $kubeRes.memory }} mem:
-                {{- with $sysRes.memory }}{{ . }}(system){{ end }}
-                {{- if and $sysRes.memory $kubeRes.memory }}+{{ end }}
-                {{- with $kubeRes.memory }}{{ . }}(kube){{ end }}
-            {{- end }}
-            {{- if or $sysEph $kubeEph }} ephemeral-storage:
-                {{- with $sysEph }}{{ . }}(system){{ end }}
-                {{- if and $sysEph $kubeEph }}+{{ end }}
-                {{- with $kubeEph }}{{ . }}(kube){{ end }}
-            {{- end }}
-            {{- if or $sysRes.pid $kubeRes.pid }} pid:
-                {{- with $sysRes.pid }}{{ . }}(system){{ end }}
-                {{- if and $sysRes.pid $kubeRes.pid }}+{{ end }}
-                {{- with $kubeRes.pid }}{{ . }}(kube){{ end }}
-            {{- end }}
-        {{- end }}
+    {{- with $kc.containerLogMaxSize }}
+        {{- $retained := mulf (. | quantityToFloat64) $kc.containerLogMaxFiles }}
+        {{- $parts = append $parts (printf "container logs: retains up to %s per container (%s x %s files)" ($retained | humanizeSI "B") . ($kc.containerLogMaxFiles | toString)) }}
     {{- end }}
+    {{- with $parts }}{{ "kubelet" | nindent 2 }} {{ join ", " . }}{{ end }}
 {{- end -}}
 
 {{- define "node_eviction_annotation" }}
@@ -137,9 +105,10 @@
            Renders nothing at all unless the threshold is actually close to tripping or already has
            -- a healthy node's rootfs/imagefs/mem/process line stays exactly as compact as it would
            be with eviction-hard unconfigured. There is deliberately no separate "eviction-hard:"
-           block restating these thresholds: the raw free-space/inode/available/process figures
-           already have their own line each (rootfs/imagefs/node overall/processes), so a second
-           block reporting the same numbers as percentages would just be the same fact twice. */ -}}
+           block restating these thresholds: every raw free-space/inode/available/process figure a
+           threshold applies to is already printed somewhere (the rootfs/imagefs line, the mem
+           line's "available", the pods line's process count), so a second block reporting the same
+           numbers as percentages would just be the same fact twice. */ -}}
     {{- with .threshold }}{{ evictionAnnotation . $.current $.total $.unit }}{{ end }}
 {{- end -}}
 
@@ -152,19 +121,41 @@
 {{- end -}}
 
 {{- define "node_pod_details" }}
-    {{- if .Config.GetBool "include-node-detailed-usage" }}
-        {{- $podCount := 0 }}
-        {{- $podsTotalCpuUsage := 0.0 }}
-        {{- $podsTotalCpuRequests := 0.0 }}
-        {{- $podsTotalCpuLimits := 0.0 }}
-        {{- $podsTotalMemUsage := 0.0 }}
-        {{- $podsTotalMemRequests := 0.0 }}
-        {{- $podsTotalMemRequestsBurstable := 0.0 }}
-        {{- $podsTotalMemRequestsGuaranteed := 0.0 }}
-        {{- $podsTotalMemLimits := 0.0 }}
-        {{- $podsNeedingAttention := list }}
-        {{- $podUsageRows := list }}
-        {{- range $pod := .KubeGetNonTerminatedPodsOnNode .Name }}
+    {{- /* Expects a dict: "r" (the Node RenderableObject), "kubeletconfig" (kubelet-api/configz ->
+           kubeletconfig) and "stats" (kubelet-api/stats/summary -> node), the latter two empty when
+           the kubelet API isn't included or isn't reachable.
+           This is the node's single resource-usage section, fed by three independent sources: the
+           Node object's allocatable, metrics-server, and the kubelet API. Each kubelet-api figure
+           renders on -- or directly under -- the line that already carries the same resource from
+           another source, so no source repeats another and any of them being missing only drops
+           its own clauses rather than a whole block. */ -}}
+    {{- $r := .r }}
+    {{- $kc := .kubeletconfig | default dict }}
+    {{- $stats := .stats | default dict }}
+    {{- /* evictionHard's thresholds have no standalone display of their own -- see the comment on
+           node_eviction_annotation for why. */ -}}
+    {{- $evictionHard := $kc.evictionHard | default dict }}
+    {{- $sysRes := $kc.systemReserved | default dict }}
+    {{- $kubeRes := $kc.kubeReserved | default dict }}
+    {{- $allocCpu := $r.Status.allocatable.cpu | quantityToFloat64 }}
+    {{- $allocMem := $r.Status.allocatable.memory | quantityToFloat64 }}
+    {{- $allocPods := $r.Status.allocatable.pods | quantityToFloat64 }}
+    {{- $nodeMetrics := $r.KubeGetNodeMetrics $r.Name }}
+    {{- $nodeUsage := ($nodeMetrics.Object | default dict).usage }}
+    {{- $detailed := $r.Config.GetBool "include-node-detailed-usage" }}
+    {{- $podCount := 0 }}
+    {{- $podsTotalCpuUsage := 0.0 }}
+    {{- $podsTotalCpuRequests := 0.0 }}
+    {{- $podsTotalCpuLimits := 0.0 }}
+    {{- $podsTotalMemUsage := 0.0 }}
+    {{- $podsTotalMemRequests := 0.0 }}
+    {{- $podsTotalMemRequestsBurstable := 0.0 }}
+    {{- $podsTotalMemRequestsGuaranteed := 0.0 }}
+    {{- $podsTotalMemLimits := 0.0 }}
+    {{- $podsNeedingAttention := list }}
+    {{- $podUsageRows := list }}
+    {{- if $detailed }}
+        {{- range $pod := $r.KubeGetNonTerminatedPodsOnNode $r.Name }}
             {{- $podCount = $podCount | add 1 }}
             {{- $podCpuUsage := 0.0 }}
             {{- $podCpuReq := 0.0 }}
@@ -200,7 +191,7 @@
                     {{- $podMemLim = $podMemLim | addFloat64 $limMem }}
                 {{- end }}
                 {{- if eq $pod.Status.phase "Running" }}
-                    {{- $podMetrics := $.KubeGetPodMetrics $pod.Namespace $pod.Name }}
+                    {{- $podMetrics := $r.KubeGetPodMetrics $pod.Namespace $pod.Name }}
                     {{- if $podMetrics.Object }}{{- if $podMetrics.Object.containers }}
                         {{- $containerMetrics := $podMetrics.Object.containers | getMatchingItemInMapList (dict "name" .name) }}
                         {{- if $containerMetrics }}
@@ -214,7 +205,7 @@
                 {{- end }}
             {{- end }}
             {{- if $podHasMetrics }}
-                {{- $podUsageRows = append $podUsageRows (dict "ref" ($.Include "resource_ref" (dict "kind" $pod.Kind "name" $pod.Name "namespace" $pod.Namespace))
+                {{- $podUsageRows = append $podUsageRows (dict "ref" ($r.Include "resource_ref" (dict "kind" $pod.Kind "name" $pod.Name "namespace" $pod.Namespace))
                     "cpuUsage" $podCpuUsage "cpuReq" $podCpuReq "cpuLim" $podCpuLim
                     "memUsage" $podMemUsage "memReq" $podMemReq "memLim" $podMemLim) }}
             {{- end }}
@@ -239,75 +230,128 @@
                 {{- "" | nindent 4 }}{{ template "pod_health_summary" (dict "pod" .pod) }}
             {{- end }}
         {{- end }}
-        {{- $inferredBurstableMemLimit := .Status.allocatable.memory | quantityToFloat64 | subFloat64 $podsTotalMemRequestsGuaranteed }}
+        {{- $inferredBurstableMemLimit := $allocMem | subFloat64 $podsTotalMemRequestsGuaranteed }}
         {{- $inferredBestEffortMemLimit := $inferredBurstableMemLimit | subFloat64 $podsTotalMemRequestsBurstable }}
         {{- "Inferred memory limits" | nindent 2 }} for BestEffort: {{ $inferredBestEffortMemLimit | humanizeSI "B" }}, for Burstable: {{ $inferredBurstableMemLimit | humanizeSI "B" }}
-        {{- $nodeMetrics := $.KubeGetNodeMetrics .Name }}
-        {{- if ($nodeMetrics.Object | default dict).usage }}
-            {{- "pods" | bold | nindent 2 }}: usage/allocatable:{{ $podCount }}/
-            {{- .Status.allocatable.pods | quantityToFloat64 | printf "%g" }}(
-            {{- percent ($podCount | float64) (.Status.allocatable.pods | quantityToFloat64) | colorPercent "%.0f%%" }})
-            {{- if eq ($podCount | float64) (.Status.allocatable.pods | quantityToFloat64) }}
-                {{- "Reached Max Pods Limit" | red | bold | nindent 4 }}: Number of Pods that can run on this Kubelet (`--max-pods`) limit is reached. No more pods will be scheduled to this Node even if there is free resource (E.g. cpu/mem).
-            {{- end }}
-            {{- "cpu" | bold | nindent 2 }}: usage/allocatable:{{ $nodeMetrics.Object.usage.cpu | quantityToFloat64 | printf "%g" }}/
-            {{- .Status.allocatable.cpu | quantityToFloat64 | printf "%g" }}(
-            {{- percent ($nodeMetrics.Object.usage.cpu | quantityToFloat64) (.Status.allocatable.cpu | quantityToFloat64) | colorPercent "%.0f%%" }})
-            {{- $percent := percent $podsTotalCpuUsage (.Status.allocatable.cpu | quantityToFloat64) }}
-            {{- "" }}, allocated usage:{{ $podsTotalCpuUsage | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)/[req:
-            {{- $percent := percent $podsTotalCpuRequests (.Status.allocatable.cpu | quantityToFloat64) }}
-            {{- $podsTotalCpuRequests | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable), lim:
-            {{- $percent := percent $podsTotalCpuLimits (.Status.allocatable.cpu | quantityToFloat64) }}
-            {{- $podsTotalCpuLimits | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)]
-            {{- if ge $podsTotalCpuLimits (.Status.allocatable.cpu | quantityToFloat64) }}
-                {{- "CPU overcommitted" | red | bold | nindent 4 }}: Application may be slow, applications are more likely to race for free cpu cycles.
-            {{- end }}
-            {{- "mem" | bold  | nindent 2 }}: usage/allocatable:{{ $nodeMetrics.Object.usage.memory | quantityToFloat64 | humanizeSI "B" }}/
-            {{- .Status.allocatable.memory | quantityToFloat64 | humanizeSI "B" }}(
-            {{- percent ($nodeMetrics.Object.usage.memory | quantityToFloat64) (.Status.allocatable.memory | quantityToFloat64) | colorPercent "%.0f%%" }})
-            {{- $percent := percent $podsTotalMemUsage (.Status.allocatable.memory | quantityToFloat64) }}
-            {{- "" }}, allocated usage:{{ $podsTotalMemUsage | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)/[req:
-            {{- $percent := percent $podsTotalMemRequests (.Status.allocatable.memory | quantityToFloat64) }}
-            {{- $podsTotalMemRequests | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable), lim:
-            {{- $percent := percent $podsTotalMemLimits (.Status.allocatable.memory | quantityToFloat64) }}
-            {{- $podsTotalMemLimits | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)]
-            {{- if ge $podsTotalMemLimits (.Status.allocatable.memory | quantityToFloat64) }}
-                {{- "Memory overcommitted" | red | bold | nindent 4 }}: Application may be OOMKilled. Expect BestEffort and then Burstable pods to have OOMKill due to overcommitted memory on the node.
-            {{- end }}
-            {{- with index .Status.allocatable "ephemeral-storage" }}{{ "ephemeral-storage" | bold | nindent 2 }}: {{ . | quantityToFloat64 | humanizeSI "B" }}{{ end }}
-            {{- with $podUsageRows }}
-                {{- $allocCpu := $.Status.allocatable.cpu | quantityToFloat64 }}
-                {{- $allocMem := $.Status.allocatable.memory | quantityToFloat64 }}
-                {{- "pods by usage" | bold | nindent 2 }}: (most memory first)
-                {{- $groupLabels := list "cpu use/req/lim (%allocatable)" "mem use/req/lim (%allocatable)" }}
-                {{- $groupSpans := list 3 3 }}
-                {{- $tableRows := list }}
-                {{- range . | sortMapListByFloatKeysValueDesc "memUsage" }}
-                    {{- /* Appending a row here via sprout's "append" would misfire: append's
-                           old/new-signature detection keys off whether its first argument is
-                           slice-kind, and a row is itself a list, so it flip-flops forever
-                           between the two argument orders instead of ever landing on the new
-                           signature (a stack-overflowing infinite loop). concat doesn't have
-                           that ambiguity -- wrapping the row in a single-element list and
-                           concatenating appends it as one row rather than flattening its
-                           cells into $tableRows. */ -}}
-                    {{- $tableRows = concat $tableRows (list (list .ref
-                        (printf "%s(%s)" (.cpuUsage | printf "%.3g") (percent .cpuUsage $allocCpu | colorPercent "%.0f%%"))
-                        (printf "%s(%s)" (.cpuReq | printf "%.3g") (percent .cpuReq $allocCpu | colorPercent "%.0f%%"))
-                        (printf "%s(%s)" (.cpuLim | printf "%.3g") (percent .cpuLim $allocCpu | colorPercent "%.0f%%"))
-                        (printf "%s(%s)" (.memUsage | humanizeSI "B") (percent .memUsage $allocMem | colorPercent "%.0f%%"))
-                        (printf "%s(%s)" (.memReq | humanizeSI "B") (percent .memReq $allocMem | colorPercent "%.0f%%"))
-                        (printf "%s(%s)" (.memLim | humanizeSI "B") (percent .memLim $allocMem | colorPercent "%.0f%%")))) }}
-                {{- end }}
-                {{- renderGroupedTable "pod" $groupLabels $groupSpans $tableRows | nindent 4 }}
-            {{- end }}
-        {{- else if not (.LiveQueriesDisabled) }}
-            {{- $metricsUnavailableReason := $.KubeMetricsUnavailableReason | default "no metrics yet" }}
-            {{- "cpu" | bold | nindent 2 }}: [req:{{ $podsTotalCpuRequests | printf "%.3g" }}, lim:{{ $podsTotalCpuLimits | printf "%.3g" }}]
-            {{- ", " }}{{ "mem" | bold }}: [req:{{ $podsTotalMemRequests | humanizeSI "B" }}, lim:{{ $podsTotalMemLimits | humanizeSI "B" }}], ({{ $metricsUnavailableReason | yellow }})
+    {{- end }}
+    {{- /* Pod slots and pid slots are the same question -- how many more things can this node still
+           run -- so the kubelet's rlimit counters share the pods line instead of sitting in a
+           separate stats block. */ -}}
+    {{- if or $detailed $stats.rlimit }}
+        {{- "pods" | bold | nindent 2 }}:
+        {{- if $detailed }} usage/allocatable:{{ $podCount }}/{{ $allocPods | printf "%g" }}({{ percent ($podCount | float64) $allocPods | colorPercent "%.0f%%" }}){{ end }}
+        {{- with $stats.rlimit }}
+            {{- if $detailed }},{{ end }} processes {{ .curproc | float64 | humanizeSI "" }}/{{ .maxpid | float64 | humanizeSI "" }} ({{ percent (.curproc | float64) (.maxpid | float64) | colorPercent "%.0f%%" }}, rlimit)
+            {{- template "node_eviction_annotation" (dict "threshold" (index $evictionHard "pid.available") "current" (subFloat64 (.curproc | float64) (.maxpid | float64)) "total" (.maxpid | float64) "unit" "") }}
+        {{- end }}
+        {{- if and $detailed (eq ($podCount | float64) $allocPods) }}
+            {{- "Reached Max Pods Limit" | red | bold | nindent 4 }}: Number of Pods that can run on this Kubelet (`--max-pods`) limit is reached. No more pods will be scheduled to this Node even if there is free resource (E.g. cpu/mem).
         {{- end }}
     {{- end }}
+    {{- if $nodeUsage }}
+        {{- "cpu" | bold | nindent 2 }}: usage/allocatable:{{ $nodeUsage.cpu | quantityToFloat64 | printf "%g" }}/
+        {{- $allocCpu | printf "%g" }}({{ percent ($nodeUsage.cpu | quantityToFloat64) $allocCpu | colorPercent "%.0f%%" }})
+        {{- if $detailed }}
+            {{- $percent := percent $podsTotalCpuUsage $allocCpu }}
+            {{- "" }}, allocated usage:{{ $podsTotalCpuUsage | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)/[req:
+            {{- $percent := percent $podsTotalCpuRequests $allocCpu }}
+            {{- $podsTotalCpuRequests | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable), lim:
+            {{- $percent := percent $podsTotalCpuLimits $allocCpu }}
+            {{- $podsTotalCpuLimits | printf "%.3g" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)]
+        {{- end }}
+        {{- template "node_reserved_clause" (dict "sys" $sysRes.cpu "kube" $kubeRes.cpu) }}
+        {{- if and $detailed (ge $podsTotalCpuLimits $allocCpu) }}
+            {{- "CPU overcommitted" | red | bold | nindent 4 }}: Application may be slow, applications are more likely to race for free cpu cycles.
+        {{- end }}
+        {{- "mem" | bold  | nindent 2 }}: usage/allocatable:{{ $nodeUsage.memory | quantityToFloat64 | humanizeSI "B" }}/
+        {{- $allocMem | humanizeSI "B" }}({{ percent ($nodeUsage.memory | quantityToFloat64) $allocMem | colorPercent "%.0f%%" }})
+        {{- if $detailed }}
+            {{- $percent := percent $podsTotalMemUsage $allocMem }}
+            {{- "" }}, allocated usage:{{ $podsTotalMemUsage | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)/[req:
+            {{- $percent := percent $podsTotalMemRequests $allocMem }}
+            {{- $podsTotalMemRequests | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable), lim:
+            {{- $percent := percent $podsTotalMemLimits $allocMem }}
+            {{- $podsTotalMemLimits | humanizeSI "B" }}({{ $percent | colorPercent "%.0f%%" }} of allocatable)]
+        {{- end }}
+        {{- template "node_reserved_clause" (dict "sys" $sysRes.memory "kube" $kubeRes.memory) }}
+    {{- else if and $detailed (not $r.LiveQueriesDisabled) }}
+        {{- $metricsUnavailableReason := $r.KubeMetricsUnavailableReason | default "no metrics yet" }}
+        {{- "cpu" | bold | nindent 2 }}: [req:{{ $podsTotalCpuRequests | printf "%.3g" }}, lim:{{ $podsTotalCpuLimits | printf "%.3g" }}]
+        {{- ", " }}{{ "mem" | bold }}: [req:{{ $podsTotalMemRequests | humanizeSI "B" }}, lim:{{ $podsTotalMemLimits | humanizeSI "B" }}], ({{ $metricsUnavailableReason | yellow }})
+    {{- end }}
+    {{- /* What the kubelet knows about node-wide memory that metrics-server can't report (rss, page
+           faults, and the "available" figure eviction actually keys off) hangs under the mem: line
+           above. Without metrics-server this is the only usage source there is, so it renders in
+           full -- and with nothing above to hang under, it gets its own labelled line. */ -}}
+    {{- $memLineRendered := or $nodeUsage (and $detailed (not $r.LiveQueriesDisabled)) }}
+    {{- if $stats.memory }}{{ if $memLineRendered }}{{ "" | nindent 4 }}{{ else }}{{ "node" | bold | nindent 2 }}: {{ end }}
+        {{- template "node_stats_resources" (dict "data" $stats "full" (not $nodeUsage)
+            "memAvailThreshold" (index $evictionHard "memory.available") "memAvailTotal" $allocMem) }}
+    {{- end }}
+    {{- if and $nodeUsage $detailed (ge $podsTotalMemLimits $allocMem) }}
+        {{- "Memory overcommitted" | red | bold | nindent 4 }}: Application may be OOMKilled. Expect BestEffort and then Burstable pods to have OOMKill due to overcommitted memory on the node.
+    {{- end }}
+    {{- /* The node's own overhead (kubelet, container runtime, ...) before the pods entry, which is
+           the "everything the workload adds up to" counterpart to the per-pod table below it. */ -}}
+    {{- $podsStats := dict }}
+    {{- range $stats.systemContainers | default list | sortMapListByKeysValue "name" }}
+        {{- if eq .name "pods" }}
+            {{- $podsStats = . }}
+        {{- else }}
+            {{- .name | bold | nindent 2 }}: {{ template "node_stats_resources" (dict "data" . "full" true "allocCpu" $allocCpu "allocMem" $allocMem) }}
+        {{- end }}
+    {{- end }}
+    {{- if or $detailed $stats.fs }}
+        {{- with index $r.Status.allocatable "ephemeral-storage" }}
+            {{- "ephemeral-storage" | bold | nindent 2 }}: {{ . | quantityToFloat64 | humanizeSI "B" }}
+            {{- template "node_reserved_clause" (dict "sys" (index $sysRes "ephemeral-storage") "kube" (index $kubeRes "ephemeral-storage")) }}
+        {{- end }}
+    {{- end }}
+    {{- with $stats.fs }}
+        {{- template "node_stats_fs" (dict "fs" . "imageFs" ($stats.runtime | default dict).imageFs "evictionHard" $evictionHard) }}
+    {{- end }}
+    {{- with $podsStats }}
+        {{- "pods" | bold | nindent 2 }}: {{ template "node_stats_resources" (dict "data" . "full" true "allocCpu" $allocCpu "allocMem" $allocMem) }}
+    {{- end }}
+    {{- /* Only ever non-empty when the pod loop above ran and found per-pod metrics, so this needs
+           no config/metrics guard of its own. */ -}}
+    {{- with $podUsageRows }}
+        {{- "pods by usage" | bold | nindent 2 }}: (most memory first)
+        {{- $groupLabels := list "cpu use/req/lim (%allocatable)" "mem use/req/lim (%allocatable)" }}
+        {{- $groupSpans := list 3 3 }}
+        {{- $tableRows := list }}
+        {{- range . | sortMapListByFloatKeysValueDesc "memUsage" }}
+            {{- /* Appending a row here via sprout's "append" would misfire: append's
+                   old/new-signature detection keys off whether its first argument is
+                   slice-kind, and a row is itself a list, so it flip-flops forever
+                   between the two argument orders instead of ever landing on the new
+                   signature (a stack-overflowing infinite loop). concat doesn't have
+                   that ambiguity -- wrapping the row in a single-element list and
+                   concatenating appends it as one row rather than flattening its
+                   cells into $tableRows. */ -}}
+            {{- $tableRows = concat $tableRows (list (list .ref
+                (printf "%s(%s)" (.cpuUsage | printf "%.3g") (percent .cpuUsage $allocCpu | colorPercent "%.0f%%"))
+                (printf "%s(%s)" (.cpuReq | printf "%.3g") (percent .cpuReq $allocCpu | colorPercent "%.0f%%"))
+                (printf "%s(%s)" (.cpuLim | printf "%.3g") (percent .cpuLim $allocCpu | colorPercent "%.0f%%"))
+                (printf "%s(%s)" (.memUsage | humanizeSI "B") (percent .memUsage $allocMem | colorPercent "%.0f%%"))
+                (printf "%s(%s)" (.memReq | humanizeSI "B") (percent .memReq $allocMem | colorPercent "%.0f%%"))
+                (printf "%s(%s)" (.memLim | humanizeSI "B") (percent .memLim $allocMem | colorPercent "%.0f%%")))) }}
+        {{- end }}
+        {{- renderGroupedTable "pod" $groupLabels $groupSpans $tableRows | nindent 4 }}
+    {{- end }}
 {{- end }}
+
+{{- define "node_reserved_clause" }}
+    {{- /* Expects "sys"/"kube" raw systemReserved/kubeReserved quantities for one resource. These
+           are what explain the capacity -> allocatable gap, so each lands on the cpu:/mem:/
+           ephemeral-storage: line whose allocatable figure it accounts for, rather than in a
+           reserved block the reader has to cross-reference. */ -}}
+    {{- if or .sys .kube }}, reserved:
+        {{- with .sys }}{{ . }}(system){{ end }}
+        {{- if and .sys .kube }}+{{ end }}
+        {{- with .kube }}{{ . }}(kube){{ end }}
+    {{- end }}
+{{- end -}}
 
 {{- define "node_capacity" }}
     {{- "allocatable/capacity" | nindent 2 }}: pods {{ .Status.allocatable.pods }}/{{ .Status.capacity.pods -}}
@@ -333,24 +377,22 @@
     {{- template "node_eviction_annotation" (dict "threshold" .inodesThreshold "current" ($fs.inodesFree | float64) "total" ($fs.inodes | float64) "unit" "") }}
 {{- end -}}
 
-{{- define "node_stats_summary_resources" }}
+{{- define "node_stats_resources" }}
     {{- /* Expects a dict:
            "data" = kubelet-api/stats/summary -> node, or -> node.systemContainers entry
            "full" = when true, include cpu/mem/workingSet totals. For the node-level entry these
              duplicate what node_pod_details' metrics-server-backed cpu:/mem: lines already report
              as this node's overall usage -- pass false there once that line has rendered.
-             rss/available/pageFaults/rlimit/network/fs aren't shown anywhere else and always
-             render regardless of "full".
+             rss/available/pageFaults aren't shown anywhere else and always render regardless.
            "allocCpu"/"allocMem" = optional node Status.allocatable cpu/mem (float64) -- when set,
              annotates this entry's cpu/mem with its share of total node capacity, e.g. how much of
              the node kubelet's own overhead is consuming.
-           "memAvailThreshold"/"pidAvailThreshold"/"nodefsAvailThreshold"/"nodefsInodesThreshold"/
-           "imagefsAvailThreshold"/"imagefsInodesThreshold" = optional raw eviction-hard threshold
-             strings (only meaningful for the node-level entry, never systemContainers) -- passed
-             through to node_eviction_annotation on the exact line already showing that figure, so
-             a node close to eviction gets called out right there instead of in a separate block
-             restating the same numbers as percentages. "memAvailTotal" = node Status.allocatable
-             memory (float64), only needed to normalize a percent-form memory.available threshold. */ -}}
+           "memAvailThreshold" = optional raw eviction-hard memory.available threshold (only
+             meaningful for the node-level entry, never systemContainers) -- passed through to
+             node_eviction_annotation on the exact line already showing that figure, so a node close
+             to eviction gets called out right there instead of in a separate block restating the
+             same numbers as percentages. "memAvailTotal" = node Status.allocatable memory
+             (float64), only needed to normalize a percent-form threshold. */ -}}
     {{- $data := .data }}
     {{- if .full }}
         {{- with $data.cpu }}{{ with .usageNanoCores }}{{ $cores := . | float64 | divFloat64 1000000000 }}cpu {{ $cores | printf "%.2g" }}core/sec{{ with $.allocCpu }} ({{ percent $cores . | colorPercent "%.0f%%" }} of node){{ end }}, {{ end }}{{ end }}
@@ -367,18 +409,51 @@
         {{- end -}}
         , pageFaults/major {{ .pageFaults | float64 | humanizeSI "" }}/{{ .majorPageFaults | float64 | humanizeSI "" }}
     {{- end }}
-    {{- with $data.rlimit -}}
-        {{- $procPercent := percent (.curproc | float64) (.maxpid | float64) -}}
-    , processes {{ .curproc | float64  | humanizeSI "" }}/{{ .maxpid | float64  | humanizeSI "" }} ({{ $procPercent | colorPercent "%.0f%%" }}, rlimit)
-    {{- template "node_eviction_annotation" (dict "threshold" $.pidAvailThreshold "current" (subFloat64 (.curproc | float64) (.maxpid | float64)) "total" (.maxpid | float64) "unit" "") }}
-    {{- end }}
-    {{- with $data.network }}
-      network: rx/tx {{ .rxBytes | float64 | humanizeSI "B" }}/{{ .txBytes | float64 | humanizeSI "B" }}, rx/tx errors {{ .rxErrors | float64 | humanizeSI "" | redIf (gt (.rxErrors | float64) 0.0) }}/{{ .txErrors | float64 | humanizeSI "" | redIf (gt (.txErrors | float64) 0.0) }}
-    {{- end }}
-    {{- if $data.fs }}
-      {{ "rootfs" | bold }}: {{ template "node_stats_summary_fs" (dict "fs" $data.fs "availableThreshold" $.nodefsAvailThreshold "inodesThreshold" $.nodefsInodesThreshold) }}
-        {{- with $data.runtime.imageFs }}
-      {{ "imagefs" | bold }}: {{ template "node_stats_summary_fs" (dict "fs" . "availableThreshold" $.imagefsAvailThreshold "inodesThreshold" $.imagefsInodesThreshold) }}
+{{- end -}}
+
+{{- define "node_stats_fs" }}
+    {{- /* Expects "fs" (kubelet-api/stats/summary -> node.fs), "imageFs" (-> node.runtime.imageFs,
+           absent on some runtimes) and "evictionHard". On the common single-disk node the two are
+           the same filesystem, so every figure except how much each one uses is identical -- there
+           they collapse onto one line instead of repeating the same capacity/free/inode numbers
+           twice. They only split back apart when imagefs really is a separate disk. */ -}}
+    {{- $fs := .fs }}
+    {{- $imageFs := .imageFs }}
+    {{- $eh := .evictionHard | default dict }}
+    {{- $nodefsAvail := index $eh "nodefs.available" | default "" }}
+    {{- $nodefsInodes := index $eh "nodefs.inodesFree" | default "" }}
+    {{- $imagefsAvail := index $eh "imagefs.available" | default "" }}
+    {{- $imagefsInodes := index $eh "imagefs.inodesFree" | default "" }}
+    {{- $shared := false }}
+    {{- if $imageFs }}
+        {{- if and (eq ($fs.capacityBytes | float64) ($imageFs.capacityBytes | float64))
+                   (eq ($fs.availableBytes | float64) ($imageFs.availableBytes | float64))
+                   (eq ($fs.inodes | float64) ($imageFs.inodes | float64))
+                   (eq ($fs.inodesFree | float64) ($imageFs.inodesFree | float64)) }}
+            {{- $shared = true }}
         {{- end }}
-      {{- end }}
+    {{- end }}
+    {{- if $shared }}
+        {{- "rootfs/imagefs" | bold | nindent 4 }}: {{ $fs.usedBytes | float64 | humanizeSI "B" }}/
+        {{- $imageFs.usedBytes | float64 | humanizeSI "B" }} used of {{ $fs.capacityBytes | float64 | humanizeSI "B" -}}
+        , {{ $fs.availableBytes | float64 | humanizeSI "B" }} still free
+        {{- template "node_eviction_annotation" (dict "threshold" $nodefsAvail "current" ($fs.availableBytes | float64) "total" ($fs.capacityBytes | float64) "unit" "B") }}
+        {{- /* One shared filesystem can still be under two different thresholds; only the second
+               one is worth printing, and only when it isn't the same threshold restated. */ -}}
+        {{- if ne $imagefsAvail $nodefsAvail }}
+            {{- template "node_eviction_annotation" (dict "threshold" $imagefsAvail "current" ($fs.availableBytes | float64) "total" ($fs.capacityBytes | float64) "unit" "B") }}
+        {{- end }}
+        {{- "" }}; {{ $fs.inodesUsed | float64 | humanizeSI "" }}/
+        {{- $imageFs.inodesUsed | float64 | humanizeSI "" }} of {{ $fs.inodes | float64 | humanizeSI "" }} inode
+        {{- ", " }}{{ $fs.inodesFree | float64 | humanizeSI "" }} inode still free
+        {{- template "node_eviction_annotation" (dict "threshold" $nodefsInodes "current" ($fs.inodesFree | float64) "total" ($fs.inodes | float64) "unit" "") }}
+        {{- if ne $imagefsInodes $nodefsInodes }}
+            {{- template "node_eviction_annotation" (dict "threshold" $imagefsInodes "current" ($fs.inodesFree | float64) "total" ($fs.inodes | float64) "unit" "") }}
+        {{- end }}
+    {{- else }}
+        {{- "rootfs" | bold | nindent 4 }}: {{ template "node_stats_summary_fs" (dict "fs" $fs "availableThreshold" $nodefsAvail "inodesThreshold" $nodefsInodes) }}
+        {{- with $imageFs }}
+            {{- "imagefs" | bold | nindent 4 }}: {{ template "node_stats_summary_fs" (dict "fs" . "availableThreshold" $imagefsAvail "inodesThreshold" $imagefsInodes) }}
+        {{- end }}
+    {{- end }}
 {{- end -}}

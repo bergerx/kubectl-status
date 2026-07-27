@@ -535,6 +535,61 @@ func TestPodContainersMetricsWarningSuppressedInShallowMode(t *testing.T) {
 	}
 }
 
+// nodeUsageObj is a minimal Node for rendering the usage sub-templates against: enough allocatable
+// for the percentage denominators, nothing else.
+func nodeUsageObj() map[string]interface{} {
+	return map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "some-node"},
+		"status": map[string]interface{}{
+			"allocatable": map[string]interface{}{
+				"cpu":               "4",
+				"memory":            "16Gi",
+				"pods":              "110",
+				"ephemeral-storage": "100Gi",
+			},
+		},
+	}
+}
+
+// newNodeRenderable builds a RenderableObject over obj wired to the offline fake client. The Node
+// sub-templates take the kubelet-api payloads as template arguments rather than fetching them
+// themselves, so tests can render them against hand-built configz/stats payloads even though the
+// live nodes/{name}/proxy calls they normally come from aren't reachable here.
+func newNodeRenderable(t *testing.T, v *viper.Viper, obj map[string]interface{}) RenderableObject {
+	t.Helper()
+	cfg := NewRenderConfig(v)
+	tmpl, _ := getTemplate(cfg)
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.Client = &fake.RESTClient{}
+	f.UnstructuredClient = f.Client
+	t.Cleanup(func() { f.Cleanup() })
+	repo, _ := input.NewResourceRepo(f, cfg.Viper)
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+	e.Template = *tmpl
+	return newRenderableObject(obj, e, repo)
+}
+
+func renderNodeSubTemplate(t *testing.T, r RenderableObject, name string, data interface{}) string {
+	t.Helper()
+	got, err := r.renderTemplate(name, data)
+	if err != nil {
+		t.Fatalf("renderTemplate(%q) error = %v", name, err)
+	}
+	return got
+}
+
+// renderNodePodDetails renders the whole usage section against the three sources it correlates:
+// the Node object, kubelet configz and kubelet stats/summary's node entry. metrics-server is never
+// available in these offline tests, so the metrics-server-backed clauses stay out of reach here
+// and are covered by the live e2e fixture instead.
+func renderNodePodDetails(t *testing.T, v *viper.Viper, kubeletconfig, stats map[string]interface{}) string {
+	t.Helper()
+	r := newNodeRenderable(t, v, nodeUsageObj())
+	return renderNodeSubTemplate(t, r, "node_pod_details", map[string]interface{}{
+		"r": r, "kubeletconfig": kubeletconfig, "stats": stats,
+	})
+}
+
 // TestNodePodDetailsMetricsNotInstalledWarningTemplate covers issue #165 case 1 for Node's
 // detailed usage section: with metrics-server not installed (the default fake test client has no
 // APIService for it), enabling the opt-in "include-node-detailed-usage" section should surface a
@@ -542,50 +597,100 @@ func TestPodContainersMetricsWarningSuppressedInShallowMode(t *testing.T) {
 func TestNodePodDetailsMetricsNotInstalledWarningTemplate(t *testing.T) {
 	v := viper.New()
 	v.Set("include-node-detailed-usage", true)
+	got := renderNodePodDetails(t, v, nil, nil)
+	if !strings.Contains(got, "not installed") {
+		t.Errorf("got = %q, want a metrics-server-not-installed warning", got)
+	}
+}
+
+// TestNodePodDetailsFoldsProcessesOntoPodsLine covers the pid side of "how many more things can
+// this node run": the kubelet's rlimit counters share the pods line rather than getting a stats
+// block of their own, and pid.available is annotated right where the process count already is.
+func TestNodePodDetailsFoldsProcessesOntoPodsLine(t *testing.T) {
+	v := viper.New()
+	v.Set("include-node-detailed-usage", false)
+	got := renderNodePodDetails(t, v,
+		map[string]interface{}{"evictionHard": map[string]interface{}{"pid.available": "10"}},
+		map[string]interface{}{"rlimit": map[string]interface{}{"curproc": 988.0, "maxpid": 1000.0}})
+	if !strings.Contains(got, "processes 988/1k (99%, rlimit)") {
+		t.Errorf("got = %q, want the process count on the pods line", got)
+	}
+	if !strings.Contains(got, "nearing 10: 12 free") {
+		t.Errorf("got = %q, want a nearing-threshold annotation on the processes figure", got)
+	}
+}
+
+// TestNodePodDetailsPutsFilesystemsUnderEphemeralStorage pins the ordering that makes the kubelet's
+// filesystem stats readable: they sit under the ephemeral-storage line whose allocatable figure
+// they're the live counterpart to, not in a separate section.
+func TestNodePodDetailsPutsFilesystemsUnderEphemeralStorage(t *testing.T) {
+	v := viper.New()
+	v.Set("include-node-detailed-usage", false)
+	got := renderNodePodDetails(t, v, nil, map[string]interface{}{
+		"fs": map[string]interface{}{
+			"usedBytes": 1.0e9, "capacityBytes": 10.0e9, "availableBytes": 9.0e9,
+			"inodesUsed": 1.0e5, "inodes": 1.0e6, "inodesFree": 9.0e5,
+		},
+	})
+	want := "\n  ephemeral-storage: 107.3GB\n    rootfs: 1GB/10GB, 9GB still free; 100k/1M inode, 900k inode still free"
+	if !strings.Contains(got, want) {
+		t.Errorf("got = %q, want substring %q", got, want)
+	}
+}
+
+// TestNodeAddressesIncludesKubeletNetworkCounters checks the kubelet's interface counters land on
+// the node's other network-facing field instead of a standalone stats block.
+func TestNodeAddressesIncludesKubeletNetworkCounters(t *testing.T) {
 	obj := map[string]interface{}{
 		"metadata": map[string]interface{}{"name": "some-node"},
 		"status": map[string]interface{}{
-			"allocatable": map[string]interface{}{
-				"cpu":    "4",
-				"memory": "16Gi",
-				"pods":   "110",
+			"addresses": []interface{}{
+				map[string]interface{}{"type": "InternalIP", "address": "10.0.0.4"},
 			},
 		},
 	}
-	checkTemplateWithViper(t, "node_pod_details", obj, "not installed", true, v)
+	r := newNodeRenderable(t, viper.New(), obj)
+	got := renderNodeSubTemplate(t, r, "node_addresses", map[string]interface{}{
+		"r": r,
+		"network": map[string]interface{}{
+			"rxBytes": 19.3e9, "txBytes": 7.9e9, "rxErrors": 0.0, "txErrors": 0.0,
+		},
+	})
+	want := "\n  addresses: InternalIP=10.0.0.4\n    network: rx/tx 19.3GB/7.9GB, rx/tx errors 0/0"
+	if got != want {
+		t.Errorf("got = %q, want %q", got, want)
+	}
 }
 
-// aksKubeletConfigzObj mirrors a real AKS node's `kubectl get --raw
-// /api/v1/nodes/{node}/proxy/configz` response (trimmed to the fields the
-// "kubelet_configz_summary" template reads). It exercises fields that other fixtures/clusters seen
-// so far didn't have set: eviction on pid.available, and kubeReserved without ephemeral-storage.
-// The live proxy call itself isn't reachable in these offline tests, so the template is rendered
-// directly against this static payload instead of going through KubeGetNodeConfigz.
-func aksKubeletConfigzObj() map[string]interface{} {
+// aksKubeletConfig mirrors a real AKS node's `kubectl get --raw
+// /api/v1/nodes/{node}/proxy/configz` -> kubeletconfig (trimmed to the fields the Node templates
+// read). It exercises fields that other fixtures/clusters seen so far didn't have set: eviction on
+// pid.available, and kubeReserved without ephemeral-storage. The live proxy call itself isn't
+// reachable in these offline tests, so templates are rendered directly against this static payload
+// instead of going through KubeGetNodeConfigz.
+func aksKubeletConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"kubeletconfig": map[string]interface{}{
-			"evictionHard": map[string]interface{}{
-				"memory.available":  "100Mi",
-				"nodefs.available":  "10%",
-				"nodefs.inodesFree": "5%",
-				"pid.available":     "2000",
-			},
-			"containerLogMaxSize":         "50M",
-			"containerLogMaxFiles":        float64(5),
-			"containerLogMaxWorkers":      float64(1),
-			"containerLogMonitorInterval": "10s",
-			"kubeReserved": map[string]interface{}{
-				"cpu":    "180m",
-				"memory": "650Mi",
-				"pid":    "1000",
-			},
-			"podPidsLimit":                    float64(-1),
-			"cpuManagerPolicy":                "none",
-			"memoryManagerPolicy":             "None",
-			"topologyManagerPolicy":           "none",
-			"shutdownGracePeriod":             "0s",
-			"shutdownGracePeriodCriticalPods": "0s",
+		"evictionHard": map[string]interface{}{
+			"memory.available":  "100Mi",
+			"nodefs.available":  "10%",
+			"nodefs.inodesFree": "5%",
+			"pid.available":     "2000",
 		},
+		"containerLogMaxSize":         "50M",
+		"containerLogMaxFiles":        float64(5),
+		"containerLogMaxWorkers":      float64(1),
+		"containerLogMonitorInterval": "10s",
+		"kubeReserved": map[string]interface{}{
+			"cpu":    "180m",
+			"memory": "650Mi",
+			"pid":    "1000",
+		},
+		"podPidsLimit":                    float64(-1),
+		"cpuManagerPolicy":                "none",
+		"memoryManagerPolicy":             "None",
+		"topologyManagerPolicy":           "none",
+		"shutdownGracePeriod":             "0s",
+		"shutdownGracePeriodCriticalPods": "0s",
 	}
 }
 
@@ -655,97 +760,150 @@ func TestNodeStatsSummaryFsNoAnnotationWhenThresholdUnconfigured(t *testing.T) {
 	}
 }
 
-// TestNodeStatsSummaryResourcesAnnotatesMemAvailableAndProcesses covers the two other lines
-// node_eviction_annotation is wired into (besides rootfs/imagefs, covered above): the "available"
-// figure on the memory line (mem.available) and the "processes" line (pid.available), both fed
-// from the same dict node_stats_summary_resources receives from kubelet_api_summary.
-func TestNodeStatsSummaryResourcesAnnotatesMemAvailableAndProcesses(t *testing.T) {
-	got := renderNodeStatsSummaryResources(t, map[string]interface{}{
+// TestNodeStatsResourcesAnnotatesMemAvailable covers the memory line's "available" figure, the one
+// eviction's memory.available threshold actually keys off.
+func TestNodeStatsResourcesAnnotatesMemAvailable(t *testing.T) {
+	r := newNodeRenderable(t, viper.New(), map[string]interface{}{})
+	got := renderNodeSubTemplate(t, r, "node_stats_resources", map[string]interface{}{
 		"data": map[string]interface{}{
 			"memory": map[string]interface{}{
 				"usageBytes": 1.0e9, "workingSetBytes": 1.0e9, "rssBytes": 1.0e9,
 				"availableBytes": 0.05e9, "pageFaults": 0.0, "majorPageFaults": 0.0,
 			},
-			"rlimit": map[string]interface{}{"curproc": 988.0, "maxpid": 1000.0},
 		},
 		"full":              false,
 		"memAvailThreshold": "100Mi",
 		"memAvailTotal":     0.0,
-		"pidAvailThreshold": "10",
 	})
 	if !strings.Contains(got, "TRIPPED") {
 		t.Errorf("got = %q, want a tripped annotation on the available-memory figure (50MB free < 100Mi threshold)", got)
 	}
-	if !strings.Contains(got, "nearing 10: 12 free") {
-		t.Errorf("got = %q, want a nearing-threshold annotation on the processes figure (12 pids free vs threshold 10)", got)
+}
+
+// sharedDiskFsStats is the overwhelmingly common node layout: imagefs is a directory on the root
+// filesystem, so the kubelet reports the same capacity/free/inode figures for both and only the
+// used ones differ.
+func sharedDiskFsStats() map[string]interface{} {
+	return map[string]interface{}{
+		"fs": map[string]interface{}{
+			"usedBytes": 37.5e9, "capacityBytes": 310.9e9, "availableBytes": 273.3e9,
+			"inodesUsed": 314.9e3, "inodes": 39.1e6, "inodesFree": 38.8e6,
+		},
+		"imageFs": map[string]interface{}{
+			"usedBytes": 22.0e9, "capacityBytes": 310.9e9, "availableBytes": 273.3e9,
+			"inodesUsed": 214.9e3, "inodes": 39.1e6, "inodesFree": 38.8e6,
+		},
 	}
 }
 
-func renderNodeStatsSummaryResources(t *testing.T, data map[string]interface{}) string {
-	t.Helper()
-	cfg := NewRenderConfig(viper.New())
-	tmpl, _ := getTemplate(cfg)
-	f := cmdtesting.NewTestFactory().WithNamespace("test")
-	f.Client = &fake.RESTClient{}
-	f.UnstructuredClient = f.Client
-	t.Cleanup(func() { f.Cleanup() })
-	repo, _ := input.NewResourceRepo(f, cfg.Viper)
-	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
-	r := newRenderableObject(map[string]interface{}{}, e, repo)
-	got, err := r.renderTemplate("node_stats_summary_resources", data)
-	if err != nil {
-		t.Fatalf("renderTemplate() error = %v", err)
+func TestNodeStatsFsCollapsesSharedRootfsAndImagefs(t *testing.T) {
+	r := newNodeRenderable(t, viper.New(), map[string]interface{}{})
+	got := renderNodeSubTemplate(t, r, "node_stats_fs", sharedDiskFsStats())
+	want := "\n    rootfs/imagefs: 37.5GB/22GB used of 310.9GB, 273.3GB still free; 314.9k/214.9k of 39.1M inode, 38.8M inode still free"
+	if got != want {
+		t.Errorf("got = %q, want %q", got, want)
 	}
-	return got
+}
+
+// TestNodeStatsFsSplitsWhenImagefsIsASeparateDisk: the moment the two filesystems stop agreeing on
+// capacity/free, collapsing them would hide a real difference, so they go back to a line each.
+func TestNodeStatsFsSplitsWhenImagefsIsASeparateDisk(t *testing.T) {
+	data := sharedDiskFsStats()
+	data["imageFs"].(map[string]interface{})["capacityBytes"] = 100.0e9
+	data["imageFs"].(map[string]interface{})["availableBytes"] = 78.0e9
+	r := newNodeRenderable(t, viper.New(), map[string]interface{}{})
+	got := renderNodeSubTemplate(t, r, "node_stats_fs", data)
+	for _, want := range []string{
+		"\n    rootfs: 37.5GB/310.9GB, 273.3GB still free",
+		"\n    imagefs: 22GB/100GB, 78GB still free",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("got = %q, want substring %q", got, want)
+		}
+	}
+	if strings.Contains(got, "rootfs/imagefs") {
+		t.Errorf("expected separate lines for filesystems with different capacity, got = %q", got)
+	}
+}
+
+// nearlyFullSharedDiskFsStats drops the shared filesystem to 8% free, past a 10% eviction
+// threshold, so the collapsed line has something to annotate.
+func nearlyFullSharedDiskFsStats() map[string]interface{} {
+	data := sharedDiskFsStats()
+	data["fs"].(map[string]interface{})["availableBytes"] = 24.0e9
+	data["imageFs"].(map[string]interface{})["availableBytes"] = 24.0e9
+	return data
+}
+
+// TestNodeStatsFsAnnotatesCollapsedLineOncePerIdenticalThreshold: nodefs and imagefs being the same
+// disk under the same threshold is one fact, so the collapsed line states it once rather than
+// printing the identical annotation twice.
+func TestNodeStatsFsAnnotatesCollapsedLineOncePerIdenticalThreshold(t *testing.T) {
+	data := nearlyFullSharedDiskFsStats()
+	data["evictionHard"] = map[string]interface{}{"nodefs.available": "10%", "imagefs.available": "10%"}
+	r := newNodeRenderable(t, viper.New(), map[string]interface{}{})
+	got := renderNodeSubTemplate(t, r, "node_stats_fs", data)
+	if n := strings.Count(got, "TRIPPED"); n != 1 {
+		t.Errorf("got = %q, want the shared free-space figure annotated exactly once, got %d annotations", got, n)
+	}
+}
+
+// TestNodeStatsFsAnnotatesCollapsedLineForEachDistinctThreshold: one shared disk can still sit
+// under two different thresholds, and then both are worth saying.
+func TestNodeStatsFsAnnotatesCollapsedLineForEachDistinctThreshold(t *testing.T) {
+	data := nearlyFullSharedDiskFsStats()
+	data["evictionHard"] = map[string]interface{}{"nodefs.available": "10%", "imagefs.available": "15%"}
+	r := newNodeRenderable(t, viper.New(), map[string]interface{}{})
+	got := renderNodeSubTemplate(t, r, "node_stats_fs", data)
+	for _, want := range []string{"10% TRIPPED", "15% TRIPPED"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("got = %q, want substring %q", got, want)
+		}
+	}
 }
 
 func renderNodeStatsSummaryFs(t *testing.T, data map[string]interface{}) string {
 	t.Helper()
-	cfg := NewRenderConfig(viper.New())
-	tmpl, _ := getTemplate(cfg)
-	f := cmdtesting.NewTestFactory().WithNamespace("test")
-	f.Client = &fake.RESTClient{}
-	f.UnstructuredClient = f.Client
-	t.Cleanup(func() { f.Cleanup() })
-	repo, _ := input.NewResourceRepo(f, cfg.Viper)
-	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
-	r := newRenderableObject(map[string]interface{}{}, e, repo)
-	got, err := r.renderTemplate("node_stats_summary_fs", data)
-	if err != nil {
-		t.Fatalf("renderTemplate() error = %v", err)
-	}
-	return got
+	r := newNodeRenderable(t, viper.New(), map[string]interface{}{})
+	return renderNodeSubTemplate(t, r, "node_stats_summary_fs", data)
 }
 
-func TestKubeletConfigzSummaryTemplateAKSContainerLogRotation(t *testing.T) {
-	got := renderConfigzSummary(t, aksKubeletConfigzObj())
-	want := "container logs: retains up to 250MB per container (50M x 5 files)"
-	if !strings.Contains(got, want) {
-		t.Errorf("got = %q, want substring %q", got, want)
-	}
+func renderNodeKubeletSummary(t *testing.T, health string, kubeletconfig map[string]interface{}) string {
+	t.Helper()
+	r := newNodeRenderable(t, viper.New(), map[string]interface{}{})
+	return renderNodeSubTemplate(t, r, "node_kubelet_summary", map[string]interface{}{
+		"health": health, "kubeletconfig": kubeletconfig,
+	})
 }
 
-func TestKubeletConfigzSummaryTemplateAKSKubeReservedWithoutEphemeralStorage(t *testing.T) {
-	got := renderConfigzSummary(t, aksKubeletConfigzObj())
-	want := "reserved: cpu:180m(kube) mem:650Mi(kube) pid:1000(kube)"
-	if !strings.Contains(got, want) {
-		t.Errorf("got = %q, want substring %q", got, want)
-	}
-	if strings.Contains(got, "(system)") {
-		t.Errorf("expected no (system) contribution when systemReserved is absent from configz, got = %q", got)
-	}
-	if strings.Contains(got, "ephemeral-storage") {
-		t.Errorf("expected no ephemeral-storage reserved clause when absent from both maps, got = %q", got)
+// TestNodeKubeletSummaryFoldsHealthAndLogRotationIntoOneLine pins the whole line, since the point
+// of it is that reachability and the kubelet's non-default knobs are one line rather than a
+// "kubelet health"/"kubelet config" pair of sections.
+func TestNodeKubeletSummaryFoldsHealthAndLogRotationIntoOneLine(t *testing.T) {
+	got := renderNodeKubeletSummary(t, "ok", aksKubeletConfig())
+	want := "\n  kubelet ok, container logs: retains up to 250MB per container (50M x 5 files)"
+	if got != want {
+		t.Errorf("got = %q, want %q", got, want)
 	}
 }
 
-// TestKubeletConfigzSummaryTemplateDefaultPoliciesHidden asserts the manager-policy/pidsLimit/
+// TestNodeKubeletSummaryOmitsReservedAndEviction asserts systemReserved/kubeReserved and
+// evictionHard don't leak back onto the kubelet line: they only mean something next to the
+// allocatable/free figures they explain, which live on the usage section's lines.
+func TestNodeKubeletSummaryOmitsReservedAndEviction(t *testing.T) {
+	got := renderNodeKubeletSummary(t, "ok", aksKubeletConfig())
+	for _, unwanted := range []string{"reserved", "pid:1000", "eviction", "nodefs"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("expected %q to stay off the kubelet line, got = %q", unwanted, got)
+		}
+	}
+}
+
+// TestNodeKubeletSummaryDefaultPoliciesHidden asserts the manager-policy/pidsLimit/
 // shutdownGracePeriod fields stay hidden when they're at their default values, matching the
 // codebase's convention of only calling out settings that deviate from the norm.
-func TestKubeletConfigzSummaryTemplateDefaultPoliciesHidden(t *testing.T) {
-	got := renderConfigzSummary(t, aksKubeletConfigzObj())
+func TestNodeKubeletSummaryDefaultPoliciesHidden(t *testing.T) {
+	got := renderNodeKubeletSummary(t, "ok", aksKubeletConfig())
 	for _, unwanted := range []string{"podPidsLimit", "cpuManager", "memoryManager", "topologyManager", "shutdownGracePeriod"} {
 		if strings.Contains(got, unwanted) {
 			t.Errorf("expected %q to stay hidden at default value, got = %q", unwanted, got)
@@ -753,23 +911,56 @@ func TestKubeletConfigzSummaryTemplateDefaultPoliciesHidden(t *testing.T) {
 	}
 }
 
-func renderConfigzSummary(t *testing.T, configz map[string]interface{}) string {
-	t.Helper()
-	cfg := NewRenderConfig(viper.New())
-	tmpl, _ := getTemplate(cfg)
-	f := cmdtesting.NewTestFactory().WithNamespace("test")
-	f.Client = &fake.RESTClient{}
-	f.UnstructuredClient = f.Client
-	t.Cleanup(func() { f.Cleanup() })
-	repo, _ := input.NewResourceRepo(f, cfg.Viper)
-	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
-	r := newRenderableObject(map[string]interface{}{}, e, repo)
-	got, err := r.renderTemplate("kubelet_configz_summary", configz)
-	if err != nil {
-		t.Fatalf("renderTemplate() error = %v", err)
+func TestNodeKubeletSummaryShowsNonDefaultPolicies(t *testing.T) {
+	kc := aksKubeletConfig()
+	kc["podPidsLimit"] = float64(4096)
+	kc["cpuManagerPolicy"] = "static"
+	kc["shutdownGracePeriod"] = "30s"
+	kc["shutdownGracePeriodCriticalPods"] = "10s"
+	got := renderNodeKubeletSummary(t, "ok", kc)
+	for _, want := range []string{"podPidsLimit:4096", "cpuManager:static", "shutdownGracePeriod:30s/10s(critical)"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("got = %q, want substring %q", got, want)
+		}
 	}
-	return got
+}
+
+// TestNodeKubeletSummaryUnreachableKubelet: an apiserver->kubelet proxy failure is the one thing
+// this line exists to surface, so it has to survive the fold into a single line.
+func TestNodeKubeletSummaryUnreachableKubelet(t *testing.T) {
+	got := renderNodeKubeletSummary(t, "unreachable: connection refused", nil)
+	if !strings.Contains(got, "unreachable: connection refused") {
+		t.Errorf("got = %q, want the healthz failure reported on the kubelet line", got)
+	}
+}
+
+func TestNodeKubeletSummaryRendersNothingWithoutKubeletApi(t *testing.T) {
+	if got := renderNodeKubeletSummary(t, "", nil); got != "" {
+		t.Errorf("got = %q, want no kubelet line when the kubelet API wasn't read", got)
+	}
+}
+
+func TestNodeReservedClause(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		sys, kube interface{}
+		want      string
+	}{
+		{"both contributions", "100m", "180m", ", reserved:100m(system)+180m(kube)"},
+		{"kube only", nil, "180m", ", reserved:180m(kube)"},
+		{"system only", "100m", nil, ", reserved:100m(system)"},
+		{"neither", nil, nil, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newNodeRenderable(t, viper.New(), map[string]interface{}{})
+			got := renderNodeSubTemplate(t, r, "node_reserved_clause", map[string]interface{}{
+				"sys": tc.sys, "kube": tc.kube,
+			})
+			if got != tc.want {
+				t.Errorf("got = %q, want %q", got, tc.want)
+			}
+		})
+	}
 }
 
 func managedResourceObj(forProvider, atProvider map[string]interface{}) map[string]interface{} {
