@@ -2,7 +2,10 @@
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject */ -}}
     {{- template "status_summary_line" . }}
     {{- template "application_details" . }}
-    {{- .Status.nodeInfo.operatingSystem | bold | nindent 2 }} {{ .Status.nodeInfo.osImage }} ({{ .Status.nodeInfo.architecture }}), kernel {{ .Status.nodeInfo.kernelVersion }}, kubelet {{ .Status.nodeInfo.kubeletVersion }}, kube-proxy {{ .Status.nodeInfo.kubeProxyVersion }}, runtime {{ .Status.nodeInfo.containerRuntimeVersion }}
+    {{- .Status.nodeInfo.operatingSystem | bold | nindent 2 }} {{ .Status.nodeInfo.osImage }} ({{ .Status.nodeInfo.architecture }}), kernel {{ .Status.nodeInfo.kernelVersion }}, kubelet {{ .Status.nodeInfo.kubeletVersion }}
+    {{- /* kubeProxyVersion is deprecated and left unset from k8s 1.31 on, so the whole clause goes
+           rather than leaving a bare label behind on newer clusters. */ -}}
+    {{- with .Status.nodeInfo.kubeProxyVersion }}, kube-proxy {{ . }}{{ end }}, {{ .Status.nodeInfo.containerRuntimeVersion }}
     {{- if or (index .Labels "node.kubernetes.io/instance") (index .Labels "topology.kubernetes.io/region") (index .Labels "failure-domain.beta.kubernetes.io/region") (index .Labels "topology.kubernetes.io/zone") (index .Labels "failure-domain.beta.kubernetes.io/region") }}
         {{- "cloudprovider" | bold | nindent 2 }}
         {{- with index .Labels "topology.kubernetes.io/region" | default (index .Labels "failure-domain.beta.kubernetes.io/region") }} {{ . }}{{ end }}
@@ -220,33 +223,6 @@
                 {{- $podsNeedingAttention = append $podsNeedingAttention (dict "key" (printf "%s/%s" $pod.Namespace $pod.Name) "pod" $pod) }}
             {{- end }}
         {{- end }}
-        {{- with $podsNeedingAttention }}
-            {{- /* Not all entries here are unhealthy right now: a Running/Ready pod with a past
-                   restart is included too, since restart count is itself a signal worth a node
-                   operator's attention (see #178), just a milder one than being stuck
-                   Pending/NotReady. */ -}}
-            {{- "pods needing attention" | bold | nindent 2 }}:
-            {{- range . | sortMapListByKeysValue "key" }}
-                {{- "" | nindent 4 }}{{ template "pod_health_summary" (dict "pod" .pod) }}
-            {{- end }}
-        {{- end }}
-        {{- $inferredBurstableMemLimit := $allocMem | subFloat64 $podsTotalMemRequestsGuaranteed }}
-        {{- $inferredBestEffortMemLimit := $inferredBurstableMemLimit | subFloat64 $podsTotalMemRequestsBurstable }}
-        {{- "Inferred memory limits" | nindent 2 }} for BestEffort: {{ $inferredBestEffortMemLimit | humanizeSI "B" }}, for Burstable: {{ $inferredBurstableMemLimit | humanizeSI "B" }}
-    {{- end }}
-    {{- /* Pod slots and pid slots are the same question -- how many more things can this node still
-           run -- so the kubelet's rlimit counters share the pods line instead of sitting in a
-           separate stats block. */ -}}
-    {{- if or $detailed $stats.rlimit }}
-        {{- "pods" | bold | nindent 2 }}:
-        {{- if $detailed }} usage/allocatable:{{ $podCount }}/{{ $allocPods | printf "%g" }}({{ percent ($podCount | float64) $allocPods | colorPercent "%.0f%%" }}){{ end }}
-        {{- with $stats.rlimit }}
-            {{- if $detailed }},{{ end }} processes {{ .curproc | float64 | humanizeSI "" }}/{{ .maxpid | float64 | humanizeSI "" }} ({{ percent (.curproc | float64) (.maxpid | float64) | colorPercent "%.0f%%" }}, rlimit)
-            {{- template "node_eviction_annotation" (dict "threshold" (index $evictionHard "pid.available") "current" (subFloat64 (.curproc | float64) (.maxpid | float64)) "total" (.maxpid | float64) "unit" "") }}
-        {{- end }}
-        {{- if and $detailed (eq ($podCount | float64) $allocPods) }}
-            {{- "Reached Max Pods Limit" | red | bold | nindent 4 }}: Number of Pods that can run on this Kubelet (`--max-pods`) limit is reached. No more pods will be scheduled to this Node even if there is free resource (E.g. cpu/mem).
-        {{- end }}
     {{- end }}
     {{- if $nodeUsage }}
         {{- "cpu" | bold | nindent 2 }}: usage/allocatable:{{ $nodeUsage.cpu | quantityToFloat64 | printf "%g" }}/
@@ -288,6 +264,14 @@
         {{- template "node_stats_resources" (dict "data" $stats "full" (not $nodeUsage)
             "memAvailThreshold" (index $evictionHard "memory.available") "memAvailTotal" $allocMem) }}
     {{- end }}
+    {{- /* How much memory a not-yet-scheduled BestEffort/Burstable pod could actually get: derived
+           from the same allocatable and per-QoS request totals the mem: line above is built from, so
+           it hangs under that line rather than standing on its own. */ -}}
+    {{- if $detailed }}
+        {{- $inferredBurstableMemLimit := $allocMem | subFloat64 $podsTotalMemRequestsGuaranteed }}
+        {{- $inferredBestEffortMemLimit := $inferredBurstableMemLimit | subFloat64 $podsTotalMemRequestsBurstable }}
+        {{- "Inferred memory limits" | nindent 4 }} for BestEffort: {{ $inferredBestEffortMemLimit | humanizeSI "B" }}, for Burstable: {{ $inferredBurstableMemLimit | humanizeSI "B" }}
+    {{- end }}
     {{- if and $nodeUsage $detailed (ge $podsTotalMemLimits $allocMem) }}
         {{- "Memory overcommitted" | red | bold | nindent 4 }}: Application may be OOMKilled. Expect BestEffort and then Burstable pods to have OOMKill due to overcommitted memory on the node.
     {{- end }}
@@ -312,6 +296,30 @@
     {{- end }}
     {{- with $podsStats }}
         {{- "pods" | bold | nindent 2 }}: {{ template "node_stats_resources" (dict "data" . "full" true "allocCpu" $allocCpu "allocMem" $allocMem) }}
+    {{- end }}
+    {{- /* Pod slots and pid slots are the same question -- how many more things can this node still
+           run -- so the kubelet's rlimit counters share the pods line instead of sitting in a
+           separate stats block. */ -}}
+    {{- if or $detailed $stats.rlimit }}
+        {{- "pods" | bold | nindent 2 }}:
+        {{- if $detailed }} usage/allocatable:{{ $podCount }}/{{ $allocPods | printf "%g" }}({{ percent ($podCount | float64) $allocPods | colorPercent "%.0f%%" }}){{ end }}
+        {{- with $stats.rlimit }}
+            {{- if $detailed }},{{ end }} processes {{ .curproc | float64 | humanizeSI "" }}/{{ .maxpid | float64 | humanizeSI "" }} ({{ percent (.curproc | float64) (.maxpid | float64) | colorPercent "%.0f%%" }}, rlimit)
+            {{- template "node_eviction_annotation" (dict "threshold" (index $evictionHard "pid.available") "current" (subFloat64 (.curproc | float64) (.maxpid | float64)) "total" (.maxpid | float64) "unit" "") }}
+        {{- end }}
+        {{- if and $detailed (eq ($podCount | float64) $allocPods) }}
+            {{- "Reached Max Pods Limit" | red | bold | nindent 4 }}: Number of Pods that can run on this Kubelet (`--max-pods`) limit is reached. No more pods will be scheduled to this Node even if there is free resource (E.g. cpu/mem).
+        {{- end }}
+    {{- end }}
+    {{- with $podsNeedingAttention }}
+        {{- /* Not all entries here are unhealthy right now: a Running/Ready pod with a past
+               restart is included too, since restart count is itself a signal worth a node
+               operator's attention (see #178), just a milder one than being stuck
+               Pending/NotReady. */ -}}
+        {{- "pods needing attention" | bold | nindent 2 }}:
+        {{- range . | sortMapListByKeysValue "key" }}
+            {{- "" | nindent 4 }}{{ template "pod_health_summary" (dict "pod" .pod) }}
+        {{- end }}
     {{- end }}
     {{- /* Only ever non-empty when the pod loop above ran and found per-pod metrics, so this needs
            no config/metrics guard of its own. */ -}}

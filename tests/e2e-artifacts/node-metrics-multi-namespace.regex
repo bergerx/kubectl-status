@@ -1,6 +1,6 @@
 \A
 Node/[a-z0-9.-]+, created \d+[a-z]+ ago
-  linux .+, kernel \S+, kubelet v[\d.]+, kube-proxy ?\S*, runtime \S+
+  linux .+, kernel \S+, kubelet v[\d.]+(?:, kube-proxy \S+)?, \S+
   images \d+
   Current: Resource is Ready
   kubelet ok(?:, \S+:\S+)*, container logs: retains up to [\d.]+[A-Za-z]+ per container \(\S+ x \d+ files\)
@@ -11,19 +11,19 @@ Node/[a-z0-9.-]+, created \d+[a-z]+ ago
   addresses: InternalIP=[\d.]+ Hostname=[a-z0-9.-]+
     network: rx/tx [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, rx/tx errors \d+/\d+
   allocatable/capacity: pods \d+/\d+, cpu [\d.]+/[\d.]+, mem [\d.]+/[\d.]+[A-Za-z]+, ephemeral-storage [\d.]+/[\d.]+[A-Za-z]+
-(?:  pods needing attention:
-(?:    \S+/\S+(?: -n \S+)?, .+
-)+)?  Inferred memory limits for BestEffort: [\d.]+[A-Za-z]+, for Burstable: [\d.]+[A-Za-z]+
-  pods: usage/allocatable:\d+/\d+\(\d+%\), processes \S+/\S+ \(\d+%, rlimit\)(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?
   cpu: usage/allocatable:[\d.]+/\d+\(\d+%\), allocated usage:[\d.]+\(\d+% of allocatable\)/\[req:[\d.]+\(\d+% of allocatable\), lim:[\d.]+\(\d+% of allocatable\)\](?:, reserved:\S+)?
   mem: usage/allocatable:[\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+\(\d+%\), allocated usage:[\d.]+[A-Za-z]+\(\d+% of allocatable\)/\[req:[\d.]+[A-Za-z]+\(\d+% of allocatable\), lim:[\d.]+[A-Za-z]+\(\d+% of allocatable\)\](?:, reserved:\S+)?
     rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?)?, pageFaults/major \S+/\S+
+    Inferred memory limits for BestEffort: [\d.]+[A-Za-z]+, for Burstable: [\d.]+[A-Za-z]+
 (?:  [a-z-]+: cpu [\d.]+core/sec \(\d+% of node\), mem [\d.]+[A-Za-z]+ \(\d+% of node\), workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+
 )*  ephemeral-storage: [\d.]+[A-Za-z]+(?:, reserved:\S+)?
 (?:    rootfs/imagefs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+ used of [\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))*; \S+/\S+ of \S+ inode, \S+ inode still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))*|    rootfs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?; \S+/\S+ inode, \S+ inode still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?(?:
     imagefs: [\d.]+[A-Za-z]+/[\d.]+[A-Za-z]+, [\d.]+[A-Za-z]+ still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?; \S+/\S+ inode, \S+ inode still free(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?)?)
   pods: cpu [\d.]+core/sec \(\d+% of node\), mem [\d.]+[A-Za-z]+ \(\d+% of node\), workingSet [\d.]+[A-Za-z]+, rss [\d.]+[A-Za-z]+(?:, available [\d.]+[A-Za-z]+)?, pageFaults/major \S+/\S+
-  pods by usage: \(most memory first\)
+  pods: usage/allocatable:\d+/\d+\(\d+%\), processes \S+/\S+ \(\d+%, rlimit\)(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?
+(?:  pods needing attention:
+(?:    \S+/\S+(?: -n \S+)?, .+
+)+)?  pods by usage: \(most memory first\)
     pod\s+cpu use/req/lim \(%allocatable\)\s+mem use/req/lim \(%allocatable\)
 (?:    \S+/\S+(?: -n \S+)?\s+[\d.]+\(\d+%\)\s+[\d.]+\(\d+%\)\s+[\d.]+\(\d+%\)\s+[\d.]+[A-Za-z]+\(\d+%\)\s+[\d.]+[A-Za-z]+\(\d+%\)\s+[\d.]+[A-Za-z]+\(\d+%\)
 )+\z
