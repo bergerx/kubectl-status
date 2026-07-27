@@ -48,15 +48,23 @@ type RenderConfig struct {
 	Now                func() time.Time
 	DurationRound      func(duration interface{}) string
 	StartedAfterClause func(createdKubeDate, startedKubeDate string) string
+	// StatefulSetRollbackTrapThreshold is how long a StatefulSet-owned Pod must have been unready
+	// before StatefulSetRollbackTrap treats it as evidence of the kubernetes/kubernetes#78709
+	// "stuck rollback" trap, rather than ordinary image-pull/startup latency. Deliberately
+	// compared against real wall-clock time (not Now, which tests freeze to a fixed date for
+	// deterministic rendering) and left overridable here so e2e tests don't need to wait out the
+	// real default.
+	StatefulSetRollbackTrapThreshold time.Duration
 }
 
 // NewRenderConfig builds a RenderConfig backed by v, with the real Now/DurationRound/
 // StartedAfterClause implementations.
 func NewRenderConfig(v *viper.Viper) *RenderConfig {
 	cfg := &RenderConfig{
-		Viper:         v,
-		Now:           time.Now,
-		DurationRound: DefaultDurationRound(),
+		Viper:                            v,
+		Now:                              time.Now,
+		DurationRound:                    DefaultDurationRound(),
+		StatefulSetRollbackTrapThreshold: 10 * time.Minute,
 	}
 	cfg.StartedAfterClause = defaultStartedAfterClause(cfg)
 	return cfg

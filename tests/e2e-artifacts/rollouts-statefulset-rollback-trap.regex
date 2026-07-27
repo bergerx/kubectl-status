@@ -1,0 +1,19 @@
+\A
+StatefulSet/e2e-rollouts-statefulset-rollback-trap -n e2e-rollouts-statefulset-rollback-trap, created 1m ago, gen:3
+  InProgress: Ready: 0/1
+    Reconciling: LessReady, Ready: 0/1
+  Selector: app=e2e-rollouts-statefulset-rollback-trap
+    Pod/e2e-rollouts-statefulset-rollback-trap-0, created 1m ago Pending, 0/1 ready ImagePullBackOff
+  Not matched by any Service
+  desired:1, existing:1, ready:0, current:1, available:0
+  Outage: StatefulSet has no Ready replicas\.
+  Ongoing rollout: Waiting for 1 pods to be ready\.\.\.
+  Stuck Rollout\?: Still replacing the first Pod, may indicate a stuck rollout\.
+  Rollout blocked: Pod/e2e-rollouts-statefulset-rollback-trap-0 has been Not Ready for 1m, still on revision e2e-rollouts-statefulset-rollback-trap-[a-z0-9]+ while the target is e2e-rollouts-statefulset-rollback-trap-[a-z0-9]+\.
+    If the Pod template was already fixed or reverted, the StatefulSet controller will keep waiting on this Pod -- delete it to recreate it on the target revision:
+      kubectl delete pod/e2e-rollouts-statefulset-rollback-trap-0 -n e2e-rollouts-statefulset-rollback-trap
+    Inspect the Pod first to confirm the original rollout failure\.
+  Rollouts: Use the `--include-rollout-diffs` flag to see the diff between each rollout!
+    1m ago used ControllerRevision/e2e-rollouts-statefulset-rollback-trap-[a-z0-9]+\.
+    1m ago used ControllerRevision/e2e-rollouts-statefulset-rollback-trap-[a-z0-9]+\.
+\z

@@ -36,6 +36,22 @@
         {{- if eq ($status.updatedCount | default 0) 0 }}
             {{- "Stuck Rollout?" | yellow | bold | nindent 2 }}: Still replacing the first Pod, may indicate a stuck rollout.
         {{- end }}
+        {{- /* kubernetes/kubernetes#78709: the StatefulSet controller only ever creates the next
+               replacement Pod once the current one it's waiting on is Ready. So if an updated Pod
+               never becomes Ready, the rollout is stuck on that specific Pod -- reverting
+               spec.template alone does not unstick it, since the controller just keeps waiting on
+               the same still-unready Pod. .StatefulSetRollbackTrap (template_functions_dynamic.go)
+               finds that Pod: it's within the partition's update range, its
+               controller-revision-hash doesn't match status.updateRevision (hasn't reached the
+               target), and it's been unready long enough to rule out ordinary startup/image-pull
+               latency. Returns nil when nothing matches. */ -}}
+        {{- with .StatefulSetRollbackTrap }}
+            {{- $readyCondition := .pod.StatusConditions | getMatchingItemInMapList (dict "type" "Ready") }}
+            {{- "Rollout blocked" | red | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" "Pod" "name" .pod.Name) }} has been {{ "Not Ready" | red }} for {{ $readyCondition.lastTransitionTime | default .pod.Metadata.creationTimestamp | colorAgo }}, still on revision {{ .podRevision | cyan }} while the target is {{ .targetRevision | cyan }}.
+            {{- "" | nindent 4 }}If the Pod template was already fixed or reverted, the StatefulSet controller will keep waiting on this Pod -- delete it to recreate it on the target revision:
+            {{- "" | nindent 6 }}{{ printf "kubectl delete pod/%s -n %s" .pod.Name .pod.Namespace | cyan }}
+            {{- "" | nindent 4 }}Inspect the Pod first to confirm the original rollout failure.
+        {{- end }}
         {{- if and (hasKey $status "currentRevision") (hasKey $status "updateRevision") }}
             {{- with .KubeGetUnifiedDiffString "ControllerRevision" .Namespace $status.currentRevision $status.updateRevision }}
                 {{- "Active Rollout Diff:" | nindent 2 }}

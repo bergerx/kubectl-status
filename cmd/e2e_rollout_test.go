@@ -4,6 +4,7 @@ import (
 	"context"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -137,6 +138,73 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 			cmdTest{
 				args:            []string{"statefulset/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/rollouts-single-blocked-statefulset.regex",
+			}.assert(t, nil, opts...)
+		})
+		t.Run("statefulset rollback recovery trap (#169)", func(t *testing.T) {
+			// Reproduces the kubernetes/kubernetes#78709 trap: an updated Pod that never becomes
+			// Ready blocks the rollout even after spec.template is reverted to the known-good
+			// image, because the StatefulSet controller keeps waiting on that specific Pod. Only
+			// deleting the Pod itself unsticks it.
+			opts := combineOpts(hackOpts, viperTestHackOpts())
+			ns := "e2e-rollouts-statefulset-rollback-trap"
+			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+			})
+			name := "e2e-rollouts-statefulset-rollback-trap"
+			one := int32(1)
+			goodImage := "nginx:1.27"
+			sts := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas:    &one,
+					ServiceName: name,
+					Selector:    &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
+						Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: goodImage}}},
+					},
+				},
+			}
+			_, err = clientset.AppsV1().StatefulSets(ns).Create(context.TODO(), sts, metav1.CreateOptions{})
+			require.NoError(t, err)
+			defer clientset.AppsV1().StatefulSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+			waitForPodReadyInNamespace(t, ns, name+"-0")
+
+			// Break the rollout: the replacement Pod for ordinal 0 gets stuck on the bad image.
+			live, err := clientset.AppsV1().StatefulSets(ns).Get(context.TODO(), name, metav1.GetOptions{})
+			require.NoError(t, err)
+			live.Spec.Template.Spec.Containers[0].Image = badImage
+			_, err = clientset.AppsV1().StatefulSets(ns).Update(context.TODO(), live, metav1.UpdateOptions{})
+			require.NoError(t, err)
+			waitForContainerWaitingReasonInNamespace(t, "pod/"+name+"-0", "app", "ImagePullBackOff", ns)
+			live, err = clientset.AppsV1().StatefulSets(ns).Get(context.TODO(), name, metav1.GetOptions{})
+			require.NoError(t, err)
+			stuckRevision := live.Status.UpdateRevision
+
+			// Revert the template to the known-good image WITHOUT deleting the stuck Pod -- the
+			// trap: the Pod is still there, still unready, still on the now-orphaned bad revision.
+			live.Spec.Template.Spec.Containers[0].Image = goodImage
+			_, err = clientset.AppsV1().StatefulSets(ns).Update(context.TODO(), live, metav1.UpdateOptions{})
+			require.NoError(t, err)
+			waitForStatefulSetUpdateRevisionChange(t, ns, name, stuckRevision)
+
+			trapOpts := combineOpts(opts, []func(*plugin.RenderConfig){
+				func(cfg *plugin.RenderConfig) { cfg.StatefulSetRollbackTrapThreshold = 2 * time.Second },
+			})
+			cmdTest{
+				args:            []string{"statefulset/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/rollouts-statefulset-rollback-trap.regex",
+			}.assert(t, nil, trapOpts...)
+
+			// Deleting only the blocking Pod recreates it on the target revision and recovers.
+			require.NoError(t, clientset.CoreV1().Pods(ns).Delete(context.TODO(), name+"-0", metav1.DeleteOptions{}))
+			waitForPodReadyInNamespace(t, ns, name+"-0")
+			cmdTest{
+				args:            []string{"statefulset/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/rollouts-statefulset-rollback-trap-recovered.regex",
 			}.assert(t, nil, opts...)
 		})
 		t.Run("daemonset", func(t *testing.T) {

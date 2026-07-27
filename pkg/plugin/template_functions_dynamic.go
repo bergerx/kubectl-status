@@ -5,6 +5,7 @@ package plugin
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -765,4 +766,95 @@ func (r RenderableObject) RolloutStatus(obj RenderableObject) map[string]interfa
 		"message": strings.TrimSpace(message),
 		"error":   strings.TrimSpace(errString),
 	}
+}
+
+// StatefulSetRollbackTrap detects the kubernetes/kubernetes#78709 StatefulSet RollingUpdate
+// recovery trap: the controller only ever creates the next replacement Pod once the current one
+// it's waiting on is Ready, so a Pod that was created for an update and never became Ready blocks
+// the rollout even after spec.template is fixed or reverted -- that specific Pod has to be
+// deleted so it gets recreated on the (possibly reverted) target revision.
+//
+// A Pod qualifies when it's within the partition's update range, its controller-revision-hash
+// doesn't match status.updateRevision (so it hasn't reached the target -- this deliberately isn't
+// compared against status.currentRevision, which collapses back to equal updateRevision once a
+// bad template is reverted, even though the already-created stuck Pod still carries the orphaned
+// bad revision), and it has been unready for at least Config's StatefulSetRollbackTrapThreshold.
+//
+// Returns nil when the StatefulSet isn't using RollingUpdate, is missing revision status, or no
+// owned Pod matches. Callers are expected to already be inside a "rollout isn't done" gate (e.g.
+// StatefulSet.tmpl checks RolloutStatus first), but this is also correct standalone.
+func (r RenderableObject) StatefulSetRollbackTrap() map[string]interface{} {
+	if r.LiveQueriesDisabled() {
+		return nil
+	}
+	if strategyType, found, _ := unstructured.NestedString(r.Object, "spec", "updateStrategy", "type"); found && strategyType != "RollingUpdate" {
+		return nil
+	}
+	updateRevision, found, _ := unstructured.NestedString(r.Object, "status", "updateRevision")
+	if !found || updateRevision == "" {
+		return nil
+	}
+	partition, _, _ := unstructured.NestedInt64(r.Object, "spec", "updateStrategy", "rollingUpdate", "partition")
+	matchLabels, _, _ := unstructured.NestedMap(r.Object, "spec", "selector", "matchLabels")
+	namePrefix := r.Name() + "-"
+	threshold := r.engine.cfg.StatefulSetRollbackTrapThreshold
+
+	var blocker RenderableObject
+	blockerOrdinal := -1
+	for _, pod := range r.KubeGetByLabelsMap(r.Namespace(), "pods", matchLabels) {
+		ordinal, ok := statefulSetPodOrdinal(namePrefix, pod.Name())
+		if !ok || int64(ordinal) < partition || ordinal <= blockerOrdinal {
+			continue
+		}
+		podRevision, _ := pod.Labels()["controller-revision-hash"].(string)
+		if podRevision == "" || podRevision == updateRevision {
+			continue
+		}
+		readyCondition := getMatchingItemInMapList(map[string]interface{}{"type": "Ready"}, pod.StatusConditions())
+		if isStatusConditionHealthy(readyCondition) {
+			continue
+		}
+		unreadySince := statefulSetPodUnreadySince(pod, readyCondition)
+		if unreadySince.IsZero() || time.Since(unreadySince) < threshold {
+			continue
+		}
+		blocker = pod
+		blockerOrdinal = ordinal
+	}
+	if blockerOrdinal < 0 {
+		return nil
+	}
+	blockerRevision, _ := blocker.Labels()["controller-revision-hash"].(string)
+	return map[string]interface{}{
+		"pod":            blocker,
+		"podRevision":    blockerRevision,
+		"targetRevision": updateRevision,
+	}
+}
+
+// statefulSetPodOrdinal extracts the ordinal suffix from a StatefulSet Pod name (e.g. "web-2" with
+// namePrefix "web-" -> 2, true). Returns false for anything that doesn't match, rather than
+// erroring, since template callers must never fail to render on an unexpected Pod name.
+func statefulSetPodOrdinal(namePrefix, podName string) (int, bool) {
+	if !strings.HasPrefix(podName, namePrefix) {
+		return 0, false
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(podName, namePrefix))
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// statefulSetPodUnreadySince returns when pod became unready: the Ready condition's
+// lastTransitionTime when present, otherwise the Pod's creation time (covers a Pod stuck before
+// any conditions were ever populated, e.g. unschedulable). Returns the zero Time when neither is
+// available.
+func statefulSetPodUnreadySince(pod RenderableObject, readyCondition map[string]interface{}) time.Time {
+	if lastTransitionTime, ok := readyCondition["lastTransitionTime"].(string); ok && lastTransitionTime != "" {
+		if t, err := time.Parse(time.RFC3339, lastTransitionTime); err == nil {
+			return t
+		}
+	}
+	return pod.GetCreationTimestamp().Time
 }
