@@ -1,6 +1,6 @@
 \A
 Node/[a-z0-9-]+, created 1m ago
-  linux [^\n]+ \(amd64\), kernel [^\n,]+, kubelet v[0-9][^\n,]*, kube-proxy , runtime [a-z]+://[0-9][^\n,]*
+  linux [^\n]+ \(amd64\), kernel [^\n,]+, kubelet v[0-9][^\n,]*(?:, kube-proxy v[0-9][^\n,]*)?, [a-z]+://[0-9][^\n,]*
   images [0-9]+
   Current: Resource is Ready
   MemoryPressure:False KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m
