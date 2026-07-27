@@ -1,6 +1,9 @@
 package plugin
 
 import (
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -8,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
+	"k8s.io/cli-runtime/pkg/resource"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest/fake"
@@ -116,17 +120,32 @@ func TestConditionsSummaryTemplate(t *testing.T) {
 			conditions: []interface{}{map[string]interface{}{"type": "Ready", "status": "True"}},
 			want:       "Ready",
 		}, {
-			name:       "condition with neither type nor status is silently skipped",
-			conditions: []interface{}{map[string]interface{}{"message": "no type here"}},
+			name:       "condition with no type key at all is silently skipped",
+			conditions: []interface{}{map[string]interface{}{"status": "True"}},
 			notWant:    "empty condition type",
 		}, {
-			name:       "typeless condition with a status still warns",
-			conditions: []interface{}{map[string]interface{}{"status": "True"}},
+			// Nodes are seen carrying such a placeholder entry, see #768. An explicit empty type
+			// is skipped just like a missing one -- both are equally content-free.
+			name: "typeless condition with only a status and heartbeats is silently skipped",
+			conditions: []interface{}{map[string]interface{}{
+				"type":               "",
+				"status":             "False",
+				"lastHeartbeatTime":  "2026-07-27T20:56:37Z",
+				"lastTransitionTime": "2026-07-23T10:34:38Z",
+			}},
+			notWant: "empty condition type",
+		}, {
+			name:       "typeless condition with a message still warns",
+			conditions: []interface{}{map[string]interface{}{"status": "True", "message": "no type here"}},
+			want:       "empty condition type",
+		}, {
+			name:       "typeless condition with a reason still warns",
+			conditions: []interface{}{map[string]interface{}{"status": "True", "reason": "NoTypeHere"}},
 			want:       "empty condition type",
 		}, {
 			name: "skipping one condition keeps the others",
 			conditions: []interface{}{
-				map[string]interface{}{"message": "no type here"},
+				map[string]interface{}{"status": "False", "type": ""},
 				map[string]interface{}{"type": "Ready", "status": "True"},
 			},
 			want:    "Ready",
@@ -144,6 +163,89 @@ func TestConditionsSummaryTemplate(t *testing.T) {
 			}
 			if tt.notWant != "" && strings.Contains(got, tt.notWant) {
 				t.Errorf("conditions_summary got = %q, should not contain %q", got, tt.notWant)
+			}
+		})
+	}
+}
+
+// TestPodNodeProblemFlags covers #768 on the Pod side: a Node carrying a content-free placeholder
+// condition (empty type, only a status and heartbeats) must not make every Pod scheduled on it
+// look like it's sitting on a broken Node. The unhealthy case is kept alongside as a control, so
+// the skip case can't pass just because the Node lookup silently returned nothing.
+func TestPodNodeProblemFlags(t *testing.T) {
+	tests := []struct {
+		name       string
+		spec       string
+		conditions string
+		want       string
+	}{
+		{
+			name:       "typeless placeholder condition is not a node problem",
+			conditions: `{"type":"Ready","status":"True"},{"type":"","status":"False","lastHeartbeatTime":"2026-07-27T20:56:37Z","lastTransitionTime":"2026-07-23T10:34:38Z"}`,
+			want:       "",
+		}, {
+			name:       "genuinely unhealthy condition is still a node problem",
+			conditions: `{"type":"Ready","status":"False"}`,
+			want:       "node Ready:False",
+		}, {
+			// Everything read off the Node shares one "node " prefix, joined with "&", so it
+			// reads as one finding about one Node rather than several unrelated ones. A
+			// placeholder condition in the middle must not leave a stray "&" behind either.
+			name:       "everything the node itself reports is grouped behind one node prefix",
+			spec:       `"unschedulable":true`,
+			conditions: `{"type":"Ready","status":"False"},{"type":"","status":"False"},{"type":"MemoryPressure","status":"True"}`,
+			want:       "node cordoned & Ready:False & MemoryPressure:True",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := fmt.Sprintf(`{"apiVersion":"v1","kind":"Node","metadata":{"name":"node-1"},"spec":{%s},"status":{"conditions":[%s]}}`, tt.spec, tt.conditions)
+			f := cmdtesting.NewTestFactory().WithNamespace("test")
+			f.UnstructuredClient = &fake.RESTClient{
+				NegotiatedSerializer: resource.UnstructuredPlusDefaultContentConfig().NegotiatedSerializer,
+				Client: fake.CreateHTTPClient(func(*http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header:     cmdtesting.DefaultHeader(),
+						Body:       io.NopCloser(strings.NewReader(node)),
+					}, nil
+				}),
+			}
+			f.Client = f.UnstructuredClient
+			t.Cleanup(func() { f.Cleanup() })
+			cfg := NewRenderConfig(viper.New())
+			tmpl, _ := getTemplate(cfg)
+			repo, err := input.NewResourceRepo(f, cfg.Viper)
+			if err != nil {
+				t.Fatal(err)
+			}
+			e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+			e.Template = *tmpl
+			pod := newRenderableObject(map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "Pod",
+				"metadata":   map[string]interface{}{"name": "pod-1", "namespace": "test"},
+				"spec":       map[string]interface{}{"nodeName": "node-1"},
+			}, e, repo)
+			got, err := pod.renderTemplate("pod_node_problem_flags", pod)
+			if err != nil {
+				t.Fatalf("renderTemplate() error = %v", err)
+			}
+			if strings.TrimSpace(got) != tt.want {
+				t.Errorf("pod_node_problem_flags got = %q, want %q", got, tt.want)
+			}
+			// pod_health_summary is where those flags actually reach a reader (it renders one
+			// line per Pod under a Job/ReplicaSet/PDB/...), so it's asserted on directly rather
+			// than trusted to pass the fragment through unchanged.
+			summary, err := pod.renderTemplate("pod_health_summary", map[string]interface{}{"pod": pod})
+			if err != nil {
+				t.Fatalf("renderTemplate() error = %v", err)
+			}
+			if tt.want == "" && strings.Contains(summary, "node ") {
+				t.Errorf("pod_health_summary got = %q, want no node problems reported", summary)
+			}
+			if tt.want != "" && !strings.Contains(summary, tt.want) {
+				t.Errorf("pod_health_summary got = %q, should contain %q", summary, tt.want)
 			}
 		})
 	}
