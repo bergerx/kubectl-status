@@ -2,23 +2,23 @@
 Gateway/eg -n default, created 1m ago, gen:1
   Current: Resource is current
   Class: eg
-  Accepted Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
+  Accepted:True Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
   Listeners:
     missing-secret: port=443/HTTPS, namespaces=Same, routes=0
       TLS mode:Terminate, cert:Secret/does-not-exist
-      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+      ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
     wrong-type: port=444/HTTPS, namespaces=Same, routes=0
       TLS mode:Terminate, cert:Secret/opaque-secret
-      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+      ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
     missing-keys: port=445/HTTPS, namespaces=Same, routes=0
       TLS mode:Terminate, cert:Secret/incomplete-tls
-      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+      ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
     self-signed: port=446/HTTPS, namespaces=Same, routes=1
       TLS mode:Terminate, cert:Secret/selfsigned-tls
-      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+      ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
     hostname-mismatch: port=447/HTTPS, host=wrong-host.example.com, namespaces=Same, routes=1
       TLS mode:Terminate, cert:Secret/gateway-tls
-      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+      ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
 
 Secret/opaque-secret -n default, created 1m ago
   Keys: foo

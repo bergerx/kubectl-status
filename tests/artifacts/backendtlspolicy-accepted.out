@@ -8,4 +8,4 @@ BackendTLSPolicy/tls-backend-policy -n default, created 1m ago, gen:1
       ConfigMap/backend-ca-cert
   Status:
     Gateway/multi-proto-gw (gateway.envoyproxy.io/gatewayclass-controller)
-      Accepted Accepted, Policy has been accepted. for 1m
+      Accepted:True Accepted, Policy has been accepted. for 1m

@@ -6,4 +6,4 @@ Certificate/kubectl-status-server -n default, created 1m ago, gen:1
   Usages: server auth, client auth
   Requested lifetime: 8760h, renew 720h before expiry
   Issued 2026-06-26 (1m ago), expires 2027-06-26, auto-renews 2027-05-27 · rev 1
-  Ready Ready, Certificate is up to date and has not expired for 1m
+  Ready:True Ready, Certificate is up to date and has not expired for 1m

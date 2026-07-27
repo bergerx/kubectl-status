@@ -5,8 +5,8 @@ Deployment/e2e-rollouts-three-revisions -n e2e-rollouts-three-revisions, created
   Selector: app=e2e-rollouts-three-revisions
     Pod/e2e-rollouts-three-revisions-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready
   Not matched by any Service
-  Available MinimumReplicasAvailable, Deployment has minimum availability\. for 1m
-  Progressing NewReplicaSetAvailable, ReplicaSet "e2e-rollouts-three-revisions-[a-z0-9]+" has successfully progressed\. for 1m
+  Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for 1m
+  Progressing:True NewReplicaSetAvailable, ReplicaSet "e2e-rollouts-three-revisions-[a-z0-9]+" has successfully progressed\. for 1m
   Rollouts:
     1m ago, managed by ReplicaSet/e2e-rollouts-three-revisions-[a-z0-9]+
     1m ago, managed by ReplicaSet/e2e-rollouts-three-revisions-[a-z0-9]+

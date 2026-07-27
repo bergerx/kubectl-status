@@ -8,4 +8,4 @@ NodePool/static-pool, created 1m ago, gen:1
   Replicas: 0
   Resources: (current/limit)
     nodes: n/a/5
-  Ready NodeClassNotReady, EC2NodeClass default is not ready for 1m
+  Ready:False NodeClassNotReady, EC2NodeClass default is not ready for 1m

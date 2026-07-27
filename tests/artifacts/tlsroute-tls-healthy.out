@@ -2,11 +2,11 @@
 Gateway/tls-gw -n default, created 1m ago, gen:1
   Current: Resource is current
   Class: eg
-  Accepted Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
+  Accepted:True Accepted, The Gateway has been scheduled by Envoy Gateway for 1m
   Listeners:
     tls: port=443/TLS, accepts=TLSRoute, routes=1
       TLS mode:Terminate, cert:Secret/gateway-tls
-      ResolvedRefs ResolvedRefs, Listener references have been resolved for 1m
+      ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
 
 TLSRoute/tls-route -n default, created 1m ago, gen:1
   Current: Resource is current
@@ -17,7 +17,7 @@ TLSRoute/tls-route -n default, created 1m ago, gen:1
     → Service/tls-backend:443
   Status:
     Gateway/tls-gw [tls] (gateway.envoyproxy.io/gatewayclass-controller)
-      Accepted Accepted, Route was valid for 1m
+      Accepted:True Accepted, Route was valid for 1m
 
 Secret/gateway-tls -n default, created 1m ago
   Certificate for CN=example.com · issued by CN=Test CA

@@ -13,8 +13,8 @@ XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
           Failed: Pod could not be scheduled
             Stalled: PodUnschedulable, Pod could not be scheduled
           Managed by probe-a-blocked application
-          Not PodScheduled -> Not Initialized -> Not ContainersReady -> Not Ready
-            PodScheduled Unschedulable, [^\n]*node\(s\) didn't match Pod's node affinity/selector[^\n]* for 1m
+          PodScheduled:False -> Initialized:Unknown -> ContainersReady:Unknown -> Ready:Unknown
+            PodScheduled:False Unschedulable, [^\n]*node\(s\) didn't match Pod's node affinity/selector[^\n]* for 1m
           node selector: kubectl-status\.io/e2e-never-schedules=true
           Volumes: kube-api-access-[a-z0-9]+ \(Projected\)
           Owners:
@@ -29,8 +29,8 @@ XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
               Owners:
                 Deployment/probe-a-blocked\[e2e-crossplane-xr\] is already printed
       Not matched by any Service
-      Available MinimumReplicasUnavailable, Deployment does not have minimum availability\. for 1m
-      Progressing ReplicaSetUpdated, ReplicaSet "probe-a-blocked-[a-z0-9]+" is progressing\. for 1m
+      Available:False MinimumReplicasUnavailable, Deployment does not have minimum availability\. for 1m
+      Progressing:True ReplicaSetUpdated, ReplicaSet "probe-a-blocked-[a-z0-9]+" is progressing\. for 1m
       Ongoing Rollout: Waiting for deployment "probe-a-blocked" rollout to finish: 0 of 1 updated replicas are available\.\.\.
       Outage: Deployment has no Ready replicas\.
       Rollouts:
@@ -51,14 +51,14 @@ XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
                   Composed resources:
                     Deployment/probe-a-blocked\[e2e-crossplane-xr\] is already printed
                     ConfigMap/probe-a-config\[e2e-crossplane-xr\] is already printed
-                  Synced ReconcileSuccess for 1m
-                  Ready Creating, Unready resources: blocked-workload, config for 1m
-                  Responsive WatchCircuitClosed for 1m
-          Synced ReconcileSuccess for 1m
-          Ready Creating, Unready resources: blocked-workload, config for 1m
-          Responsive WatchCircuitClosed for 1m
+                  Synced:True ReconcileSuccess for 1m
+                  Ready:False Creating, Unready resources: blocked-workload, config for 1m
+                  Responsive:True WatchCircuitClosed for 1m
+          Synced:True ReconcileSuccess for 1m
+          Ready:False Creating, Unready resources: blocked-workload, config for 1m
+          Responsive:True WatchCircuitClosed for 1m
     ConfigMap/probe-a-config\[e2e-crossplane-xr\] is already printed
-  Synced ReconcileSuccess for 1m
-  Ready Creating, Unready resources: blocked-workload, config for 1m
-  Responsive WatchCircuitClosed for 1m
+  Synced:True ReconcileSuccess for 1m
+  Ready:False Creating, Unready resources: blocked-workload, config for 1m
+  Responsive:True WatchCircuitClosed for 1m
 \z

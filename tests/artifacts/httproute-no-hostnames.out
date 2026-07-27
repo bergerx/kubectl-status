@@ -4,8 +4,8 @@ HTTPRoute/myapp-prom-prometheus-prometheus -n prom, created 1m ago by HTTPRoute/
   Parents:
     Gateway/myapp-envoy-gateway -n infra-envoy-gateway
       controller: gateway.envoyproxy.io/gatewayclass-controller
-      Accepted Accepted, Route is accepted for 1m
-      ResolvedRefs ResolvedRefs, Resolved all the Object references for the Route for 1m
+      Accepted:True Accepted, Route is accepted for 1m
+      ResolvedRefs:True ResolvedRefs, Resolved all the Object references for the Route for 1m
   Rules:
     PathPrefix /
       header:Host=^prom\.app\..*

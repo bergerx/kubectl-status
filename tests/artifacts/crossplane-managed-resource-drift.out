@@ -11,5 +11,5 @@ VPC/checkout-network, created 1m ago, gen:2
     -  environment: production
     +  environment: staging
   Management policies: * (full control)
-  Synced ReconcileSuccess for 1m
-  Ready Available for 1m
+  Synced:True ReconcileSuccess for 1m
+  Ready:True Available for 1m

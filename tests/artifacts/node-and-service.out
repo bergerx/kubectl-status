@@ -3,10 +3,10 @@ Node/minikube, created 1m ago
   linux Ubuntu 22.04.4 LTS (amd64), kernel 6.6.41-1-MANJARO, kubelet v1.30.0, kube-proxy v1.30.0, runtime docker://26.1.1
   images 8
   Current: Resource is Ready
-  MemoryPressure KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m
-  DiskPressure KubeletHasNoDiskPressure, kubelet has no disk pressure for 1m
-  PIDPressure KubeletHasSufficientPID, kubelet has sufficient PID available for 1m
-  Ready KubeletReady, kubelet is posting ready status for 1m
+  MemoryPressure:False KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m
+  DiskPressure:False KubeletHasNoDiskPressure, kubelet has no disk pressure for 1m
+  PIDPressure:False KubeletHasSufficientPID, kubelet has sufficient PID available for 1m
+  Ready:True KubeletReady, kubelet is posting ready status for 1m
   addresses: InternalIP=192.168.49.2 Hostname=minikube
   allocatable/capacity: pods 110/110, cpu 16/16, mem 33.3/33.3GB, ephemeral-storage 997.3/997.3GB
 

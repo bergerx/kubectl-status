@@ -5,6 +5,6 @@ ListenerSet/e2e-listenerset -n e2e-listenerset, created 1m ago, gen:1
     Gateway/e2e-lset-gw
   Listeners:
     extra-http: port=8081/HTTP, namespaces=Same
-  Accepted Pending, Waiting for controller for 1m
-  Programmed Pending, Waiting for controller for 1m
+  Accepted:Unknown Pending, Waiting for controller for 1m
+  Programmed:Unknown Pending, Waiting for controller for 1m
 \z
