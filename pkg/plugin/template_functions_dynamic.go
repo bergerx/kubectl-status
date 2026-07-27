@@ -5,6 +5,7 @@ package plugin
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -765,4 +766,159 @@ func (r RenderableObject) RolloutStatus(obj RenderableObject) map[string]interfa
 		"message": strings.TrimSpace(message),
 		"error":   strings.TrimSpace(errString),
 	}
+}
+
+// StatefulSetRollbackTrap detects the kubernetes/kubernetes#67250 StatefulSet RollingUpdate
+// recovery trap, documented upstream as "Forced rollback"
+// (https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#forced-rollback): with
+// the default OrderedReady Pod management the controller stops its sync at the first Pod that
+// isn't Running and Ready and never reaches the phase where it would delete Pods that are off the
+// update revision. So a Pod created for an update that never becomes Ready blocks the rollout even
+// after spec.template is fixed or reverted -- that specific Pod has to be deleted by hand so it
+// gets recreated on the (possibly reverted) target revision.
+//
+// Closed upstream as working-as-intended: auto-deleting a Pod that may already have run containers
+// isn't safe for workloads that own data, so RollingUpdate will never self-heal. The escape hatch
+// is instead the opt-in `Recreate` update strategy (KEP-3541, alpha in v1.37 behind the
+// StatefulSetRecreateStrategy feature gate), which is excluded here along with OnDelete.
+//
+// Only OrderedReady is affected: with `podManagementPolicy: Parallel` the sync isn't monotonic, so
+// the controller reaches its update phase and deletes the stuck off-revision Pod itself.
+//
+// Returns nil unless the StatefulSet is an OrderedReady RollingUpdate one with revision status,
+// and the Pod its sync is blocked on is one this trap explains -- see
+// statefulSetRollbackTrapBlocker. Callers are expected to already be inside a "rollout isn't done"
+// gate (e.g. StatefulSet.tmpl checks RolloutStatus first), but this is also correct standalone.
+func (r RenderableObject) StatefulSetRollbackTrap() map[string]interface{} {
+	if r.LiveQueriesDisabled() {
+		return nil
+	}
+	if strategyType, found, _ := unstructured.NestedString(r.Object, "spec", "updateStrategy", "type"); found && strategyType != "RollingUpdate" {
+		return nil
+	}
+	if policy, found, _ := unstructured.NestedString(r.Object, "spec", "podManagementPolicy"); found && policy != "OrderedReady" {
+		return nil
+	}
+	updateRevision, found, _ := unstructured.NestedString(r.Object, "status", "updateRevision")
+	if !found || updateRevision == "" {
+		return nil
+	}
+	replicas, found, _ := unstructured.NestedInt64(r.Object, "spec", "replicas")
+	if !found {
+		replicas = 1
+	}
+	startOrdinal, _, _ := unstructured.NestedInt64(r.Object, "spec", "ordinals", "start")
+	partition, _, _ := unstructured.NestedInt64(r.Object, "spec", "updateStrategy", "rollingUpdate", "partition")
+	matchLabels, _, _ := unstructured.NestedMap(r.Object, "spec", "selector", "matchLabels")
+
+	blocker, blockerRevision, found := statefulSetRollbackTrapBlocker(
+		r.KubeGetByLabelsMap(r.Namespace(), "pods", matchLabels),
+		statefulSetRollbackTrapParams{
+			namePrefix:     r.Name() + "-",
+			startOrdinal:   startOrdinal,
+			replicas:       replicas,
+			partition:      partition,
+			updateRevision: updateRevision,
+			threshold:      r.engine.cfg.StatefulSetRollbackTrapThreshold,
+			now:            time.Now(),
+		})
+	if !found {
+		return nil
+	}
+	return map[string]interface{}{
+		"pod":            blocker,
+		"podRevision":    blockerRevision,
+		"targetRevision": updateRevision,
+	}
+}
+
+// statefulSetRollbackTrapParams carries the StatefulSet-level inputs of the trap detection, so the
+// decision itself stays a pure function over already-fetched Pods.
+type statefulSetRollbackTrapParams struct {
+	namePrefix     string
+	startOrdinal   int64
+	replicas       int64
+	partition      int64
+	updateRevision string
+	threshold      time.Duration
+	now            time.Time
+}
+
+// statefulSetRollbackTrapBlocker returns the Pod whose unreadiness is trapping the rollout, and its
+// revision. It first picks the Pod the controller's OrderedReady sync is stopped at -- the
+// lowest-ordinal Pod in the replica range that isn't Ready -- because that's the only Pod deleting
+// which can make the rollout progress: any higher-ordinal one gets recreated, but the sync still
+// stops at the lower one.
+//
+// That Pod is only reported when every signal says the trap (rather than something else) explains
+// it: it isn't already terminating (the controller is then just waiting out graceful deletion, and
+// deleting it again changes nothing), it's within the partition's update range (a Pod below the
+// partition gets recreated at the current revision, so deleting it doesn't move the rollout), its
+// controller-revision-hash doesn't match status.updateRevision (deliberately not compared against
+// status.currentRevision, which collapses back to equal updateRevision once a bad template is
+// reverted, even though the already-created stuck Pod still carries the orphaned bad revision), and
+// it has been unready long enough to rule out ordinary startup/image-pull latency.
+func statefulSetRollbackTrapBlocker(pods []RenderableObject, params statefulSetRollbackTrapParams) (RenderableObject, string, bool) {
+	var blocker RenderableObject
+	blockerOrdinal := int64(-1)
+	var blockerReadyCondition map[string]interface{}
+	for _, pod := range pods {
+		parsedOrdinal, ok := statefulSetPodOrdinal(params.namePrefix, pod.Name())
+		ordinal := int64(parsedOrdinal)
+		if !ok || ordinal < params.startOrdinal || ordinal >= params.startOrdinal+params.replicas {
+			continue
+		}
+		if blockerOrdinal >= 0 && ordinal > blockerOrdinal {
+			continue
+		}
+		readyCondition := getMatchingItemInMapList(map[string]interface{}{"type": "Ready"}, pod.StatusConditions())
+		if isStatusConditionHealthy(readyCondition) {
+			continue
+		}
+		blocker = pod
+		blockerOrdinal = ordinal
+		blockerReadyCondition = readyCondition
+	}
+	if blockerOrdinal < 0 || blockerOrdinal < params.partition {
+		return RenderableObject{}, "", false
+	}
+	if _, terminating, _ := unstructured.NestedString(blocker.Object, "metadata", "deletionTimestamp"); terminating {
+		return RenderableObject{}, "", false
+	}
+	blockerRevision, _ := blocker.Labels()["controller-revision-hash"].(string)
+	if blockerRevision == "" || blockerRevision == params.updateRevision {
+		return RenderableObject{}, "", false
+	}
+	unreadySince := statefulSetPodUnreadySince(blocker, blockerReadyCondition)
+	if unreadySince.IsZero() || params.now.Sub(unreadySince) < params.threshold {
+		return RenderableObject{}, "", false
+	}
+	return blocker, blockerRevision, true
+}
+
+// statefulSetPodOrdinal extracts the ordinal suffix from a StatefulSet Pod name (e.g. "web-2" with
+// namePrefix "web-" -> 2, true). Returns false for anything that doesn't match, rather than
+// erroring, since template callers must never fail to render on an unexpected Pod name.
+func statefulSetPodOrdinal(namePrefix, podName string) (int, bool) {
+	if !strings.HasPrefix(podName, namePrefix) {
+		return 0, false
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(podName, namePrefix))
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// statefulSetPodUnreadySince returns when pod became unready: the Ready condition's
+// lastTransitionTime when present, otherwise the Pod's creation time (covers a Pod stuck before
+// any conditions were ever populated, e.g. unschedulable). Returns the zero Time when neither is
+// available.
+func statefulSetPodUnreadySince(pod RenderableObject, readyCondition map[string]interface{}) time.Time {
+	if lastTransitionTime, ok := readyCondition["lastTransitionTime"].(string); ok && lastTransitionTime != "" {
+		if t, err := time.Parse(time.RFC3339, lastTransitionTime); err == nil {
+			return t
+		}
+	}
+	return pod.GetCreationTimestamp().Time
 }

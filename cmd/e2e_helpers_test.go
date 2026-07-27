@@ -390,6 +390,47 @@ func waitForPodByLabel(t *testing.T, namespace, labelSelector string) string {
 	return ""
 }
 
+// waitForStatefulSetUpdateRevisionChange polls until the StatefulSet's status.updateRevision no
+// longer equals staleRevision -- used after reverting spec.template, so the assertion that
+// follows reads the controller's reconciled state rather than racing a stale one.
+func waitForStatefulSetUpdateRevisionChange(t *testing.T, namespace, name, staleRevision string) {
+	t.Helper()
+	deadline := time.Now().Add(4 * time.Minute)
+	for time.Now().Before(deadline) {
+		cmd := exec.Command("kubectl", "get", "statefulset", name, "-n", namespace,
+			"-o", "jsonpath={.status.updateRevision}")
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			rev := strings.TrimSpace(string(output))
+			if rev != "" && rev != staleRevision {
+				t.Logf("statefulset %s/%s updateRevision changed from %s to %s", namespace, name, staleRevision, rev)
+				return
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for statefulset %s/%s updateRevision to change from %s", namespace, name, staleRevision)
+}
+
+// waitForPodReadyInNamespace polls a Pod's Ready condition instead of using `kubectl wait`, which
+// errors immediately if the Pod doesn't exist yet -- needed right after deleting a Pod, before the
+// owning controller has recreated it.
+func waitForPodReadyInNamespace(t *testing.T, namespace, podName string) {
+	t.Helper()
+	deadline := time.Now().Add(4 * time.Minute)
+	for time.Now().Before(deadline) {
+		cmd := exec.Command("kubectl", "get", "pod", podName, "-n", namespace,
+			"-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`)
+		output, err := cmd.CombinedOutput()
+		if err == nil && strings.TrimSpace(string(output)) == "True" {
+			t.Logf("pod %s/%s is Ready", namespace, podName)
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Fatalf("timed out waiting for pod %s/%s to become Ready", namespace, podName)
+}
+
 // waitForContainerWaitingReasonInNamespace targets a namespace explicitly via `kubectl -n`
 // instead of the kubeconfig's default; pass "" to use the kubeconfig's default namespace.
 func waitForContainerWaitingReasonInNamespace(t *testing.T, resource, containerName, reason, namespace string) {

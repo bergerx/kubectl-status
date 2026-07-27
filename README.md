@@ -69,7 +69,8 @@ re-shuffling of `kubectl get`/`describe` fields. Every template answers a questi
 * colors carry meaning, not decoration: white-ish means everything is ok, red-ish strongly indicates something's wrong
   — and it's never color-only, the words say it too,
 * explicit messages for not-so-easy-to-understand status (e.g., ongoing rollout),
-* goes further where it's warranted (e.g., shows a spec diff for ongoing rollouts),
+* goes further where it's warranted (e.g., shows a spec diff for ongoing rollouts, or names the
+  specific Pod blocking a stuck StatefulSet rollback and the command to unstick it),
 * compact, non-extensive output to keep it sharp,
 * no external dependencies, doesn't shell out, and so doesn't depend on client/workstation configuration,
 * optionally show absolute timestamps with `--absolute-time` for building timelines

@@ -36,6 +36,25 @@
         {{- if eq ($status.updatedCount | default 0) 0 }}
             {{- "Stuck Rollout?" | yellow | bold | nindent 2 }}: Still replacing the first Pod, may indicate a stuck rollout.
         {{- end }}
+        {{- /* kubernetes/kubernetes#67250, upstream's "Forced rollback": with the default
+               OrderedReady Pod management the controller stops its sync at the first Pod that
+               isn't Running and Ready, so it never reaches the phase that would delete Pods left
+               on an outdated revision. An updated Pod that never becomes Ready therefore blocks
+               the rollout even after spec.template is fixed or reverted -- the controller just
+               keeps waiting on that same Pod, and only deleting it by hand unsticks the rollout.
+               Closed upstream as working-as-intended (auto-deleting a Pod that may already have
+               run isn't safe for workloads owning data); the opt-in Recreate strategy is the fix,
+               and it's excluded here along with OnDelete and Parallel Pod management, none of
+               which can hit this. .StatefulSetRollbackTrap (template_functions_dynamic.go) finds
+               the Pod, and returns nil unless every signal says this trap explains it. */ -}}
+        {{- with .StatefulSetRollbackTrap }}
+            {{- $readyCondition := .pod.StatusConditions | getMatchingItemInMapList (dict "type" "Ready") }}
+            {{- "Rollout blocked" | red | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" "Pod" "name" .pod.Name) }} has been {{ "Not Ready" | red }} for {{ $readyCondition.lastTransitionTime | default .pod.Metadata.creationTimestamp | colorAgo }}, still on revision {{ .podRevision | cyan }} while the target is {{ .targetRevision | cyan }}.
+            {{- "" | nindent 4 }}If the Pod template was already fixed or reverted, the StatefulSet controller will keep waiting on this Pod -- delete it to recreate it on the target revision:
+            {{- "" | nindent 6 }}{{ printf "kubectl delete pod/%s -n %s" .pod.Name .pod.Namespace | cyan }}
+            {{- "" | nindent 4 }}Inspect the Pod first to confirm the original rollout failure.
+            {{- "" | nindent 4 }}Long standing upstream issue, closed as intended behavior: https://github.com/kubernetes/kubernetes/issues/67250
+        {{- end }}
         {{- if and (hasKey $status "currentRevision") (hasKey $status "updateRevision") }}
             {{- with .KubeGetUnifiedDiffString "ControllerRevision" .Namespace $status.currentRevision $status.updateRevision }}
                 {{- "Active Rollout Diff:" | nindent 2 }}
