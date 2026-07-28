@@ -1,0 +1,53 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  creationTimestamp: "2026-06-14T11:02:37Z"
+  finalizers:
+  - finalizers.fluxcd.io
+  generation: 2
+  name: podinfo
+  namespace: flux-system
+  resourceVersion: "77120"
+  uid: 6d2f8b31-4c5a-4e7d-9b0a-3e1c5f7a9d20
+spec:
+  force: false
+  interval: 5m
+  path: ./kustomize
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  targetNamespace: default
+  timeout: 2m
+  wait: true
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-29T23:55:12Z"
+    message: 'Applied revision: refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1'
+    observedGeneration: 2
+    reason: ReconciliationSucceeded
+    status: "True"
+    type: Ready
+  inventory:
+    entries:
+    - id: default_podinfo__Service
+      v: v1
+    - id: default_podinfo__ServiceAccount
+      v: v1
+    - id: default_podinfo_apps_Deployment
+      v: v1
+    - id: default_podinfo_autoscaling_HorizontalPodAutoscaler
+      v: v2
+    - id: default_podinfo-frontend__Service
+      v: v1
+    - id: default_podinfo-frontend_apps_Deployment
+      v: v1
+    - id: default_podinfo-backend__Service
+      v: v1
+    - id: default_podinfo-backend_apps_Deployment
+      v: v1
+    - id: default_podinfo-config__ConfigMap
+      v: v1
+  lastAppliedRevision: refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1
+  lastAttemptedRevision: refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1
+  observedGeneration: 2

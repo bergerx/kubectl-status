@@ -1,0 +1,114 @@
+{{- define "HelmRelease" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: helm.toolkit.fluxcd.io/v2, Kind=HelmRelease */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- /* What chart, from where. spec.chart (helm-controller mirrors it into a HelmChart object,
+           which is where chart pull/version-resolution failures actually surface) and spec.chartRef
+           (v2, pointing straight at an OCIRepository or a hand-made HelmChart) are mutually
+           exclusive. */ -}}
+    {{- with .Spec.chart }}
+        {{- with .spec }}
+            {{- "Chart" | bold | nindent 2 }} {{ .chart | cyan }}
+            {{- with .version }} ({{ . | cyan }}){{ end }}
+            {{- with .sourceRef }}
+                {{- " from " }}{{ $.Include "resource_ref" (dict "kind" (.kind | default "HelmRepository") "name" .name "namespace" (.namespace | default $.Namespace) "callerNamespace" $.Namespace) }}
+            {{- end }}
+            {{- with $.Status.helmChart }}
+                {{- $chartParts := splitList "/" . }}
+                {{- if eq (len $chartParts) 2 }} · {{ $.Include "resource_ref" (dict "kind" "HelmChart" "name" (last $chartParts) "namespace" (first $chartParts) "callerNamespace" $.Namespace) }}{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.chartRef }}
+        {{- "Chart" | bold | nindent 2 }} from {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" (.namespace | default $.Namespace) "callerNamespace" $.Namespace) }}
+    {{- end }}
+    {{- /* status.history is the Helm release ledger, newest first. Entry 0 is the last release
+           helm-controller made -- which is not necessarily the one currently serving: a failed
+           upgrade leaves a "failed" entry on top of the "deployed" one that is still installed. */ -}}
+    {{- $history := .Status.history | default list }}
+    {{- $latest := dict }}
+    {{- $deployed := dict }}
+    {{- with $history }}
+        {{- $latest = index . 0 }}
+        {{- range . }}
+            {{- if not $deployed }}{{ if eq (.status | default "") "deployed" }}{{ $deployed = . }}{{ end }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- with $latest }}
+        {{- /* The Helm release name/namespace are only worth showing when spec.releaseName or
+               spec.targetNamespace moved them away from this object's own name/namespace, which
+               the status summary line already shows. */ -}}
+        {{- $elsewhere := or (ne (.name | default $.Name) $.Name) (ne (.namespace | default $.Namespace) $.Namespace) }}
+        {{- "Helm release" | bold | nindent 2 }}
+        {{- if $elsewhere }} {{ .name | default $.Name | cyan }}
+            {{- with .namespace }}{{ if ne . $.Namespace }} -n {{ . | cyan }}{{ end }}{{ end }}
+        {{- end }}:
+        {{- with .chartVersion }} chart {{ . | cyan }}{{ end }}
+        {{- with .appVersion }} (app {{ . | cyan }}){{ end }}
+        {{- with .version }}, revision {{ . | toString | cyan }}{{ end }}
+        {{- with .status }}, {{ . | colorKeyword }}{{ with $latest.lastDeployed }} {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+        {{- else }}{{ with .lastDeployed }}, deployed {{ . | colorAgo }}{{ agoSuffix }}{{ end }}{{ end }}
+        {{- with .firstDeployed }}
+            {{- if ne . $latest.lastDeployed }}, first deployed {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- /* Revision divergence: the chart version helm-controller last tried isn't the one that
+           ended up released. Highest-signal state this object has -- it means an install/upgrade
+           is either in flight or persistently failing, and the conditions alone bury it.
+           status.lastAppliedRevision is the deprecated v2 spelling, only there as a fallback for
+           objects last written by an older helm-controller. */ -}}
+    {{- $released := $deployed.chartVersion | default .Status.lastAppliedRevision }}
+    {{- $olderStillInstalled := false }}
+    {{- with $deployed }}
+        {{- if ne (.version | toString) ($latest.version | toString) }}{{ $olderStillInstalled = true }}{{ end }}
+    {{- end }}
+    {{- with .Status.lastAttemptedRevision }}
+        {{- if ne . ($released | default "") }}
+            {{- "Last attempted" | red | bold | nindent 2 }} chart {{ . | red }} was not released
+            {{- if not $olderStillInstalled }}
+                {{- if $released }}, {{ $released | red }} is still what's installed
+                {{- else }}, this HelmRelease has never been installed{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- /* The newest release failed, so an older one is what's actually still installed. */ -}}
+    {{- if $olderStillInstalled }}
+        {{- "Still installed" | bold | nindent 2 }}: chart {{ $deployed.chartVersion | cyan }}
+        {{- with $deployed.appVersion }} (app {{ . | cyan }}){{ end }}
+        {{- with $deployed.version }}, revision {{ . | toString | cyan }}{{ end }}
+        {{- with $deployed.lastDeployed }}, deployed {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- end }}
+    {{- /* Cumulative since the last successful release of each kind, reset on success. */ -}}
+    {{- if or .Status.installFailures .Status.upgradeFailures .Status.failures }}
+        {{- "Failures" | red | bold | nindent 2 }}:
+        {{- $failureParts := list }}
+        {{- with .Status.installFailures }}{{ $failureParts = append $failureParts (printf "install:%d" (int .)) }}{{ end }}
+        {{- with .Status.upgradeFailures }}{{ $failureParts = append $failureParts (printf "upgrade:%d" (int .)) }}{{ end }}
+        {{- with .Status.failures }}{{ $failureParts = append $failureParts (printf "total:%d" (int .)) }}{{ end }}
+        {{- " " }}{{ join ", " $failureParts | red | bold }}
+    {{- end }}
+    {{- /* Remediation only matters once it deviates from the default of not retrying at all;
+           a non-zero retry count explains repeated install/upgrade attempts between intervals,
+           and the upgrade strategy decides whether a failure rolls back or uninstalls. */ -}}
+    {{- $installRetries := dig "install" "remediation" "retries" 0 (.Spec | default dict) }}
+    {{- $upgradeRetries := dig "upgrade" "remediation" "retries" 0 (.Spec | default dict) }}
+    {{- $upgradeStrategy := dig "upgrade" "remediation" "strategy" "" (.Spec | default dict) }}
+    {{- if or $installRetries $upgradeRetries $upgradeStrategy }}
+        {{- "Remediation" | bold | nindent 2 }}:
+        {{- $remediationParts := list }}
+        {{- with $installRetries }}{{ $remediationParts = append $remediationParts (printf "install retries %d" (int .)) }}{{ end }}
+        {{- with $upgradeRetries }}{{ $remediationParts = append $remediationParts (printf "upgrade retries %d" (int .)) }}{{ end }}
+        {{- with $upgradeStrategy }}{{ $remediationParts = append $remediationParts (printf "on failed upgrade: %s" .) }}{{ end }}
+        {{- " " }}{{ join ", " $remediationParts | cyan }}
+    {{- end }}
+    {{- template "flux_depends_on" . }}
+    {{- template "flux_reconciliation" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

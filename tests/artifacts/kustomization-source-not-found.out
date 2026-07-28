@@ -1,0 +1,9 @@
+
+Kustomization/tenant-staging -n flux-system, created 1m ago, gen:1
+  InProgress: Source artifact not found, retrying in 30s: GitRepository.source.toolkit.fluxcd.io "tenant-repo" not found
+    Reconciling: ArtifactFailed, Source artifact not found, retrying in 30s: GitRepository.source.toolkit.fluxcd.io "tenant-repo" not found
+  Applies ./tenants/staging from GitRepository/tenant-repo -n tenants
+  Applies to a remote cluster: kubeconfig from Secret/staging-cluster-kubeconfig
+  Last attempted revision staging@0d3f5a7c was not applied, nothing has been applied from this source yet
+  Reconciles every 5m
+  Ready:False ArtifactFailed, Source artifact not found, retrying in 30s: GitRepository.source.toolkit.fluxcd.io "tenant-repo" not found for 1m

@@ -1,0 +1,81 @@
+{{- define "Kustomization" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: kustomize.toolkit.fluxcd.io/v1, Kind=Kustomization */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- /* Which source, which path in it, and where the built manifests land. */ -}}
+    {{- with .Spec.sourceRef }}
+        {{- "Applies" | bold | nindent 2 }} {{ $.Spec.path | default "./" | cyan }} from {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" (.namespace | default $.Namespace) "callerNamespace" $.Namespace) }}
+        {{- with $.Spec.targetNamespace }} into namespace {{ . | cyan }}{{ end }}
+    {{- end }}
+    {{- /* spec.kubeConfig means the manifests are applied to a *different* cluster than the one
+           this object lives in -- without it on screen, everything below reads as local. */ -}}
+    {{- with .Spec.kubeConfig }}
+        {{- with .secretRef }}
+            {{- "Applies to a remote cluster" | yellow | bold | nindent 2 }}: kubeconfig from {{ $.Include "resource_ref" (dict "kind" "Secret" "name" .name "namespace" $.Namespace "callerNamespace" $.Namespace) }}
+        {{- end }}
+    {{- end }}
+    {{- with .Status.lastAppliedRevision }}
+        {{- "Applied revision" | bold | nindent 2 }} {{ $.Include "flux_revision" . | cyan }}
+    {{- end }}
+    {{- /* Revision divergence: kustomize-controller got a newer revision from the source but
+           never managed to apply it (build error, dry-run/apply failure, failed health checks).
+           Highest-signal state this object has, and the conditions alone bury it. */ -}}
+    {{- with .Status.lastAttemptedRevision }}
+        {{- $applied := $.Status.lastAppliedRevision | default "" }}
+        {{- if ne . $applied }}
+            {{- "Last attempted" | red | bold | nindent 2 }} revision {{ $.Include "flux_revision" . | red }} was not applied
+            {{- if $applied }}, the cluster still runs {{ $.Include "flux_revision" $applied | red }}
+            {{- else }}, nothing has been applied from this source yet
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- /* status.inventory is the full list of applied objects -- hundreds of entries for a big
+           overlay, so only the shape of it is worth showing. Entry ids are
+           "<namespace>_<name>_<group>_<kind>"; none of those four parts can contain an
+           underscore, so the kind is always the last segment. */ -}}
+    {{- $entries := (.Status.inventory | default dict).entries | default list }}
+    {{- if $entries }}
+        {{- $countsByKind := dict }}
+        {{- range $entries }}
+            {{- $kind := last (splitList "_" (.id | toString)) }}
+            {{- $_ := set $countsByKind $kind (add1 (int (get $countsByKind $kind))) }}
+        {{- end }}
+        {{- $kindSummaries := list }}
+        {{- range $kind := keys $countsByKind | sortAlpha }}
+            {{- $kindSummaries = append $kindSummaries (printf "%s×%d" $kind (int (get $countsByKind $kind))) }}
+        {{- end }}
+        {{- "Manages" | bold | nindent 2 }} {{ len $entries | toString | cyan }} resources: {{ join ", " $kindSummaries | cyan }}
+    {{- else if .Status.lastAppliedRevision }}
+        {{- "Manages no resources" | yellow | bold | nindent 2 }}: the applied revision produced an empty inventory
+    {{- end }}
+    {{- /* prune:false is the common ops footgun -- usually enabled "temporarily" and forgotten,
+           after which everything deleted from the source keeps running in the cluster forever,
+           while the object stays perfectly Ready. */ -}}
+    {{- if not .Spec.prune }}
+        {{- "Prune disabled" | yellow | bold | nindent 2 }}: resources removed from the source are left running in the cluster
+    {{- end }}
+    {{- /* What Ready actually means here: with wait/healthChecks it also covers the health of the
+           applied objects, without them it only means the apply itself succeeded. */ -}}
+    {{- if .Spec.wait }}
+        {{- "Waits" | bold | nindent 2 }} for every managed resource to become healthy
+    {{- else }}
+        {{- with .Spec.healthChecks }}
+            {{- "Health-checks" | bold | nindent 2 }}
+            {{- if eq (len .) 1 }}
+                {{- $check := index . 0 }}
+                {{- " " }}{{ $.Include "resource_ref" (dict "kind" $check.kind "name" $check.name "namespace" ($check.namespace | default $.Namespace) "callerNamespace" $.Namespace) }}
+            {{- else }} {{ len . | toString | cyan }} resources
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "flux_depends_on" . }}
+    {{- template "flux_reconciliation" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

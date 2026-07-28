@@ -1,0 +1,14 @@
+
+Kustomization/apps -n flux-system, created 1m ago, gen:11
+  Failed: kustomize build failed: accumulating resources: accumulation err='accumulating resources from '../base'
+    Stalled: BuildFailed, kustomize build failed: accumulating resources: accumulation err='accumulating resources from '../base'
+  Applies ./apps/production from GitRepository/flux-system
+  Applied revision main@2b9d4f1a
+  Last attempted revision main@c4e8b0d3 was not applied, the cluster still runs main@2b9d4f1a
+  Manages 3 resources: ConfigMap×1, Deployment×1, Service×1
+  Prune disabled: resources removed from the source are left running in the cluster
+  Health-checks Deployment/podinfo -n default
+  Depends on Kustomization/infra-controllers, Kustomization/infra-configs
+  Reconciles every 10m, retries every 1m after a failure
+  Ready:False BuildFailed, kustomize build failed: accumulating resources: accumulation err='accumulating resources from '../base': '/tmp/kustomization-1029384756/apps/base' must resolve to a file': recursed accumulation of path '/tmp/kustomization-1029384756/apps/base': must build at directory: not a valid directory: evalsymlink failure for 1m
+  Stalled:True BuildFailed, kustomize build failed: accumulating resources: accumulation err='accumulating resources from '../base' for 1m
