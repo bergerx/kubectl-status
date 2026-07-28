@@ -1,6 +1,6 @@
 
 Node/gke-cluster-default-pool-9f5f0e1a-abcd, created 1m ago
-  linux Container-Optimized OS from Google (amd64), kernel 5.15.133+, kubelet v1.29.0, kube-proxy v1.29.0, runtime containerd://1.7.11
+  linux Container-Optimized OS from Google (amd64), kernel 5.15.133+, kubelet v1.29.0, kube-proxy v1.29.0, containerd://1.7.11
   cloudprovider GCP (from labels) europe-west1/europe-west1-b e2-standard-2
   Current: Resource is Ready
   Ready:True KubeletReady, kubelet is posting ready status for 1m
