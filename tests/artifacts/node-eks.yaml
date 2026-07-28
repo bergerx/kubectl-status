@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: Node
+metadata:
+  creationTimestamp: "2020-03-18T14:13:28Z"
+  labels:
+    eks.amazonaws.com/capacityType: ON_DEMAND
+    eks.amazonaws.com/nodegroup: workers
+    karpenter.sh/capacity-type: on-demand
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: ip-10-0-1-23.ec2.internal
+    kubernetes.io/os: linux
+    node.kubernetes.io/instance-type: m5.large
+    topology.kubernetes.io/region: us-east-1
+    topology.kubernetes.io/zone: us-east-1a
+  name: ip-10-0-1-23.ec2.internal
+  resourceVersion: "46883692"
+  uid: 4ecfbfa0-e12b-4868-9463-2bc9808d3aab
+spec:
+  providerID: aws:///us-east-1a/i-0123456789abcdef0
+status:
+  addresses:
+  - address: 10.0.1.23
+    type: InternalIP
+  - address: ip-10-0-1-23.ec2.internal
+    type: Hostname
+  allocatable:
+    cpu: 1930m
+    ephemeral-storage: "76224326324"
+    memory: 7220364Ki
+    pods: "29"
+  capacity:
+    cpu: "2"
+    ephemeral-storage: 83873772Ki
+    memory: 7938700Ki
+    pods: "29"
+  conditions:
+  - lastHeartbeatTime: "2020-03-18T17:27:09Z"
+    lastTransitionTime: "2020-03-18T14:13:28Z"
+    message: kubelet has sufficient memory available
+    reason: KubeletHasSufficientMemory
+    status: "False"
+    type: MemoryPressure
+  - lastHeartbeatTime: "2020-03-18T17:27:09Z"
+    lastTransitionTime: "2020-03-18T14:13:28Z"
+    message: kubelet has no disk pressure
+    reason: KubeletHasNoDiskPressure
+    status: "False"
+    type: DiskPressure
+  - lastHeartbeatTime: "2020-03-18T17:27:09Z"
+    lastTransitionTime: "2020-03-18T14:13:28Z"
+    message: kubelet has sufficient PID available
+    reason: KubeletHasSufficientPID
+    status: "False"
+    type: PIDPressure
+  - lastHeartbeatTime: "2020-03-18T17:27:09Z"
+    lastTransitionTime: "2020-03-18T14:13:29Z"
+    message: kubelet is posting ready status
+    reason: KubeletReady
+    status: "True"
+    type: Ready
+  daemonEndpoints:
+    kubeletEndpoint:
+      Port: 10250
+  nodeInfo:
+    architecture: amd64
+    bootID: 2df597ca-daa5-4dec-95d2-61237fafd4cf
+    containerRuntimeVersion: containerd://1.7.11
+    kernelVersion: 5.10.205-195.807.amzn2.x86_64
+    kubeProxyVersion: v1.29.0
+    kubeletVersion: v1.29.0
+    machineID: 58d2ef1eaeaa4c80b42069f2fe5bb0cd
+    operatingSystem: linux
+    osImage: Amazon Linux 2
+    systemUUID: F3DC2E84-279A-FF45-A31A-ADBBD8DD5DD3

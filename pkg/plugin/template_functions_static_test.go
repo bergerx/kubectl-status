@@ -1008,6 +1008,92 @@ func TestKarpenterDisqualifyingKey(t *testing.T) {
 	}
 }
 
+func TestNodeCloudProvider(t *testing.T) {
+	labels := func(keys ...string) map[string]interface{} {
+		m := map[string]interface{}{}
+		for _, k := range keys {
+			m[k] = ""
+		}
+		return m
+	}
+
+	tests := []struct {
+		name       string
+		providerID string
+		labels     map[string]interface{}
+		want       string
+	}{
+		{
+			name:       "providerID scheme wins over everything else",
+			providerID: "aws:///us-east-1a/i-0123456789abcdef0",
+			labels:     labels("kubernetes.azure.com/cluster"),
+			want:       "AWS",
+		},
+		{
+			name:       "azure's empty-authority form still parses",
+			providerID: "azure:///subscriptions/abc/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/1",
+			want:       "Azure",
+		},
+		{
+			name:       "gce is reported under the name users know it by",
+			providerID: "gce://my-project/europe-west1-b/instance-1",
+			want:       "GCP",
+		},
+		{
+			name:       "an unrecognized scheme is still reported verbatim",
+			providerID: "someprovider://opaque-id",
+			want:       "someprovider",
+		},
+		{
+			name:       "a providerID that isn't a URL at all falls through to the labels",
+			providerID: "bare-metal-box-17",
+			labels:     labels("eks.amazonaws.com/nodegroup"),
+			want:       "AWS (from labels)",
+		},
+		{
+			name:   "labels alone are reported as the weaker evidence they are",
+			labels: labels("cloud.google.com/gke-nodepool"),
+			want:   "GCP (from labels)",
+		},
+		{
+			name:   "topology and instance-type labels are provider-agnostic -- not evidence",
+			labels: labels("topology.kubernetes.io/zone", "node.kubernetes.io/instance-type"),
+			want:   "",
+		},
+		{
+			name: "no providerID and no labels -- no guess",
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := nodeCloudProvider(tt.providerID, tt.labels)
+			if got != tt.want {
+				t.Errorf("nodeCloudProvider() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNodeCloudProviderIsDeterministicAcrossNamespaces guards the ordering of
+// cloudProviderLabelPrefixes: a node can legitimately carry two providers' label namespaces (an
+// EKS node managed by Karpenter carries both eks.amazonaws.com/ and karpenter.k8s.aws/, and a
+// migrated cluster can keep a departed provider's labels around), and map iteration order would
+// make which one gets reported differ between runs.
+func TestNodeCloudProviderIsDeterministicAcrossNamespaces(t *testing.T) {
+	multi := map[string]interface{}{
+		"kubernetes.azure.com/cluster":  "",
+		"eks.amazonaws.com/nodegroup":   "",
+		"cloud.google.com/gke-nodepool": "",
+	}
+	first := nodeCloudProvider("", multi)
+	for i := 0; i < 50; i++ {
+		if got := nodeCloudProvider("", multi); got != first {
+			t.Fatalf("nodeCloudProvider() = %q on run %d, want a stable %q", got, i, first)
+		}
+	}
+}
+
 func TestNetworkPolicySelectsPod(t *testing.T) {
 	tests := []struct {
 		name      string
