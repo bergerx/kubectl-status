@@ -1,0 +1,55 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  finalizers:
+  - finalizers.fluxcd.io
+  generation: 1
+  name: nginx
+  namespace: default
+  resourceVersion: "18422"
+  uid: 4b1a0a4e-6f7c-4a2e-9d3a-0f0b2c9d1e77
+spec:
+  chart:
+    spec:
+      chart: nginx
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+      version: '>=18.x'
+  interval: 10m
+  releaseName: nginx
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-29T23:54:59Z"
+    message: Helm install succeeded for release default/nginx.v1 with chart nginx@18.2.5
+    observedGeneration: 1
+    reason: InstallSucceeded
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2026-06-29T23:54:59Z"
+    message: Helm install succeeded for release default/nginx.v1 with chart nginx@18.2.5
+    observedGeneration: 1
+    reason: InstallSucceeded
+    status: "True"
+    type: Released
+  helmChart: flux-system/default-nginx
+  history:
+  - appVersion: 1.27.1
+    chartName: nginx
+    chartVersion: 18.2.5
+    configDigest: sha256:5a0f2b6c8e4d1a3f9c7b2e5d8a1c4f7b0e3d6a9c2f5b8e1d4a7c0f3b6e9d2a5c
+    digest: sha256:1c4f7b0e3d6a9c2f5b8e1d4a7c0f3b6e9d2a5c8f1b4e7d0a3c6f9b2e5d8a1c4f
+    firstDeployed: "2026-06-29T23:54:58Z"
+    lastDeployed: "2026-06-29T23:54:58Z"
+    name: nginx
+    namespace: default
+    status: deployed
+    version: 1
+  lastAttemptedConfigDigest: sha256:5a0f2b6c8e4d1a3f9c7b2e5d8a1c4f7b0e3d6a9c2f5b8e1d4a7c0f3b6e9d2a5c
+  lastAttemptedGeneration: 1
+  lastAttemptedReleaseAction: install
+  lastAttemptedRevision: 18.2.5
+  observedGeneration: 1

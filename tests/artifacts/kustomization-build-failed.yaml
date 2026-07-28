@@ -1,0 +1,57 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  creationTimestamp: "2026-04-02T15:20:09Z"
+  finalizers:
+  - finalizers.fluxcd.io
+  generation: 11
+  name: apps
+  namespace: flux-system
+  resourceVersion: "998341"
+  uid: 8a0e5c74-1b93-46f2-a5d8-0c7e2b4f6a91
+spec:
+  dependsOn:
+  - name: infra-controllers
+  - name: infra-configs
+  healthChecks:
+  - apiVersion: apps/v1
+    kind: Deployment
+    name: podinfo
+    namespace: default
+  interval: 10m
+  path: ./apps/production
+  prune: false
+  retryInterval: 1m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  timeout: 3m
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-29T23:50:31Z"
+    message: 'kustomize build failed: accumulating resources: accumulation err=''accumulating
+      resources from ''../base'': ''/tmp/kustomization-1029384756/apps/base'' must
+      resolve to a file'': recursed accumulation of path ''/tmp/kustomization-1029384756/apps/base'':
+      must build at directory: not a valid directory: evalsymlink failure'
+    observedGeneration: 11
+    reason: BuildFailed
+    status: "False"
+    type: Ready
+  - lastTransitionTime: "2026-06-29T23:50:31Z"
+    message: 'kustomize build failed: accumulating resources: accumulation err=''accumulating
+      resources from ''../base'''
+    observedGeneration: 11
+    reason: BuildFailed
+    status: "True"
+    type: Stalled
+  inventory:
+    entries:
+    - id: default_podinfo__Service
+      v: v1
+    - id: default_podinfo_apps_Deployment
+      v: v1
+    - id: default_podinfo__ConfigMap
+      v: v1
+  lastAppliedRevision: refs/heads/main@sha1:2b9d4f1a6c8e0357b1d9f2a4c6e8b0d3f5a7c9e1
+  lastAttemptedRevision: refs/heads/main@sha1:c4e8b0d3f5a7c9e12b9d4f1a6c8e0357b1d9f2a4
+  observedGeneration: 11

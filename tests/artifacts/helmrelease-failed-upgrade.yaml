@@ -1,0 +1,87 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  creationTimestamp: "2026-06-20T08:31:12Z"
+  finalizers:
+  - finalizers.fluxcd.io
+  generation: 4
+  name: nginx
+  namespace: default
+  resourceVersion: "204411"
+  uid: 9e2c7a15-3b48-4c6d-8e1f-2a5b7c9d0e34
+spec:
+  chart:
+    spec:
+      chart: nginx
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+      version: '>=18.x'
+  dependsOn:
+  - name: redis
+  install:
+    remediation:
+      retries: 3
+  interval: 10m
+  upgrade:
+    remediation:
+      remediateLastFailure: true
+      retries: 2
+      strategy: rollback
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-29T23:52:44Z"
+    message: 'Helm upgrade failed for release default/nginx with chart nginx@18.3.0:
+      timed out waiting for the condition'
+    observedGeneration: 4
+    reason: UpgradeFailed
+    status: "False"
+    type: Ready
+  - lastTransitionTime: "2026-06-29T23:52:44Z"
+    message: 'Helm upgrade failed for release default/nginx with chart nginx@18.3.0:
+      timed out waiting for the condition'
+    observedGeneration: 4
+    reason: UpgradeFailed
+    status: "False"
+    type: Released
+  - lastTransitionTime: "2026-06-29T23:53:10Z"
+    message: Helm rollback to previous release default/nginx.v2 with chart nginx@18.2.5
+      succeeded
+    observedGeneration: 4
+    reason: RollbackSucceeded
+    status: "True"
+    type: Remediated
+  helmChart: flux-system/default-nginx
+  history:
+  - appVersion: 1.27.2
+    chartName: nginx
+    chartVersion: 18.3.0
+    configDigest: sha256:8f1b4e7d0a3c6f9b2e5d8a1c4f7b0e3d6a9c2f5b8e1d4a7c0f3b6e9d2a5c8f1b
+    digest: sha256:2e5d8a1c4f7b0e3d6a9c2f5b8e1d4a7c0f3b6e9d2a5c8f1b4e7d0a3c6f9b2e5d
+    firstDeployed: "2026-06-20T08:31:20Z"
+    lastDeployed: "2026-06-29T23:51:02Z"
+    name: nginx
+    namespace: default
+    status: failed
+    version: 3
+  - appVersion: 1.27.1
+    chartName: nginx
+    chartVersion: 18.2.5
+    configDigest: sha256:5a0f2b6c8e4d1a3f9c7b2e5d8a1c4f7b0e3d6a9c2f5b8e1d4a7c0f3b6e9d2a5c
+    digest: sha256:1c4f7b0e3d6a9c2f5b8e1d4a7c0f3b6e9d2a5c8f1b4e7d0a3c6f9b2e5d8a1c4f
+    firstDeployed: "2026-06-20T08:31:20Z"
+    lastDeployed: "2026-06-25T14:07:33Z"
+    name: nginx
+    namespace: default
+    status: deployed
+    version: 2
+  installFailures: 0
+  lastAttemptedConfigDigest: sha256:8f1b4e7d0a3c6f9b2e5d8a1c4f7b0e3d6a9c2f5b8e1d4a7c0f3b6e9d2a5c8f1b
+  lastAttemptedGeneration: 4
+  lastAttemptedReleaseAction: upgrade
+  lastAttemptedRevision: 18.3.0
+  observedGeneration: 4
+  upgradeFailures: 2
+  failures: 2

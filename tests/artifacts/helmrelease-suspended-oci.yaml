@@ -1,0 +1,50 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  creationTimestamp: "2026-05-11T17:44:51Z"
+  finalizers:
+  - finalizers.fluxcd.io
+  generation: 7
+  name: podinfo
+  namespace: apps
+  resourceVersion: "551903"
+  uid: 1f7d3c22-8a90-4d51-b2c6-77e4a0d9b311
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: podinfo
+    namespace: flux-system
+  interval: 30m
+  suspend: true
+  targetNamespace: apps
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-14T06:20:41Z"
+    message: Helm upgrade succeeded for release apps/podinfo.v5 with chart podinfo@6.7.1
+    observedGeneration: 7
+    reason: UpgradeSucceeded
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2026-06-14T06:20:41Z"
+    message: Helm upgrade succeeded for release apps/podinfo.v5 with chart podinfo@6.7.1
+    observedGeneration: 7
+    reason: UpgradeSucceeded
+    status: "True"
+    type: Released
+  history:
+  - appVersion: 6.7.1
+    chartName: podinfo
+    chartVersion: 6.7.1
+    configDigest: sha256:3d6a9c2f5b8e1d4a7c0f3b6e9d2a5c8f1b4e7d0a3c6f9b2e5d8a1c4f7b0e3d6a
+    digest: sha256:7c0f3b6e9d2a5c8f1b4e7d0a3c6f9b2e5d8a1c4f7b0e3d6a9c2f5b8e1d4a7c0f
+    firstDeployed: "2026-05-11T17:45:03Z"
+    lastDeployed: "2026-06-14T06:20:39Z"
+    name: podinfo
+    namespace: apps
+    status: deployed
+    version: 5
+  lastAttemptedConfigDigest: sha256:3d6a9c2f5b8e1d4a7c0f3b6e9d2a5c8f1b4e7d0a3c6f9b2e5d8a1c4f7b0e3d6a
+  lastAttemptedGeneration: 7
+  lastAttemptedReleaseAction: upgrade
+  lastAttemptedRevision: 6.7.1
+  observedGeneration: 7

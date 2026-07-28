@@ -1311,3 +1311,50 @@
         {{- template "generic_health_summary" (dict "obj" $obj "callerNamespace" $callerNamespace) }}
     {{- end }}
 {{- end }}
+
+{{- define "flux_reconciliation" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Every Flux toolkit CRD (HelmRelease, Kustomization, the source kinds) shares
+           spec.interval and spec.suspend, so this renders the same line for all of them.
+           suspend:true is the single most misleading state a Flux object can be in -- the
+           conditions keep reporting the last successful reconciliation, so it can read as
+           perfectly healthy while neither drift nor spec changes are being applied. */ -}}
+    {{- if .Spec.suspend }}
+        {{- "Suspended" | red | bold | nindent 2 }}: reconciliation is paused, neither spec changes nor drift are applied
+        {{- with .Spec.interval }} (would otherwise reconcile every {{ . | cyan }}){{ end }}
+    {{- else }}
+        {{- with .Spec.interval }}
+            {{- "Reconciles" | bold | nindent 2 }} every {{ . | cyan }}
+            {{- with $.Spec.retryInterval }}, retries every {{ . | cyan }} after a failure{{ end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "flux_depends_on" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Flux gates reconciliation on spec.dependsOn: while any listed object is not Ready this
+           one isn't reconciled at all, which is the usual explanation for an object that just
+           sits there with a stale revision. Entries carry only name/namespace -- they always
+           refer to the same kind as the object declaring them. */ -}}
+    {{- with .Spec.dependsOn }}
+        {{- "Depends on" | bold | nindent 2 }}
+        {{- range $index, $dep := . }}
+            {{- if $index }},{{ end }} {{ $.Include "resource_ref" (dict "kind" ($dep.kind | default $.Kind) "name" $dep.name "namespace" ($dep.namespace | default $.Namespace) "callerNamespace" $.Namespace) }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "flux_revision" }}
+    {{- /* Expects a Flux revision string. Source revisions are "<ref>@<algo>:<hex>" (e.g.
+           "refs/heads/main@sha1:1a2b3c...") since the v1 source API; older objects and Bucket
+           sources carry a bare "<algo>:<hex>", and OCI/Helm ones a plain version. Renders
+           "<ref>@<short-hex>", passing anything that doesn't match the shape through untouched.
+           Emits no color so callers can paint the whole revision cyan or red as their state
+           demands. */ -}}
+    {{- $parts := splitList "@" (. | toString) }}
+    {{- $digest := last $parts }}
+    {{- $digestParts := splitList ":" $digest }}
+    {{- if eq (len $digestParts) 2 }}{{ $digest = last $digestParts | trunc 8 }}{{ end }}
+    {{- if gt (len $parts) 1 }}{{ first $parts | trimPrefix "refs/heads/" | trimPrefix "refs/tags/" }}@{{ end }}
+    {{- $digest }}
+{{- end -}}

@@ -1,0 +1,34 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  creationTimestamp: "2026-06-29T23:40:18Z"
+  finalizers:
+  - finalizers.fluxcd.io
+  generation: 1
+  name: tenant-staging
+  namespace: flux-system
+  resourceVersion: "991002"
+  uid: 3c5b9d17-2e64-4a80-91f3-6b8d0e2a4c57
+spec:
+  interval: 5m
+  kubeConfig:
+    secretRef:
+      key: value
+      name: staging-cluster-kubeconfig
+  path: ./tenants/staging
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: tenant-repo
+    namespace: tenants
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-29T23:40:19Z"
+    message: 'Source artifact not found, retrying in 30s: GitRepository.source.toolkit.fluxcd.io
+      "tenant-repo" not found'
+    observedGeneration: 1
+    reason: ArtifactFailed
+    status: "False"
+    type: Ready
+  lastAttemptedRevision: refs/heads/staging@sha1:0d3f5a7c9e12b9d4f1a6c8e0357b1d9f2a4c6e8b
+  observedGeneration: 1
