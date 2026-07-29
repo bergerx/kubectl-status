@@ -5,6 +5,7 @@
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
     {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
     {{- $type := .Spec.type }}
     {{- if eq $type "Exempt" }}
         {{- "Type" | bold | nindent 2 }}: {{ "Exempt" | green }} (requests are never queued or rejected)

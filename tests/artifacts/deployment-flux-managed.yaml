@@ -1,0 +1,75 @@
+apiVersion: v1
+items:
+# Ownership labels plus every policy override, deliberately spread across labels and annotations
+# and inconsistently cased: kustomize-controller ORs the two maps and compares with EqualFold, so
+# all of these are live. prune/force/ssa/driftDetection here are the "any Kind" overrides that
+# neither the Kustomization nor the HelmRelease object itself ever shows.
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    annotations:
+      helm.toolkit.fluxcd.io/driftDetection: DISABLED
+      kustomize.toolkit.fluxcd.io/force: Enabled
+      kustomize.toolkit.fluxcd.io/ssa: merge
+    creationTimestamp: "2026-06-28T08:11:32Z"
+    generation: 4
+    labels:
+      app.kubernetes.io/managed-by: Helm
+      kustomize.toolkit.fluxcd.io/name: podinfo
+      kustomize.toolkit.fluxcd.io/namespace: flux-system
+      kustomize.toolkit.fluxcd.io/prune: disabled
+    name: podinfo
+    namespace: apps
+    resourceVersion: "77213"
+    uid: 5b1e9c04-7a3f-4d28-8e60-c1f9a2b7d305
+  spec:
+    replicas: 2
+    selector:
+      matchLabels:
+        app: podinfo
+  status:
+    availableReplicas: 2
+    observedGeneration: 4
+    readyReplicas: 2
+    replicas: 2
+    updatedReplicas: 2
+# Owned by a Kustomization in its own namespace, so the ref drops the redundant "-n", and opted out
+# of reconciliation entirely -- the state where the object silently stops tracking the source while
+# its Kustomization goes on reporting Ready.
+- apiVersion: v1
+  kind: ConfigMap
+  data:
+    tuned-by-hand: "true"
+  metadata:
+    creationTimestamp: "2026-06-28T08:11:32Z"
+    labels:
+      kustomize.toolkit.fluxcd.io/name: podinfo
+      kustomize.toolkit.fluxcd.io/namespace: apps
+      kustomize.toolkit.fluxcd.io/reconcile: disabled
+    name: podinfo-config
+    namespace: apps
+    resourceVersion: "77214"
+    uid: 9d2c7f81-4b05-4e6a-a3f7-2c8b1d0e4a97
+# ssa:IfNotPresent on a cluster-scoped Kind with no ownership labels at all -- the policy
+# annotations are read from the manifest in the source, so they show up on objects Flux has not
+# (yet) recorded ownership of.
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  metadata:
+    annotations:
+      kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
+    creationTimestamp: "2026-06-28T08:11:32Z"
+    name: podinfo-viewer
+    resourceVersion: "77215"
+    uid: 3a6f0b52-9c14-4d73-b8e2-5f1a7c0d9e34
+  rules:
+  - apiGroups:
+    - ""
+    resources:
+    - pods
+    verbs:
+    - get
+    - list
+kind: List
+metadata:
+  resourceVersion: ""

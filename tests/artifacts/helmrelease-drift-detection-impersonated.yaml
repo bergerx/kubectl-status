@@ -28,8 +28,12 @@ spec:
           name: cosign-pub
   driftDetection:
     mode: enabled
+  install:
+    crds: CreateReplace
   interval: 10m
   serviceAccountName: podinfo-deployer
+  upgrade:
+    crds: CreateReplace
   valuesFrom:
   - kind: ConfigMap
     name: podinfo-defaults

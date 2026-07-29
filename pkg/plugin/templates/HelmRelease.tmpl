@@ -167,6 +167,29 @@
         {{- with $upgradeStrategy }}{{ $remediationParts = append $remediationParts (printf "on failed upgrade: %s" .) }}{{ end }}
         {{- " " }}{{ join ", " $remediationParts | cyan }}
     {{- end }}
+    {{- /* Helm never touches CRDs on its own, so these two decide whether a chart's crds/ directory
+           reaches the cluster at all. Defaults are install:Create (new CRDs created, existing ones
+           left alone) and upgrade:Skip (nothing at all) -- both taken from the field docs in
+           helm-controller's api/v2, since the CRD schema itself declares no default.
+           Only deviations are shown: we can't see whether the chart even ships a crds/ directory,
+           so a line about the defaults would fire on every HelmRelease in the cluster, most of
+           which have no CRDs for it to be about. */ -}}
+    {{- $installCRDs := dig "install" "crds" "Create" (.Spec | default dict) }}
+    {{- $upgradeCRDs := dig "upgrade" "crds" "Skip" (.Spec | default dict) }}
+    {{- if or (ne $installCRDs "Create") (ne $upgradeCRDs "Skip") }}
+        {{- /* Both phases go on one line -- they're two halves of a single policy, and a reader
+               deciding whether a CRD change will land needs them together. Whichever half is at
+               its default is still named, because "created on install" only means something once
+               you can see what happens on upgrade next to it. */ -}}
+        {{- $crdParts := list }}
+        {{- if eq $installCRDs "Skip" }}{{ $crdParts = append $crdParts "never installed" }}
+        {{- else if eq $installCRDs "CreateReplace" }}{{ $crdParts = append $crdParts "created and replaced on install" }}
+        {{- else }}{{ $crdParts = append $crdParts "created on install" }}{{ end }}
+        {{- if eq $upgradeCRDs "CreateReplace" }}{{ $crdParts = append $crdParts "replaced on upgrade" }}
+        {{- else if eq $upgradeCRDs "Create" }}{{ $crdParts = append $crdParts "created on upgrade" }}
+        {{- else if ne $installCRDs "Skip" }}{{ $crdParts = append $crdParts "left alone on upgrade" }}{{ end }}
+        {{- "Chart CRDs" | bold | nindent 2 }} {{ join ", " $crdParts | cyan }}
+    {{- end }}
     {{- /* Off by default: with it on, helm-controller diffs the cluster against the last release
            on every reconcile and (in full mode) reverts anything edited out-of-band, which is
            the explanation for manual changes that keep disappearing. */ -}}

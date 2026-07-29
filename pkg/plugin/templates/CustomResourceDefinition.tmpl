@@ -4,6 +4,7 @@
     {{- template "status_summary_line" . }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
+    {{- template "application_details" . }}
     {{- .Spec.group | bold | nindent 2 }}, scope: {{ .Spec.scope | colorKeyword }}
     {{- with .Spec.names.shortNames }}, short: {{ join ", " . }}{{ end }}
     {{- with .Spec.names.categories }}, categories: {{ join ", " . }}{{ end }}

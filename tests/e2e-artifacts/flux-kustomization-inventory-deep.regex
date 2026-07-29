@@ -1,0 +1,20 @@
+\A
+Kustomization/podinfo -n e2e-flux-kustomization, created 1m ago, gen:1
+  Current: Resource is Ready
+  Applies \./kustomize from GitRepository/flux-system
+  Applied revision main@7f3c1a9e
+  Manages 4 resources: ClusterRole×1, ConfigMap×1, Deployment×1, Secret×1
+    ClusterRole/e2e-flux-podinfo-viewer, created 1m ago
+      Current: Resource is current
+    Secret/deleted-by-hand missing: no such object in the cluster
+    ConfigMap/podinfo-config -n e2e-flux-kustomization, created 1m ago
+      Applied by Flux Kustomization/podinfo
+      Flux prune disabled: kept running in the cluster after it is removed from the source
+    Deployment/podinfo -n e2e-flux-kustomization, created 1m ago, gen:1 rev:1
+      Current: Deployment is available\. Replicas: 2
+      desired:2, existing:2, ready:2, updated:2, available:2
+      Selector: app=podinfo
+.*  Ready covers the apply only: without wait or healthChecks, unhealthy managed resources leave it Ready
+  Reconciles every 5m
+  Ready:True ReconciliationSucceeded, Applied revision: refs/heads/main@sha1:7f3c1a9e for 1m
+\z
