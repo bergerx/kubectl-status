@@ -1,0 +1,78 @@
+{{- define "gatekeeper_constraint_match_and_enforcement" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Shared by all Gatekeeper constraint kinds (constraints.gatekeeper.sh/*, one dynamic Kind
+           per installed ConstraintTemplate -- K8sRequiredLabels, K8sAllowedRepos, etc. -- all with
+           an identical spec.match/spec.enforcementAction and status.violations/byPod shape).
+           Renders spec.match (which objects this constraint evaluates) and the enforcement mode. */ -}}
+    {{- with .Spec.match }}
+        {{- if eq (len .kinds) 1 }}
+            {{- with index .kinds 0 }}
+                {{- "Match" | bold | nindent 2 }}: {{ .apiGroups | join "," | default "core" }}/{{ .kinds | join "," | cyan }}
+            {{- end }}
+        {{- else }}
+            {{- "Match" | bold | nindent 2 }}:
+            {{- range .kinds }}
+                {{- "" | nindent 4 }}{{ .apiGroups | join "," | default "core" }}/{{ .kinds | join "," | cyan }}
+            {{- end }}
+        {{- end }}
+        {{- with .scope }}{{ if ne . "*" }}, scope:{{ . | cyan }}{{ end }}{{ end }}
+        {{- with .name }}, name:{{ . | cyan }}{{ end }}
+        {{- with .namespaces }}, namespaces:{{ join "," . | cyan }}{{ end }}
+        {{- with .excludedNamespaces }}, excludedNamespaces:{{ join "," . | cyan }}{{ end }}
+        {{- with .labelSelector }}
+            {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+                {{- "labelSelector" | bold | nindent 4 }}: {{ . | labelSelector | cyan }}
+            {{- end }}
+        {{- end }}
+        {{- with .namespaceSelector }}
+            {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+                {{- "namespaceSelector" | bold | nindent 4 }}: {{ . | labelSelector | cyan }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- $enforcementAction := .Spec.enforcementAction | default "deny" }}
+    {{- "enforcementAction" | bold | nindent 2 }}: {{ if eq $enforcementAction "deny" }}{{ $enforcementAction | cyan }}{{ else }}{{ $enforcementAction | yellow | bold }} (violations are not blocked){{ end }}
+    {{- with .Spec.scopedEnforcementActions }}
+        {{- range . }}
+            {{- $action := .action | default "deny" }}
+            {{- $points := list }}
+            {{- range .enforcementPoints }}{{ $points = append $points .name }}{{ end }}
+            {{- "" | nindent 4 }}{{ $action | redBoldIf (ne $action "deny") }} at {{ $points | join "," | cyan }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "gatekeeper_constraint_audit_status" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Shared audit/violations/replica-sync rendering, see gatekeeper_constraint_match_and_enforcement. */ -}}
+    {{- with .Status.auditTimestamp }}
+        {{- "Last audited" | bold | nindent 2 }}: {{ . | colorAgo }}{{ agoSuffix }}
+    {{- end }}
+    {{- $total := .Status.totalViolations | default 0 | int }}
+    {{- $violations := .Status.violations | default list }}
+    {{- if gt $total 0 }}
+        {{- "Violations" | red | bold | nindent 2 }}: {{ $total | toString | red | bold }}
+        {{- $cap := 10 }}
+        {{- range $i, $v := $violations }}
+            {{- if lt $i $cap }}
+                {{- "" | nindent 4 }}{{ $.Include "resource_ref" (dict "kind" $v.kind "name" $v.name "namespace" $v.namespace) }}: {{ $v.message | red }}
+                {{- with $v.enforcementAction }}{{ if ne . "deny" }} [{{ . | yellow }}]{{ end }}{{ end }}
+            {{- end }}
+        {{- end }}
+        {{- $shown := len $violations }}
+        {{- if gt $shown $cap }}{{ $shown = $cap }}{{ end }}
+        {{- with sub $total $shown }}{{ if gt . 0 }}
+            {{- printf "… %d more" . | nindent 4 }}
+        {{- end }}{{ end }}
+    {{- else }}
+        {{- "Violations" | green | nindent 2 }}: none
+    {{- end }}
+    {{- with .Status.byPod }}
+        {{- $total := len . }}
+        {{- $enforced := 0 }}
+        {{- range . }}{{ if .enforced }}{{ $enforced = add1 $enforced }}{{ end }}{{ end }}
+        {{- if lt $enforced $total }}
+            {{- "Sync" | red | bold | nindent 2 }}: {{ printf "%d/%d" $enforced $total | red | bold }} gatekeeper replicas enforcing this constraint
+        {{- end }}
+    {{- end }}
+{{- end }}

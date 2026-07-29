@@ -1,0 +1,18 @@
+
+K8sRequiredLabels/dryrun-check, created 1m ago, gen:1
+  Match: core/Namespace
+  enforcementAction: dryrun (violations are not blocked)
+  Required labels: owner
+  Last audited: 1m ago
+  Violations: 22
+    Namespace/test-violation-5: regex mismatch [dryrun]
+    Namespace/test-violation-5: missing required label, requires all of: owner [dryrun]
+    Namespace/test-violation-4: regex mismatch [dryrun]
+    Namespace/test-violation-4: missing required label, requires all of: owner [dryrun]
+    Namespace/test-violation-3: regex mismatch [dryrun]
+    Namespace/test-violation-3: missing required label, requires all of: owner [dryrun]
+    Namespace/test-violation-2: regex mismatch [dryrun]
+    Namespace/test-violation-2: missing required label, requires all of: owner [dryrun]
+    Namespace/test-violation-1: regex mismatch [dryrun]
+    Namespace/test-violation-1: missing required label, requires all of: owner [dryrun]
+    … 12 more

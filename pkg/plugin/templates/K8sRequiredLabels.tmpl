@@ -1,0 +1,34 @@
+{{- define "K8sRequiredLabels" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: constraints.gatekeeper.sh/v1beta1, Kind=K8sRequiredLabels */ -}}
+    {{- /* kstatus_summary omitted: constraints carry no status.conditions, so it only ever
+           reports a generic "Resource is current" that duplicates nothing useful -- the
+           audit/violations/sync lines below are the actual health signal. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "gatekeeper_constraint_match_and_enforcement" . }}
+    {{- with .Spec.parameters }}
+        {{- with .labels }}
+            {{- if eq (len .) 1 }}
+                {{- with index . 0 }}
+                    {{- "Required labels" | bold | nindent 2 }}: {{ .key | cyan }}{{ with .allowedRegex }} matching {{ . | cyan }}{{ end }}
+                {{- end }}
+            {{- else }}
+                {{- "Required labels" | bold | nindent 2 }}:
+                {{- range . }}
+                    {{- "" | nindent 4 }}{{ .key | cyan }}{{ with .allowedRegex }} matching {{ . | cyan }}{{ end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+        {{- with .message }}
+            {{- "Message" | bold | nindent 2 }}: {{ . }}
+        {{- end }}
+    {{- end }}
+    {{- template "gatekeeper_constraint_audit_status" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}
