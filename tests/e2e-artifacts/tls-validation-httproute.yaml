@@ -19,6 +19,31 @@ spec:
         type: PathPrefix
         value: /
 ---
+# A wildcard route hostname is as legal as a wildcard listener hostname, and the
+# leaf certificate covers e2e-tls.example.com, which sits under it -- so this
+# must not be flagged as a hostname mismatch either. sectionName pins the
+# listener, bypassing the parentRef hostname filtering.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: e2e-tls-httproute-wildcard-host
+spec:
+  hostnames:
+  - "*.example.com"
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: e2e-tls-gw-healthy
+    sectionName: https
+  rules:
+  - backendRefs:
+    - name: e2e-tls-svc
+      port: 80
+    matches:
+    - path:
+        type: PathPrefix
+        value: /
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

@@ -167,6 +167,12 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 				assert.NotContains(t, stdout, problem)
 			}
 		})
+		t.Run("httproute with a wildcard hostname covering the cert shows no cert flags", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-wildcard-host", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			require.NoError(t, err)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-httproute-wildcard-host.regex")
+			assert.NotContains(t, stdout, "hostname mismatch")
+		})
 		t.Run("httproute attached to a mismatched-hostname listener flags hostname mismatch", func(t *testing.T) {
 			cmdTest{
 				args:            []string{"httproute/e2e-tls-httproute-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
