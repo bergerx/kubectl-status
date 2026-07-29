@@ -30,6 +30,17 @@ jobs:
         uses: medyagh/setup-minikube@e9e035a86bbc3caea26a450bd4dbf9d0c453682e # v0.0.21
         with:
           addons: metrics-server
+          # minikube's own default is --cpus=2, sized for serial use, and the suite below runs
+          # with -parallel=4. The Makefile already learned this the hard way and starts its
+          # cluster with --cpus=4 (see e2e-minikube-up's note on the defaults getting
+          # overwhelmed into widespread `kubectl wait` timeouts) -- but CI runs the
+          # ASSUME_MINIKUBE_IS_CONFIGURED branch, which skips e2e-minikube-up entirely, so that
+          # sizing never applied here and CI has been running the whole suite on 2 CPUs.
+          # "max" rather than a literal 4 so this tracks the runner size instead of pinning to
+          # today's 4-vCPU ubuntu-latest.
+          cpus: max
+          # memory is deliberately left at minikube's default: unlike --cpus it auto-sizes from
+          # the host, so naming a figure here could only shrink it.
       - name: Run e2e tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:

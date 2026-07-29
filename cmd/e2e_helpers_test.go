@@ -941,11 +941,37 @@ func ensureCrossplane(t *testing.T) {
 		if output, err := exec.Command("kubectl", "apply", "-f", functionsManifest).CombinedOutput(); err != nil {
 			return fmt.Errorf("kubectl apply %s: %w: %s", functionsManifest, err, output)
 		}
-		output, err := exec.Command("kubectl", "wait", "--for=condition=Healthy", "--timeout=180s",
+		// 5m, matching the helm installs above rather than being the one short wait in the
+		// function: both Functions are OCI packages pulled on demand, so this is a cold pull of
+		// two images plus a Deployment rollout, racing whatever else the suite has running.
+		output, err := exec.Command("kubectl", "wait", "--for=condition=Healthy", "--timeout=300s",
 			"function.pkg.crossplane.io", "--all").CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("kubectl wait crossplane functions: %w: %s", err, output)
+			return fmt.Errorf("kubectl wait crossplane functions: %w: %s%s", err, output, crossplaneDiagnostics())
 		}
 		return nil
 	})
+}
+
+// crossplaneDiagnostics dumps the state that explains why the Functions never went Healthy. On
+// timeout `kubectl wait` says only "timed out waiting for the condition on functions/...", which
+// names no cause: a package still pulling, a pull that failed outright, and a Function whose pod
+// never got scheduled are indistinguishable in CI logs after the fact. The install runs
+// unattended on a cluster the rest of the suite is loading, so whatever is collected here is the
+// only evidence anyone gets -- the failure is not reproducible by re-reading the log later.
+func crossplaneDiagnostics() string {
+	var b strings.Builder
+	for _, args := range [][]string{
+		{"get", "function.pkg.crossplane.io", "-o", "wide"},
+		{"get", "functionrevision.pkg.crossplane.io", "-o", "wide"},
+		{"get", "pods", "-n", "crossplane-system", "-o", "wide"},
+		{"get", "events", "-n", "crossplane-system", "--sort-by=.lastTimestamp"},
+	} {
+		out, err := exec.Command("kubectl", args...).CombinedOutput()
+		fmt.Fprintf(&b, "\n--- kubectl %s ---\n%s", strings.Join(args, " "), out)
+		if err != nil {
+			fmt.Fprintf(&b, "(%v)\n", err)
+		}
+	}
+	return b.String()
 }
