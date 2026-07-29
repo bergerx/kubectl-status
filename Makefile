@@ -32,9 +32,66 @@ fmt:
 vet:
 	go vet ./...
 
+# `go run <mod>@<version>` builds the tool with the *oldest* toolchain that module's own go.mod
+# allows (go1.25 for both staticcheck v0.6.1 and x/vuln v1.6.0), however new the local Go is. A
+# tool that type-checks this module's packages then rejects every one of them with "package
+# requires newer Go version go1.26 (application built with go1.25)". Pinning to `go env GOVERSION`
+# -- go.mod's version, once GOTOOLCHAIN=auto has resolved it -- keeps the analyzer at least as new
+# as the code it analyzes. Only bites where the machine's base Go predates go.mod's (CI's base Go
+# is installed from go.mod, so there's nothing for it to downgrade to and it never trips this).
+TOOL_GOVERSION = $(shell go env GOVERSION)
+
 .PHONY: staticcheck
 staticcheck:
-	go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
+	GOTOOLCHAIN=$(TOOL_GOVERSION) go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
+
+#--------------------------
+# Security
+#--------------------------
+# Deliberately not wired into `test` (i.e. not into the pre-commit hook or ci-test.yml):
+# both checks are about the repo as a whole rather than the change in front of you, and
+# both are already covered in CI by .github/workflows/security-checks.yml -- running them
+# from `test` too would just duplicate that job on every push. Locally they're a pre-push
+# concern instead, see the make-security-check hook in .pre-commit-config.yaml.
+.PHONY: security-check
+security-check: gitleaks govulncheck
+
+GITLEAKS_MODULE := github.com/zricethezav/gitleaks/v8@v8.30.1
+
+.PHONY: gitleaks
+gitleaks:
+	go run $(GITLEAKS_MODULE) git --redact --no-banner --verbose --log-level warn
+
+# Appends fingerprints for current findings (e.g. a newly added test fixture)
+# to .gitleaksignore, skipping ones already listed. Findings are matched by
+# fingerprint only (commit:file:rule-id:line), so nothing here embeds secret
+# content or commit metadata. Review the diff before committing -- this is
+# also the command that would silence a genuine leak if one slipped in.
+.PHONY: gitleaks-allow
+gitleaks-allow:
+	@tmp=$$(mktemp); \
+	go run $(GITLEAKS_MODULE) git --redact --no-banner --log-level warn -f json -r "$$tmp" >/dev/null 2>&1; \
+	added=0; \
+	for fp in $$(jq -r '.[].Fingerprint' "$$tmp" | sort -u); do \
+		if ! grep -qxF "$$fp" .gitleaksignore 2>/dev/null; then \
+			echo "$$fp" >> .gitleaksignore; \
+			added=$$((added+1)); \
+		fi; \
+	done; \
+	rm -f "$$tmp"; \
+	echo "Added $$added new fingerprint(s) to .gitleaksignore."; \
+	if [ "$$added" -gt 0 ]; then \
+		echo "Review before committing:"; \
+		git --no-pager diff -- .gitleaksignore; \
+	fi
+
+GOVULNCHECK_MODULE := golang.org/x/vuln/cmd/govulncheck@v1.6.0
+
+# GOTOOLCHAIN: govulncheck type-checks the packages it scans, so it needs the same treatment as
+# staticcheck -- see the TOOL_GOVERSION comment above.
+.PHONY: govulncheck
+govulncheck:
+	GOTOOLCHAIN=$(TOOL_GOVERSION) go run $(GOVULNCHECK_MODULE) ./...
 
 #--------------------------
 # Test
@@ -62,6 +119,7 @@ E2E_PROFILE := kstat-e2e-shared
 E2E_HOME := $(HOME)/.kstat-e2e
 E2E_KUBECONFIG := $(E2E_HOME)/shared.kubeconfig
 E2E_LOCKFILE := $(E2E_HOME)/shared.lock
+GOTESTSUM_MODULE := gotest.tools/gotestsum@v1.13.0
 
 # CI (and anyone else who already has a suitable cluster configured) sets
 # ASSUME_MINIKUBE_IS_CONFIGURED=true, in which case we deliberately fall back to the
@@ -159,7 +217,7 @@ test-e2e: vet staticcheck install-e2e-deps
 	# CI runner $(E2E_LOCKFILE)'s parent dir wouldn't otherwise exist and flock would
 	# fail outright.
 	@mkdir -p $(E2E_HOME)
-	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
+	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# The cluster (profile: $(E2E_PROFILE)) is shared across every worktree/branch/session on
@@ -170,7 +228,7 @@ test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# using count to prevent caching; see the timeout note in the ASSUME_MINIKUBE_IS_CONFIGURED
 	# branch above.
 	# See the gotestsum note, and the -parallel=4 note above the other branch's go test invocation.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
 endif
 
 .PHONY: test-e2e-quick
@@ -195,7 +253,7 @@ test-e2e-quick:
 	# sized for the e2e-minikube-up VM (see that target's comment), not worth changing for a
 	# narrower -run since it's still the same cluster taking the load. flock $(E2E_LOCKFILE):
 	# see the comment on the shared-cluster branch of test-e2e above.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=10m -parallel=4 -run '$(RUN)'
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=10m -parallel=4 -run '$(RUN)'
 
 #--------------------------
 # Test Artifacts
