@@ -5,6 +5,15 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  # Both checks can start failing without anyone touching the repo -- govulncheck reads a
+  # vulnerability DB that gains entries for already-released dependencies, and gitleaks ships
+  # new detection rules that can match content already in history. A daily run on master
+  # surfaces that within a day instead of whenever someone next happens to open a PR.
+  schedule:
+    - cron: '17 6 * * *'
+  # So the same scan can be re-run on demand (e.g. right after bumping a dependency) without
+  # waiting for the nightly slot.
+  workflow_dispatch:
 
 permissions:
   contents: read

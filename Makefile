@@ -32,20 +32,35 @@ fmt:
 vet:
 	go vet ./...
 
+# `go run <mod>@<version>` builds the tool with the *oldest* toolchain that module's own go.mod
+# allows (go1.25 for both staticcheck v0.6.1 and x/vuln v1.6.0), however new the local Go is. A
+# tool that type-checks this module's packages then rejects every one of them with "package
+# requires newer Go version go1.26 (application built with go1.25)". Pinning to `go env GOVERSION`
+# -- go.mod's version, once GOTOOLCHAIN=auto has resolved it -- keeps the analyzer at least as new
+# as the code it analyzes. Only bites where the machine's base Go predates go.mod's (CI's base Go
+# is installed from go.mod, so there's nothing for it to downgrade to and it never trips this).
+TOOL_GOVERSION = $(shell go env GOVERSION)
+
 .PHONY: staticcheck
 staticcheck:
-	go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
+	GOTOOLCHAIN=$(TOOL_GOVERSION) go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
+
+#--------------------------
+# Security
+#--------------------------
+# Deliberately not wired into `test` (i.e. not into the pre-commit hook or ci-test.yml):
+# both checks are about the repo as a whole rather than the change in front of you, and
+# both are already covered in CI by .github/workflows/security-checks.yml -- running them
+# from `test` too would just duplicate that job on every push. Locally they're a pre-push
+# concern instead, see the make-security-check hook in .pre-commit-config.yaml.
+.PHONY: security-check
+security-check: gitleaks govulncheck
 
 GITLEAKS_MODULE := github.com/zricethezav/gitleaks/v8@v8.30.1
 
 .PHONY: gitleaks
 gitleaks:
 	go run $(GITLEAKS_MODULE) git --redact --no-banner --verbose --log-level warn
-
-# Fast path for pre-commit: scans only staged content instead of full history.
-.PHONY: gitleaks-staged
-gitleaks-staged:
-	go run $(GITLEAKS_MODULE) git --staged --redact --no-banner --verbose --log-level warn
 
 # Appends fingerprints for current findings (e.g. a newly added test fixture)
 # to .gitleaksignore, skipping ones already listed. Findings are matched by
@@ -72,17 +87,17 @@ gitleaks-allow:
 
 GOVULNCHECK_MODULE := golang.org/x/vuln/cmd/govulncheck@v1.6.0
 
+# GOTOOLCHAIN: govulncheck type-checks the packages it scans, so it needs the same treatment as
+# staticcheck -- see the TOOL_GOVERSION comment above.
 .PHONY: govulncheck
 govulncheck:
-	go run $(GOVULNCHECK_MODULE) ./...
+	GOTOOLCHAIN=$(TOOL_GOVERSION) go run $(GOVULNCHECK_MODULE) ./...
 
 #--------------------------
 # Test
 #--------------------------
 .PHONY: test
-# gitleaks-staged (not the full-history gitleaks) so this stays cheap enough to run on every
-# commit; the full-history scan still runs in CI via .github/workflows/security-checks.yml.
-test: vet staticcheck gitleaks-staged govulncheck
+test: vet staticcheck
 	go test ./...
 
 #--------------------------
