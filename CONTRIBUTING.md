@@ -211,6 +211,28 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
 
 3. **Include updated artifacts in PRs** - reviewers use `.out` file diffs to verify template changes.
 
+4. **Check the template survives a partial object.** Artifacts captured from a live cluster are
+   fully populated, so they never exercise the missing-field paths — and a rendering error aborts
+   the whole object, not just the offending line (see CONVENTIONS.md § Never trust a field to be
+   present). Hand-write a stripped manifest with empty/absent fields and render it:
+
+   ```bash
+   cat > /tmp/partial.yaml <<'EOF'
+   apiVersion: <group>/<version>
+   kind: <Kind>
+   metadata:
+     name: bare
+     namespace: default
+     creationTimestamp: "2026-06-27T09:12:04Z"
+   spec: {}
+   EOF
+   bin/status -f /tmp/partial.yaml --local --shallow
+   ```
+
+   Then add a second document dropping individual `required` sub-fields from the lists and refs
+   the template renders. Any `Failed to render:` line, or a literal `<nil>` in the output, is a
+   bug. Worth keeping as a `tests/artifacts/` case when the kind has many optional fields.
+
 ### Running e2e Tests Locally
 
 `make test-e2e` runs the `TestE2E*` suite against a real cluster. That suite has two top-level

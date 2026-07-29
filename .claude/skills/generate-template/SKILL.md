@@ -38,6 +38,7 @@ Read `spec` and `status` sub-schemas **in full** — not just top-level keys. Fo
 Pay specific attention to:
 - **Timestamps** — apply the date formatting rules in CONVENTIONS.md § Dates.
 - **Booleans and enums** — never emit raw `true`/`false`; emit a meaningful label only when the value is operationally interesting.
+- **`required` lists** — note them, but do **not** treat them as a render-time guarantee. Third-party CRD schemas are looser than their docs, they change between operator versions, and `--local`/`-f` renders manifests that never passed API-server validation. See CONVENTIONS.md § Never trust a field to be present — a nil reaching a color function aborts the render of the whole object.
 
 ### 3. Sample live instances
 
@@ -57,6 +58,7 @@ Copy the `define` wrapper and bookend sections from any existing template. The G
 All design rules are in CONVENTIONS.md. Implementation pointers:
 - **Label selectors** — use `selector_with_health_summary` from `common.tmpl`; only hand-roll when custom health logic is needed.
 - **Reference fields** — `HTTPRoute.tmpl` has worked examples of both single-ref and list-of-refs forms.
+- **Nil safety** — normal `with`/`if` guards cover almost everything; don't pre-emptively wrap every field in `default`. Add it where a guard can't reach: values handed to a shared sub-template, sub-fields of an item inside a `range`, and anything reaching `toString`. Let step 5 tell you the rest.
 
 ### 5. Verify
 
@@ -65,3 +67,20 @@ kubectl status <resource> <name> -n <ns>
 ```
 
 Test at least two different instances to confirm optional fields appear and disappear correctly.
+
+Then verify against a **partial object**, which live instances never exercise:
+
+```bash
+cat > /tmp/partial.yaml <<'EOF'
+apiVersion: <group>/<version>
+kind: <Kind>
+metadata:
+  name: bare
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec: {}
+EOF
+kubectl status -f /tmp/partial.yaml --local --shallow
+```
+
+Add further documents that drop individual `required` sub-fields from each list and reference the template renders — e.g. a ref with `name` but no `kind`, a list entry with only one of its fields. Any `Failed to render:` line, or a literal `<nil>` in the output, is a bug: fix it before finishing, and re-run all three renders.

@@ -1,0 +1,39 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  annotations:
+    reconcile.fluxcd.io/requestedAt: "2026-06-29T23:59:00.482913746Z"
+  creationTimestamp: "2026-06-14T11:02:37Z"
+  finalizers:
+  - finalizers.fluxcd.io
+  generation: 3
+  name: podinfo
+  namespace: flux-system
+  resourceVersion: "91004"
+  uid: 4a8e2c17-6b93-4f05-8d2e-b17c0a5f9e34
+spec:
+  interval: 5m
+  path: ./kustomize
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  timeout: 2m
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-29T23:55:12Z"
+    message: 'Applied revision: refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1'
+    observedGeneration: 3
+    reason: ReconciliationSucceeded
+    status: "True"
+    type: Ready
+  inventory:
+    entries:
+    - id: default_podinfo__Service
+      v: v1
+    - id: default_podinfo_apps_Deployment
+      v: v1
+  lastAppliedRevision: refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1
+  lastAttemptedRevision: refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1
+  lastHandledReconcileAt: "2026-06-29T22:14:03.118204553Z"
+  observedGeneration: 3

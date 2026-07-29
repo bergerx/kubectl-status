@@ -3,9 +3,10 @@ HelmRelease/nginx -n default, created 1m ago, gen:4
   InProgress: Helm upgrade failed for release default/nginx with chart nginx@18.3.0: timed out waiting for the condition
     Reconciling: UpgradeFailed, Helm upgrade failed for release default/nginx with chart nginx@18.3.0: timed out waiting for the condition
   Chart nginx (>=18.x) from HelmRepository/bitnami -n flux-system · HelmChart/default-nginx -n flux-system
-  Helm release: chart 18.3.0 (app 1.27.2), revision 3, failed 1m ago, first deployed 1m ago
-  Last attempted chart 18.3.0 was not released
-  Still installed: chart 18.2.5 (app 1.27.1), revision 2, deployed 1m ago
+  Helm releases (2 revisions, first deployed 1m ago):
+    revision 3, chart 18.3.0 (app 1.27.2), failed 1m ago
+    revision 2, chart 18.2.5 (app 1.27.1), deployed 1m ago
+  Last attempted upgrade of chart 18.3.0 was not released, 18.2.5 is still what's installed
   Failures: upgrade:2, total:2
   Remediation: install retries 3, upgrade retries 2, on failed upgrade: rollback
   Depends on HelmRelease/redis

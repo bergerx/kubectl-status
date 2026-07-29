@@ -2,7 +2,7 @@
 HelmRelease/nginx -n default, created 1m ago, gen:1
   Current: Resource is Ready
   Chart nginx (>=18.x) from HelmRepository/bitnami -n flux-system · HelmChart/default-nginx -n flux-system
-  Helm release: chart 18.2.5 (app 1.27.1), revision 1, deployed 1m ago
+  Helm release: revision 1, chart 18.2.5 (app 1.27.1), deployed 1m ago
   Reconciles every 10m
   Ready:True InstallSucceeded, Helm install succeeded for release default/nginx.v1 with chart nginx@18.2.5 for 1m
   Released:True InstallSucceeded, Helm install succeeded for release default/nginx.v1 with chart nginx@18.2.5 for 1m
