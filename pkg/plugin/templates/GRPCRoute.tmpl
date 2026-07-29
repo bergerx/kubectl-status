@@ -25,20 +25,16 @@
                         {{- $gwNs := coalesce .namespace $.Namespace }}
                         {{- $gw := $.KubeGetFirst $gwNs "Gateway" .name }}
                         {{- if $gw.Object }}
-                            {{- /* if the route has exactly one hostname, use it for hostname-match checks; skip strictness otherwise */}}
                             {{- $routeHostnames := $.Spec.hostnames | default (list) }}
-                            {{- $routeHostname := "" }}
-                            {{- if eq (len $routeHostnames) 1 }}{{ $routeHostname = index $routeHostnames 0 }}{{ end }}
                             {{- range $gw.Spec.listeners }}
+                                {{- /* See the HTTPRoute template for what this intersection means. */ -}}
+                                {{- $certHostnames := hostnameIntersections (.hostname | default "") $routeHostnames }}
                                 {{- $isMatch := false }}
                                 {{- if $parentRef.sectionName }}
                                     {{- if eq .name $parentRef.sectionName }}{{ $isMatch = true }}{{ end }}
+                                    {{- if not $certHostnames }}{{ $certHostnames = $routeHostnames }}{{ end }}
                                 {{- else if eq .protocol "HTTPS" }}
-                                    {{- $hostOk := true }}
-                                    {{- with .hostname }}
-                                        {{- if and (gt (len $routeHostnames) 0) (not (has . $routeHostnames)) }}{{ $hostOk = false }}{{ end }}
-                                    {{- end }}
-                                    {{- if $hostOk }}{{ $isMatch = true }}{{ end }}
+                                    {{- if or (not $routeHostnames) (not .hostname) $certHostnames }}{{ $isMatch = true }}{{ end }}
                                 {{- end }}
                                 {{- if $isMatch }}
                                     {{- with .tls }}
@@ -51,7 +47,7 @@
                                                 {{- if not $secret.Object }}
                                                     {{- " doesn't exist" | red | bold }}
                                                 {{- else }}
-                                                    {{- $cert := parseTLSSecretCertificate $secret $routeHostname }}
+                                                    {{- $cert := parseTLSSecretCertificate $secret $certHostnames }}
                                                     {{- if $cert.WrongType }}
                                                         {{- printf ", wrong type:%s" $cert.ActualType | red | bold }}
                                                     {{- else if $cert.MissingKeys }}

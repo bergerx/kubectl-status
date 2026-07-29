@@ -120,3 +120,41 @@ spec:
       certificateRefs:
       - kind: Secret
         name: e2e-tls-leaf-tls
+---
+# A wildcard listener only routes names the leaf certificate covers
+# (e2e-tls.example.com), so this must not be flagged as a hostname mismatch.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: e2e-tls-gw-wildcard-host
+spec:
+  gatewayClassName: e2e-tls-unused-gwc
+  listeners:
+  - name: https
+    port: 443
+    protocol: HTTPS
+    hostname: "*.example.com"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: e2e-tls-leaf-tls
+---
+# The leaf certificate covers nothing under wrong.example.com, so a wildcard
+# listener for it is still a genuine mismatch.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: e2e-tls-gw-wildcard-mismatch
+spec:
+  gatewayClassName: e2e-tls-unused-gwc
+  listeners:
+  - name: https
+    port: 443
+    protocol: HTTPS
+    hostname: "*.wrong.example.com"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: e2e-tls-leaf-tls

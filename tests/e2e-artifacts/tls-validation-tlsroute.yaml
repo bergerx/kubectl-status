@@ -63,3 +63,46 @@ spec:
   - backendRefs:
     - name: e2e-tls-svc
       port: 80
+---
+# Two Terminate listeners with different hostnames and certificates: the route
+# below attaches only to tls-a, so tls-b's non-covering certificate must not be
+# reported against it.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: e2e-tls-gw-tlsroute-multi
+spec:
+  gatewayClassName: e2e-tls-unused-gwc
+  listeners:
+  - name: tls-a
+    port: 443
+    protocol: TLS
+    hostname: e2e-tls.example.com
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: e2e-tls-leaf-tls
+  - name: tls-b
+    port: 444
+    protocol: TLS
+    hostname: other.example.com
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: e2e-tls-root-ca-secret
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  name: e2e-tlsroute-multi-listener
+spec:
+  hostnames:
+  - e2e-tls.example.com
+  parentRefs:
+  - name: e2e-tls-gw-tlsroute-multi
+  rules:
+  - backendRefs:
+    - name: e2e-tls-svc
+      port: 80

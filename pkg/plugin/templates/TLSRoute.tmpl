@@ -10,10 +10,7 @@
         {{- "Hostnames" | bold | nindent 2 }}: {{ join ", " . | cyan }}
     {{- end }}
     {{- with .Spec.parentRefs }}
-        {{- $routeHostname := "" }}
-        {{- with $.Spec.hostnames }}
-            {{- if eq (len .) 1 }}{{ $routeHostname = index . 0 }}{{ end }}
-        {{- end }}
+        {{- $routeHostnames := $.Spec.hostnames | default (list) }}
         {{- "Parents" | bold | nindent 2 }}:
         {{- range . }}
             {{- if $.Config.GetBool "deep" }}
@@ -29,11 +26,17 @@
                     {{- $gw := $.KubeGetFirst $gwNs (coalesce $parentRef.kind "Gateway") $parentRef.name }}
                     {{- if $gw.Object }}
                         {{- range $gw.Spec.listeners }}
+                            {{- /* See the HTTPRoute template for what this intersection means. Without
+                                   it an unpinned route reported every TLS listener on the Gateway,
+                                   flagging certificates on listeners whose own hostname means they
+                                   never serve this route. */ -}}
+                            {{- $certHostnames := hostnameIntersections (.hostname | default "") $routeHostnames }}
                             {{- $listenerMatches := false }}
                             {{- if $parentRef.sectionName }}
                                 {{- if eq .name $parentRef.sectionName }}{{ $listenerMatches = true }}{{ end }}
+                                {{- if not $certHostnames }}{{ $certHostnames = $routeHostnames }}{{ end }}
                             {{- else if eq .protocol "TLS" }}
-                                {{- $listenerMatches = true }}
+                                {{- if or (not $routeHostnames) (not .hostname) $certHostnames }}{{ $listenerMatches = true }}{{ end }}
                             {{- end }}
                             {{- if $listenerMatches }}
                                 {{- with .tls }}
@@ -44,7 +47,7 @@
                                                 {{- $refNs := coalesce .namespace $gwNs }}
                                                 {{- $secret := $.KubeGetFirst $refNs "Secret" .name }}
                                                 {{- if $secret.Object }}
-                                                    {{- $cert := parseTLSSecretCertificate $secret $routeHostname }}
+                                                    {{- $cert := parseTLSSecretCertificate $secret $certHostnames }}
                                                     {{- if $cert.WrongType }}
                                                         {{- printf ", wrong type:%s" $cert.ActualType | red | bold }}
                                                     {{- else if $cert.MissingKeys }}
