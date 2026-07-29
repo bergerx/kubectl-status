@@ -1658,9 +1658,10 @@ func stringifyLabels(labels map[string]interface{}) map[string]string {
 
 // parseTLSSecretCertificate inspects a Secret expected to be type kubernetes.io/tls and
 // returns both full certificate detail (for Secret.tmpl's own display) and consistency
-// flags against an optional expected hostname (for Ingress/Gateway callers). hostname == ""
-// skips the hostname-match check and is used by Secret.tmpl, which has no "expected host" of
-// its own.
+// flags against an optional expected hostname (for Ingress/Gateway callers). The expected
+// hostname may itself be a wildcard pattern such as "*.example.com" -- see certServesHostname.
+// hostname == "" skips the hostname-match check and is used by Secret.tmpl, which has no
+// "expected host" of its own.
 func (cfg *RenderConfig) parseTLSSecretCertificate(secret RenderableObject, hostname string) map[string]interface{} {
 	result := map[string]interface{}{
 		"Exists":          false,
@@ -1763,10 +1764,97 @@ func (cfg *RenderConfig) parseTLSSecretCertificate(secret RenderableObject, host
 	if hostname == "" {
 		result["MatchesHostname"] = true
 	} else {
-		result["MatchesHostname"] = cert.VerifyHostname(hostname) == nil
+		result["MatchesHostname"] = certServesHostname(cert, hostname)
 	}
 
 	return result
+}
+
+// certServesHostname reports whether cert can serve the hostname a caller expects it to serve.
+//
+// The expectation comes from an Ingress rule host, a Gateway listener hostname or a route
+// hostname, every one of which may itself be a wildcard pattern such as "*.example.com" rather
+// than a concrete server name. x509.VerifyHostname is only defined for concrete names: it
+// refuses to treat a "*" in its argument as a wildcard and degrades to a byte comparison
+// against the SANs, so a "*.example.com" listener fronting a "foo.example.com" (or
+// "*.apps.example.com") certificate gets reported as a mismatch even though every name that
+// listener accepts routing for is one the certificate covers. For a wildcard expectation we
+// therefore ask the weaker, correct question: does the certificate cover *any* hostname this
+// caller would accept?
+func certServesHostname(cert *x509.Certificate, hostname string) bool {
+	certNames := cert.DNSNames
+	hasSAN := len(certNames) > 0 || len(cert.IPAddresses) > 0
+	if !hasSAN {
+		// Pre-RFC-6125 certificates name the server only in the subject CN. Go and browsers
+		// ignore it, but OpenSSL-based proxies still honour it, and reporting a hostname
+		// mismatch for a certificate whose CN is exactly the expected host misdiagnoses the
+		// real problem (the missing SAN) as the wrong one.
+		if cn := cert.Subject.CommonName; cn != "" {
+			certNames = []string{cn}
+		}
+	}
+
+	if suffix, isWildcard := wildcardSuffix(hostname); isWildcard {
+		for _, certName := range certNames {
+			if certNameIntersectsWildcard(certName, suffix) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if hasSAN {
+		return cert.VerifyHostname(hostname) == nil
+	}
+	for _, certName := range certNames {
+		if certNameCoversHost(certName, hostname) {
+			return true
+		}
+	}
+	return false
+}
+
+// wildcardSuffix splits a "*.example.com" pattern into the "example.com" it is a wildcard for.
+func wildcardSuffix(pattern string) (suffix string, isWildcard bool) {
+	if !strings.HasPrefix(pattern, "*.") || len(pattern) == len("*.") {
+		return "", false
+	}
+	return pattern[len("*."):], true
+}
+
+// certNameIntersectsWildcard reports whether a certificate DNS name covers at least one hostname
+// under the "*."+suffix wildcard an Ingress/Gateway/route expects. Both sides can be patterns, so
+// this is a set-intersection test rather than a match: a certificate wildcard covers one label
+// (RFC 6125), while the expected wildcard covers any depth of subdomain but never the bare
+// suffix itself -- "*.example.com" accepts "a.example.com" and "b.a.example.com" but not
+// "example.com", per the Gateway API hostname spec and Ingress' wildcard host rules.
+func certNameIntersectsWildcard(certName, suffix string) bool {
+	base, certIsWildcard := wildcardSuffix(certName)
+	if !certIsWildcard {
+		base = certName
+	}
+	if base == "" {
+		return false
+	}
+	// A certificate wildcard "*."+base contributes names one label below base, so it reaches
+	// into the expected space as soon as base is the suffix itself. A concrete certificate name
+	// has to sit strictly below the suffix.
+	if certIsWildcard && strings.EqualFold(base, suffix) {
+		return true
+	}
+	return strings.HasSuffix(strings.ToLower(base), "."+strings.ToLower(suffix))
+}
+
+// certNameCoversHost applies RFC 6125 matching -- exact, or a leading wildcard standing for
+// exactly one label -- of a single certificate name against a concrete hostname. Only used for
+// the legacy CN fallback; SAN matching goes through x509.VerifyHostname.
+func certNameCoversHost(certName, host string) bool {
+	suffix, isWildcard := wildcardSuffix(certName)
+	if !isWildcard {
+		return strings.EqualFold(certName, host)
+	}
+	label, ok := strings.CutSuffix(strings.ToLower(host), "."+strings.ToLower(suffix))
+	return ok && label != "" && !strings.Contains(label, ".")
 }
 
 // parseDockerConfigSecret inspects a Secret expected to be type kubernetes.io/dockerconfigjson

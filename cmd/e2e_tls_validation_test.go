@@ -108,6 +108,18 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 				stdoutRegexPath: "e2e-artifacts/tls-validation-gateway-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
+		t.Run("gateway with wildcard hostname covering the cert shows no cert flags", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"gateway/e2e-tls-gw-wildcard-host", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			require.NoError(t, err)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-gateway-wildcard-host.regex")
+			assert.NotContains(t, stdout, ", hostname mismatch")
+		})
+		t.Run("gateway with wildcard hostname outside the cert flags hostname mismatch", func(t *testing.T) {
+			cmdTest{
+				args:            []string{"gateway/e2e-tls-gw-wildcard-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+				stdoutRegexPath: "e2e-artifacts/tls-validation-gateway-wildcard-mismatch.regex",
+			}.assert(t, nil, opts...)
+		})
 		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-grpcroute.yaml", ns)
 		t.Run("grpcroute attached to healthy gateway listener shows no cert flags", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"grpcroute/e2e-tls-grpcroute-healthy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)

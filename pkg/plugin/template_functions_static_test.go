@@ -1591,6 +1591,25 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 		selfSigned: true,
 	})
 
+	// A wildcard certificate as cert-manager issues one, and an apex-only one, to exercise
+	// wildcard expected hostnames (Gateway listener/route hostnames and Ingress hosts) on both
+	// sides of the comparison.
+	wildcardPEM, _, wildcardKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "*.example.com",
+		dnsNames:   []string{"*.example.com"},
+		selfSigned: true,
+	})
+	apexPEM, _, apexKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "example.com",
+		dnsNames:   []string{"example.com"},
+		selfSigned: true,
+	})
+	// Pre-RFC-6125 certificate naming the server only in its subject CN, with no SAN extension.
+	cnOnlyPEM, _, cnOnlyKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "*.cn-only.example.com",
+		selfSigned: true,
+	})
+
 	tests := []struct {
 		name          string
 		secret        RenderableObject
@@ -1732,6 +1751,123 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 			hostname: "foo.wild.example.com",
 			want: map[string]interface{}{
 				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			// A "*.example.com" listener only ever routes names the certificate covers, so
+			// flagging this is a false alarm -- x509.VerifyHostname can't tell, since it treats
+			// its argument as a concrete server name.
+			name:     "wildcard expected hostname is served by a concrete SAN below it",
+			secret:   tlsSecret("kubernetes.io/tls", leafPEM, keyPEMBytes(leafKey)),
+			hostname: "*.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "wildcard expected hostname is served by an identical wildcard SAN",
+			secret:   tlsSecret("kubernetes.io/tls", wildcardPEM, keyPEMBytes(wildcardKey)),
+			hostname: "*.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "wildcard expected hostname is served by a deeper wildcard SAN",
+			secret:   tlsSecret("kubernetes.io/tls", leafPEM, keyPEMBytes(leafKey)),
+			hostname: "*.wild.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "wildcard expected hostname mismatch on a sibling subdomain",
+			secret:   tlsSecret("kubernetes.io/tls", leafPEM, keyPEMBytes(leafKey)),
+			hostname: "*.other.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "wildcard expected hostname mismatch on an unrelated domain",
+			secret:   tlsSecret("kubernetes.io/tls", wildcardPEM, keyPEMBytes(wildcardKey)),
+			hostname: "*.example.org",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			// "*.example.com" never routes the apex, so an apex-only certificate serves nothing
+			// the listener accepts.
+			name:     "wildcard expected hostname is not served by the bare suffix",
+			secret:   tlsSecret("kubernetes.io/tls", apexPEM, keyPEMBytes(apexKey)),
+			hostname: "*.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			// A certificate wildcard stands for exactly one label (RFC 6125), so "*.example.com"
+			// covers no name under "foo.example.com".
+			name:     "shallower wildcard SAN doesn't serve a deeper wildcard expected hostname",
+			secret:   tlsSecret("kubernetes.io/tls", wildcardPEM, keyPEMBytes(wildcardKey)),
+			hostname: "*.foo.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "CN-only certificate matches via its CommonName wildcard",
+			secret:   tlsSecret("kubernetes.io/tls", cnOnlyPEM, keyPEMBytes(cnOnlyKey)),
+			hostname: "foo.cn-only.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "CN-only certificate matches a wildcard expected hostname",
+			secret:   tlsSecret("kubernetes.io/tls", cnOnlyPEM, keyPEMBytes(cnOnlyKey)),
+			hostname: "*.cn-only.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "CN-only certificate wildcard spans a single label only",
+			secret:   tlsSecret("kubernetes.io/tls", cnOnlyPEM, keyPEMBytes(cnOnlyKey)),
+			hostname: "foo.bar.cn-only.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "CN-only certificate mismatch",
+			secret:   tlsSecret("kubernetes.io/tls", cnOnlyPEM, keyPEMBytes(cnOnlyKey)),
+			hostname: "foo.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			// The SAN extension is authoritative when present: a certificate with SANs is not
+			// rescued by a CommonName that happens to match.
+			name:     "CommonName is ignored when the certificate has SANs",
+			secret:   tlsSecret("kubernetes.io/tls", cnNotFirstPEM, keyPEMBytes(cnNotFirstKey)),
+			hostname: "other.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
 			},
 			checkKeysOnly: []string{"MatchesHostname"},
 		},
