@@ -1,0 +1,12 @@
+
+Node/ip-10-0-1-23.ec2.internal, created 1m ago
+  linux Amazon Linux 2 (amd64), kernel 5.10.205-195.807.amzn2.x86_64, kubelet v1.29.0, kube-proxy v1.29.0, containerd://1.7.11
+  cloudprovider AWS us-east-1/us-east-1a m5.large
+    providerID: aws:///us-east-1a/i-0123456789abcdef0
+  Current: Resource is Ready
+  MemoryPressure:False KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m
+  DiskPressure:False KubeletHasNoDiskPressure, kubelet has no disk pressure for 1m
+  PIDPressure:False KubeletHasSufficientPID, kubelet has sufficient PID available for 1m
+  Ready:True KubeletReady, kubelet is posting ready status for 1m
+  addresses: InternalIP=10.0.1.23 Hostname=ip-10-0-1-23.ec2.internal
+  allocatable/capacity: pods 29/29, cpu 1.93/2, mem 7.3/8.1GB, ephemeral-storage 76.2/85.8GB

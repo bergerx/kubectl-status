@@ -138,6 +138,7 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"untilClause":                     cfg.untilClause,
 		"labelSelector":                   labelSelector,
 		"taintsNotToleratedByPod":         taintsNotToleratedByPod,
+		"nodeCloudProvider":               nodeCloudProvider,
 		"formatNodeSelector":              formatNodeSelector,
 		"formatNodeSelectorTerms":         formatNodeSelectorTerms,
 		"podHardConstraintRequirements":   podHardConstraintRequirements,
@@ -1039,6 +1040,68 @@ func taintsNotToleratedByPod(nodeTaints, tolerations []interface{}) (result []in
 		}
 	}
 	return result
+}
+
+// cloudProviderNames maps the scheme of a Node's .spec.providerID -- the
+// "<provider>://<provider-specific-id>" prefix naming the infrastructure that backs the node -- to
+// a display name. providerID is the only field in the Node object meant to identify the provider,
+// but it is optional and its format is provider-defined (see
+// https://github.com/kubernetes/kubernetes/issues/124348), so an unrecognized scheme is reported
+// verbatim rather than dropped: telling the reader the node says "ibmcloud" beats saying nothing.
+var cloudProviderNames = map[string]string{
+	"alicloud":     "Alibaba Cloud",
+	"aws":          "AWS",
+	"azure":        "Azure",
+	"digitalocean": "DigitalOcean",
+	"equinixmetal": "Equinix Metal",
+	"gce":          "GCP",
+	"hcloud":       "Hetzner",
+	"ibm":          "IBM Cloud",
+	"kind":         "kind",
+	"kwok":         "kwok",
+	"metal3":       "Metal3",
+	"oci":          "OCI",
+	"openstack":    "OpenStack",
+	"vsphere":      "vSphere",
+}
+
+// cloudProviderLabelPrefixes maps label namespaces only one provider's components ever set to that
+// provider. Weaker evidence than providerID -- a node can carry these while the cloud provider
+// integration itself is absent or half-configured -- so nodeCloudProvider qualifies a match found
+// this way. A slice rather than a map so a node carrying two of these namespaces always reports
+// the same provider instead of whichever one map iteration happened to reach first.
+var cloudProviderLabelPrefixes = []struct{ prefix, name string }{
+	{"eks.amazonaws.com/", "AWS"},
+	{"karpenter.k8s.aws/", "AWS"},
+	{"cloud.google.com/", "GCP"},
+	{"topology.gke.io/", "GCP"},
+	{"kubernetes.azure.com/", "Azure"},
+	{"doks.digitalocean.com/", "DigitalOcean"},
+	{"oci.oraclecloud.com/", "OCI"},
+	{"ibm-cloud.kubernetes.io/", "IBM Cloud"},
+}
+
+// nodeCloudProvider names the infrastructure backing a Node, preferring .spec.providerID (set by
+// the cloud provider itself) over provider-specific label namespaces (circumstantial, so the
+// returned name says where it came from). Returns "" when neither offers evidence, which the Node
+// template renders as no provider at all: node names, addresses and topology values all look like
+// they identify a provider and are all installation-specific, and to a reader mid-incident a
+// confidently wrong provider is worse than none.
+func nodeCloudProvider(providerID string, labels map[string]interface{}) string {
+	if scheme, _, found := strings.Cut(providerID, "://"); found && scheme != "" {
+		if name, ok := cloudProviderNames[strings.ToLower(scheme)]; ok {
+			return name
+		}
+		return scheme
+	}
+	for _, provider := range cloudProviderLabelPrefixes {
+		for key := range labels {
+			if strings.HasPrefix(key, provider.prefix) {
+				return provider.name + " (from labels)"
+			}
+		}
+	}
+	return ""
 }
 
 // formatNodeSelector renders spec.nodeSelector, a flat key/value map, as "k=v,k2=v2" -- the same

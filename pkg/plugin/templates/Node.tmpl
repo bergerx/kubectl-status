@@ -6,14 +6,28 @@
     {{- /* kubeProxyVersion is deprecated and left unset from k8s 1.31 on, so the whole clause goes
            rather than leaving a bare label behind on newer clusters. */ -}}
     {{- with .Status.nodeInfo.kubeProxyVersion }}, kube-proxy {{ . }}{{ end }}, {{ .Status.nodeInfo.containerRuntimeVersion }}
-    {{- if or (index .Labels "node.kubernetes.io/instance") (index .Labels "topology.kubernetes.io/region") (index .Labels "failure-domain.beta.kubernetes.io/region") (index .Labels "topology.kubernetes.io/zone") (index .Labels "failure-domain.beta.kubernetes.io/region") }}
+    {{- /* Which cloud this node runs on, and where. The beta.kubernetes.io/failure-domain.beta
+           forms of these labels are deprecated in favour of the topology.kubernetes.io/
+           node.kubernetes.io ones, but a node only ever carries one of each pair, so each falls
+           back to its predecessor rather than being shown twice. */ -}}
+    {{- $providerID := .Spec.providerID | default "" }}
+    {{- $region := index .Labels "topology.kubernetes.io/region" | default (index .Labels "failure-domain.beta.kubernetes.io/region") }}
+    {{- $zone := index .Labels "topology.kubernetes.io/zone" | default (index .Labels "failure-domain.beta.kubernetes.io/zone") }}
+    {{- $instanceType := index .Labels "node.kubernetes.io/instance-type" | default (index .Labels "beta.kubernetes.io/instance-type") }}
+    {{- $provider := nodeCloudProvider $providerID .Labels }}
+    {{- if or $provider $providerID $region $zone $instanceType }}
         {{- "cloudprovider" | bold | nindent 2 }}
-        {{- with index .Labels "topology.kubernetes.io/region" | default (index .Labels "failure-domain.beta.kubernetes.io/region") }} {{ . }}{{ end }}
-        {{- with index .Labels "topology.kubernetes.io/zone" | default (index .Labels "failure-domain.beta.kubernetes.io/zone") }}{{ . }}{{ end }}
-        {{- with index .Labels "node.kubernetes.io/instance" | default (index .Labels "beta.kubernetes.io/instance-type") }} {{ . }}{{ end }}
-        {{- with .Labels.agentpool }}, agentpool:{{ . }}{{ end }}
-        {{- with index .Labels "node.kubernetes.io/windows-build" }}, windows-build:{{ . }}{{ end }}
-        {{- with index .Labels "kubernetes.io/role" }}, role:{{ . }}{{ end }}
+        {{- with $provider }} {{ . | cyan }}{{ end }}
+        {{- with $region }} {{ . | cyan }}{{ end }}
+        {{- with $zone }}{{ if $region }}/{{ else }} {{ end }}{{ . | cyan }}{{ end }}
+        {{- with $instanceType }} {{ . | cyan }}{{ end }}
+        {{- with .Labels.agentpool }}, agentpool:{{ . | cyan }}{{ end }}
+        {{- with index .Labels "node.kubernetes.io/windows-build" }}, windows-build:{{ . | cyan }}{{ end }}
+        {{- with index .Labels "kubernetes.io/role" }}, role:{{ . | cyan }}{{ end }}
+        {{- /* The evidence behind the provider name above, and the only place in the Node object
+               that identifies the backing VM/instance -- worth the line it costs when you need to
+               go find that instance in a cloud console. */ -}}
+        {{- with $providerID }}{{ "providerID" | bold | nindent 4 }}: {{ . | cyan }}{{ end }}
     {{- end }}
     {{- with .Status.images }}{{ "images" | bold | nindent 2 }} {{ . | len }}{{ end }}
     {{- if .Status.volumesInUse }} {{ "volumes" | bold }} inuse={{ .Status.volumesInUse | len }}

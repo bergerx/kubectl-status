@@ -1,7 +1,8 @@
 
 Node/aks-cpuworkers-41776494-vmss00006u, created 1m ago
   linux Ubuntu 16.04.6 LTS (amd64), kernel 4.15.0-1066-azure, kubelet v1.15.7, kube-proxy v1.15.7, docker://3.0.8
-  cloudprovider eastus0 Standard_D8s_v3, agentpool:cpuworkers, role:agent
+  cloudprovider Azure eastus/0 Standard_D8s_v3, agentpool:cpuworkers, role:agent
+    providerID: azure:///subscriptions/f198f0d7-73af-486e-ad9c-f17f5c3f6664/resourceGroups/mc_cluster-nimbus_cluster-nimbus_eastus/providers/Microsoft.Compute/virtualMachineScaleSets/aks-cpuworkers-41776494-vmss/virtualMachines/246
   images 50 volumes inuse=1/16, attached=1
   Current: Resource is Ready
   MemoryPressure:False KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m

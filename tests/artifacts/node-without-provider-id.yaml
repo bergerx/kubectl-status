@@ -1,0 +1,56 @@
+# A node whose cloud provider integration hasn't set .spec.providerID (yet) -- the provider can
+# still be named, but only from labels its components left behind, which is weaker evidence.
+apiVersion: v1
+kind: Node
+metadata:
+  creationTimestamp: "2020-03-18T14:13:28Z"
+  labels:
+    cloud.google.com/gke-nodepool: default-pool
+    cloud.google.com/gke-os-distribution: cos
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: gke-cluster-default-pool-9f5f0e1a-abcd
+    kubernetes.io/os: linux
+    node.kubernetes.io/instance-type: e2-standard-2
+    topology.kubernetes.io/region: europe-west1
+    topology.kubernetes.io/zone: europe-west1-b
+  name: gke-cluster-default-pool-9f5f0e1a-abcd
+  resourceVersion: "46883692"
+  uid: 5ecfbfa0-e12b-4868-9463-2bc9808d3aab
+spec: {}
+status:
+  addresses:
+  - address: 10.132.0.11
+    type: InternalIP
+  - address: gke-cluster-default-pool-9f5f0e1a-abcd
+    type: Hostname
+  allocatable:
+    cpu: 1930m
+    ephemeral-storage: "47093746742"
+    memory: 6187140Ki
+    pods: "110"
+  capacity:
+    cpu: "2"
+    ephemeral-storage: 98831908Ki
+    memory: 8145028Ki
+    pods: "110"
+  conditions:
+  - lastHeartbeatTime: "2020-03-18T17:27:09Z"
+    lastTransitionTime: "2020-03-18T14:13:29Z"
+    message: kubelet is posting ready status
+    reason: KubeletReady
+    status: "True"
+    type: Ready
+  daemonEndpoints:
+    kubeletEndpoint:
+      Port: 10250
+  nodeInfo:
+    architecture: amd64
+    bootID: 3df597ca-daa5-4dec-95d2-61237fafd4cf
+    containerRuntimeVersion: containerd://1.7.11
+    kernelVersion: 5.15.133+
+    kubeProxyVersion: v1.29.0
+    kubeletVersion: v1.29.0
+    machineID: 68d2ef1eaeaa4c80b42069f2fe5bb0cd
+    operatingSystem: linux
+    osImage: Container-Optimized OS from Google
+    systemUUID: F3DC2E84-279A-FF45-A31A-ADBBD8DD5DD4
