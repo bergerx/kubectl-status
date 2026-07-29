@@ -1,0 +1,65 @@
+# Known test fixtures under tests/artifacts and tests/e2e-artifacts: synthetic
+# TLS keys/tokens generated from a disposable minikube cluster for kubectl-status
+# test coverage, not real credentials. Regenerate via:
+#   go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact -r /tmp/report.json .
+# then extract .[].Fingerprint
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-basic-auth-healthy.yaml:kubernetes-secret-yaml:2
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-bootstrap-token-expired.yaml:generic-api-key:5
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-bootstrap-token-expired.yaml:generic-api-key:5
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-bootstrap-token-expired.yaml:kubernetes-secret-yaml:2
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-bootstrap-token-expired.yaml:kubernetes-secret-yaml:2
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-bootstrap-token-healthy.yaml:generic-api-key:5
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-bootstrap-token-healthy.yaml:generic-api-key:5
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-bootstrap-token-healthy.yaml:kubernetes-secret-yaml:2
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-bootstrap-token-healthy.yaml:kubernetes-secret-yaml:2
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-opaque-malformed-cert.yaml:kubernetes-secret-yaml:2
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-service-account-token-healthy.yaml:generic-api-key:5
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-service-account-token-healthy.yaml:jwt-base64:5
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-service-account-token-healthy.yaml:jwt:5
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-ssh-auth-healthy.yaml:kubernetes-secret-yaml:2
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-ssh-auth-healthy.yaml:private-key:3
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-ssh-auth-malformed.yaml:generic-api-key:3
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-ssh-auth-malformed.yaml:kubernetes-secret-yaml:2
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-tls-malformed-cert.yaml:generic-api-key:4
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-tls-malformed-cert.yaml:kubernetes-secret-yaml:2
+010ee98d7b86e683ad863769eea258f91d6f9902:tests/artifacts/secret-tls-malformed-cert.yaml:kubernetes-secret-yaml:2
+137fba623a32e82eb7ac710fdfdf2e638f4bf04f:tests/artifacts/secret-dockerconfig-healthy.yaml:generic-api-key:3
+137fba623a32e82eb7ac710fdfdf2e638f4bf04f:tests/artifacts/secret-dockerconfig-healthy.yaml:generic-api-key:3
+137fba623a32e82eb7ac710fdfdf2e638f4bf04f:tests/artifacts/secret-dockerconfig-healthy.yaml:kubernetes-secret-yaml:2
+137fba623a32e82eb7ac710fdfdf2e638f4bf04f:tests/artifacts/secret-tls-expired.yaml:private-key:4
+167a5019d218e9e5e033d6dbd4d43389db5284da:tests/e2e-artifacts/pod-image-pull-secrets.yaml:kubernetes-secret-yaml:11
+9f2119fb9c70949b3b9db7839a9b9664552cdb48:tests/artifacts/secret-cert-manager-managed.yaml:private-key:5
+9f2119fb9c70949b3b9db7839a9b9664552cdb48:tests/artifacts/secret-opaque-cert-manager-ca.yaml:private-key:5
+bbb1ad9e7392bcc50f03f141dcbdab7716dd1689:tests/artifacts/secret-helm-release-deployed.yaml:kubernetes-secret-yaml:2
+bbb1ad9e7392bcc50f03f141dcbdab7716dd1689:tests/artifacts/secret-helm-release-deployed.yaml:kubernetes-secret-yaml:2
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/gateway-tls-healthy.yaml:kubernetes-secret-yaml:48
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/gateway-tls-healthy.yaml:private-key:58
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/gateway-tls-problems.yaml:kubernetes-secret-yaml:137
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/gateway-tls-problems.yaml:kubernetes-secret-yaml:149
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/gateway-tls-problems.yaml:kubernetes-secret-yaml:162
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/gateway-tls-problems.yaml:private-key:159
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/gateway-tls-problems.yaml:private-key:172
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/grpcroute-tls-healthy.yaml:kubernetes-secret-yaml:81
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/grpcroute-tls-healthy.yaml:private-key:91
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/grpcroute-tls-problems.yaml:kubernetes-secret-yaml:75
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/httproute-tls-healthy.yaml:kubernetes-secret-yaml:48
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/httproute-tls-healthy.yaml:private-key:58
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/httproute-tls-problems.yaml:kubernetes-secret-yaml:85
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/httproute-tls-problems.yaml:kubernetes-secret-yaml:98
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/httproute-tls-problems.yaml:private-key:108
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/httproute-tls-problems.yaml:private-key:95
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/ingress-tls-healthy.yaml:kubernetes-secret-yaml:40
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/ingress-tls-healthy.yaml:private-key:50
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/ingress-tls-problems.yaml:kubernetes-secret-yaml:65
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/ingress-tls-problems.yaml:kubernetes-secret-yaml:76
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/ingress-tls-problems.yaml:kubernetes-secret-yaml:88
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/ingress-tls-problems.yaml:private-key:98
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/secret-tls-healthy.yaml:kubernetes-secret-yaml:2
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/secret-tls-healthy.yaml:private-key:12
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/secret-tls-self-signed.yaml:kubernetes-secret-yaml:2
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/secret-tls-self-signed.yaml:private-key:12
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/tlsroute-tls-healthy.yaml:kubernetes-secret-yaml:78
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/tlsroute-tls-healthy.yaml:private-key:88
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/tlsroute-tls-problems.yaml:kubernetes-secret-yaml:121
+d733fbe312eac7d3f1ca427ff20fc053c885548a:tests/artifacts/tlsroute-tls-problems.yaml:private-key:131
+d87d2d366f3bd633c9713299911c53dc5b968dca:tests/artifacts/ingress-tls-problems.yaml:private-key:88

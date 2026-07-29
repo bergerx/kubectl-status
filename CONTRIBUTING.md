@@ -183,6 +183,32 @@ Before submitting a PR, ensure tests pass:
 make test
 ```
 
+### Security Checks
+
+`make security-check` runs the two repo-wide security scans:
+
+```bash
+make security-check   # gitleaks (full git history) + govulncheck (module graph)
+```
+
+- **gitleaks** scans the whole git history for committed secrets. The synthetic secrets in
+  `tests/artifacts/` are allowlisted by fingerprint in the committed `.gitleaksignore`, so only
+  genuinely new findings fail the scan. When you add a fixture that trips a rule, run
+  `make gitleaks-allow` to append its fingerprint(s) (fingerprints only — no secret content or
+  commit metadata) and review the resulting `.gitleaksignore` diff before committing; that same
+  command would silence a real leak, so don't run it reflexively on a red scan.
+- **govulncheck** reports known vulnerabilities that are actually reachable from this module's
+  code, so a finding usually means bumping the dependency in `go.mod`.
+
+These are deliberately **not** part of `make test`/the pre-commit hook: both scan the repo as a
+whole rather than the change in front of you, so per-commit runs cost time without telling you
+anything new. They run at pre-push instead (the `make-security-check` hook in
+`.pre-commit-config.yaml`, installed by the `install-pre-push-hook` hook the first time
+pre-commit runs), so you find out before the push rather than from CI afterwards. CI runs the
+same pair in `.github/workflows/security-checks.yml` — on every PR and push to `master`, plus
+daily, since both checks can start failing without anyone touching the repo (a new entry in the
+vulnerability DB, a new gitleaks rule matching something already in history).
+
 ### Claude Code Integration
 
 The project ships a [Claude Code](https://claude.ai/code) skill and project-level settings under `.claude/`.

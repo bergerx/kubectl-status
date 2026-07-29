@@ -20,15 +20,14 @@ repos:
 -   repo: local
     hooks:
 
-    # install-pre-push-hook and make-test-e2e are commented out: they got too
-    # heavyweight for a local pre-push hook. Delegating to CI for now until
-    # their runtime is sorted out.
-    # -   id: install-pre-push-hook
-    #     name: install-pre-push-hook
-    #     entry: pre-commit install -t pre-push
-    #     language: system
-    #     always_run: true
-    #     pass_filenames: false
+    # Usual pre-commit install only installs the pre-commit hook, trying to get
+    # them installed through this hook.
+    -   id: install-pre-push-hook
+        name: install-pre-push-hook
+        entry: pre-commit install -t pre-push
+        language: system
+        always_run: true
+        pass_filenames: false
 
     -   id: make-test
         name: make test
@@ -37,6 +36,22 @@ repos:
         always_run: true
         pass_filenames: false
 
+    # Pre-push rather than pre-commit: both checks scan the whole repo (full git
+    # history for gitleaks, the whole module graph for govulncheck) rather than
+    # just the change in front of you, so they're too slow to pay for on every
+    # commit and there's nothing new to learn from rerunning them per commit in
+    # a branch. This mirrors what security-checks.yml runs, so a failure shows
+    # up before the push rather than in CI afterwards.
+    -   id: make-security-check
+        name: make security-check
+        stages: [pre-push]
+        entry: make security-check
+        language: system
+        always_run: true
+        pass_filenames: false
+
+    # make-test-e2e is commented out: it got too heavyweight for a local pre-push
+    # hook. Delegating to CI for now until its runtime is sorted out.
     # -   id: make-test-e2e
     #     name: make test-e2e
     #     stages: [pre-push]
