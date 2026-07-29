@@ -1,0 +1,16 @@
+
+HelmRelease/kafka -n streaming, created 1m ago, gen:9
+  InProgress: Helm upgrade failed for release streaming/kafka with chart kafka@30.1.8: timed out waiting for the condition
+    Reconciling: UpgradeFailed, Helm upgrade failed for release streaming/kafka with chart kafka@30.1.8: timed out waiting for the condition
+  Chart kafka (30.x) from HelmRepository/bitnami -n flux-system · HelmChart/streaming-kafka -n flux-system
+  Helm releases (4 revisions, first deployed 1m ago):
+    revision 7, chart 30.1.8 (app 3.8.0), failed 1m ago
+    revision 6, chart 30.0.4 (app 3.7.1), deployed 1m ago
+    revision 5, chart 30.1.8 (app 3.8.0), superseded 1m ago
+    revision 4, chart 30.0.4 (app 3.7.1), superseded 1m ago
+  Last attempted upgrade of chart 30.1.8 was not released, 30.0.4 is still what's installed
+  Remediation: install retries 3, upgrade retries 4, on failed upgrade: rollback
+  Reconciles every 10m
+  Ready:False UpgradeFailed, Helm upgrade failed for release streaming/kafka with chart kafka@30.1.8: timed out waiting for the condition for 1m
+  Released:False UpgradeFailed, Helm upgrade failed for release streaming/kafka with chart kafka@30.1.8: timed out waiting for the condition for 1m
+  Remediated:True RollbackSucceeded, Helm rollback to previous release streaming/kafka.v4 with chart kafka@30.0.4 succeeded for 1m

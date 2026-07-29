@@ -1,0 +1,69 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  finalizers:
+  - finalizers.fluxcd.io
+  generation: 3
+  name: podinfo
+  namespace: apps
+  resourceVersion: "44190"
+  uid: 8c3d1f6a-2b5e-4a7c-9f0d-1e4b7a2c5d80
+spec:
+  chart:
+    spec:
+      chart: ./charts/podinfo
+      ignoreMissingValuesFiles: true
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: podinfo
+        namespace: flux-system
+      valuesFiles:
+      - ./charts/podinfo/values.yaml
+      - ./charts/podinfo/values-prod.yaml
+      verify:
+        provider: cosign
+        secretRef:
+          name: cosign-pub
+  driftDetection:
+    mode: enabled
+  interval: 10m
+  serviceAccountName: podinfo-deployer
+  valuesFrom:
+  - kind: ConfigMap
+    name: podinfo-defaults
+    valuesKey: values.yaml
+  - kind: Secret
+    name: podinfo-credentials
+    optional: true
+    targetPath: backend.password
+    valuesKey: password
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-29T23:55:41Z"
+    message: Helm upgrade succeeded for release apps/podinfo.v3 with chart podinfo@6.7.1
+    observedGeneration: 3
+    reason: UpgradeSucceeded
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2026-06-29T23:55:41Z"
+    message: Helm upgrade succeeded for release apps/podinfo.v3 with chart podinfo@6.7.1
+    observedGeneration: 3
+    reason: UpgradeSucceeded
+    status: "True"
+    type: Released
+  history:
+  - appVersion: 6.7.1
+    chartName: podinfo
+    chartVersion: 6.7.1
+    firstDeployed: "2026-06-29T23:50:12Z"
+    lastDeployed: "2026-06-29T23:55:41Z"
+    name: podinfo
+    namespace: apps
+    status: deployed
+    version: 3
+  lastAttemptedGeneration: 3
+  lastAttemptedReleaseAction: upgrade
+  lastAttemptedRevision: 6.7.1
+  observedGeneration: 3

@@ -183,6 +183,32 @@ Before submitting a PR, ensure tests pass:
 make test
 ```
 
+### Security Checks
+
+`make security-check` runs the two repo-wide security scans:
+
+```bash
+make security-check   # gitleaks (full git history) + govulncheck (module graph)
+```
+
+- **gitleaks** scans the whole git history for committed secrets. The synthetic secrets in
+  `tests/artifacts/` are allowlisted by fingerprint in the committed `.gitleaksignore`, so only
+  genuinely new findings fail the scan. When you add a fixture that trips a rule, run
+  `make gitleaks-allow` to append its fingerprint(s) (fingerprints only — no secret content or
+  commit metadata) and review the resulting `.gitleaksignore` diff before committing; that same
+  command would silence a real leak, so don't run it reflexively on a red scan.
+- **govulncheck** reports known vulnerabilities that are actually reachable from this module's
+  code, so a finding usually means bumping the dependency in `go.mod`.
+
+These are deliberately **not** part of `make test`/the pre-commit hook: both scan the repo as a
+whole rather than the change in front of you, so per-commit runs cost time without telling you
+anything new. They run at pre-push instead (the `make-security-check` hook in
+`.pre-commit-config.yaml`, installed by the `install-pre-push-hook` hook the first time
+pre-commit runs), so you find out before the push rather than from CI afterwards. CI runs the
+same pair in `.github/workflows/security-checks.yml` — on every PR and push to `master`, plus
+daily, since both checks can start failing without anyone touching the repo (a new entry in the
+vulnerability DB, a new gitleaks rule matching something already in history).
+
 ### Claude Code Integration
 
 The project ships a [Claude Code](https://claude.ai/code) skill and project-level settings under `.claude/`.
@@ -210,6 +236,28 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
    ```
 
 3. **Include updated artifacts in PRs** - reviewers use `.out` file diffs to verify template changes.
+
+4. **Check the template survives a partial object.** Artifacts captured from a live cluster are
+   fully populated, so they never exercise the missing-field paths — and a rendering error aborts
+   the whole object, not just the offending line (see CONVENTIONS.md § Never trust a field to be
+   present). Hand-write a stripped manifest with empty/absent fields and render it:
+
+   ```bash
+   cat > /tmp/partial.yaml <<'EOF'
+   apiVersion: <group>/<version>
+   kind: <Kind>
+   metadata:
+     name: bare
+     namespace: default
+     creationTimestamp: "2026-06-27T09:12:04Z"
+   spec: {}
+   EOF
+   bin/status -f /tmp/partial.yaml --local --shallow
+   ```
+
+   Then add a second document dropping individual `required` sub-fields from the lists and refs
+   the template renders. Any `Failed to render:` line, or a literal `<nil>` in the output, is a
+   bug. Worth keeping as a `tests/artifacts/` case when the kind has many optional fields.
 
 ### Running e2e Tests Locally
 

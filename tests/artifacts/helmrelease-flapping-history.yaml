@@ -1,0 +1,95 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  creationTimestamp: "2026-06-20T08:41:19Z"
+  finalizers:
+  - finalizers.fluxcd.io
+  generation: 9
+  name: kafka
+  namespace: streaming
+  resourceVersion: "203914"
+  uid: 2e9a4b7c-1d3f-4085-a6b2-7c0e9f4d5a13
+spec:
+  chart:
+    spec:
+      chart: kafka
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+      version: 30.x
+  install:
+    remediation:
+      retries: 3
+  interval: 10m
+  upgrade:
+    remediation:
+      remediateLastFailure: true
+      retries: 4
+      strategy: rollback
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-29T23:52:07Z"
+    message: 'Helm upgrade failed for release streaming/kafka with chart kafka@30.1.8:
+      timed out waiting for the condition'
+    observedGeneration: 9
+    reason: UpgradeFailed
+    status: "False"
+    type: Ready
+  - lastTransitionTime: "2026-06-29T23:52:07Z"
+    message: 'Helm upgrade failed for release streaming/kafka with chart kafka@30.1.8:
+      timed out waiting for the condition'
+    observedGeneration: 9
+    reason: UpgradeFailed
+    status: "False"
+    type: Released
+  - lastTransitionTime: "2026-06-29T23:52:41Z"
+    message: Helm rollback to previous release streaming/kafka.v4 with chart kafka@30.0.4
+      succeeded
+    observedGeneration: 9
+    reason: RollbackSucceeded
+    status: "True"
+    type: Remediated
+  helmChart: flux-system/streaming-kafka
+  history:
+  - appVersion: 3.8.0
+    chartName: kafka
+    chartVersion: 30.1.8
+    firstDeployed: "2026-06-20T08:41:31Z"
+    lastDeployed: "2026-06-29T23:52:07Z"
+    name: kafka
+    namespace: streaming
+    status: failed
+    version: 7
+  - appVersion: 3.7.1
+    chartName: kafka
+    chartVersion: 30.0.4
+    firstDeployed: "2026-06-20T08:41:31Z"
+    lastDeployed: "2026-06-29T23:52:41Z"
+    name: kafka
+    namespace: streaming
+    status: deployed
+    version: 6
+  - appVersion: 3.8.0
+    chartName: kafka
+    chartVersion: 30.1.8
+    firstDeployed: "2026-06-20T08:41:31Z"
+    lastDeployed: "2026-06-29T23:44:52Z"
+    name: kafka
+    namespace: streaming
+    status: superseded
+    version: 5
+  - appVersion: 3.7.1
+    chartName: kafka
+    chartVersion: 30.0.4
+    firstDeployed: "2026-06-20T08:41:31Z"
+    lastDeployed: "2026-06-29T23:45:18Z"
+    name: kafka
+    namespace: streaming
+    status: superseded
+    version: 4
+  lastAttemptedConfigDigest: sha256:9f2e5c8b1a4d7f0c3b6e9d2a5c8f1b4e7d0a3c6f9b2e5d8a1c4f7b0e3d6a9c2f
+  lastAttemptedGeneration: 9
+  lastAttemptedReleaseAction: upgrade
+  lastAttemptedRevision: 30.1.8
+  observedGeneration: 9

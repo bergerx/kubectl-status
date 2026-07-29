@@ -127,6 +127,15 @@ For **label selectors**, `selector_with_health_summary` in `common.tmpl` impleme
 
 For **reference fields** (spec fields pointing to another resource by kind/name), show `Kind/name -n ns` via the `resource_ref` sub-template in the default case, and `$.IncludeRenderableObject` in deep mode. `HTTPRoute.tmpl` has worked examples of both single-ref and list-of-refs forms.
 
+Where the ref sits on a line of its own, deep mode replaces it with the inlined object (`ExternalSecret.tmpl`, `HTTPRoute.tmpl`). Where it's named mid-sentence — `Applies ./x from GitRepository/y into namespace z` — substituting a multi-line block would destroy the sentence, so pair the `resource_ref` line with `deep_render_ref`, which appends the inlined object underneath and renders nothing in the other modes:
+
+```
+{{- "Applies" | bold | nindent 2 }} from {{ $.Include "resource_ref" (dict "kind" .kind "name" .name) }}
+{{- $.Include "deep_render_ref" (dict "ctx" $ "kind" .kind "name" .name) }}
+```
+
+Either shape is fine; the requirement is that the ref itself stays on screen in all three modes. `deep_render_ref` needs no `--shallow`/`--local` check of its own — `KubeGetFirst` already returns an empty object whenever `LiveQueriesDisabled()` is true.
+
 ### Go template `and`/`or` do not short-circuit
 
 Unlike most languages, Go templates evaluate **all** arguments to `and` and `or` before applying the logic. `{{ if and .A (someFunc .A.B) }}` panics when `.A` is nil because `.A.B` is always evaluated. Use nested `with`/`if` blocks for any chained field access that could be nil:
@@ -137,6 +146,37 @@ Unlike most languages, Go templates evaluate **all** arguments to `and` and `or`
 ```
 
 Never rely on `and` to guard a nil dereference.
+
+### Never trust a field to be present, however required the schema says it is
+
+A rendering error aborts the **entire object**, not the line that caused it — `Include` propagates the error up, so you lose the conditions, events, and everything else for exactly the resource someone was trying to debug. A template must degrade one line, never the whole render.
+
+`required:` in a CRD schema is not a guarantee at render time:
+
+- `--local` / `-f file.yaml` renders hand-written manifests that never passed API-server validation.
+- CRD schemas change between operator versions; an object written by an older controller can be missing a field the current schema marks required, and a `status` block is written asynchronously — an object observed mid-reconcile has a partial one.
+- Third-party CRDs are the common case here, and their schemas are frequently looser than their docs imply.
+
+The trap is that these paths are the ones a template is *least* likely to be exercised against, so the crash surfaces in the field.
+
+Color functions are the usual detonator — `cyan` and friends reject a nil with `invalid value; expected string`:
+
+```
+{{- .kind | cyan }}                    {{- /* aborts the object's render when kind is absent */}}
+{{- .kind | default "" | cyan }}       {{- /* degrades to an empty segment */}}
+```
+
+`toString` is the other one: it turns a missing field into a literal `<nil>` on screen rather than an error, which is worse — it looks like real data.
+
+This is not a licence to wrap every field in `default`. The `with`/`if` guards the conventions already call for cover the overwhelming majority of cases, and they read better than a wall of defaulted pipelines — `{{- with .Spec.url }}url: {{ . | cyan }}{{ end }}` needs nothing further. Reach for `default` only in the three spots a guard can't reach:
+
+- **Values passed to a shared sub-template**, which can't guard on behalf of its caller. A single unguarded `cyan` in `common.tmpl` is a latent crash for all ~50 call sites, so helpers default their own inputs.
+- **Sub-fields of an item inside a `range`**, where wrapping each one in its own `with` would bury the line. When several optional fields concatenate there, track the separators rather than hardcoding them so any subset composes — `storageclass_summary` is the reference for the `$needsComma` pattern.
+- **Anything reaching `toString`**, which has no failure mode that looks like a failure.
+
+Everywhere else, let the test tell you. Render a stripped-down manifest with `--local` where optional fields are absent and the "required" ones are missing or empty, and guard what actually breaks — see CONTRIBUTING.md § Working with Test Artifacts. Guessing at it up front produces noise; the render either aborts or prints `<nil>`, and both are obvious.
+
+The same proportionality applies to parsing. `colorAgo` accepts exactly one layout and silently returns the zero time for anything else, rendering an age that is wrong by two millennia but looks plausible. For a Kubernetes-managed timestamp that's fine — the API server normalizes them. For a value a human or a CLI writes, such as the `reconcile.fluxcd.io/requestedAt` annotation, print it raw instead of inventing a guard.
 
 ### Omit spec fields at their Kubernetes default
 

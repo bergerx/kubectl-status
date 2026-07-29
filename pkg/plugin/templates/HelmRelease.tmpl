@@ -12,6 +12,7 @@
            exclusive. */ -}}
     {{- with .Spec.chart }}
         {{- with .spec }}
+            {{- $chartSpec := . }}
             {{- "Chart" | bold | nindent 2 }} {{ .chart | cyan }}
             {{- with .version }} ({{ . | cyan }}){{ end }}
             {{- with .sourceRef }}
@@ -21,10 +22,61 @@
                 {{- $chartParts := splitList "/" . }}
                 {{- if eq (len $chartParts) 2 }} · {{ $.Include "resource_ref" (dict "kind" "HelmChart" "name" (last $chartParts) "namespace" (first $chartParts) "callerNamespace" $.Namespace) }}{{ end }}
             {{- end }}
+            {{- /* reconcileStrategy:Revision makes the HelmChart re-package on every source
+                   revision, so upgrades happen without the chart version ever changing --
+                   without it on screen an unchanged chart version reads as "nothing moved". */ -}}
+            {{- if eq (.reconcileStrategy | default "ChartVersion") "Revision" }}
+                {{- ", repackaged on every source revision" }}
+            {{- end }}
+            {{- /* Unverifiable provenance blocks the release before it is ever attempted, so the
+                   fact that verification is demanded at all explains that failure mode. */ -}}
+            {{- with .verify }}
+                {{- ", signature verified with " }}{{ .provider | default "cosign" | cyan }}
+            {{- end }}
+            {{- /* Values files are read out of the chart source; a typo'd path fails the release
+                   outright unless ignoreMissingValuesFiles turns it into a silent no-op, which
+                   is worth calling out because the release then runs on unintended values. */ -}}
+            {{- with .valuesFiles }}
+                {{- "Chart values" | bold | nindent 2 }} from {{ join ", " . | cyan }}
+                {{- if $chartSpec.ignoreMissingValuesFiles }} ({{ "missing files are ignored" | yellow }}){{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- /* Deep inlines the chart's source and the mirrored HelmChart. Both are named mid-sentence
+           on the Chart line above, so they're rendered below the whole chart block rather than
+           substituted into it. The HelmChart is where chart pull and version-resolution failures
+           actually surface, which the HelmRelease's own conditions only summarize. */ -}}
+    {{- with .Spec.chart }}
+        {{- with .spec }}
+            {{- with .sourceRef }}
+                {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" (.kind | default "HelmRepository") "name" .name "namespace" (.namespace | default $.Namespace)) }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Status.helmChart }}
+        {{- $chartParts := splitList "/" . }}
+        {{- if eq (len $chartParts) 2 }}
+            {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" "HelmChart" "name" (last $chartParts) "namespace" (first $chartParts)) }}
         {{- end }}
     {{- end }}
     {{- with .Spec.chartRef }}
         {{- "Chart" | bold | nindent 2 }} from {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" (.namespace | default $.Namespace) "callerNamespace" $.Namespace) }}
+        {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" .kind "name" .name "namespace" (.namespace | default $.Namespace)) }}
+    {{- end }}
+    {{- /* Values pulled from other objects: an edit to one of these changes what is deployed
+           without this HelmRelease ever changing, and a missing non-optional ref stalls
+           reconciliation before Helm is even invoked. */ -}}
+    {{- with .Spec.valuesFrom }}
+        {{- "Values" | bold | nindent 2 }} also from
+        {{- range $index, $ref := . }}
+            {{- if $index }},{{ end }} {{ $.Include "resource_ref" (dict "kind" $ref.kind "name" $ref.name "namespace" $.Namespace "callerNamespace" $.Namespace) }}
+            {{- with $ref.valuesKey }} key {{ . | cyan }}{{ end }}
+            {{- with $ref.targetPath }} into {{ . | cyan }}{{ end }}
+            {{- if $ref.optional }} (optional){{ end }}
+        {{- end }}
+        {{- range $ref := . }}
+            {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" $ref.kind "name" $ref.name) }}
+        {{- end }}
     {{- end }}
     {{- /* status.history is the Helm release ledger, newest first. Entry 0 is the last release
            helm-controller made -- which is not necessarily the one currently serving: a failed
@@ -38,22 +90,44 @@
             {{- if not $deployed }}{{ if eq (.status | default "") "deployed" }}{{ $deployed = . }}{{ end }}{{ end }}
         {{- end }}
     {{- end }}
-    {{- with $latest }}
+    {{- /* Every revision is listed, not just the newest: the ledger is where a bad rollout shows
+           its shape -- a flapping install/rollback loop, a chart version that was released and
+           then silently superseded, or an upgrade that has been failing across several attempts
+           while the object still reports the last good release. */ -}}
+    {{- with $history }}
+        {{- $multipleRevisions := gt (len .) 1 }}
+        {{- $firstDeployed := (index . (sub (len .) 1)).firstDeployed | default "" }}
         {{- /* The Helm release name/namespace are only worth showing when spec.releaseName or
                spec.targetNamespace moved them away from this object's own name/namespace, which
                the status summary line already shows. */ -}}
-        {{- $elsewhere := or (ne (.name | default $.Name) $.Name) (ne (.namespace | default $.Namespace) $.Namespace) }}
-        {{- "Helm release" | bold | nindent 2 }}
-        {{- if $elsewhere }} {{ .name | default $.Name | cyan }}
-            {{- with .namespace }}{{ if ne . $.Namespace }} -n {{ . | cyan }}{{ end }}{{ end }}
+        {{- $elsewhere := or (ne ($latest.name | default $.Name) $.Name) (ne ($latest.namespace | default $.Namespace) $.Namespace) }}
+        {{- if $multipleRevisions }}{{ "Helm releases" | bold | nindent 2 }}{{ else }}{{ "Helm release" | bold | nindent 2 }}{{ end }}
+        {{- if $elsewhere }} {{ $latest.name | default $.Name | cyan }}
+            {{- with $latest.namespace }}{{ if ne . $.Namespace }} -n {{ . | cyan }}{{ end }}{{ end }}
+        {{- end }}
+        {{- /* firstDeployed is the same value on every entry -- it belongs to the Helm release,
+               not the revision -- so it goes on the header rather than repeated per line. When it
+               predates the oldest revision shown, Helm has already trimmed older ones. */ -}}
+        {{- if $multipleRevisions }} ({{ len . | toString | cyan }} revisions
+            {{- with $firstDeployed }}, first deployed {{ . | colorAgo }}{{ agoSuffix }}{{ end }})
         {{- end }}:
-        {{- with .chartVersion }} chart {{ . | cyan }}{{ end }}
-        {{- with .appVersion }} (app {{ . | cyan }}){{ end }}
-        {{- with .version }}, revision {{ . | toString | cyan }}{{ end }}
-        {{- with .status }}, {{ . | colorKeyword }}{{ with $latest.lastDeployed }} {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-        {{- else }}{{ with .lastDeployed }}, deployed {{ . | colorAgo }}{{ agoSuffix }}{{ end }}{{ end }}
-        {{- with .firstDeployed }}
-            {{- if ne . $latest.lastDeployed }}, first deployed {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+        {{- range . }}
+            {{- if $multipleRevisions }}{{ "" | nindent 4 }}{{ else }}{{ " " }}{{ end }}
+            {{- /* Every field here is required by the CRD schema, but a history entry rendered
+                   from a hand-written manifest with -f can be missing any of them, so the
+                   separators are tracked rather than hardcoded between the parts. */ -}}
+            {{- $needsComma := false }}
+            {{- with .version }}revision {{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+            {{- with .chartVersion }}{{ if $needsComma }}, {{ end }}chart {{ . | cyan }}{{ $needsComma = true }}{{ end }}
+            {{- with .appVersion }} (app {{ . | cyan }}){{ end }}
+            {{- if $needsComma }}, {{ end }}
+            {{- with .status }}{{ . | colorKeyword }}{{ else }}deployed{{ end }}
+            {{- with .lastDeployed }} {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+        {{- end }}
+        {{- if not $multipleRevisions }}
+            {{- with $firstDeployed }}
+                {{- if ne . ($latest.lastDeployed | default "") }}, first deployed {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+            {{- end }}
         {{- end }}
     {{- end }}
     {{- /* Revision divergence: the chart version helm-controller last tried isn't the one that
@@ -62,25 +136,13 @@
            status.lastAppliedRevision is the deprecated v2 spelling, only there as a fallback for
            objects last written by an older helm-controller. */ -}}
     {{- $released := $deployed.chartVersion | default .Status.lastAppliedRevision }}
-    {{- $olderStillInstalled := false }}
-    {{- with $deployed }}
-        {{- if ne (.version | toString) ($latest.version | toString) }}{{ $olderStillInstalled = true }}{{ end }}
-    {{- end }}
     {{- with .Status.lastAttemptedRevision }}
         {{- if ne . ($released | default "") }}
-            {{- "Last attempted" | red | bold | nindent 2 }} chart {{ . | red }} was not released
-            {{- if not $olderStillInstalled }}
-                {{- if $released }}, {{ $released | red }} is still what's installed
-                {{- else }}, this HelmRelease has never been installed{{ end }}
-            {{- end }}
+            {{- "Last attempted" | red | bold | nindent 2 }}
+            {{- with $.Status.lastAttemptedReleaseAction }} {{ . | red }} of{{ end }} chart {{ . | red }} was not released
+            {{- if $released }}, {{ $released | red }} is still what's installed
+            {{- else }}, this HelmRelease has never been installed{{ end }}
         {{- end }}
-    {{- end }}
-    {{- /* The newest release failed, so an older one is what's actually still installed. */ -}}
-    {{- if $olderStillInstalled }}
-        {{- "Still installed" | bold | nindent 2 }}: chart {{ $deployed.chartVersion | cyan }}
-        {{- with $deployed.appVersion }} (app {{ . | cyan }}){{ end }}
-        {{- with $deployed.version }}, revision {{ . | toString | cyan }}{{ end }}
-        {{- with $deployed.lastDeployed }}, deployed {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- end }}
     {{- /* Cumulative since the last successful release of each kind, reset on success. */ -}}
     {{- if or .Status.installFailures .Status.upgradeFailures .Status.failures }}
@@ -104,6 +166,22 @@
         {{- with $upgradeRetries }}{{ $remediationParts = append $remediationParts (printf "upgrade retries %d" (int .)) }}{{ end }}
         {{- with $upgradeStrategy }}{{ $remediationParts = append $remediationParts (printf "on failed upgrade: %s" .) }}{{ end }}
         {{- " " }}{{ join ", " $remediationParts | cyan }}
+    {{- end }}
+    {{- /* Off by default: with it on, helm-controller diffs the cluster against the last release
+           on every reconcile and (in full mode) reverts anything edited out-of-band, which is
+           the explanation for manual changes that keep disappearing. */ -}}
+    {{- with .Spec.driftDetection }}
+        {{- if ne (.mode | default "disabled") "disabled" }}
+            {{- "Drift detection" | bold | nindent 2 }} in {{ .mode | cyan }} mode
+            {{- if eq .mode "enabled" }}: out-of-band changes to released resources are reverted{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- /* Without it helm-controller acts as itself (cluster-admin in most installs); with it
+           every Helm operation is impersonated, so RBAC denials on the release come from this
+           account, not from the controller. */ -}}
+    {{- with .Spec.serviceAccountName }}
+        {{- "Impersonates" | bold | nindent 2 }} {{ $.Include "resource_ref" (dict "kind" "ServiceAccount" "name" . "namespace" $.Namespace "callerNamespace" $.Namespace) }}
+        {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" "ServiceAccount" "name" .) }}
     {{- end }}
     {{- template "flux_depends_on" . }}
     {{- template "flux_reconciliation" . }}

@@ -57,11 +57,40 @@
 {{- define "resource_ref" }}
     {{- /* Expects dict "kind" "name" "namespace" (optional) "callerNamespace" (optional -- the
            namespace of the object doing the referencing; when it matches "namespace" the
-           namespace is redundant on screen and is dropped). */ -}}
-    {{- .kind | cyan | bold }}/{{ .name | cyan }}
+           namespace is redundant on screen and is dropped).
+           kind/name go through "default" rather than straight into cyan: a ref field a CRD marks
+           required can still arrive nil from a hand-written manifest rendered with -f, and cyan
+           errors on a nil, which aborts the render of the entire object instead of degrading
+           just this one reference. */ -}}
+    {{- .kind | default "" | cyan | bold }}/{{ .name | default "" | cyan }}
     {{- with .namespace }}
         {{- if or (not $.callerNamespace) (ne . $.callerNamespace) }}
             {{- " -n " }}{{ if eq . "default" }}{{ . | red }}{{ else }}{{ . | cyan }}{{ end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "deep_render_ref" }}
+    {{- /* Expects dict "ctx" (the RenderableObject doing the referencing) "kind" "name"
+           "namespace" (optional, defaults to the caller's) "indent" (optional, defaults to 4).
+           Renders the referenced object inline under the caller's line when --deep is set, and
+           nothing at all otherwise -- so a caller pairs it with a resource_ref line, which stays
+           on screen in every mode:
+
+               {{- "Applies" | bold | nindent 2 }} from {{ $.Include "resource_ref" (dict ...) }}
+               {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" .kind "name" .name) }}
+
+           Appending rather than replacing the ref keeps prose lines intact -- "Applies ./x from
+           GitRepository/y into namespace z" would be destroyed by substituting a multi-line block
+           mid-sentence. Templates whose ref sits on a line of its own (ExternalSecret, HTTPRoute)
+           replace it instead; both are fine, the ref just has to survive in the non-deep modes.
+           Silent when the object can't be fetched, which covers --shallow and --local without
+           either needing an explicit check here. */ -}}
+    {{- $ctx := .ctx }}
+    {{- if $ctx.Config.GetBool "deep" }}
+        {{- $obj := $ctx.KubeGetFirst (.namespace | default $ctx.Namespace) .kind .name }}
+        {{- if $obj.Object }}
+            {{- $ctx.IncludeRenderableObject $obj | nindent (int (.indent | default 4)) }}
         {{- end }}
     {{- end }}
 {{- end -}}
@@ -1328,6 +1357,22 @@
             {{- with $.Spec.retryInterval }}, retries every {{ . | cyan }} after a failure{{ end }}
         {{- end }}
     {{- end }}
+    {{- /* "flux reconcile" asks for an out-of-band run by stamping this annotation; the controller
+           copies it into status.lastHandledReconcileAt once it picks the request up. While the two
+           differ the request is still outstanding, and every condition on the object continues to
+           describe the *previous* run -- so the object reads as Current while the reconcile the
+           operator is waiting on hasn't started.
+           The timestamp is printed raw rather than through colorAgo: the annotation is documented
+           as "any value that changes", the flux CLI writes RFC3339 with nanoseconds, and colorAgo
+           parses exactly one layout and silently returns the zero time otherwise -- which would
+           render a plausible-looking age that is wrong by two millennia. */ -}}
+    {{- $reconcileRequestedAt := index .Annotations "reconcile.fluxcd.io/requestedAt" | default "" }}
+    {{- if $reconcileRequestedAt }}
+        {{- if ne $reconcileRequestedAt (.Status.lastHandledReconcileAt | default "") }}
+            {{- "Reconcile pending" | yellow | bold | nindent 2 }}: requested at {{ $reconcileRequestedAt | cyan }}, not handled yet
+            {{- with .Status.lastHandledReconcileAt }} (last handled {{ . | cyan }}){{ end }}
+        {{- end }}
+    {{- end }}
 {{- end -}}
 
 {{- define "flux_depends_on" }}
@@ -1340,6 +1385,11 @@
         {{- "Depends on" | bold | nindent 2 }}
         {{- range $index, $dep := . }}
             {{- if $index }},{{ end }} {{ $.Include "resource_ref" (dict "kind" ($dep.kind | default $.Kind) "name" $dep.name "namespace" ($dep.namespace | default $.Namespace) "callerNamespace" $.Namespace) }}
+        {{- end }}
+        {{- /* Deep renders each dependency below the list rather than inline in it, so the
+               one-line "who is blocking me" summary survives in every mode. */ -}}
+        {{- range $dep := . }}
+            {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" ($dep.kind | default $.Kind) "name" $dep.name "namespace" ($dep.namespace | default $.Namespace)) }}
         {{- end }}
     {{- end }}
 {{- end -}}

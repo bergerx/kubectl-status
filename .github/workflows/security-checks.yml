@@ -1,0 +1,50 @@
+name: security-checks
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  # Both checks can start failing without anyone touching the repo -- govulncheck reads a
+  # vulnerability DB that gains entries for already-released dependencies, and gitleaks ships
+  # new detection rules that can match content already in history. A daily run on master
+  # surfaces that within a day instead of whenever someone next happens to open a PR.
+  schedule:
+    - cron: '17 6 * * *'
+  # So the same scan can be re-run on demand (e.g. right after bumping a dependency) without
+  # waiting for the nightly slot.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # gitleaks-action reads the PR's commit list via the API to scope its scan -- it hard-fails
+  # without a token on pull_request events, even with comments disabled below.
+  pull-requests: read
+
+jobs:
+  security-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # gitleaks-action resolves `<base-commit>^` to diff against on push/pull_request
+          # events, which fails on a shallow clone.
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pinned so the action skips its own version-lookup API call. Keep in sync with
+          # GITLEAKS_MODULE in the Makefile.
+          GITLEAKS_VERSION: "8.30.1"
+          # PR review comments need pull-requests: write, which this job intentionally
+          # doesn't have; findings still show up in the job summary/logs/sarif artifact.
+          GITLEAKS_ENABLE_COMMENTS: "false"
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+        with:
+          go-version-file: 'go.mod'
+          # Already checked out above (with fetch-depth: 0 for gitleaks); skip this
+          # action's own default checkout.
+          repo-checkout: false
