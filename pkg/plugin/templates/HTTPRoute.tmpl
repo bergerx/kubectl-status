@@ -17,8 +17,6 @@
         {{- end }}
     {{- end }}
     {{- $routeHostnames := .Spec.hostnames | default (list) }}
-    {{- $routeHostname := "" }}
-    {{- if eq (len $routeHostnames) 1 }}{{ $routeHostname = index $routeHostnames 0 }}{{ end }}
     {{- with .Spec.parentRefs }}
         {{- "Parents" | bold | nindent 2 }}:
         {{- range . }}
@@ -42,15 +40,23 @@
                     {{- if $gw.Object }}
                         {{- $sectionName := .sectionName }}
                         {{- range $gw.Spec.listeners }}
+                            {{- /* The hostnames this listener and this route serve together, which
+                                   are the ones the listener's certificate has to cover -- either
+                                   side may be a wildcard, so this is an intersection rather than
+                                   an equality test. Empty means the route pins no hostname (or,
+                                   for a listener that isn't pinned by sectionName below, that the
+                                   two are disjoint and the route doesn't attach here). */ -}}
+                            {{- $certHostnames := hostnameIntersections (.hostname | default "") $routeHostnames }}
                             {{- $matches := false }}
                             {{- if $sectionName }}
                                 {{- if eq .name $sectionName }}{{ $matches = true }}{{ end }}
+                                {{- /* sectionName attaches the route to this listener whatever its
+                                       hostname, so a disjoint pair is a real problem: fall back to
+                                       the route's hostnames to report it rather than staying
+                                       silent. */ -}}
+                                {{- if not $certHostnames }}{{ $certHostnames = $routeHostnames }}{{ end }}
                             {{- else if eq .protocol "HTTPS" }}
-                                {{- $hostnameOk := true }}
-                                {{- with .hostname }}
-                                    {{- if and $routeHostnames (not (has . $routeHostnames)) }}{{ $hostnameOk = false }}{{ end }}
-                                {{- end }}
-                                {{- if $hostnameOk }}{{ $matches = true }}{{ end }}
+                                {{- if or (not $routeHostnames) (not .hostname) $certHostnames }}{{ $matches = true }}{{ end }}
                             {{- end }}
                             {{- if $matches }}
                                 {{- with .tls }}
@@ -63,7 +69,7 @@
                                             {{- if not $secret.Object }}
                                                 {{- " doesn't exist" | red | bold }}
                                             {{- else }}
-                                                {{- $cert := parseTLSSecretCertificate $secret $routeHostname }}
+                                                {{- $cert := parseTLSSecretCertificate $secret $certHostnames }}
                                                 {{- if $cert.WrongType }}
                                                     {{- printf ", wrong type:%s" $cert.ActualType | red | bold }}
                                                 {{- else if $cert.MissingKeys }}

@@ -150,6 +150,7 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"cronNextTime":                    cfg.cronNextTime,
 		"withinLastHour":                  cfg.withinLastHour,
 		"parseTLSSecretCertificate":       cfg.parseTLSSecretCertificate,
+		"hostnameIntersections":           hostnameIntersections,
 		"certificatesInSecret":            cfg.certificatesInSecret,
 		"certificatesInConfigMap":         cfg.certificatesInConfigMap,
 		"certificateInCSR":                cfg.certificateInCSR,
@@ -1658,11 +1659,13 @@ func stringifyLabels(labels map[string]interface{}) map[string]string {
 
 // parseTLSSecretCertificate inspects a Secret expected to be type kubernetes.io/tls and
 // returns both full certificate detail (for Secret.tmpl's own display) and consistency
-// flags against an optional expected hostname (for Ingress/Gateway callers). The expected
-// hostname may itself be a wildcard pattern such as "*.example.com" -- see certServesHostname.
-// hostname == "" skips the hostname-match check and is used by Secret.tmpl, which has no
-// "expected host" of its own.
-func (cfg *RenderConfig) parseTLSSecretCertificate(secret RenderableObject, hostname string) map[string]interface{} {
+// flags against the expected hostname(s) (for Ingress/Gateway callers). hostnames takes either a
+// single hostname or a list of them, each of which may be a wildcard pattern such as
+// "*.example.com" -- see certServesHostname. A list is satisfied when the certificate serves at
+// least one of its entries, since a route with several hostnames only needs the listener's
+// certificate to cover the ones it actually terminates. Passing "" (or an empty list) skips the
+// hostname-match check and is used by Secret.tmpl, which has no "expected host" of its own.
+func (cfg *RenderConfig) parseTLSSecretCertificate(secret RenderableObject, hostnames interface{}) map[string]interface{} {
 	result := map[string]interface{}{
 		"Exists":          false,
 		"WrongType":       false,
@@ -1761,13 +1764,109 @@ func (cfg *RenderConfig) parseTLSSecretCertificate(secret RenderableObject, host
 	result["SelfSigned"] = bytes.Equal(cert.RawIssuer, cert.RawSubject)
 	result["Expired"] = cert.NotAfter.Before(cfg.Now())
 
-	if hostname == "" {
-		result["MatchesHostname"] = true
-	} else {
-		result["MatchesHostname"] = certServesHostname(cert, hostname)
+	// Nothing expected to match against (Secret.tmpl, or an unset listener/route hostname) is
+	// not a mismatch.
+	expected := expectedHostnames(hostnames)
+	matchesHostname := len(expected) == 0
+	for _, hostname := range expected {
+		if certServesHostname(cert, hostname) {
+			matchesHostname = true
+			break
+		}
 	}
+	result["MatchesHostname"] = matchesHostname
 
 	return result
+}
+
+// expectedHostnames normalises a hostnames argument that templates pass either as a single
+// hostname or as a list, dropping the empty entries an unset Gateway listener or route hostname
+// produces.
+func expectedHostnames(hostnames interface{}) []string {
+	var raw []string
+	switch v := hostnames.(type) {
+	case nil:
+	case string:
+		// Not cast.ToStringSlice: that splits a plain string on whitespace.
+		raw = []string{v}
+	default:
+		raw = cast.ToStringSlice(v)
+	}
+	var out []string
+	for _, hostname := range raw {
+		if hostname != "" {
+			out = append(out, hostname)
+		}
+	}
+	return out
+}
+
+// hostnameIntersections narrows a Gateway listener's hostname against a route's hostnames the
+// way the Gateway API attaches routes to listeners, returning the hostnames the pair actually
+// serves together -- which is what a listener's certificate has to cover.
+//
+// Templates previously compared the two sides as exact strings, which is wrong on both counts a
+// Gateway API hostname can be a wildcard: a "*.example.com" listener does serve a
+// "foo.example.com" route (so the listener's certificate should be checked, not skipped), and
+// the pair's effective hostname is the narrower of the two, not the wildcard. Wildcards here are
+// suffix matches of any depth, per the Gateway API hostname spec -- unlike a certificate
+// wildcard, which spans exactly one label.
+//
+// An empty listener hostname means the listener serves every hostname, so the route's own
+// hostnames stand unnarrowed. Empty route hostnames mean the route accepts whatever the listener
+// serves, which the listener's own certificate check already covers, so nothing is returned. An
+// empty result for two non-empty sides means they are disjoint: the route does not attach here.
+func hostnameIntersections(listenerHostname string, routeHostnames interface{}) []string {
+	hostnames := expectedHostnames(routeHostnames)
+	if len(hostnames) == 0 {
+		return nil
+	}
+	if listenerHostname == "" {
+		return hostnames
+	}
+	var intersections []string
+	for _, routeHostname := range hostnames {
+		if narrowed := narrowerHostname(listenerHostname, routeHostname); narrowed != "" {
+			intersections = append(intersections, narrowed)
+		}
+	}
+	return intersections
+}
+
+// narrowerHostname returns the more specific of two Gateway API hostname patterns, or "" when
+// they share no hostname at all.
+func narrowerHostname(a, b string) string {
+	aSuffix, aIsWildcard := wildcardSuffix(a)
+	bSuffix, bIsWildcard := wildcardSuffix(b)
+	switch {
+	case !aIsWildcard && !bIsWildcard:
+		if strings.EqualFold(a, b) {
+			return a
+		}
+	case aIsWildcard && !bIsWildcard:
+		// A wildcard covers subdomains of its suffix at any depth, but never the suffix itself.
+		if hostnameUnder(b, aSuffix) {
+			return b
+		}
+	case !aIsWildcard && bIsWildcard:
+		if hostnameUnder(a, bSuffix) {
+			return a
+		}
+	default:
+		// Two wildcards overlap when one suffix contains the other; the deeper one wins.
+		if strings.EqualFold(aSuffix, bSuffix) || hostnameUnder(aSuffix, bSuffix) {
+			return a
+		}
+		if hostnameUnder(bSuffix, aSuffix) {
+			return b
+		}
+	}
+	return ""
+}
+
+// hostnameUnder reports whether host is a strict subdomain of suffix.
+func hostnameUnder(host, suffix string) bool {
+	return strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(suffix))
 }
 
 // certServesHostname reports whether cert can serve the hostname a caller expects it to serve.

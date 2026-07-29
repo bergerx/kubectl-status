@@ -1918,6 +1918,145 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 	}
 }
 
+// Routes carry a list of hostnames, so the templates hand parseTLSSecretCertificate every
+// hostname a listener serves for the route rather than only the single-hostname case they used to
+// restrict themselves to.
+func TestParseTLSSecretCertificateHostnameLists(t *testing.T) {
+	cfg := NewRenderConfig(viper.New())
+	leafPEM, _, leafKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "leaf.example.com",
+		dnsNames:   []string{"leaf.example.com", "*.wild.example.com"},
+		selfSigned: true,
+	})
+	secret := tlsSecret("kubernetes.io/tls", leafPEM, keyPEMBytes(leafKey))
+
+	tests := []struct {
+		name      string
+		hostnames interface{}
+		want      bool
+	}{
+		{"empty list expects nothing", []string{}, true},
+		{"nil expects nothing", nil, true},
+		{"list of empty strings expects nothing", []string{"", ""}, true},
+		{"single-entry list matches", []string{"leaf.example.com"}, true},
+		{"one served hostname among several is enough", []string{"nope.example.com", "leaf.example.com"}, true},
+		{"no served hostname in the list", []string{"nope.example.com", "other.example.com"}, false},
+		{"wildcard entry in the list", []string{"*.wild.example.com"}, true},
+		// Templates range over unstructured data, so lists reach here as []interface{}.
+		{"untyped list from unstructured data", []interface{}{"leaf.example.com"}, true},
+		{"plain string is still accepted", "leaf.example.com", true},
+		// A hostname with a space in it can't match anything, but must not be split into two
+		// hostnames either (which is what cast.ToStringSlice would do to a bare string).
+		{"string is not split on whitespace", "nope.example.com leaf.example.com", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cfg.parseTLSSecretCertificate(secret, tt.hostnames)["MatchesHostname"]
+			if got != tt.want {
+				t.Errorf("parseTLSSecretCertificate(secret, %#v)[MatchesHostname] = %v, want %v", tt.hostnames, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHostnameIntersections(t *testing.T) {
+	tests := []struct {
+		name             string
+		listenerHostname string
+		routeHostnames   interface{}
+		want             []string
+	}{
+		{
+			name:             "route pins no hostname, so nothing narrows the listener",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []string{},
+			want:             nil,
+		},
+		{
+			name:             "listener serves every hostname, so the route's stand unnarrowed",
+			listenerHostname: "",
+			routeHostnames:   []string{"a.example.com", "*.b.example.com"},
+			want:             []string{"a.example.com", "*.b.example.com"},
+		},
+		{
+			name:             "identical concrete hostnames",
+			listenerHostname: "a.example.com",
+			routeHostnames:   []string{"a.example.com"},
+			want:             []string{"a.example.com"},
+		},
+		{
+			name:             "different concrete hostnames are disjoint",
+			listenerHostname: "a.example.com",
+			routeHostnames:   []string{"b.example.com"},
+			want:             nil,
+		},
+		{
+			// The listener attaches the route, and the pair only ever serves the route's
+			// concrete hostname -- so that, not the wildcard, is what the cert must cover.
+			name:             "wildcard listener narrows to the route's concrete hostname",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []string{"a.example.com", "deep.a.example.com", "other.org"},
+			want:             []string{"a.example.com", "deep.a.example.com"},
+		},
+		{
+			name:             "concrete listener narrows a wildcard route to itself",
+			listenerHostname: "a.example.com",
+			routeHostnames:   []string{"*.example.com"},
+			want:             []string{"a.example.com"},
+		},
+		{
+			name:             "a wildcard never covers its own suffix",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []string{"example.com"},
+			want:             nil,
+		},
+		{
+			name:             "two wildcards keep the deeper one",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []string{"*.apps.example.com"},
+			want:             []string{"*.apps.example.com"},
+		},
+		{
+			name:             "two wildcards keep the deeper one, listener side",
+			listenerHostname: "*.apps.example.com",
+			routeHostnames:   []string{"*.example.com"},
+			want:             []string{"*.apps.example.com"},
+		},
+		{
+			name:             "identical wildcards",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []string{"*.example.com"},
+			want:             []string{"*.example.com"},
+		},
+		{
+			name:             "sibling wildcards are disjoint",
+			listenerHostname: "*.a.example.com",
+			routeHostnames:   []string{"*.b.example.com"},
+			want:             nil,
+		},
+		{
+			name:             "matching is case-insensitive",
+			listenerHostname: "*.EXAMPLE.com",
+			routeHostnames:   []string{"A.example.COM"},
+			want:             []string{"A.example.COM"},
+		},
+		{
+			name:             "untyped list from unstructured data",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []interface{}{"a.example.com"},
+			want:             []string{"a.example.com"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hostnameIntersections(tt.listenerHostname, tt.routeHostnames)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("hostnameIntersections(%q, %#v) = %#v, want %#v", tt.listenerHostname, tt.routeHostnames, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCertificatesInSecret(t *testing.T) {
 	cfg := NewRenderConfig(viper.New())
 	caPEM, caCert, caKey := generateTestCert(t, genCertOptions{

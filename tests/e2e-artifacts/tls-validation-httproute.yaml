@@ -64,3 +64,26 @@ spec:
     - path:
         type: PathPrefix
         value: /
+---
+# No sectionName, so the listener is picked by hostname: the Gateway's
+# "*.example.com" listener does serve this route, and its certificate must be
+# checked rather than the listener being skipped as non-matching.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: e2e-tls-httproute-wildcard-listener
+spec:
+  hostnames:
+  - e2e-tls.example.com
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: e2e-tls-gw-wildcard-host
+  rules:
+  - backendRefs:
+    - name: e2e-tls-svc
+      port: 80
+    matches:
+    - path:
+        type: PathPrefix
+        value: /

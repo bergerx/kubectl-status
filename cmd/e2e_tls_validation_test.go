@@ -150,6 +150,16 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 				stdoutRegexPath: "e2e-artifacts/tls-validation-tlsroute-mismatch.regex",
 			}.assert(t, nil, opts...)
 		})
+		t.Run("tlsroute unpinned to a section ignores listeners it doesn't attach to", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-multi-listener", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			require.NoError(t, err)
+			// The Gateway's other TLS listener terminates a different hostname with a self-signed
+			// CA certificate; it never serves this route, so neither flag belongs here.
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-tlsroute-multi-listener.regex")
+			for _, problem := range []string{", self-signed", ", hostname mismatch"} {
+				assert.NotContains(t, stdout, problem)
+			}
+		})
 		t.Run("tlsroute attached to a Passthrough listener shows no cert flags", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-passthrough", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
 			require.NoError(t, err)
@@ -166,6 +176,15 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 			for _, problem := range []string{"doesn't exist", "wrong type:", "missing keys:", "parse error:", "self-signed", "hostname mismatch"} {
 				assert.NotContains(t, stdout, problem)
 			}
+		})
+		t.Run("httproute unpinned to a section checks the wildcard listener it attaches to", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-wildcard-listener", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			require.NoError(t, err)
+			// The cert line's presence is the point: the wildcard listener used to be dropped as
+			// non-matching, leaving its certificate unchecked.
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-httproute-wildcard-listener.regex")
+			assert.Contains(t, stdout, "cert:Secret/e2e-tls-leaf-tls")
+			assert.NotContains(t, stdout, "hostname mismatch")
 		})
 		t.Run("httproute with a wildcard hostname covering the cert shows no cert flags", func(t *testing.T) {
 			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-wildcard-host", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
