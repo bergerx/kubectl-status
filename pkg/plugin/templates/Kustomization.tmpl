@@ -10,12 +10,16 @@
     {{- with .Spec.sourceRef }}
         {{- "Applies" | bold | nindent 2 }} {{ $.Spec.path | default "./" | cyan }} from {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" (.namespace | default $.Namespace) "callerNamespace" $.Namespace) }}
         {{- with $.Spec.targetNamespace }} into namespace {{ . | cyan }}{{ end }}
+        {{- /* The source is where a stuck Kustomization usually fails -- a GitRepository that
+               can't authenticate or an artifact that never got fetched -- so deep inlines it. */ -}}
+        {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" .kind "name" .name "namespace" (.namespace | default $.Namespace)) }}
     {{- end }}
     {{- /* spec.kubeConfig means the manifests are applied to a *different* cluster than the one
            this object lives in -- without it on screen, everything below reads as local. */ -}}
     {{- with .Spec.kubeConfig }}
         {{- with .secretRef }}
             {{- "Applies to a remote cluster" | yellow | bold | nindent 2 }}: kubeconfig from {{ $.Include "resource_ref" (dict "kind" "Secret" "name" .name "namespace" $.Namespace "callerNamespace" $.Namespace) }}
+            {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" "Secret" "name" .name) }}
         {{- end }}
     {{- end }}
     {{- with .Status.lastAppliedRevision }}
@@ -58,6 +62,18 @@
     {{- if not .Spec.prune }}
         {{- "Prune disabled" | yellow | bold | nindent 2 }}: resources removed from the source are left running in the cluster
     {{- end }}
+    {{- /* force turns an immutable-field conflict into a delete-and-recreate of the whole object,
+           which for a Job or a Service is real disruption rather than a retry. */ -}}
+    {{- if .Spec.force }}
+        {{- "Force" | yellow | bold | nindent 2 }}: resources that can't be patched are deleted and recreated
+    {{- end }}
+    {{- /* Without it kustomize-controller applies as itself (cluster-admin in most installs); with
+           it every apply is impersonated, so RBAC denials on the managed resources come from this
+           account, not from the controller. */ -}}
+    {{- with .Spec.serviceAccountName }}
+        {{- "Impersonates" | bold | nindent 2 }} {{ $.Include "resource_ref" (dict "kind" "ServiceAccount" "name" . "namespace" $.Namespace "callerNamespace" $.Namespace) }}
+        {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" "ServiceAccount" "name" .) }}
+    {{- end }}
     {{- /* What Ready actually means here: with wait/healthChecks it also covers the health of the
            applied objects, without them it only means the apply itself succeeded. */ -}}
     {{- if .Spec.wait }}
@@ -68,7 +84,11 @@
             {{- if eq (len .) 1 }}
                 {{- $check := index . 0 }}
                 {{- " " }}{{ $.Include "resource_ref" (dict "kind" $check.kind "name" $check.name "namespace" ($check.namespace | default $.Namespace) "callerNamespace" $.Namespace) }}
+                {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" $check.kind "name" $check.name "namespace" ($check.namespace | default $.Namespace)) }}
             {{- else }} {{ len . | toString | cyan }} resources
+                {{- range . }}
+                    {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" .kind "name" .name "namespace" (.namespace | default $.Namespace)) }}
+                {{- end }}
             {{- end }}
         {{- end }}
     {{- end }}

@@ -2,7 +2,7 @@
 HelmRelease/podinfo -n apps, created 1m ago, gen:7
   Current: Resource is Ready
   Chart from OCIRepository/podinfo -n flux-system
-  Helm release: chart 6.7.1 (app 6.7.1), revision 5, deployed 1m ago, first deployed 1m ago
+  Helm release: revision 5, chart 6.7.1 (app 6.7.1), deployed 1m ago, first deployed 1m ago
   Suspended: reconciliation is paused, neither spec changes nor drift are applied (would otherwise reconcile every 30m)
   Ready:True UpgradeSucceeded, Helm upgrade succeeded for release apps/podinfo.v5 with chart podinfo@6.7.1 for 1m
   Released:True UpgradeSucceeded, Helm upgrade succeeded for release apps/podinfo.v5 with chart podinfo@6.7.1 for 1m
