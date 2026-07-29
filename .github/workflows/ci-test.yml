@@ -22,10 +22,6 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - run: make test
-      - name: Run govulncheck
-        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
-        with:
-          go-version-file: 'go.mod'
       - name: Start minikube
         uses: medyagh/setup-minikube@e9e035a86bbc3caea26a450bd4dbf9d0c453682e # v0.0.21
         with:

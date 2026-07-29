@@ -36,11 +36,53 @@ vet:
 staticcheck:
 	go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
 
+GITLEAKS_MODULE := github.com/zricethezav/gitleaks/v8@v8.30.1
+
+.PHONY: gitleaks
+gitleaks:
+	go run $(GITLEAKS_MODULE) git --redact --no-banner --verbose --log-level warn
+
+# Fast path for pre-commit: scans only staged content instead of full history.
+.PHONY: gitleaks-staged
+gitleaks-staged:
+	go run $(GITLEAKS_MODULE) git --staged --redact --no-banner --verbose --log-level warn
+
+# Appends fingerprints for current findings (e.g. a newly added test fixture)
+# to .gitleaksignore, skipping ones already listed. Findings are matched by
+# fingerprint only (commit:file:rule-id:line), so nothing here embeds secret
+# content or commit metadata. Review the diff before committing -- this is
+# also the command that would silence a genuine leak if one slipped in.
+.PHONY: gitleaks-allow
+gitleaks-allow:
+	@tmp=$$(mktemp); \
+	go run $(GITLEAKS_MODULE) git --redact --no-banner --log-level warn -f json -r "$$tmp" >/dev/null 2>&1; \
+	added=0; \
+	for fp in $$(jq -r '.[].Fingerprint' "$$tmp" | sort -u); do \
+		if ! grep -qxF "$$fp" .gitleaksignore 2>/dev/null; then \
+			echo "$$fp" >> .gitleaksignore; \
+			added=$$((added+1)); \
+		fi; \
+	done; \
+	rm -f "$$tmp"; \
+	echo "Added $$added new fingerprint(s) to .gitleaksignore."; \
+	if [ "$$added" -gt 0 ]; then \
+		echo "Review before committing:"; \
+		git --no-pager diff -- .gitleaksignore; \
+	fi
+
+GOVULNCHECK_MODULE := golang.org/x/vuln/cmd/govulncheck@v1.6.0
+
+.PHONY: govulncheck
+govulncheck:
+	go run $(GOVULNCHECK_MODULE) ./...
+
 #--------------------------
 # Test
 #--------------------------
 .PHONY: test
-test: vet staticcheck
+# gitleaks-staged (not the full-history gitleaks) so this stays cheap enough to run on every
+# commit; the full-history scan still runs in CI via .github/workflows/security-checks.yml.
+test: vet staticcheck gitleaks-staged govulncheck
 	go test ./...
 
 #--------------------------
@@ -62,6 +104,7 @@ E2E_PROFILE := kstat-e2e-shared
 E2E_HOME := $(HOME)/.kstat-e2e
 E2E_KUBECONFIG := $(E2E_HOME)/shared.kubeconfig
 E2E_LOCKFILE := $(E2E_HOME)/shared.lock
+GOTESTSUM_MODULE := gotest.tools/gotestsum@v1.13.0
 
 # CI (and anyone else who already has a suitable cluster configured) sets
 # ASSUME_MINIKUBE_IS_CONFIGURED=true, in which case we deliberately fall back to the
@@ -159,7 +202,7 @@ test-e2e: vet staticcheck install-e2e-deps
 	# CI runner $(E2E_LOCKFILE)'s parent dir wouldn't otherwise exist and flock would
 	# fail outright.
 	@mkdir -p $(E2E_HOME)
-	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
+	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# The cluster (profile: $(E2E_PROFILE)) is shared across every worktree/branch/session on
@@ -170,7 +213,7 @@ test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# using count to prevent caching; see the timeout note in the ASSUME_MINIKUBE_IS_CONFIGURED
 	# branch above.
 	# See the gotestsum note, and the -parallel=4 note above the other branch's go test invocation.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
 endif
 
 .PHONY: test-e2e-quick
@@ -195,7 +238,7 @@ test-e2e-quick:
 	# sized for the e2e-minikube-up VM (see that target's comment), not worth changing for a
 	# narrower -run since it's still the same cluster taking the load. flock $(E2E_LOCKFILE):
 	# see the comment on the shared-cluster branch of test-e2e above.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run gotest.tools/gotestsum@v1.13.0 -- ./... -count=1 -timeout=10m -parallel=4 -run '$(RUN)'
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=10m -parallel=4 -run '$(RUN)'
 
 #--------------------------
 # Test Artifacts
