@@ -1,0 +1,9 @@
+\A
+TLSRoute/e2e-tlsroute-multi-listener -n e2e-tls-validation, created 1m ago, gen:1
+  Current: Resource is current
+  Hostnames: e2e-tls\.example\.com
+  Parents:
+    Gateway/e2e-tls-gw-tlsroute-multi
+  Rules:
+    → Service/e2e-tls-svc:80
+\z

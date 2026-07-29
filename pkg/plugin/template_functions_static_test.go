@@ -1591,6 +1591,25 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 		selfSigned: true,
 	})
 
+	// A wildcard certificate as cert-manager issues one, and an apex-only one, to exercise
+	// wildcard expected hostnames (Gateway listener/route hostnames and Ingress hosts) on both
+	// sides of the comparison.
+	wildcardPEM, _, wildcardKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "*.example.com",
+		dnsNames:   []string{"*.example.com"},
+		selfSigned: true,
+	})
+	apexPEM, _, apexKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "example.com",
+		dnsNames:   []string{"example.com"},
+		selfSigned: true,
+	})
+	// Pre-RFC-6125 certificate naming the server only in its subject CN, with no SAN extension.
+	cnOnlyPEM, _, cnOnlyKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "*.cn-only.example.com",
+		selfSigned: true,
+	})
+
 	tests := []struct {
 		name          string
 		secret        RenderableObject
@@ -1736,6 +1755,123 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 			checkKeysOnly: []string{"MatchesHostname"},
 		},
 		{
+			// A "*.example.com" listener only ever routes names the certificate covers, so
+			// flagging this is a false alarm -- x509.VerifyHostname can't tell, since it treats
+			// its argument as a concrete server name.
+			name:     "wildcard expected hostname is served by a concrete SAN below it",
+			secret:   tlsSecret("kubernetes.io/tls", leafPEM, keyPEMBytes(leafKey)),
+			hostname: "*.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "wildcard expected hostname is served by an identical wildcard SAN",
+			secret:   tlsSecret("kubernetes.io/tls", wildcardPEM, keyPEMBytes(wildcardKey)),
+			hostname: "*.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "wildcard expected hostname is served by a deeper wildcard SAN",
+			secret:   tlsSecret("kubernetes.io/tls", leafPEM, keyPEMBytes(leafKey)),
+			hostname: "*.wild.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "wildcard expected hostname mismatch on a sibling subdomain",
+			secret:   tlsSecret("kubernetes.io/tls", leafPEM, keyPEMBytes(leafKey)),
+			hostname: "*.other.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "wildcard expected hostname mismatch on an unrelated domain",
+			secret:   tlsSecret("kubernetes.io/tls", wildcardPEM, keyPEMBytes(wildcardKey)),
+			hostname: "*.example.org",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			// "*.example.com" never routes the apex, so an apex-only certificate serves nothing
+			// the listener accepts.
+			name:     "wildcard expected hostname is not served by the bare suffix",
+			secret:   tlsSecret("kubernetes.io/tls", apexPEM, keyPEMBytes(apexKey)),
+			hostname: "*.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			// A certificate wildcard stands for exactly one label (RFC 6125), so "*.example.com"
+			// covers no name under "foo.example.com".
+			name:     "shallower wildcard SAN doesn't serve a deeper wildcard expected hostname",
+			secret:   tlsSecret("kubernetes.io/tls", wildcardPEM, keyPEMBytes(wildcardKey)),
+			hostname: "*.foo.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "CN-only certificate matches via its CommonName wildcard",
+			secret:   tlsSecret("kubernetes.io/tls", cnOnlyPEM, keyPEMBytes(cnOnlyKey)),
+			hostname: "foo.cn-only.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "CN-only certificate matches a wildcard expected hostname",
+			secret:   tlsSecret("kubernetes.io/tls", cnOnlyPEM, keyPEMBytes(cnOnlyKey)),
+			hostname: "*.cn-only.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": true,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "CN-only certificate wildcard spans a single label only",
+			secret:   tlsSecret("kubernetes.io/tls", cnOnlyPEM, keyPEMBytes(cnOnlyKey)),
+			hostname: "foo.bar.cn-only.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			name:     "CN-only certificate mismatch",
+			secret:   tlsSecret("kubernetes.io/tls", cnOnlyPEM, keyPEMBytes(cnOnlyKey)),
+			hostname: "foo.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
+			// The SAN extension is authoritative when present: a certificate with SANs is not
+			// rescued by a CommonName that happens to match.
+			name:     "CommonName is ignored when the certificate has SANs",
+			secret:   tlsSecret("kubernetes.io/tls", cnNotFirstPEM, keyPEMBytes(cnNotFirstKey)),
+			hostname: "other.example.com",
+			want: map[string]interface{}{
+				"MatchesHostname": false,
+			},
+			checkKeysOnly: []string{"MatchesHostname"},
+		},
+		{
 			name:     "AltDNSNames excludes the CommonName regardless of its position in DNSNames",
 			secret:   tlsSecret("kubernetes.io/tls", cnNotFirstPEM, keyPEMBytes(cnNotFirstKey)),
 			hostname: "",
@@ -1779,6 +1915,145 @@ func TestParseTLSSecretCertificate(t *testing.T) {
 		if _, ok := all[key]; !ok {
 			t.Errorf("result map missing key %q", key)
 		}
+	}
+}
+
+// Routes carry a list of hostnames, so the templates hand parseTLSSecretCertificate every
+// hostname a listener serves for the route rather than only the single-hostname case they used to
+// restrict themselves to.
+func TestParseTLSSecretCertificateHostnameLists(t *testing.T) {
+	cfg := NewRenderConfig(viper.New())
+	leafPEM, _, leafKey := generateTestCert(t, genCertOptions{
+		subjectCN:  "leaf.example.com",
+		dnsNames:   []string{"leaf.example.com", "*.wild.example.com"},
+		selfSigned: true,
+	})
+	secret := tlsSecret("kubernetes.io/tls", leafPEM, keyPEMBytes(leafKey))
+
+	tests := []struct {
+		name      string
+		hostnames interface{}
+		want      bool
+	}{
+		{"empty list expects nothing", []string{}, true},
+		{"nil expects nothing", nil, true},
+		{"list of empty strings expects nothing", []string{"", ""}, true},
+		{"single-entry list matches", []string{"leaf.example.com"}, true},
+		{"one served hostname among several is enough", []string{"nope.example.com", "leaf.example.com"}, true},
+		{"no served hostname in the list", []string{"nope.example.com", "other.example.com"}, false},
+		{"wildcard entry in the list", []string{"*.wild.example.com"}, true},
+		// Templates range over unstructured data, so lists reach here as []interface{}.
+		{"untyped list from unstructured data", []interface{}{"leaf.example.com"}, true},
+		{"plain string is still accepted", "leaf.example.com", true},
+		// A hostname with a space in it can't match anything, but must not be split into two
+		// hostnames either (which is what cast.ToStringSlice would do to a bare string).
+		{"string is not split on whitespace", "nope.example.com leaf.example.com", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cfg.parseTLSSecretCertificate(secret, tt.hostnames)["MatchesHostname"]
+			if got != tt.want {
+				t.Errorf("parseTLSSecretCertificate(secret, %#v)[MatchesHostname] = %v, want %v", tt.hostnames, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHostnameIntersections(t *testing.T) {
+	tests := []struct {
+		name             string
+		listenerHostname string
+		routeHostnames   interface{}
+		want             []string
+	}{
+		{
+			name:             "route pins no hostname, so nothing narrows the listener",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []string{},
+			want:             nil,
+		},
+		{
+			name:             "listener serves every hostname, so the route's stand unnarrowed",
+			listenerHostname: "",
+			routeHostnames:   []string{"a.example.com", "*.b.example.com"},
+			want:             []string{"a.example.com", "*.b.example.com"},
+		},
+		{
+			name:             "identical concrete hostnames",
+			listenerHostname: "a.example.com",
+			routeHostnames:   []string{"a.example.com"},
+			want:             []string{"a.example.com"},
+		},
+		{
+			name:             "different concrete hostnames are disjoint",
+			listenerHostname: "a.example.com",
+			routeHostnames:   []string{"b.example.com"},
+			want:             nil,
+		},
+		{
+			// The listener attaches the route, and the pair only ever serves the route's
+			// concrete hostname -- so that, not the wildcard, is what the cert must cover.
+			name:             "wildcard listener narrows to the route's concrete hostname",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []string{"a.example.com", "deep.a.example.com", "other.org"},
+			want:             []string{"a.example.com", "deep.a.example.com"},
+		},
+		{
+			name:             "concrete listener narrows a wildcard route to itself",
+			listenerHostname: "a.example.com",
+			routeHostnames:   []string{"*.example.com"},
+			want:             []string{"a.example.com"},
+		},
+		{
+			name:             "a wildcard never covers its own suffix",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []string{"example.com"},
+			want:             nil,
+		},
+		{
+			name:             "two wildcards keep the deeper one",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []string{"*.apps.example.com"},
+			want:             []string{"*.apps.example.com"},
+		},
+		{
+			name:             "two wildcards keep the deeper one, listener side",
+			listenerHostname: "*.apps.example.com",
+			routeHostnames:   []string{"*.example.com"},
+			want:             []string{"*.apps.example.com"},
+		},
+		{
+			name:             "identical wildcards",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []string{"*.example.com"},
+			want:             []string{"*.example.com"},
+		},
+		{
+			name:             "sibling wildcards are disjoint",
+			listenerHostname: "*.a.example.com",
+			routeHostnames:   []string{"*.b.example.com"},
+			want:             nil,
+		},
+		{
+			name:             "matching is case-insensitive",
+			listenerHostname: "*.EXAMPLE.com",
+			routeHostnames:   []string{"A.example.COM"},
+			want:             []string{"A.example.COM"},
+		},
+		{
+			name:             "untyped list from unstructured data",
+			listenerHostname: "*.example.com",
+			routeHostnames:   []interface{}{"a.example.com"},
+			want:             []string{"a.example.com"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hostnameIntersections(tt.listenerHostname, tt.routeHostnames)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("hostnameIntersections(%q, %#v) = %#v, want %#v", tt.listenerHostname, tt.routeHostnames, got, tt.want)
+			}
+		})
 	}
 }
 
