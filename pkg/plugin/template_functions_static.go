@@ -27,10 +27,14 @@ import (
 	"github.com/spf13/cast"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	resource2 "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	resourcehelper "k8s.io/component-helpers/resource"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 
@@ -120,6 +124,7 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"colorPercent":                    colorPercent,
 		"evictionHeadroom":                evictionHeadroom,
 		"evictionAnnotation":              evictionAnnotation,
+		"quotaRolloutHeadroom":            quotaRolloutHeadroom,
 		"humanizeSI":                      humanizeSI,
 		"humanizeSIPair":                  humanizeSIPair,
 		"getMatchingItemInMapList":        getMatchingItemInMapList,
@@ -313,6 +318,206 @@ func colorPercent(format string, percent float64) string {
 		return color.YellowString(str)
 	}
 	return str
+}
+
+// quotaHeadroomReport is what quotaRolloutHeadroom found for one workload: how many Pods the
+// workload still has to create before its rollout can finish, and the ResourceQuotas that don't
+// currently have room for them. Quotas is empty whenever every quota in the namespace has room
+// (the common case), so templates can render nothing at all without inspecting further.
+type quotaHeadroomReport struct {
+	ExtraPods int
+	Quotas    []quotaHeadroomQuota
+}
+
+// quotaHeadroomQuota is one ResourceQuota that is short on at least one of the resources the
+// pending Pods would consume. Only the short resources are listed -- a quota that tracks ten
+// resources and is short on one shouldn't print the nine that fit.
+type quotaHeadroomQuota struct {
+	Name       string
+	Shortfalls []quotaShortfall
+}
+
+// quotaShortfall is one resource of one quota. The figures are resource.Quantity strings, i.e. the
+// same canonical form the quota itself is written in ("512Mi", "500m"), so the reader can compare
+// them against their own manifests and against kubectl's own quota output.
+type quotaShortfall struct {
+	Resource string
+	Need     string
+	Free     string
+	Used     string
+	Hard     string
+}
+
+// quotaRolloutHeadroom answers "will the Pods this rollout still has to create fit in the
+// namespace's ResourceQuota?" -- the warning a reader wants *before* the rollout wedges on
+// FailedCreate. quotas are the namespace's ResourceQuota objects and workload is a Deployment or
+// StatefulSet, all as unstructured maps, which are converted to their API types so that the
+// per-Pod resource total comes from the same k8s.io/component-helpers/resource implementation the
+// scheduler and quota controller use (sidecars, init containers, pod-level resources and
+// RuntimeClass overhead all have non-obvious rules there that aren't worth restating).
+//
+// The comparison is deliberately conservative, because a false "you're out of quota" on a workload
+// that is merely slow to roll out is worse than saying nothing:
+//
+//   - Quotas carrying spec.scopes or spec.scopeSelector are skipped entirely. Whether these Pods
+//     fall in a scope depends on fields (priorityClassName, BestEffort-ness, termination) whose
+//     matching rules live in k8s.io/kubernetes and can't be imported, and guessing wrong means
+//     blaming a quota that never applied to these Pods.
+//   - A quota resource the Pod template requests nothing for is skipped, so nothing is reported
+//     for object-count quotas (count/deployments.apps, services, ...).
+//   - A resource missing from status.used is skipped: the quota controller hasn't reported on it
+//     yet, so its free capacity is unknown rather than equal to hard.
+//   - Only an actual shortfall is returned; a quota with room produces no entry.
+//
+// status.used is namespace-wide and shared with every other workload in the namespace, and quota
+// headroom says nothing about whether a node can fit the Pod -- callers must word the output so
+// neither is implied.
+func quotaRolloutHeadroom(quotas []interface{}, workload map[string]interface{}) quotaHeadroomReport {
+	extraPods, podSpec := rolloutPendingPods(workload)
+	report := quotaHeadroomReport{ExtraPods: extraPods}
+	if extraPods <= 0 || podSpec == nil {
+		return report
+	}
+	pod := &corev1.Pod{Spec: *podSpec}
+	requests := resourcehelper.PodRequests(pod, resourcehelper.PodResourcesOptions{})
+	limits := resourcehelper.PodLimits(pod, resourcehelper.PodResourcesOptions{})
+	for _, q := range quotas {
+		quotaObject, ok := q.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		var quota corev1.ResourceQuota
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(quotaObject, &quota); err != nil {
+			klog.V(3).ErrorS(err, "ignoring unconvertible ResourceQuota in quota headroom check")
+			continue
+		}
+		if len(quota.Spec.Scopes) > 0 || quota.Spec.ScopeSelector != nil {
+			continue
+		}
+		var shortfalls []quotaShortfall
+		for _, name := range sortedResourceNames(quota.Status.Hard) {
+			used, reported := quota.Status.Used[name]
+			if !reported {
+				continue
+			}
+			perPod, consumed := quotaResourcePerPod(name, requests, limits)
+			if !consumed {
+				continue
+			}
+			need := multiplyQuantity(perPod, extraPods)
+			hard := quota.Status.Hard[name]
+			free := hard.DeepCopy()
+			free.Sub(used)
+			if free.Sign() < 0 {
+				free.Set(0)
+			}
+			if need.Cmp(free) <= 0 {
+				continue
+			}
+			shortfalls = append(shortfalls, quotaShortfall{
+				Resource: string(name),
+				Need:     need.String(),
+				Free:     free.String(),
+				Used:     used.String(),
+				Hard:     hard.String(),
+			})
+		}
+		if len(shortfalls) > 0 {
+			report.Quotas = append(report.Quotas, quotaHeadroomQuota{Name: quota.Name, Shortfalls: shortfalls})
+		}
+	}
+	return report
+}
+
+// rolloutPendingPods is how many Pods the workload's controller still has to create before its
+// rollout is complete -- the replica count it may run at once minus the Pods it already has --
+// along with the Pod spec each of them will be created from. A Deployment's allowance includes
+// rolling-update surge, resolved with the same intstr helper the Deployment controller's
+// ResolveFenceposts uses, since surge is what makes a rollout need more quota than the steady
+// state. A StatefulSet gets no surge allowance -- it deletes a Pod before creating its replacement
+// -- so for one only a scale-up shows up here. Returns 0 and a nil spec for any other kind, or
+// when the object doesn't convert to its API type (a hand-written manifest rendered with -f can be
+// missing or mistype anything).
+func rolloutPendingPods(workload map[string]interface{}) (int, *corev1.PodSpec) {
+	switch cast.ToString(workload["kind"]) {
+	case "Deployment":
+		var deployment appsv1.Deployment
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(workload, &deployment); err != nil {
+			klog.V(3).ErrorS(err, "ignoring unconvertible Deployment in quota headroom check")
+			return 0, nil
+		}
+		desired := 1
+		if deployment.Spec.Replicas != nil {
+			desired = int(*deployment.Spec.Replicas)
+		}
+		surge := 0
+		if strategy := deployment.Spec.Strategy; strategy.Type == "" || strategy.Type == appsv1.RollingUpdateDeploymentStrategyType {
+			maxSurge := intstr.FromString("25%")
+			if strategy.RollingUpdate != nil && strategy.RollingUpdate.MaxSurge != nil {
+				maxSurge = *strategy.RollingUpdate.MaxSurge
+			}
+			surge, _ = intstr.GetScaledValueFromIntOrPercent(&maxSurge, desired, true)
+		}
+		return desired + surge - int(deployment.Status.Replicas), &deployment.Spec.Template.Spec
+	case "StatefulSet":
+		var statefulSet appsv1.StatefulSet
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(workload, &statefulSet); err != nil {
+			klog.V(3).ErrorS(err, "ignoring unconvertible StatefulSet in quota headroom check")
+			return 0, nil
+		}
+		desired := 1
+		if statefulSet.Spec.Replicas != nil {
+			desired = int(*statefulSet.Spec.Replicas)
+		}
+		return desired - int(statefulSet.Status.Replicas), &statefulSet.Spec.Template.Spec
+	}
+	return 0, nil
+}
+
+// resourceLimitsPrefix is the "limits.<resource>" counterpart of core/v1's
+// DefaultResourceRequestsPrefix, which upstream declares only for the requests form.
+const resourceLimitsPrefix = "limits."
+
+// quotaResourcePerPod maps a ResourceQuota resource name to how much of it a single Pod of the
+// template consumes, following the quota resource naming: "requests.<name>"/"limits.<name>", the
+// bare "cpu"/"memory" aliases for the requests form, and "pods" for the Pod count itself. consumed
+// is false for a resource the Pod template doesn't ask for, including object counts.
+func quotaResourcePerPod(quotaResource corev1.ResourceName, requests, limits corev1.ResourceList) (quantity resource2.Quantity, consumed bool) {
+	if quotaResource == corev1.ResourcePods {
+		return *resource2.NewQuantity(1, resource2.DecimalSI), true
+	}
+	amounts, name := requests, string(quotaResource)
+	switch {
+	case strings.HasPrefix(name, corev1.DefaultResourceRequestsPrefix):
+		name = strings.TrimPrefix(name, corev1.DefaultResourceRequestsPrefix)
+	case strings.HasPrefix(name, resourceLimitsPrefix):
+		amounts, name = limits, strings.TrimPrefix(name, resourceLimitsPrefix)
+	}
+	perPod, ok := amounts[corev1.ResourceName(name)]
+	if !ok || perPod.IsZero() {
+		return resource2.Quantity{}, false
+	}
+	return perPod, true
+}
+
+// multiplyQuantity returns quantity added to itself count times, keeping it a resource.Quantity
+// (which has no multiplication of its own) so the result stays exact and prints in the same
+// canonical form as the quota's own values. Pod counts here are small.
+func multiplyQuantity(quantity resource2.Quantity, count int) resource2.Quantity {
+	total := quantity.DeepCopy()
+	for i := 1; i < count; i++ {
+		total.Add(quantity)
+	}
+	return total
+}
+
+func sortedResourceNames(list corev1.ResourceList) []corev1.ResourceName {
+	names := make([]corev1.ResourceName, 0, len(list))
+	for name := range list {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool { return names[i] < names[j] })
+	return names
 }
 
 // ansiEscape matches an SGR color/style escape sequence (e.g. from fatih/color), used by
