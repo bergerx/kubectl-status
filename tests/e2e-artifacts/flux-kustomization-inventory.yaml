@@ -1,80 +1,86 @@
-# Objects for the Kustomization inventory subtest. No metadata.namespace anywhere, so
-# applyManifestInNamespace can place the namespaced ones with `kubectl -n` (the ClusterRole is
-# cluster-scoped and ignores it).
+# A real Flux source and Kustomization for TestE2EFluxKustomizationInventory. Everything the test
+# asserts on -- status.inventory, status.lastAppliedRevision, and the kustomize.toolkit.fluxcd.io
+# ownership labels on the applied objects -- is written by source-controller and
+# kustomize-controller as they reconcile this, so there is no status here to fabricate.
 #
-# The Kustomization's status -- conditions and the inventory itself -- is patched in by the test
-# rather than set here: inventory entry ids embed the namespace ("<ns>_<name>_<group>_<kind>"),
-# which the test picks, and .status can't be set through `kubectl apply` on a resource with a
-# status subresource anyway.
-#
-# spec.sourceRef points at a GitRepository that doesn't exist and has no CRD in this cluster. That
-# is deliberate: it keeps the source lookup on the path where KubeGetFirst finds nothing, which is
-# what every non-Flux cluster looks like, and proves the ref still renders.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  # The ownership labels and the prune opt-out that common.tmpl's flux_object_management reads.
-  # They need no live query, so their rendering is pinned by tests/artifacts/deployment-flux-managed
-  # -- what this file adds is the --deep path, where this object is inlined *by* the Kustomization
-  # that owns it and must name that Kustomization without recursing back into it.
-  annotations:
-    kustomize.toolkit.fluxcd.io/prune: Disabled
-  labels:
-    kustomize.toolkit.fluxcd.io/name: podinfo
-    kustomize.toolkit.fluxcd.io/namespace: e2e-flux-kustomization
-  name: podinfo-config
-data:
-  greeting: hello
+# No metadata.namespace on the objects below: applied with `kubectl apply -n <ns>`
+# (applyManifestInNamespace). spec.targetNamespace is the exception and has to name the namespace
+# outright -- kustomize-controller does *not* fall back to the Kustomization's own namespace for
+# manifests that leave it unset (it fails the apply with "namespace not specified"), and podinfo's
+# manifests set no namespace. It must stay in step with the `ns` constant in
+# TestE2EFluxKustomizationInventory.
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
 metadata:
   name: podinfo
 spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: podinfo
-  template:
-    metadata:
-      labels:
-        app: podinfo
-    spec:
-      containers:
-      - image: registry.k8s.io/pause:3.9
-        name: app
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: podinfo
-spec:
-  ports:
-  - port: 80
-  selector:
-    app: podinfo
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: e2e-flux-podinfo-viewer
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - get
-  - list
+  # Pinned to an immutable tag, like tests/e2e-artifacts/crossplane-functions.yaml pins its
+  # Function versions, and for a sharper reason: the fixtures assert the inventory object by
+  # object, so a branch ref would change which objects exist out from under them. podinfo's
+  # kustomize/ dir at this tag is a Deployment, a Service and a HorizontalPodAutoscaler.
+  # Kept out of hack/versions.env because nothing else uses it -- that file is for add-ons both
+  # `make install-e2e-deps` and hack/generate-screenshots.sh install, and has to stay parseable as
+  # a Makefile include.
+  url: https://github.com/stefanprodan/podinfo
+  ref:
+    tag: 6.9.2
+  interval: 60m
+  timeout: 2m
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: podinfo
 spec:
-  interval: 5m
+  # 60m is what lets the test delete a managed object and have it stay deleted: kustomize-controller
+  # doesn't watch the objects it applies, so nothing re-applies the Service until this interval
+  # elapses. That is also exactly how an out-of-band deletion behaves in a real cluster, which is
+  # the state the "missing" marker exists to report.
+  interval: 60m
   path: ./kustomize
   prune: true
+  targetNamespace: e2e-flux-kustomization
   sourceRef:
     kind: GitRepository
-    name: flux-system
+    name: podinfo
+  # spec.wait is left at its default (false) deliberately -- that's the state Kustomization.tmpl
+  # qualifies with "Ready covers the apply only", and the one worth pinning against a real
+  # controller. The test waits on the Deployment itself, so the health summaries it asserts on are
+  # settled regardless.
+  #
+  # These patches are how the test gets real, controller-applied Flux policy annotations onto a
+  # managed object for common.tmpl's flux_object_management to read: kustomize-controller writes
+  # them as part of the apply, exactly as it would for an annotation committed to the source. The
+  # casing is deliberately inconsistent with the docs' examples -- Flux matches these values
+  # case-insensitively (fluxcd/pkg/ssa/utils/meta.go), and so must we.
+  #
+  # They go on the Deployment and the HPA rather than the Service because the Service is the object
+  # the test deletes out-of-band: a policy annotation on it would never be rendered, since a missing
+  # object is reported as missing and never inlined.
+  #
+  # kustomize.toolkit.fluxcd.io/reconcile is not among them on purpose -- it tells Flux to skip the
+  # object entirely, so an object carrying it never reaches the inventory this test is about. Its
+  # rendering is pinned offline instead, by tests/artifacts/deployment-flux-managed.
+  patches:
+    - target:
+        kind: Deployment
+        name: podinfo
+      patch: |
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: podinfo
+          annotations:
+            kustomize.toolkit.fluxcd.io/prune: Disabled
+            kustomize.toolkit.fluxcd.io/force: Enabled
+    - target:
+        kind: HorizontalPodAutoscaler
+        name: podinfo
+      patch: |
+        apiVersion: autoscaling/v2
+        kind: HorizontalPodAutoscaler
+        metadata:
+          name: podinfo
+          annotations:
+            kustomize.toolkit.fluxcd.io/ssa: merge

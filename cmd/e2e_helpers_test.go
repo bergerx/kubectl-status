@@ -665,7 +665,7 @@ func waitForPodRecreated(t *testing.T, namespace, labelSelector, originalPodName
 // Per-scenario cluster dependency installs (see #720).
 //
 // Each topical group installs whatever cluster prerequisites *it* needs (cert-manager, Gateway
-// API CRDs, Cilium/Calico CRDs, VPA, Crossplane) instead of everything being installed
+// API CRDs, Cilium/Calico CRDs, VPA, Crossplane, Flux) instead of everything being installed
 // unconditionally by `make install-e2e-deps` before any test runs. metrics-server is the one
 // exception left as a Makefile step: it must be available before TestE2EParallel's pool starts
 // (see that function's doc comment), not merely before whichever group happens to use it.
@@ -951,6 +951,62 @@ func ensureCrossplane(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+var fluxInstaller onceInstaller
+
+// ensureFlux installs Flux, needed by TestE2EFluxKustomizationInventory. Unlike the CRDs-only
+// installs above, this one has to actually reconcile: what that test asserts on is
+// status.inventory, status.lastAppliedRevision and the kustomize.toolkit.fluxcd.io ownership
+// labels -- all of them written by kustomize-controller as it applies a real source, none of them
+// fields a user sets. Fabricating them would leave the test asserting against our own idea of what
+// Flux writes rather than against Flux, which is the whole point of covering these branches live.
+// Same "controller must actually run" reasoning as ensureCrossplane/ensureVPA.
+//
+// The release's install.yaml is applied directly rather than shelling out to `flux install`: it's
+// the same manifest the CLI would render with default components, and it doesn't put the flux
+// binary on the list of things a contributor (or the CI runner) needs installed. --server-side:
+// the bundle's CRDs are large enough to trip the same client-side last-applied-configuration
+// annotation limit as the Gateway API bundle above.
+func ensureFlux(t *testing.T) {
+	t.Helper()
+	fluxInstaller.ensure(t, func() error {
+		version, err := versionsEnvValue("FLUX_VERSION")
+		if err != nil {
+			return err
+		}
+		url := fmt.Sprintf("https://github.com/fluxcd/flux2/releases/download/%s/install.yaml", version)
+		if output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput(); err != nil {
+			return fmt.Errorf("kubectl apply flux install.yaml: %w: %s", err, output)
+		}
+		// 300s matches the cert-manager/Crossplane installs: four controller Deployments, each a
+		// cold image pull, racing whatever else the suite has running on the shared cluster.
+		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=300s",
+			"deployment", "--all", "-n", "flux-system").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("kubectl wait flux deployments: %w: %s%s", err, output, fluxDiagnostics())
+		}
+		return nil
+	})
+}
+
+// fluxDiagnostics dumps why the controllers never came up, for the same reason
+// crossplaneDiagnostics exists: `kubectl wait`'s timeout message names no cause, and this install
+// runs unattended on a cluster the rest of the suite is loading, so this is the only evidence
+// anyone gets after the fact.
+func fluxDiagnostics() string {
+	var b strings.Builder
+	for _, args := range [][]string{
+		{"get", "pods", "-n", "flux-system", "-o", "wide"},
+		{"get", "events", "-n", "flux-system", "--sort-by=.lastTimestamp"},
+	} {
+		out, err := exec.Command("kubectl", args...).CombinedOutput()
+		fmt.Fprintf(&b, "\n--- kubectl %s ---\n%s", strings.Join(args, " "), out)
+		if err != nil {
+			fmt.Fprintf(&b, "(%v)\n", err)
+		}
+	}
+	return b.String()
 }
 
 // crossplaneDiagnostics dumps the state that explains why the Functions never went Healthy. On

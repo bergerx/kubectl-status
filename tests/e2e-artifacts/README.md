@@ -40,7 +40,9 @@ bound object. `ServiceMonitor`/`PodMonitor` have no such branch — Tier 1 is en
 
 ## Flux
 
-`flux install`
+Installed by `ensureFlux` (cmd/e2e_helpers_test.go), which applies the release's `install.yaml` --
+version pinned as `FLUX_VERSION` in hack/versions.env. `flux install` does the same thing if you
+have the CLI and want to poke at a cluster by hand.
 
 ### Sample Helm workload (nginx via HelmRelease)
 
@@ -107,15 +109,28 @@ flux get helmreleases
 
 Both templates now exist (issue #660). `Kustomization.tmpl`'s live-query branches — resolving
 `status.inventory` entries into health summaries, inlining them under `--deep`, and flagging entries
-whose object is gone — are covered by `TestE2EFluxKustomizationInventory`, which installs only the
-Kustomization CRD rather than Flux itself: it renders a `.status` field, and the test writes that
-field directly. The manifests above are still what you want for exercising the templates by hand
-against a really-reconciling Flux.
+whose object is gone — are covered by `TestE2EFluxKustomizationInventory`. That test installs Flux
+and lets it reconcile `tests/e2e-artifacts/flux-kustomization-inventory.yaml`: a `GitRepository` on
+podinfo pinned to an immutable tag, and a `Kustomization` over it. Nothing in its `.status` is
+written by the test — the inventory, `lastAppliedRevision` and the `kustomize.toolkit.fluxcd.io`
+ownership labels on the applied objects are all kustomize-controller's, which is the only way an
+assertion about them tests Flux rather than our reading of it.
+
+Two details there are worth knowing before you write another Flux subtest:
+
+- `spec.interval` is 60m, and the Kustomization does not watch what it applies. That's what lets the
+  test delete a managed Service out-of-band and have it stay deleted — which is exactly the
+  real-world state the `missing` marker reports, an inventory recording an apply that succeeded while
+  the object is gone and the Kustomization goes on reporting Ready.
+- `spec.targetNamespace` has to name the namespace outright. kustomize-controller does *not* default
+  it to the Kustomization's own namespace; a source whose manifests set no namespace fails the apply
+  with `namespace not specified`. It must stay in step with the test's `ns`.
 
 **Remaining gap:** `HelmRelease.tmpl`'s live-query branches all run through `deep_render_ref` and so
 need the real chart-source objects (`HelmRepository`/`OCIRepository`, the mirrored `HelmChart`) to
-exist, which takes a genuine `flux install` plus a reachable chart repository. It's Tier 1 only for
-now — see `tests/artifacts/helmrelease-*`.
+exist. Flux is already installed by `ensureFlux`, so what's left is a reachable chart repository and
+a release that actually installs — the sample above is the starting point. It's Tier 1 only for now
+— see `tests/artifacts/helmrelease-*`.
 
 ---
 

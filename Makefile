@@ -184,8 +184,8 @@ e2e-minikube-down:
 install-e2e-deps:
 	# metrics-server is the one cluster dependency that stays here as a global, upfront install
 	# rather than moving into its topical e2e test group (see cmd/e2e_helpers_test.go's
-	# ensure*(t) functions for cert-manager, Gateway API CRDs, Cilium/Calico CRDs, VPA, and
-	# Crossplane -- #720): pdb-empty-selector-conflict, not itself a metrics test, can render a
+	# ensure*(t) functions for cert-manager, Gateway API CRDs, Cilium/Calico CRDs, VPA, Crossplane
+	# and Flux -- #720): pdb-empty-selector-conflict, not itself a metrics test, can render a
 	# spurious "metrics-server is not available" line if the metrics API isn't queryable yet
 	# when TestE2EParallel's parallel pool starts, so metrics availability is an invariant for
 	# the whole pool, not a per-group concern.
