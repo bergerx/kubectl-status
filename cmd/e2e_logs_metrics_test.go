@@ -49,15 +49,18 @@ func runPodLogsAndMetricsSubtests(t *testing.T, hackOpts []func(*plugin.RenderCo
 		// then waiting on metrics just reintroduces the same flip the CrashLoopBackOff wait was
 		// meant to avoid, by leaving a wide gap between the check and the actual assertion.
 		waitForContainerMetrics(t, ns, "e2e-pod-container-logs", "healthy", "sidecar")
-		// Wait for a stable Waiting(CrashLoopBackOff) state rather than just restartCount > 0:
-		// the container's current state otherwise flips between Waiting and Terminated(Error)
-		// as the kubelet retries, which would make the golden regex flaky. This has to be the
-		// last wait before the assertion below -- see the comment above.
+		// Confirm the container really did reach Waiting(CrashLoopBackOff) before rendering, so a
+		// crasher that never crashed fails here rather than as a fixture mismatch. It can drop
+		// back out of that state before the render's own Pod GET lands, which is what
+		// retryStdoutRegexFor below is for -- see cmdTest.execute.
 		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-container-logs", "crasher", "CrashLoopBackOff", ns)
 
 		cmdTest{
 			args:            []string{"pod/e2e-pod-container-logs", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/pod-container-logs.regex",
+			// Enough to span a whole restart backoff window at the sizes this pod reaches, since
+			// the render can only match while the kubelet is reporting CrashLoopBackOff.
+			retryStdoutRegexFor: 4 * time.Minute,
 		}.assert(t, nil, opts...)
 	})
 	t.Run("node correctly resolves pod metrics for pods in multiple namespaces via the batched PodMetrics lookup", func(t *testing.T) {

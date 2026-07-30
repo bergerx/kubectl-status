@@ -55,6 +55,11 @@ type cmdTest struct {
 	stderrRegex     string // Regex
 	stderrEqual     string // Exact
 	wantErr         string // Contains
+	// retryStdoutRegexFor re-runs the command until its stdout matches stdoutRegexPath, for
+	// state a `kubectl get` poll can confirm is present but that won't hold still for the length
+	// of one render (see the CrashLoopBackOff note on cmdTest.execute). Zero -- the default, and
+	// what every other subtest wants -- renders exactly once.
+	retryStdoutRegexFor time.Duration
 }
 
 // createBadNode creates a synthetic Node (no real kubelet backs it) that's cordoned, tainted,
@@ -159,13 +164,48 @@ func assertStdoutMatchesRegexFixture(t *testing.T, stdout, fixture string) {
 	assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
 }
 
+// execute runs the command once, or -- when retryStdoutRegexFor is set -- until its stdout matches
+// the stdoutRegexPath fixture, returning the last attempt's output either way so the assertions
+// below still report a real render rather than a bare timeout. Only state the kubelet reports for a
+// moment at a time needs this. A crashlooping container is the case in hand: for all but the last
+// seconds of each restart backoff window its status shows the exited instance as
+// Terminated(Error), and the kubelet swaps that for Waiting(CrashLoopBackOff) only just before it
+// starts the container again. So however recently a `kubectl get` poll confirmed CrashLoopBackOff,
+// the container can be Running by the time the render's own Pod GET lands -- and since the windows
+// double (10s, 20s, 40s, ... capped at 5m), waiting for a later one buys nothing but a longer wait
+// for the same few seconds. Re-rendering is what closes the gap: CrashLoopBackOff comes back at the
+// end of the next window, and one of the renders lands while it's there.
+func (c cmdTest) execute(t *testing.T, stdoutModifier func(string) string, opts ...func(*plugin.RenderConfig)) (string, string, error) {
+	t.Helper()
+	render := func() (string, string, error) {
+		stdout, stderr, err := executeCMD(t, c.args, opts...)
+		if stdoutModifier != nil {
+			stdout = nodeNameModifier(stdout)
+		}
+		return stdout, stderr, err
+	}
+	stdout, stderr, err := render()
+	if c.retryStdoutRegexFor == 0 || c.stdoutRegexPath == "" {
+		return stdout, stderr, err
+	}
+	outFile := path.Join("..", "tests", c.stdoutRegexPath)
+	regexBytes, readErr := os.ReadFile(outFile)
+	require.NoErrorf(t, readErr, "failed to read test artifact file: %s", outFile)
+	fixture, compileErr := regexp.Compile(`(?ms)` + string(regexBytes))
+	require.NoErrorf(t, compileErr, "failed to compile test artifact regex: %s", outFile)
+	deadline := time.Now().Add(c.retryStdoutRegexFor)
+	for attempt := 2; !fixture.MatchString(stdout) && time.Now().Before(deadline); attempt++ {
+		time.Sleep(2 * time.Second)
+		t.Logf("stdout didn't match %s, re-rendering (attempt %d)", c.stdoutRegexPath, attempt)
+		stdout, stderr, err = render()
+	}
+	return stdout, stderr, err
+}
+
 func (c cmdTest) assert(t *testing.T, stdoutModifier func(string) string, opts ...func(*plugin.RenderConfig)) {
 	t.Helper()
-	t.Logf("running cmdTest assert: %s", c)
-	stdout, stderr, err := executeCMD(t, c.args, opts...)
-	if stdoutModifier != nil {
-		stdout = nodeNameModifier(stdout)
-	}
+	t.Logf("running cmdTest assert: %+v", c)
+	stdout, stderr, err := c.execute(t, stdoutModifier, opts...)
 	switch {
 	case c.stdoutRegexPath == "" && c.stdoutEqualPath == "":
 		assert.Empty(t, stdout)
@@ -425,10 +465,6 @@ func waitForSinglePod(t *testing.T, namespace, labelSelector string) {
 	t.Fatalf("timed out waiting for exactly one pod matching selector %s in namespace %s", labelSelector, namespace)
 }
 
-// waitForContainerWaitingReason polls until the named container in the resource reports the
-// given waiting-state reason. Used instead of a plain restart-count check because a crashlooping
-// container's current state flips between Waiting(CrashLoopBackOff) and Terminated(Error) as the
-// kubelet retries, so waiting for a stable, specific state avoids a flaky render.
 // waitForPodByLabel polls until exactly one pod matches the given label selector and returns
 // its name. Used for Deployment/DaemonSet, whose pod names include a random suffix that isn't
 // known ahead of time (unlike StatefulSet, where pod names are predictable).
@@ -494,8 +530,12 @@ func waitForPodReadyInNamespace(t *testing.T, namespace, podName string) {
 	t.Fatalf("timed out waiting for pod %s/%s to become Ready", namespace, podName)
 }
 
-// waitForContainerWaitingReasonInNamespace targets a namespace explicitly via `kubectl -n`
-// instead of the kubeconfig's default; pass "" to use the kubeconfig's default namespace.
+// waitForContainerWaitingReasonInNamespace polls until the named container in the resource reports
+// the given waiting-state reason, so the render that follows has a specific state to assert on
+// rather than whatever a plain restart-count check happened to catch. Targets a namespace
+// explicitly via `kubectl -n` instead of the kubeconfig's default; pass "" to use the kubeconfig's
+// default namespace. Reasons the kubelet drops again on its own schedule (CrashLoopBackOff) need
+// cmdTest.retryStdoutRegexFor on top of this -- see the note on cmdTest.execute.
 func waitForContainerWaitingReasonInNamespace(t *testing.T, resource, containerName, reason, namespace string) {
 	t.Helper()
 	jsonpath := fmt.Sprintf(`{.status.containerStatuses[?(@.name=="%s")].state.waiting.reason}`, containerName)
