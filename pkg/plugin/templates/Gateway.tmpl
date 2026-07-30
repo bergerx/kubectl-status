@@ -33,9 +33,9 @@
                 {{- with .certificateRefs }}
                     {{- range . }}
                         {{- $refKind := .kind | default "Secret" }}
-                        {{- printf ", cert:%s/%s" $refKind .name | cyan }}
+                        {{- $refNs := coalesce .namespace $.Namespace }}
+                        {{- ", cert:" }}{{ $.Include "resource_ref" (dict "kind" $refKind "name" .name "namespace" $refNs "callerNamespace" $.Namespace) }}
                         {{- if and (eq $refKind "Secret") (not ($.LiveQueriesDisabled)) }}
-                            {{- $refNs := coalesce .namespace $.Namespace }}
                             {{- $secret := $.KubeGetFirst $refNs "Secret" .name }}
                             {{- if not $secret.Object }}
                                 {{- " doesn't exist" | red | bold }}
