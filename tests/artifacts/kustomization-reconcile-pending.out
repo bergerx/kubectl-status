@@ -3,7 +3,12 @@ Kustomization/podinfo -n flux-system, created 1m ago, gen:3
   Current: Resource is Ready
   Applies ./kustomize from GitRepository/flux-system
   Applied revision main@7f3c1a9e
-  Manages 2 resources: Deployment×1, Service×1
+  Manages 4 resources: ClusterRole×1, Deployment×1, Service×1, unparsable×1
+    ClusterRole/podinfo-viewer
+    Service/podinfo -n default
+    Deployment/podinfo -n default
+    not-a-well-formed-id
+  Ready covers the apply only: without wait or healthChecks, unhealthy managed resources leave it Ready
   Reconciles every 5m
   Reconcile pending: requested at 2026-06-29T23:59:00.482913746Z, not handled yet (last handled 2026-06-29T22:14:03.118204553Z)
   Ready:True ReconciliationSucceeded, Applied revision: refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1 for 1m

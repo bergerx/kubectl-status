@@ -5,6 +5,7 @@ HelmRelease/podinfo -n apps, created 1m ago, gen:3
   Chart values from ./charts/podinfo/values.yaml, ./charts/podinfo/values-prod.yaml (missing files are ignored)
   Values also from ConfigMap/podinfo-defaults key values.yaml, Secret/podinfo-credentials key password into backend.password (optional)
   Helm release: revision 3, chart 6.7.1 (app 6.7.1), deployed 1m ago, first deployed 1m ago
+  Chart CRDs created and replaced on install, replaced on upgrade
   Drift detection in enabled mode: out-of-band changes to released resources are reverted
   Impersonates ServiceAccount/podinfo-deployer
   Reconciles every 10m

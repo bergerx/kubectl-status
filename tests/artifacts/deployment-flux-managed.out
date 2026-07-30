@@ -1,0 +1,19 @@
+
+Deployment/podinfo -n apps, created 1m ago, gen:4
+  InProgress: Deployment not Available
+    Reconciling: DeploymentNotAvailable, Deployment not Available
+  Applied by Flux Kustomization/podinfo -n flux-system
+  Flux apply policy Merge: fields added by other tools are preserved rather than reverted
+  Flux prune disabled: kept running in the cluster after it is removed from the source
+  Flux force enabled: deleted and recreated when a patch hits an immutable field
+  Flux drift detection disabled: out-of-band changes to this object are not reverted
+  desired:2, existing:2, ready:2, updated:2, available:2
+  Selector: app=podinfo
+
+ConfigMap/podinfo-config -n apps, created 1m ago
+  Applied by Flux Kustomization/podinfo
+  Flux reconcile disabled: neither applied nor pruned by its Kustomization, however far the source moves on
+
+ClusterRole/podinfo-viewer, created 1m ago
+  Current: Resource is current
+  Flux apply policy IfNotPresent: created if missing, never updated afterwards

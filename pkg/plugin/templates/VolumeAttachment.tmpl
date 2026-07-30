@@ -4,6 +4,7 @@
     {{- template "status_summary_line" . }}
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
+    {{- template "application_details" . }}
     {{- "Attacher" | bold | nindent 2 }}: {{ .Spec.attacher | cyan }}
     {{- with .Spec.source.persistentVolumeName }}, volume {{ $.Include "resource_ref" (dict "kind" "PersistentVolume" "name" .) }}{{ end }}
     {{- with .Spec.nodeName }}, node {{ $.Include "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}

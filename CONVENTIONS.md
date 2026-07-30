@@ -136,6 +136,14 @@ Where the ref sits on a line of its own, deep mode replaces it with the inlined 
 
 Either shape is fine; the requirement is that the ref itself stays on screen in all three modes. `deep_render_ref` needs no `--shallow`/`--local` check of its own — `KubeGetFirst` already returns an empty object whenever `LiveQueriesDisabled()` is true.
 
+For a **list of resources another object manages** — a Kustomization's `status.inventory`, a Crossplane XR's `resourceRefs`, the objects in a Helm release manifest — use `managed_resource_line`, which implements all three modes plus the not-found case in one call:
+
+```
+{{- $.Include "managed_resource_line" (dict "ctx" $ "kind" $kind "name" $name "namespace" $ns) | nindent 4 }}
+```
+
+It renders the full inline object under `--deep`, a per-kind health summary by default (via `resource_health_summary`, so a mixed-kind list needs no dispatch of its own), and a bare `resource_ref` when the object can't be fetched. A reference with nothing behind it is additionally marked `missing`, since naming a resource you manage is a claim that it exists; that marking is suppressed when live queries are off, where *every* lookup comes back empty for an unrelated reason. Callers apply their own `nindent` — the helper emits no leading indentation, so the same call works at any depth.
+
 ### Go template `and`/`or` do not short-circuit
 
 Unlike most languages, Go templates evaluate **all** arguments to `and` and `or` before applying the logic. `{{ if and .A (someFunc .A.B) }}` panics when `.A` is nil because `.A.B` is always evaluated. Use nested `with`/`if` blocks for any chained field access that could be nil:

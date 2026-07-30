@@ -6,6 +6,9 @@ Kustomization/apps -n flux-system, created 1m ago, gen:11
   Applied revision main@2b9d4f1a
   Last attempted revision main@c4e8b0d3 was not applied, the cluster still runs main@2b9d4f1a
   Manages 3 resources: ConfigMap×1, Deployment×1, Service×1
+    ConfigMap/podinfo -n default
+    Service/podinfo -n default
+    Deployment/podinfo -n default
   Prune disabled: resources removed from the source are left running in the cluster
   Health-checks Deployment/podinfo -n default
   Depends on Kustomization/infra-controllers, Kustomization/infra-configs
