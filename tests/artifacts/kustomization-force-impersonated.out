@@ -4,8 +4,11 @@ Kustomization/tenant-apps -n flux-system, created 1m ago, gen:4
   Applies ./tenants/production from GitRepository/flux-system
   Applied revision main@7f3c1a9e
   Manages 2 resources: Deployment×1, ServiceAccount×1
+    ServiceAccount/tenant-apps -n production
+    Deployment/tenant-apps -n production
   Prune disabled: resources removed from the source are left running in the cluster
   Force: resources that can't be patched are deleted and recreated
   Impersonates ServiceAccount/tenant-reconciler
+  Ready covers the apply only: without wait or healthChecks, unhealthy managed resources leave it Ready
   Reconciles every 5m
   Ready:True ReconciliationSucceeded, Applied revision: refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1 for 1m

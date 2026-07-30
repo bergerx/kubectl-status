@@ -14,6 +14,8 @@ spec:
     kind: OCIRepository
     name: podinfo
     namespace: flux-system
+  install:
+    crds: Skip
   interval: 30m
   suspend: true
   targetNamespace: apps

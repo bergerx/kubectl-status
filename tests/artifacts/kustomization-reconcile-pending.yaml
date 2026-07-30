@@ -33,6 +33,10 @@ status:
       v: v1
     - id: default_podinfo_apps_Deployment
       v: v1
+    - id: _podinfo-viewer_rbac.authorization.k8s.io_ClusterRole
+      v: v1
+    - id: not-a-well-formed-id
+      v: v1
   lastAppliedRevision: refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1
   lastAttemptedRevision: refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1
   lastHandledReconcileAt: "2026-06-29T22:14:03.118204553Z"

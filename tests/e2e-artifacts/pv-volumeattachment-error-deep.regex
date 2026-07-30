@@ -4,6 +4,7 @@ PersistentVolume/\S+, created 1m ago Bound
   PV is Bound, since 1m ago managed by StorageClass/standard provisioned by \S+ with ReadWriteOnce mode, reclaim: Delete
     StorageClass/standard, created 1m ago
       Current: Resource is current
+      Managed by AddonManager in \S+ mode
       Default StorageClass
       Provisioner: \S+
   Created for PersistentVolumeClaim/e2e-attach-error-pvc -n e2e-volumeattachment

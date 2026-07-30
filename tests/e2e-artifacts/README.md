@@ -105,7 +105,17 @@ flux get kustomizations
 flux get helmreleases
 ```
 
-See GitHub issue #660 for the tracked work item (add `HelmRelease.tmpl`/`Kustomization.tmpl`).
+Both templates now exist (issue #660). `Kustomization.tmpl`'s live-query branches — resolving
+`status.inventory` entries into health summaries, inlining them under `--deep`, and flagging entries
+whose object is gone — are covered by `TestE2EFluxKustomizationInventory`, which installs only the
+Kustomization CRD rather than Flux itself: it renders a `.status` field, and the test writes that
+field directly. The manifests above are still what you want for exercising the templates by hand
+against a really-reconciling Flux.
+
+**Remaining gap:** `HelmRelease.tmpl`'s live-query branches all run through `deep_render_ref` and so
+need the real chart-source objects (`HelmRepository`/`OCIRepository`, the mirrored `HelmChart`) to
+exist, which takes a genuine `flux install` plus a reachable chart repository. It's Tier 1 only for
+now — see `tests/artifacts/helmrelease-*`.
 
 ---
 

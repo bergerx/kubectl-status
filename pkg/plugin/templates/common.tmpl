@@ -95,6 +95,40 @@
     {{- end }}
 {{- end -}}
 
+{{- define "managed_resource_line" }}
+    {{- /* Expects dict "ctx" (the RenderableObject doing the managing) "kind" "name" "namespace"
+           (optional, defaults to the caller's).
+
+           One line for one object that some other object claims to manage, in whichever of the
+           three rendering modes is active: the full inline render under --deep, a compact per-kind
+           health summary by default, and a bare reference when the object can't be fetched.
+           KubeGetFirst returns an empty object whenever LiveQueriesDisabled() is true, so that last
+           branch covers --shallow and --local without either needing a check here.
+
+           Anything that names the resources it manages wants exactly this -- a Kustomization's
+           status.inventory, a Crossplane XR's resourceRefs, the objects in a Helm release manifest
+           -- so it lives here rather than being written out a fourth time. Emits no indentation of
+           its own; callers pipe the result through nindent, which also indents the inlined object's
+           own lines under --deep.
+
+           A reference with nothing behind it is always called out: whatever the managing object
+           is, naming a resource it manages is a claim that the resource exists, and an unfulfilled
+           claim is worth a word wherever it shows up. Gated only on live queries -- under
+           --shallow/--local every lookup comes back empty, and calling all of them missing there
+           would be a lie. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $namespace := .namespace | default $ctx.Namespace }}
+    {{- $obj := $ctx.KubeGetFirst $namespace .kind .name }}
+    {{- if not $obj.Object }}
+        {{- $ctx.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" $namespace "callerNamespace" $ctx.Namespace) }}
+        {{- if not $ctx.LiveQueriesDisabled }} {{ "missing" | red | bold }}: no such object in the cluster{{ end }}
+    {{- else if $ctx.Config.GetBool "deep" }}
+        {{- $ctx.IncludeRenderableObject $obj }}
+    {{- else }}
+        {{- $ctx.Include "resource_health_summary" (dict "obj" $obj "callerNamespace" $ctx.Namespace) }}
+    {{- end }}
+{{- end -}}
+
 {{- define "storageclass_summary" }}
     {{- /* Expects dict "ctx" (RenderableObject, used for KubeGetFirst/Include/Config) "name"
            (the storageClassName from a PV or PVC spec) "provisionerShown" (optional bool -- true
@@ -460,21 +494,7 @@
         {{- range . }}
             {{- $ns := $.Namespace }}
             {{- with .namespace }}{{ $ns = . }}{{ end }}
-            {{- if $.Config.GetBool "deep" }}
-                {{- $obj := $.KubeGetFirst $ns .kind .name }}
-                {{- if $obj.Object }}
-                    {{- $.IncludeRenderableObject $obj | nindent 4 }}
-                {{- else }}
-                    {{- $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" $ns "callerNamespace" $.Namespace) | nindent 4 }}
-                {{- end }}
-            {{- else }}
-                {{- $obj := $.KubeGetFirst $ns .kind .name }}
-                {{- if $obj.Object }}
-                    {{- $.Include "resource_health_summary" (dict "obj" $obj "callerNamespace" $.Namespace) | nindent 4 }}
-                {{- else }}
-                    {{- $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" $ns "callerNamespace" $.Namespace) | nindent 4 }}
-                {{- end }}
-            {{- end }}
+            {{- $.Include "managed_resource_line" (dict "ctx" $ "kind" .kind "name" .name "namespace" $ns) | nindent 4 }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -611,6 +631,10 @@
             {{- with $version }}{{ if not (contains $version $name) }} using version {{ . | bold }}{{ end }}{{ end }}
         {{- end -}}
     {{- end }}
+    {{- /* Deliberately outside the include-application-details gate: what Flux stamps onto a
+           managed object is an opt-out from reconciliation, not application metadata, and
+           suppressing it would hide the reason an object is silently diverging from its source. */ -}}
+    {{- template "flux_object_management" . }}
     {{- template "custom_application_details" .}}
 {{- end -}}
 
@@ -1391,6 +1415,62 @@
         {{- range $dep := . }}
             {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" ($dep.kind | default $.Kind) "name" $dep.name "namespace" ($dep.namespace | default $.Namespace)) }}
         {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "flux_object_management" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Flux stamps ownership and per-object policy overrides onto the objects it manages, not
+           onto the Kustomization or HelmRelease that manages them -- a Deployment, a Secret and a
+           CRD can all carry them. So this hangs off application_details, which nearly every
+           template already calls, rather than living in the two Flux templates.
+
+           Every policy key is honoured as a label *or* an annotation, matched case-insensitively
+           (fluxcd/pkg/ssa/utils/meta.go:AnyInMetadata ORs the two and compares with EqualFold), so
+           both maps are searched and the value is lowercased before comparison. Labels win a
+           disagreement, which is an arbitrary choice -- the controller ORs them and so never has
+           to resolve one. */ -}}
+    {{- $meta := merge (dict) (.Labels | default dict) (.Annotations | default dict) }}
+    {{- /* The ownership pair is read from labels alone: kustomize-controller writes it there
+           (fluxcd/pkg/ssa/manager.go GetOwnerLabels) and matches on labels alone when deciding
+           what to garbage collect, so an annotation of the same name owns nothing. */ -}}
+    {{- $owner := get (.Labels | default dict) "kustomize.toolkit.fluxcd.io/name" | default "" | toString }}
+    {{- with $owner }}
+        {{- $ownerNamespace := get ($.Labels | default dict) "kustomize.toolkit.fluxcd.io/namespace" | default "" | toString }}
+        {{- /* Not paired with deep_render_ref, unlike every other ref in the Flux templates: a
+               Kustomization deep-renders its own healthChecks, each of which would then deep-render
+               the Kustomization that owns it. The render engine has no cycle or depth guard, so
+               that recurses until the stack gives out. The ref alone carries the whole fact. */ -}}
+        {{- "Applied by Flux" | nindent 2 }} {{ $.Include "resource_ref" (dict "kind" "Kustomization" "name" . "namespace" $ownerNamespace "callerNamespace" $.Namespace) }}
+    {{- end }}
+    {{- /* reconcile:disabled and ssa:Ignore both drop the object out of apply *and* prune, so it
+           keeps whatever state it has however far the source moves on -- and its Kustomization
+           still reports Ready, because skipping is a success. */ -}}
+    {{- if eq (get $meta "kustomize.toolkit.fluxcd.io/reconcile" | default "" | toString | lower) "disabled" }}
+        {{- "Flux reconcile disabled" | yellow | bold | nindent 2 }}: neither applied nor pruned by its Kustomization, however far the source moves on
+    {{- end }}
+    {{- $ssa := get $meta "kustomize.toolkit.fluxcd.io/ssa" | default "" | toString | lower }}
+    {{- if eq $ssa "ignore" }}
+        {{- "Flux apply policy Ignore" | yellow | bold | nindent 2 }}: never applied and never pruned, even while it is still in the source
+    {{- else if eq $ssa "merge" }}
+        {{- "Flux apply policy Merge" | bold | nindent 2 }}: fields added by other tools are preserved rather than reverted
+    {{- else if eq $ssa "ifnotpresent" }}
+        {{- "Flux apply policy IfNotPresent" | bold | nindent 2 }}: created if missing, never updated afterwards
+    {{- end }}
+    {{- /* Usually set on a Namespace, PVC or PV to protect it from an accidental prune, and just as
+           usually forgotten -- after which deleting it from the source silently leaves it running. */ -}}
+    {{- if eq (get $meta "kustomize.toolkit.fluxcd.io/prune" | default "" | toString | lower) "disabled" }}
+        {{- "Flux prune disabled" | yellow | bold | nindent 2 }}: kept running in the cluster after it is removed from the source
+    {{- end }}
+    {{- /* Meant to be removed once the immutable change is through; left on a StatefulSet it turns
+           an ordinary field change into a delete and recreate. */ -}}
+    {{- if eq (get $meta "kustomize.toolkit.fluxcd.io/force" | default "" | toString | lower) "enabled" }}
+        {{- "Flux force enabled" | yellow | bold | nindent 2 }}: deleted and recreated when a patch hits an immutable field
+    {{- end }}
+    {{- /* Only bites on a HelmRelease that turned drift detection on; there it is the reason one
+           object in the release keeps its out-of-band edits while the rest lose theirs. */ -}}
+    {{- if eq (get $meta "helm.toolkit.fluxcd.io/driftDetection" | default "" | toString | lower) "disabled" }}
+        {{- "Flux drift detection disabled" | bold | nindent 2 }}: out-of-band changes to this object are not reverted
     {{- end }}
 {{- end -}}
 

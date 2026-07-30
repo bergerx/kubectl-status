@@ -2,6 +2,7 @@
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* GVK: apiextensions.crossplane.io/v1, Kind=Composition */ -}}
     {{- template "status_summary_line" . }}
+    {{- template "application_details" . }}
     {{- with .Spec.compositeTypeRef }}
         {{- "Composite type" | bold | nindent 2 }}: {{ .kind | cyan | bold }} ({{ .apiVersion | cyan }})
     {{- end }}

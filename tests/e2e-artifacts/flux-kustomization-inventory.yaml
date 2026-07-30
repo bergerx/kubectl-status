@@ -1,0 +1,80 @@
+# Objects for the Kustomization inventory subtest. No metadata.namespace anywhere, so
+# applyManifestInNamespace can place the namespaced ones with `kubectl -n` (the ClusterRole is
+# cluster-scoped and ignores it).
+#
+# The Kustomization's status -- conditions and the inventory itself -- is patched in by the test
+# rather than set here: inventory entry ids embed the namespace ("<ns>_<name>_<group>_<kind>"),
+# which the test picks, and .status can't be set through `kubectl apply` on a resource with a
+# status subresource anyway.
+#
+# spec.sourceRef points at a GitRepository that doesn't exist and has no CRD in this cluster. That
+# is deliberate: it keeps the source lookup on the path where KubeGetFirst finds nothing, which is
+# what every non-Flux cluster looks like, and proves the ref still renders.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # The ownership labels and the prune opt-out that common.tmpl's flux_object_management reads.
+  # They need no live query, so their rendering is pinned by tests/artifacts/deployment-flux-managed
+  # -- what this file adds is the --deep path, where this object is inlined *by* the Kustomization
+  # that owns it and must name that Kustomization without recursing back into it.
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: Disabled
+  labels:
+    kustomize.toolkit.fluxcd.io/name: podinfo
+    kustomize.toolkit.fluxcd.io/namespace: e2e-flux-kustomization
+  name: podinfo-config
+data:
+  greeting: hello
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podinfo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: podinfo
+  template:
+    metadata:
+      labels:
+        app: podinfo
+    spec:
+      containers:
+      - image: registry.k8s.io/pause:3.9
+        name: app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: podinfo
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: podinfo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: e2e-flux-podinfo-viewer
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: podinfo
+spec:
+  interval: 5m
+  path: ./kustomize
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

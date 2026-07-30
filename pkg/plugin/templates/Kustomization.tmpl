@@ -37,22 +37,46 @@
             {{- end }}
         {{- end }}
     {{- end }}
-    {{- /* status.inventory is the full list of applied objects -- hundreds of entries for a big
-           overlay, so only the shape of it is worth showing. Entry ids are
-           "<namespace>_<name>_<group>_<kind>"; none of those four parts can contain an
-           underscore, so the kind is always the last segment. */ -}}
+    {{- /* status.inventory is the full list of applied objects. Entry ids are
+           "<namespace>_<name>_<group>_<kind>" and none of those four parts can contain an
+           underscore, so a well-formed id always splits into exactly four segments -- an id that
+           doesn't is printed verbatim rather than mis-parsed into a ref pointing nowhere.
+           The per-kind counts stay as a header even though every entry is listed below them: for a
+           big overlay the shape is the only part that fits on a screen. */ -}}
     {{- $entries := (.Status.inventory | default dict).entries | default list }}
     {{- if $entries }}
         {{- $countsByKind := dict }}
+        {{- $ids := list }}
         {{- range $entries }}
-            {{- $kind := last (splitList "_" (.id | toString)) }}
+            {{- $parts := splitList "_" (.id | default "" | toString) }}
+            {{- /* An id that doesn't split into four is bucketed rather than counted under its own
+                   text, which would otherwise put the whole malformed id in the kind summary. */ -}}
+            {{- $kind := ternary (last $parts) "unparsable" (eq (len $parts) 4) }}
             {{- $_ := set $countsByKind $kind (add1 (int (get $countsByKind $kind))) }}
+            {{- $ids = append $ids (.id | default "" | toString) }}
         {{- end }}
         {{- $kindSummaries := list }}
         {{- range $kind := keys $countsByKind | sortAlpha }}
             {{- $kindSummaries = append $kindSummaries (printf "%s×%d" $kind (int (get $countsByKind $kind))) }}
         {{- end }}
         {{- "Manages" | bold | nindent 2 }} {{ len $entries | toString | cyan }} resources: {{ join ", " $kindSummaries | cyan }}
+        {{- /* Sorted by id so the list is stable across reconciliations -- the controller writes
+               the inventory in apply order, which shifts as the overlay changes. */ -}}
+        {{- range $entry := $ids | compact | sortAlpha }}
+            {{- $parts := splitList "_" ($entry | toString) }}
+            {{- if eq (len $parts) 4 }}
+                {{- $entryNamespace := index $parts 0 }}
+                {{- $entryName := index $parts 1 }}
+                {{- $entryKind := index $parts 3 }}
+                {{- /* An inventory entry is a record of an apply that already succeeded, so an
+                       object missing from underneath one was deleted out-of-band or left behind by
+                       a prune that couldn't finish -- and the Kustomization reports Ready either
+                       way. managed_resource_line flags that for us. */ -}}
+                {{- $.Include "managed_resource_line" (dict "ctx" $ "kind" $entryKind "name" $entryName "namespace" $entryNamespace) | nindent 4 }}
+            {{- else }}
+                {{- $entry | toString | cyan | nindent 4 }}
+            {{- end }}
+        {{- end }}
     {{- else if .Status.lastAppliedRevision }}
         {{- "Manages no resources" | yellow | bold | nindent 2 }}: the applied revision produced an empty inventory
     {{- end }}
@@ -78,7 +102,7 @@
            applied objects, without them it only means the apply itself succeeded. */ -}}
     {{- if .Spec.wait }}
         {{- "Waits" | bold | nindent 2 }} for every managed resource to become healthy
-    {{- else }}
+    {{- else if .Spec.healthChecks }}
         {{- with .Spec.healthChecks }}
             {{- "Health-checks" | bold | nindent 2 }}
             {{- if eq (len .) 1 }}
@@ -90,6 +114,16 @@
                     {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" .kind "name" .name "namespace" (.namespace | default $.Namespace)) }}
                 {{- end }}
             {{- end }}
+        {{- end }}
+    {{- else }}
+        {{- /* spec.wait defaults to false and healthChecks is optional, so by default Ready means
+               only that the apply itself succeeded -- every managed Deployment can be crashlooping
+               underneath it. Only said while Ready is actually True: the line exists to qualify a
+               reassuring verdict, and on an object that is already reporting a failure there is no
+               false reassurance to correct, just an extra line between the reader and the error. */ -}}
+        {{- $readyCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "Ready") }}
+        {{- if eq ($readyCondition.status | default "") "True" }}
+            {{- "Ready covers the apply only" | bold | nindent 2 }}: without wait or healthChecks, unhealthy managed resources leave it Ready
         {{- end }}
     {{- end }}
     {{- template "flux_depends_on" . }}

@@ -5,6 +5,7 @@
     {{- template "kstatus_summary" . }}
     {{- template "finalizer_details_on_termination" . }}
     {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
     {{- /* Dangling=True means the referenced PriorityLevelConfiguration is missing */}}
     {{- $plcName := "" }}
     {{- with .Spec }}
