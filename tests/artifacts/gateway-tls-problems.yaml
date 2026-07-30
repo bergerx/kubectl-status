@@ -66,6 +66,18 @@ spec:
       certificateRefs:
       - kind: Secret
         name: gateway-tls
+  - allowedRoutes:
+      namespaces:
+        from: Same
+    name: cross-namespace-cert
+    port: 448
+    protocol: HTTPS
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: gateway-tls
+        namespace: certs
 status:
   conditions:
   - lastTransitionTime: "2026-06-26T23:42:41Z"
@@ -120,6 +132,15 @@ status:
       status: "True"
       type: ResolvedRefs
     name: hostname-mismatch
+  - attachedRoutes: 0
+    conditions:
+    - lastTransitionTime: "2026-06-26T23:42:41Z"
+      message: Secret certs/gateway-tls not permitted by any ReferenceGrant
+      observedGeneration: 1
+      reason: RefNotPermitted
+      status: "False"
+      type: ResolvedRefs
+    name: cross-namespace-cert
 ---
 apiVersion: v1
 kind: Secret

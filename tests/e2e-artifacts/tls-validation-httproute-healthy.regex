@@ -4,7 +4,7 @@ HTTPRoute/e2e-tls-httproute-healthy -n e2e-tls-validation, created 1m ago, gen:1
   Hostnames: e2e-tls\.example\.com
   Parents:
     Gateway/e2e-tls-gw-healthy \[https\]
-      , cert:Secret/e2e-tls-leaf-tls
+      cert:Secret/e2e-tls-leaf-tls
   Rules:
     PathPrefix /
     → Service/e2e-tls-svc:80

@@ -19,6 +19,9 @@ Gateway/eg -n default, created 1m ago, gen:1
     hostname-mismatch: port=447/HTTPS, host=wrong-host.example.com, namespaces=Same, routes=1
       TLS mode:Terminate, cert:Secret/gateway-tls
       ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m
+    cross-namespace-cert: port=448/HTTPS, namespaces=Same, routes=0
+      TLS mode:Terminate, cert:Secret/gateway-tls -n certs
+      ResolvedRefs:False RefNotPermitted, Secret certs/gateway-tls not permitted by any ReferenceGrant for 1m
 
 Secret/opaque-secret -n default, created 1m ago
   Keys: foo
