@@ -1521,3 +1521,91 @@ func TestResourceHealthSummaryTemplate_FallsBackToGenericForUnknownKind(t *testi
 		t.Errorf("got = %q, want the generic_health_summary fallback", got)
 	}
 }
+
+// TestQuotaHeadroomTemplate covers the rendered form of the quota headroom warning (issue #658):
+// the numbers come from quotaRolloutHeadroom's own tests, what's asserted here is that the section
+// reaches the reader with the ResourceQuota named, and with the two caveats the figures need --
+// that the quota is namespace-wide, and that free quota isn't a scheduling guarantee.
+func TestQuotaHeadroomTemplate(t *testing.T) {
+	quotaList := `{"apiVersion":"v1","kind":"ResourceQuotaList","items":[
+		{"apiVersion":"v1","kind":"ResourceQuota","metadata":{"name":"compute","namespace":"test"},
+		 "status":{"hard":{"requests.memory":"2Gi"},"used":{"requests.memory":"1920Mi"}}}]}`
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.UnstructuredClient = &fake.RESTClient{
+		NegotiatedSerializer: resource.UnstructuredPlusDefaultContentConfig().NegotiatedSerializer,
+		Client: fake.CreateHTTPClient(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     cmdtesting.DefaultHeader(),
+				Body:       io.NopCloser(strings.NewReader(quotaList)),
+			}, nil
+		}),
+	}
+	f.Client = f.UnstructuredClient
+	t.Cleanup(func() { f.Cleanup() })
+	cfg := NewRenderConfig(viper.New())
+	tmpl, _ := getTemplate(cfg)
+	repo, err := input.NewResourceRepo(f, cfg.Viper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+	e.Template = *tmpl
+	// 4 replicas at 256Mi each, all 4 running: the 25% surge Pod of the next rollout step needs
+	// 256Mi and the quota has 128Mi left.
+	deployment := newRenderableObject(unstructuredFromJSON(t, deploymentJSON(4, 4, "")), e, repo)
+	got, err := deployment.renderTemplate("quota_headroom", deployment)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	for _, want := range []string{
+		"ResourceQuota/compute",
+		"doesn't have room for the 1 more Pod a rollout needs to create",
+		"requests.memory: needs 256Mi, only 128Mi free",
+		"used 1920Mi of 2Gi",
+		"namespace-wide",
+		"not a guarantee that a node can fit",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("quota_headroom got = %q, should contain %q", got, want)
+		}
+	}
+}
+
+// TestQuotaHeadroomTemplateSilentWhenQuotaHasRoom keeps the healthy path free of the warning: the
+// section is reached whenever a rollout looks unhealthy for any reason, and most of those have
+// nothing to do with quota.
+func TestQuotaHeadroomTemplateSilentWhenQuotaHasRoom(t *testing.T) {
+	quotaList := `{"apiVersion":"v1","kind":"ResourceQuotaList","items":[
+		{"apiVersion":"v1","kind":"ResourceQuota","metadata":{"name":"compute","namespace":"test"},
+		 "status":{"hard":{"requests.memory":"2Gi"},"used":{"requests.memory":"512Mi"}}}]}`
+	f := cmdtesting.NewTestFactory().WithNamespace("test")
+	f.UnstructuredClient = &fake.RESTClient{
+		NegotiatedSerializer: resource.UnstructuredPlusDefaultContentConfig().NegotiatedSerializer,
+		Client: fake.CreateHTTPClient(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     cmdtesting.DefaultHeader(),
+				Body:       io.NopCloser(strings.NewReader(quotaList)),
+			}, nil
+		}),
+	}
+	f.Client = f.UnstructuredClient
+	t.Cleanup(func() { f.Cleanup() })
+	cfg := NewRenderConfig(viper.New())
+	tmpl, _ := getTemplate(cfg)
+	repo, err := input.NewResourceRepo(f, cfg.Viper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
+	e.Template = *tmpl
+	deployment := newRenderableObject(unstructuredFromJSON(t, deploymentJSON(4, 4, "")), e, repo)
+	got, err := deployment.renderTemplate("quota_headroom", deployment)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if strings.TrimSpace(got) != "" {
+		t.Errorf("quota_headroom got = %q, want nothing when the quota has room", got)
+	}
+}

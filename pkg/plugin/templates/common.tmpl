@@ -54,6 +54,37 @@
     {{- end }}
 {{- end -}}
 
+{{- define "quota_headroom" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects a Deployment or StatefulSet. Warns when the namespace's ResourceQuota doesn't
+           have room for the Pods the workload still has to create, which is why a rollout that
+           looks stuck for no reason is stuck -- and, in --deep, before it gets stuck. Callers gate
+           this on the rollout already looking unhealthy (or --deep), so a healthy workload never
+           pays for the extra query or the extra lines; quotaRolloutHeadroom itself only reports an
+           actual shortfall, so even then the common case renders nothing.
+           Wording is deliberate: the numbers are namespace-wide and say nothing about node
+           capacity, so the note below spells both out rather than letting the reader assume this
+           quota is the workload's own, or that free quota means the Pods will schedule. */ -}}
+    {{- $quotaObjects := list }}
+    {{- range .KubeGet .Namespace "resourcequotas" }}
+        {{- $quotaObjects = append $quotaObjects .Object }}
+    {{- end }}
+    {{- with $quotaObjects }}
+        {{- $headroom := quotaRolloutHeadroom . $.Object }}
+        {{- with $headroom.Quotas }}
+            {{- $pods := printf "%d more Pods" $headroom.ExtraPods }}
+            {{- if eq $headroom.ExtraPods 1 }}{{ $pods = "1 more Pod" }}{{ end }}
+            {{- range . }}
+                {{- "Quota Headroom" | yellow | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" "ResourceQuota" "name" .Name) }} doesn't have room for the {{ $pods }} a rollout needs to create:
+                {{- range .Shortfalls }}
+                    {{- printf "%s: needs %s, only %s free" .Resource .Need .Free | yellow | nindent 4 }} (used {{ .Used | cyan }} of {{ .Hard | cyan }})
+                {{- end }}
+            {{- end }}
+            {{- "" | nindent 4 }}Quota is namespace-wide and shared with every workload in the namespace; free quota is not a guarantee that a node can fit the {{ $pods }}.
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
 {{- define "resource_ref" }}
     {{- /* Expects dict "kind" "name" "namespace" (optional) "callerNamespace" (optional -- the
            namespace of the object doing the referencing; when it matches "namespace" the

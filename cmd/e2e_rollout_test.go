@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -308,5 +309,60 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 				stdoutRegexPath: "e2e-artifacts/rollouts-three-revisions-with-diffs.regex",
 			}.assert(t, nil, opts...)
 		})
+	})
+	t.Run("a rollout that can't fit in the namespace ResourceQuota reports the headroom shortfall (#658)", func(t *testing.T) {
+		t.Parallel()
+		// The quota only has room for 2 of the 3 replicas, so the Deployment is stuck with a
+		// ReplicaFailure and the headroom check explains which resource ran out. Needs a live
+		// cluster: the quota lives on a separate object that only a KubeGet can reach.
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-quota-headroom"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+		})
+
+		_, err = clientset.CoreV1().ResourceQuotas(ns).Create(context.TODO(), &corev1.ResourceQuota{
+			ObjectMeta: metav1.ObjectMeta{Name: "compute", Namespace: ns},
+			Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{
+				corev1.ResourceRequestsMemory: resource.MustParse("512Mi"),
+			}},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		name := "e2e-quota-headroom"
+		three := int32(3)
+		dep := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &three,
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": name}},
+					Spec: corev1.PodSpec{Containers: []corev1.Container{{
+						Name:  "app",
+						Image: "registry.k8s.io/pause:3.10",
+						Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
+						}},
+					}}},
+				},
+			},
+		}
+		_, err = clientset.AppsV1().Deployments(ns).Create(context.TODO(), dep, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer clientset.AppsV1().Deployments(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+		waitForInNamespace(t, "deployment/"+name, "condition=ReplicaFailure", ns)
+		// The 2 Pods the quota does allow start out Pending, and the Deployment's own
+		// readyReplicas lags behind their readiness, so wait on the field the render actually
+		// prints rather than on the Pods.
+		waitForInNamespace(t, "deployment/"+name, "jsonpath={.status.readyReplicas}=2", ns)
+
+		cmdTest{
+			args:            []string{"deployment/" + name, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/quota-headroom-blocked-deployment.regex",
+		}.assert(t, nil, opts...)
 	})
 }
