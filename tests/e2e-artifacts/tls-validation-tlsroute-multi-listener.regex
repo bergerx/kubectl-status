@@ -4,6 +4,7 @@ TLSRoute/e2e-tlsroute-multi-listener -n e2e-tls-validation, created 1m ago, gen:
   Hostnames: e2e-tls\.example\.com
   Parents:
     Gateway/e2e-tls-gw-tlsroute-multi
+      cert:Secret/e2e-tls-leaf-tls
   Rules:
     → Service/e2e-tls-svc:80
 \z

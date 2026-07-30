@@ -14,6 +14,30 @@ import (
 	"github.com/bergerx/kubectl-status/pkg/plugin"
 )
 
+// copyLeafSecretToNamespace clones the cert-manager-issued leaf TLS secret into a second
+// namespace, so a certificateRef can point across namespaces at genuine certificate content.
+// Copying beats issuing a second Certificate there: the CA Issuer is namespaced to srcNS, so
+// reaching it from another namespace would mean promoting it to a ClusterIssuer for every other
+// subtest too. Creating dstNS is part of the same job: it has to exist before
+// tls-validation-crossns-grant.yaml, which is applied into it, lands.
+func copyLeafSecretToNamespace(t *testing.T, clientset *kubernetes.Clientset, srcNS, dstNS string) {
+	t.Helper()
+	_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: dstNS}}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		clientset.CoreV1().Namespaces().Delete(context.TODO(), dstNS, metav1.DeleteOptions{})
+	})
+	src, err := clientset.CoreV1().Secrets(srcNS).Get(context.TODO(), "e2e-tls-leaf-tls", metav1.GetOptions{})
+	require.NoError(t, err)
+	_, err = clientset.CoreV1().Secrets(dstNS).Create(context.TODO(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: src.Name, Namespace: dstNS},
+		Type:       src.Type,
+		Data:       src.Data,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+}
+
 func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), clientset *kubernetes.Clientset) {
 	ensureCertManager(t)
 	ensureGatewayAPICRDs(t)
@@ -197,6 +221,30 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 				args:            []string{"httproute/e2e-tls-httproute-mismatch", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 				stdoutRegexPath: "e2e-artifacts/tls-validation-httproute-mismatch.regex",
 			}.assert(t, nil, opts...)
+		})
+		certsNS := ns + "-certs"
+		copyLeafSecretToNamespace(t, clientset, ns, certsNS)
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-crossns-grant.yaml", certsNS)
+		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-crossns.yaml", ns)
+		t.Run("httproute whose listener certificate lives in another namespace names that namespace", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"httproute/e2e-tls-httproute-crossns", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			require.NoError(t, err)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-crossns-httproute.regex")
+			// The namespace is the whole point: a bare "cert:Secret/e2e-tls-leaf-tls" would
+			// point at a Secret that doesn't exist in the route's own namespace.
+			assert.Contains(t, stdout, "cert:Secret/e2e-tls-leaf-tls -n "+certsNS)
+			for _, problem := range []string{", self-signed", ", hostname mismatch", "wrong type:", "missing keys:", "parse error:", "doesn't exist"} {
+				assert.NotContains(t, stdout, problem)
+			}
+		})
+		t.Run("tlsroute whose listener certificate lives in another namespace names that namespace", func(t *testing.T) {
+			stdout, _, err := executeCMD(t, []string{"tlsroute/e2e-tlsroute-crossns", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"}, opts...)
+			require.NoError(t, err)
+			assertStdoutMatchesRegexFixture(t, stdout, "e2e-artifacts/tls-validation-crossns-tlsroute.regex")
+			assert.Contains(t, stdout, "cert:Secret/e2e-tls-leaf-tls -n "+certsNS)
+			for _, problem := range []string{", self-signed", ", hostname mismatch", "wrong type:", "missing keys:", "parse error:", "doesn't exist"} {
+				assert.NotContains(t, stdout, problem)
+			}
 		})
 	})
 }

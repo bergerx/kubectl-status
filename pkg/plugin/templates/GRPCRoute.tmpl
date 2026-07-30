@@ -43,7 +43,7 @@
                                             {{- if eq $refKind "Secret" }}
                                                 {{- $refNs := coalesce .namespace $gwNs }}
                                                 {{- $secret := $.KubeGetFirst $refNs "Secret" .name }}
-                                                {{- printf "cert:%s/%s" $refKind .name | cyan | nindent 6 }}
+                                                {{- "cert:" | nindent 6 }}{{ $.Include "resource_ref" (dict "kind" $refKind "name" .name "namespace" $refNs "callerNamespace" $.Namespace) }}
                                                 {{- if not $secret.Object }}
                                                     {{- " doesn't exist" | red | bold }}
                                                 {{- else }}

@@ -32,7 +32,9 @@
             {{- with .tls }}
                 {{- printf "TLS mode:%s" (.mode | default "Terminate") | nindent 6 }}
                 {{- with .certificateRefs }}
-                    {{- range . }}{{ printf ", cert:%s/%s" (.kind | default "Secret") .name | cyan }}{{ end }}
+                    {{- range . }}
+                        {{- ", cert:" }}{{ $.Include "resource_ref" (dict "kind" (.kind | default "Secret") "name" .name "namespace" (coalesce .namespace $.Namespace) "callerNamespace" $.Namespace) }}
+                    {{- end }}
                 {{- end }}
             {{- end }}
             {{- range $statusListener.conditions }}

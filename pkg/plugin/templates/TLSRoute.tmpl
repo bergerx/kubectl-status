@@ -46,6 +46,7 @@
                                             {{- if eq $refKind "Secret" }}
                                                 {{- $refNs := coalesce .namespace $gwNs }}
                                                 {{- $secret := $.KubeGetFirst $refNs "Secret" .name }}
+                                                {{- "cert:" | nindent 6 }}{{ $.Include "resource_ref" (dict "kind" $refKind "name" .name "namespace" $refNs "callerNamespace" $.Namespace) }}
                                                 {{- if $secret.Object }}
                                                     {{- $cert := parseTLSSecretCertificate $secret $certHostnames }}
                                                     {{- if $cert.WrongType }}

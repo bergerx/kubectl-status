@@ -1,0 +1,19 @@
+# Lives in the certificate's namespace, so it is applied separately from
+# tls-validation-crossns.yaml -- applyManifestInNamespace passes a single `kubectl -n`, which
+# kubectl rejects against an object carrying a different explicit metadata.namespace.
+#
+# Nothing in the rendering depends on this grant (the fixtures' GatewayClass has no controller
+# behind it, so no admission ever checks it); it is here because a cross-namespace certificateRef
+# without one isn't a configuration anybody would actually run.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: e2e-tls-allow-gateway-certs
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    namespace: e2e-tls-validation
+  to:
+  - group: ""
+    kind: Secret
