@@ -2,47 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// patchKustomizationStatus writes conditions and a status.inventory onto a Kustomization through
-// the status subresource. Inventory entry ids are "<namespace>_<name>_<group>_<kind>" (core-group
-// kinds leave the group segment empty, cluster-scoped ones the namespace segment), so they can only
-// be built once the test knows its namespace -- which is why they aren't in the fixture yaml.
-func patchKustomizationStatus(t *testing.T, namespace, name string, entryIDs []string) {
-	t.Helper()
-	entries := make([]map[string]string, 0, len(entryIDs))
-	for _, id := range entryIDs {
-		entries = append(entries, map[string]string{"id": id, "v": "v1"})
-	}
-	patch, err := json.Marshal(map[string]interface{}{
-		"status": map[string]interface{}{
-			"observedGeneration":  1,
-			"lastAppliedRevision": "refs/heads/main@sha1:7f3c1a9e4b2d8c60f5a3e1b7d9c2f480a6e5b3d1",
-			"conditions": []map[string]interface{}{{
-				"type":               "Ready",
-				"status":             "True",
-				"reason":             "ReconciliationSucceeded",
-				"message":            "Applied revision: refs/heads/main@sha1:7f3c1a9e",
-				"lastTransitionTime": "2020-01-01T00:00:00Z",
-				"observedGeneration": 1,
-			}},
-			"inventory": map[string]interface{}{"entries": entries},
-		},
-	})
-	require.NoError(t, err)
-	out, err := exec.Command("kubectl", "patch", "kustomization", name, "-n", namespace,
-		"--subresource=status", "--type=merge", "-p", string(patch)).CombinedOutput()
-	require.NoErrorf(t, err, "failed to patch Kustomization status: %s", string(out))
-	t.Logf("patched Kustomization %s/%s status: %s", namespace, name, string(out))
-}
 
 // TestE2EFluxKustomizationInventory covers Kustomization.tmpl's live-query branches, which every
 // offline artifact under tests/artifacts/kustomization-* leaves untouched because --shallow/--local
@@ -51,19 +18,29 @@ func patchKustomizationStatus(t *testing.T, namespace, name string, entryIDs []s
 //   - default mode resolves each status.inventory entry into a per-kind health summary
 //     (managed_resource_line -> resource_health_summary),
 //   - --deep inlines each entry's full render instead,
-//   - an entry whose object isn't in the cluster is flagged, and is *not* flagged under --shallow,
-//     where every lookup comes back empty for an unrelated reason.
+//   - an entry whose object is no longer in the cluster is flagged, and is *not* flagged under
+//     --shallow, where every lookup comes back empty for an unrelated reason.
 //
 // It also pins the one --deep behaviour that can't be reached offline: an inlined object naming the
 // Kustomization that owns it (via common.tmpl's flux_object_management) without recursing back into
 // it. The render engine has no cycle guard, so a deep_render_ref there would not terminate.
 //
-// Only the CRD is installed, not Flux itself -- see tests/e2e-artifacts/flux-kustomization-crd.yaml
-// for why.
+// Flux is installed and left to reconcile a real source rather than having its status written by
+// the test. Every field asserted on here -- the inventory, lastAppliedRevision, the
+// kustomize.toolkit.fluxcd.io ownership labels, the applied policy annotations -- is one only
+// kustomize-controller writes, so a hand-patched status would only ever confirm our own reading of
+// the Flux API, never Flux's behaviour, and would keep passing after Flux changed it.
+//
+// What that costs: the inventory is whatever the pinned source actually contains, which is three
+// namespaced objects. Inventory entry *id shapes* -- a cluster-scoped entry's empty namespace
+// segment, an id that doesn't split into four parts -- are covered offline instead, by
+// tests/artifacts/kustomization-reconcile-pending, where a hand-written status is the point rather
+// than a substitute for one.
 func TestE2EFluxKustomizationInventory(t *testing.T) {
 	e2eMinikubeTest(t)
 	hackOpts, clientset, _ := e2eClients(t)
 	opts := combineOpts(hackOpts, viperTestHackOpts())
+	ensureFlux(t)
 
 	ns := "e2e-flux-kustomization"
 	_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
@@ -73,21 +50,25 @@ func TestE2EFluxKustomizationInventory(t *testing.T) {
 		clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
 	})
 
-	applyManifest(t, "e2e-artifacts/flux-kustomization-crd.yaml")
-	require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Established",
-		"crd/kustomizations.kustomize.toolkit.fluxcd.io", "--timeout=60s").Run())
 	applyManifestInNamespace(t, "e2e-artifacts/flux-kustomization-inventory.yaml", ns)
+	// Ready on the Kustomization means the apply succeeded and the inventory has been written --
+	// with spec.wait false it says nothing about the applied objects' health, hence the second wait.
+	// The source clone and the podinfo image pull both happen inside this window.
+	waitForInNamespace(t, "gitrepository/podinfo", "condition=Ready", ns)
+	waitForInNamespace(t, "kustomization/podinfo", "condition=Ready", ns)
 	waitForInNamespace(t, "deployment/podinfo", "condition=Available", ns)
+	// The HPA is in the inventory too, and its render includes the scale target's current replica
+	// count -- which only settles once the HPA has computed a recommendation and stopped moving.
+	waitForFluxHPASettled(t, ns, "podinfo")
 
-	// Four entries: three backed by objects this fixture creates (one of them cluster-scoped, so
-	// its id has an empty namespace segment and its ref must render without "-n"), and one Secret
-	// that is deliberately never created -- the inventory says it was applied, nothing is there.
-	patchKustomizationStatus(t, ns, "podinfo", []string{
-		fmt.Sprintf("%s_podinfo-config__ConfigMap", ns),
-		fmt.Sprintf("%s_podinfo_apps_Deployment", ns),
-		fmt.Sprintf("%s_deleted-by-hand__Secret", ns),
-		"_e2e-flux-podinfo-viewer_rbac.authorization.k8s.io_ClusterRole",
-	})
+	// Delete one applied object out-of-band. This is the state the "missing" marker reports: the
+	// inventory still records an apply that succeeded, the object is gone, and the Kustomization
+	// goes on reporting Ready because nothing re-checks it until spec.interval (60m) elapses.
+	// kubectl, not the clientset, so the deletion is ordered against the waits above the same way
+	// every other manifest change in this suite is.
+	out, err := exec.Command("kubectl", "delete", "service", "podinfo", "-n", ns, "--wait").CombinedOutput()
+	require.NoErrorf(t, err, "failed to delete the managed Service out-of-band: %s", out)
+	t.Logf("deleted managed Service podinfo in %s out-of-band: %s", ns, out)
 
 	cmdTest{
 		args:            []string{"kustomization/podinfo", "-n", ns, "--include-events=false", "--include-managed-fields=false"},
@@ -111,4 +92,33 @@ func TestE2EFluxKustomizationInventory(t *testing.T) {
 		args:            []string{"kustomization/podinfo", "-n", ns, "--shallow"},
 		stdoutRegexPath: "e2e-artifacts/flux-kustomization-inventory-shallow.regex",
 	}.assert(t, nil, opts...)
+}
+
+// waitForFluxHPASettled waits until the HorizontalPodAutoscaler that podinfo's kustomize/ ships has
+// reached its resting state, so the inlined HPA render isn't racing the autoscaler: before the first
+// metrics scrape currentReplicas reads 0 and the conditions say ScalingActive:False, and the
+// replica count then moves from the Deployment's implicit 1 to the HPA's minReplicas of 2.
+//
+// ScalingLimited is waited on rather than tolerated in the fixture because its resting value here is
+// not the intuitive one: podinfo sits near-idle against a 99%-of-request CPU target, so the HPA
+// permanently *wants* fewer replicas than minReplicas allows and settles on
+// ScalingLimited:True/TooFewReplicas. Reaching that is what tells us the autoscaler has scraped,
+// scaled, and recomputed -- the same three steps the rest of the assertions depend on.
+//
+// AbleToScale is the one condition the fixture does tolerate two values for rather than waiting out:
+// it reads SucceededRescale for the cycle after the scale-up and ReadyForNewScale from then on, and
+// which of those a render catches depends on how loaded the cluster is, not on anything under test.
+func waitForFluxHPASettled(t *testing.T, namespace, name string) {
+	t.Helper()
+	waitForInNamespace(t, "hpa/"+name, "condition=ScalingActive", namespace)
+	waitForInNamespace(t, "hpa/"+name, "condition=ScalingLimited", namespace)
+	require.Eventuallyf(t, func() bool {
+		out, err := exec.Command("kubectl", "get", "hpa", name, "-n", namespace,
+			"-o", "jsonpath={.status.desiredReplicas}/{.status.currentReplicas}").Output()
+		if err != nil {
+			return false
+		}
+		t.Logf("hpa/%s desired/current replicas: %s", name, out)
+		return string(out) == "2/2"
+	}, 3*time.Minute, 5*time.Second, "hpa/%s never settled at 2 replicas", name)
 }

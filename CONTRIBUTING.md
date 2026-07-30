@@ -270,7 +270,9 @@ run under plain `make test` instead. `make test-e2e` manages one **shared** mini
 cluster/profile (`kstat-e2e-shared`), reused across every worktree, branch, and session on your
 machine — not one per branch/session. Run
 `make print-e2e-profile` to see the profile name and kubeconfig path (`~/.kstat-e2e/shared.kubeconfig`)
-it uses. `install-e2e-deps` (cert-manager, Gateway API CRDs) runs against that same cluster right
+it uses. `install-e2e-deps` (metrics-server only — everything else is installed on demand by the
+`ensureX` functions of whichever topical group needs it: cert-manager, Gateway API CRDs,
+Cilium/Calico CRDs, VPA, Crossplane, Flux) runs against that same cluster right
 after it's created, so deps always land on the cluster the tests actually use. The cluster is left
 running after the tests finish, for fast reruns from any worktree/session; delete it explicitly
 with `make e2e-minikube-down` when you're sure no other worktree/session still needs it — this

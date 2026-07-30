@@ -1,20 +1,39 @@
 \A
 Kustomization/podinfo -n e2e-flux-kustomization, created 1m ago, gen:1
   Current: Resource is Ready
-  Applies \./kustomize from GitRepository/flux-system
-  Applied revision main@7f3c1a9e
-  Manages 4 resources: ClusterRole×1, ConfigMap×1, Deployment×1, Secret×1
-    ClusterRole/e2e-flux-podinfo-viewer, created 1m ago
-      Current: Resource is current
-    Secret/deleted-by-hand missing: no such object in the cluster
-    ConfigMap/podinfo-config -n e2e-flux-kustomization, created 1m ago
+  Applies \./kustomize from GitRepository/podinfo into namespace e2e-flux-kustomization
+    GitRepository/podinfo -n e2e-flux-kustomization, created 1m ago, gen:1
+      Current: Resource is Ready
+      Ready:True Succeeded, stored artifact for revision '6\.9\.2@sha1:[0-9a-f]+' for 1m
+      ArtifactInStorage:True Succeeded, stored artifact for revision '6\.9\.2@sha1:[0-9a-f]+' for 1m
+  Applied revision 6\.9\.2@[0-9a-f]+
+  Manages 3 resources: Deployment×1, HorizontalPodAutoscaler×1, Service×1
+    Service/podinfo missing: no such object in the cluster
+    Deployment/podinfo -n e2e-flux-kustomization, created 1m ago, gen:[0-9]+ rev:1
+      Current: Deployment is available\. Replicas: 2
       Applied by Flux Kustomization/podinfo
       Flux prune disabled: kept running in the cluster after it is removed from the source
-    Deployment/podinfo -n e2e-flux-kustomization, created 1m ago, gen:1 rev:1
-      Current: Deployment is available\. Replicas: 2
+      Flux force enabled: deleted and recreated when a patch hits an immutable field
       desired:2, existing:2, ready:2, updated:2, available:2
       Selector: app=podinfo
-.*  Ready covers the apply only: without wait or healthChecks, unhealthy managed resources leave it Ready
-  Reconciles every 5m
-  Ready:True ReconciliationSucceeded, Applied revision: refs/heads/main@sha1:7f3c1a9e for 1m
+.*
+      Not matched by any Service
+      HorizontalPodAutoscalers:
+        HorizontalPodAutoscaler/podinfo -n e2e-flux-kustomization, created 1m ago, last scaled 1m ago
+          Current: Resource is current
+          Deployment/podinfo\[e2e-flux-kustomization\] is already printed
+          Replicas: 2/2-4
+          Metrics:
+            cpu:[0-9]+%/99%
+          AbleToScale:True (?:ReadyForNewScale, recommended size matches current size|SucceededRescale, the HPA controller was able to update the target scale to 2) for 1m
+          ScalingActive:True ValidMetricFound, the HPA was able to successfully calculate a replica count from cpu resource utilization \(percentage of request\) for 1m
+          ScalingLimited:True TooFewReplicas, the desired replica count is less than the minimum replica count for 1m
+          Applied by Flux Kustomization/podinfo
+          Flux apply policy Merge: fields added by other tools are preserved rather than reverted
+      Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for 1m
+      Progressing:True NewReplicaSetAvailable, ReplicaSet "podinfo-[0-9a-z]+" has successfully progressed\. for 1m
+    HorizontalPodAutoscaler/podinfo\[e2e-flux-kustomization\] is already printed
+  Ready covers the apply only: without wait or healthChecks, unhealthy managed resources leave it Ready
+  Reconciles every 60m
+  Ready:True ReconciliationSucceeded, Applied revision: 6\.9\.2@sha1:[0-9a-f]+ for 1m
 \z

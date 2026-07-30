@@ -55,6 +55,11 @@ type cmdTest struct {
 	stderrRegex     string // Regex
 	stderrEqual     string // Exact
 	wantErr         string // Contains
+	// retryStdoutRegexFor re-runs the command until its stdout matches stdoutRegexPath, for
+	// state a `kubectl get` poll can confirm is present but that won't hold still for the length
+	// of one render (see the CrashLoopBackOff note on cmdTest.execute). Zero -- the default, and
+	// what every other subtest wants -- renders exactly once.
+	retryStdoutRegexFor time.Duration
 }
 
 // createBadNode creates a synthetic Node (no real kubelet backs it) that's cordoned, tainted,
@@ -159,13 +164,48 @@ func assertStdoutMatchesRegexFixture(t *testing.T, stdout, fixture string) {
 	assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
 }
 
+// execute runs the command once, or -- when retryStdoutRegexFor is set -- until its stdout matches
+// the stdoutRegexPath fixture, returning the last attempt's output either way so the assertions
+// below still report a real render rather than a bare timeout. Only state the kubelet reports for a
+// moment at a time needs this. A crashlooping container is the case in hand: for all but the last
+// seconds of each restart backoff window its status shows the exited instance as
+// Terminated(Error), and the kubelet swaps that for Waiting(CrashLoopBackOff) only just before it
+// starts the container again. So however recently a `kubectl get` poll confirmed CrashLoopBackOff,
+// the container can be Running by the time the render's own Pod GET lands -- and since the windows
+// double (10s, 20s, 40s, ... capped at 5m), waiting for a later one buys nothing but a longer wait
+// for the same few seconds. Re-rendering is what closes the gap: CrashLoopBackOff comes back at the
+// end of the next window, and one of the renders lands while it's there.
+func (c cmdTest) execute(t *testing.T, stdoutModifier func(string) string, opts ...func(*plugin.RenderConfig)) (string, string, error) {
+	t.Helper()
+	render := func() (string, string, error) {
+		stdout, stderr, err := executeCMD(t, c.args, opts...)
+		if stdoutModifier != nil {
+			stdout = nodeNameModifier(stdout)
+		}
+		return stdout, stderr, err
+	}
+	stdout, stderr, err := render()
+	if c.retryStdoutRegexFor == 0 || c.stdoutRegexPath == "" {
+		return stdout, stderr, err
+	}
+	outFile := path.Join("..", "tests", c.stdoutRegexPath)
+	regexBytes, readErr := os.ReadFile(outFile)
+	require.NoErrorf(t, readErr, "failed to read test artifact file: %s", outFile)
+	fixture, compileErr := regexp.Compile(`(?ms)` + string(regexBytes))
+	require.NoErrorf(t, compileErr, "failed to compile test artifact regex: %s", outFile)
+	deadline := time.Now().Add(c.retryStdoutRegexFor)
+	for attempt := 2; !fixture.MatchString(stdout) && time.Now().Before(deadline); attempt++ {
+		time.Sleep(2 * time.Second)
+		t.Logf("stdout didn't match %s, re-rendering (attempt %d)", c.stdoutRegexPath, attempt)
+		stdout, stderr, err = render()
+	}
+	return stdout, stderr, err
+}
+
 func (c cmdTest) assert(t *testing.T, stdoutModifier func(string) string, opts ...func(*plugin.RenderConfig)) {
 	t.Helper()
-	t.Logf("running cmdTest assert: %s", c)
-	stdout, stderr, err := executeCMD(t, c.args, opts...)
-	if stdoutModifier != nil {
-		stdout = nodeNameModifier(stdout)
-	}
+	t.Logf("running cmdTest assert: %+v", c)
+	stdout, stderr, err := c.execute(t, stdoutModifier, opts...)
 	switch {
 	case c.stdoutRegexPath == "" && c.stdoutEqualPath == "":
 		assert.Empty(t, stdout)
@@ -425,10 +465,6 @@ func waitForSinglePod(t *testing.T, namespace, labelSelector string) {
 	t.Fatalf("timed out waiting for exactly one pod matching selector %s in namespace %s", labelSelector, namespace)
 }
 
-// waitForContainerWaitingReason polls until the named container in the resource reports the
-// given waiting-state reason. Used instead of a plain restart-count check because a crashlooping
-// container's current state flips between Waiting(CrashLoopBackOff) and Terminated(Error) as the
-// kubelet retries, so waiting for a stable, specific state avoids a flaky render.
 // waitForPodByLabel polls until exactly one pod matches the given label selector and returns
 // its name. Used for Deployment/DaemonSet, whose pod names include a random suffix that isn't
 // known ahead of time (unlike StatefulSet, where pod names are predictable).
@@ -494,8 +530,12 @@ func waitForPodReadyInNamespace(t *testing.T, namespace, podName string) {
 	t.Fatalf("timed out waiting for pod %s/%s to become Ready", namespace, podName)
 }
 
-// waitForContainerWaitingReasonInNamespace targets a namespace explicitly via `kubectl -n`
-// instead of the kubeconfig's default; pass "" to use the kubeconfig's default namespace.
+// waitForContainerWaitingReasonInNamespace polls until the named container in the resource reports
+// the given waiting-state reason, so the render that follows has a specific state to assert on
+// rather than whatever a plain restart-count check happened to catch. Targets a namespace
+// explicitly via `kubectl -n` instead of the kubeconfig's default; pass "" to use the kubeconfig's
+// default namespace. Reasons the kubelet drops again on its own schedule (CrashLoopBackOff) need
+// cmdTest.retryStdoutRegexFor on top of this -- see the note on cmdTest.execute.
 func waitForContainerWaitingReasonInNamespace(t *testing.T, resource, containerName, reason, namespace string) {
 	t.Helper()
 	jsonpath := fmt.Sprintf(`{.status.containerStatuses[?(@.name=="%s")].state.waiting.reason}`, containerName)
@@ -665,7 +705,7 @@ func waitForPodRecreated(t *testing.T, namespace, labelSelector, originalPodName
 // Per-scenario cluster dependency installs (see #720).
 //
 // Each topical group installs whatever cluster prerequisites *it* needs (cert-manager, Gateway
-// API CRDs, Cilium/Calico CRDs, VPA, Crossplane) instead of everything being installed
+// API CRDs, Cilium/Calico CRDs, VPA, Crossplane, Flux) instead of everything being installed
 // unconditionally by `make install-e2e-deps` before any test runs. metrics-server is the one
 // exception left as a Makefile step: it must be available before TestE2EParallel's pool starts
 // (see that function's doc comment), not merely before whichever group happens to use it.
@@ -951,6 +991,62 @@ func ensureCrossplane(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+var fluxInstaller onceInstaller
+
+// ensureFlux installs Flux, needed by TestE2EFluxKustomizationInventory. Unlike the CRDs-only
+// installs above, this one has to actually reconcile: what that test asserts on is
+// status.inventory, status.lastAppliedRevision and the kustomize.toolkit.fluxcd.io ownership
+// labels -- all of them written by kustomize-controller as it applies a real source, none of them
+// fields a user sets. Fabricating them would leave the test asserting against our own idea of what
+// Flux writes rather than against Flux, which is the whole point of covering these branches live.
+// Same "controller must actually run" reasoning as ensureCrossplane/ensureVPA.
+//
+// The release's install.yaml is applied directly rather than shelling out to `flux install`: it's
+// the same manifest the CLI would render with default components, and it doesn't put the flux
+// binary on the list of things a contributor (or the CI runner) needs installed. --server-side:
+// the bundle's CRDs are large enough to trip the same client-side last-applied-configuration
+// annotation limit as the Gateway API bundle above.
+func ensureFlux(t *testing.T) {
+	t.Helper()
+	fluxInstaller.ensure(t, func() error {
+		version, err := versionsEnvValue("FLUX_VERSION")
+		if err != nil {
+			return err
+		}
+		url := fmt.Sprintf("https://github.com/fluxcd/flux2/releases/download/%s/install.yaml", version)
+		if output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput(); err != nil {
+			return fmt.Errorf("kubectl apply flux install.yaml: %w: %s", err, output)
+		}
+		// 300s matches the cert-manager/Crossplane installs: four controller Deployments, each a
+		// cold image pull, racing whatever else the suite has running on the shared cluster.
+		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=300s",
+			"deployment", "--all", "-n", "flux-system").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("kubectl wait flux deployments: %w: %s%s", err, output, fluxDiagnostics())
+		}
+		return nil
+	})
+}
+
+// fluxDiagnostics dumps why the controllers never came up, for the same reason
+// crossplaneDiagnostics exists: `kubectl wait`'s timeout message names no cause, and this install
+// runs unattended on a cluster the rest of the suite is loading, so this is the only evidence
+// anyone gets after the fact.
+func fluxDiagnostics() string {
+	var b strings.Builder
+	for _, args := range [][]string{
+		{"get", "pods", "-n", "flux-system", "-o", "wide"},
+		{"get", "events", "-n", "flux-system", "--sort-by=.lastTimestamp"},
+	} {
+		out, err := exec.Command("kubectl", args...).CombinedOutput()
+		fmt.Fprintf(&b, "\n--- kubectl %s ---\n%s", strings.Join(args, " "), out)
+		if err != nil {
+			fmt.Fprintf(&b, "(%v)\n", err)
+		}
+	}
+	return b.String()
 }
 
 // crossplaneDiagnostics dumps the state that explains why the Functions never went Healthy. On
