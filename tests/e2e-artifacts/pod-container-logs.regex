@@ -3,8 +3,8 @@ Pod/e2e-pod-container-logs -n e2e-pod-container-logs, created 1m ago, gen:1, sta
   Failed: Containers in CrashLoop state: crasher
     Stalled: ContainerCrashLooping, Containers in CrashLoop state: crasher
   PodScheduled:True -> Initialized:True -> ContainersReady:False -> Ready:False
-    Ready:False ContainersNotReady, containers with unready status: \[crasher\] for 1m
     ContainersReady:False ContainersNotReady, containers with unready status: \[crasher\] for 1m
+    Ready:False ContainersNotReady, containers with unready status: \[crasher\] for 1m
   Standalone POD\.
   InitContainers:
     init-setup \(busybox:latest\) Started 1m ago and Completed after 1m

@@ -14,6 +14,6 @@ NodePool/default, created 1m ago, gen:3
     cpu: 48/1000
     memory: 206.1GB/1TB
     pods: 220/unlimited
-  Ready:True Ready for 1m
   NodeClassReady:True NodeClassReady for 1m
+  Ready:True Ready for 1m
   ValidationSucceeded:True ValidationSucceeded for 1m

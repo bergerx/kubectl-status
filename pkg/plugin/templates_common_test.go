@@ -194,7 +194,7 @@ func TestPodNodeProblemFlags(t *testing.T) {
 			name:       "everything the node itself reports is grouped behind one node prefix",
 			spec:       `"unschedulable":true`,
 			conditions: `{"type":"Ready","status":"False"},{"type":"","status":"False"},{"type":"MemoryPressure","status":"True"}`,
-			want:       "node cordoned & Ready:False & MemoryPressure:True",
+			want:       "node cordoned & MemoryPressure:True & Ready:False",
 		},
 	}
 	for _, tt := range tests {

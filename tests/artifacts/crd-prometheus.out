@@ -3,5 +3,5 @@ CustomResourceDefinition/prometheuses.monitoring.coreos.com, created 1m ago, gen
   Current: CRD is established
   monitoring.coreos.com, scope: Namespaced, short: prom, categories: prometheus-operator
   Versions: v1 [storage]
-  NamesAccepted:True NoConflicts, no conflicts found for 1m
   Established:True InitialNamesAccepted, the initial names have been accepted for 1m
+  NamesAccepted:True NoConflicts, no conflicts found for 1m

@@ -8,8 +8,8 @@ Deployment/e2e-quota-headroom -n e2e-quota-headroom, created 1m ago, gen:1 rev:1
     Pod/e2e-quota-headroom-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready
   Not matched by any Service
   Available:False MinimumReplicasUnavailable, Deployment does not have minimum availability\. for 1m
-  ReplicaFailure:True FailedCreate, pods "e2e-quota-headroom-[a-z0-9]+-[a-z0-9]+" is forbidden: exceeded quota: compute, requested: requests\.memory=256Mi, used: requests\.memory=512Mi, limited: requests\.memory=512Mi for 1m
   Progressing:True ReplicaSetUpdated, ReplicaSet "e2e-quota-headroom-[a-z0-9]+" is progressing\. for 1m
+  ReplicaFailure:True FailedCreate, pods "e2e-quota-headroom-[a-z0-9]+-[a-z0-9]+" is forbidden: exceeded quota: compute, requested: requests\.memory=256Mi, used: requests\.memory=512Mi, limited: requests\.memory=512Mi for 1m
   Ongoing Rollout: Waiting for deployment "e2e-quota-headroom" rollout to finish: 2 out of 3 new replicas have been updated\.\.\.
   Quota Headroom: ResourceQuota/compute doesn't have room for the 2 more Pods a rollout needs to create:
     requests\.memory: needs 512Mi, only 0 free \(used 512Mi of 512Mi\)

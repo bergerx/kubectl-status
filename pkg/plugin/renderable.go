@@ -118,9 +118,13 @@ func (r RenderableObject) Namespace() string {
 	return r.GetNamespace()
 }
 
+// StatusConditions returns status.conditions sorted by type, ascending. Controllers don't
+// guarantee a stable order for this list (see #787, where a Deployment's Available/Progressing
+// conditions flipped order between runs), so every caller gets a deterministic order here rather
+// than each render site having to tolerate either ordering on its own.
 func (r RenderableObject) StatusConditions() (conditions []interface{}) {
 	if x := r.Status()["conditions"]; x != nil {
-		conditions = x.([]interface{})
+		conditions = sortMapListByKeysValue("type", x.([]interface{}))
 	}
 	return
 }

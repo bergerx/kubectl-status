@@ -92,7 +92,7 @@
             {{- with $statusEntry.controllerName }}
                 {{- "controller" | nindent 6 }}: {{ . | cyan }}
             {{- end }}
-            {{- range $statusEntry.conditions }}
+            {{- range $statusEntry.conditions | sortMapListByKeysValue "type" }}
                 {{- $.Include "condition_summary" . | nindent 6 }}
             {{- end }}
         {{- end }}

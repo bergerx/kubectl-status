@@ -3,5 +3,5 @@ CustomResourceDefinition/databaseconnections.example.com, created 1m ago, gen:2
   Current: CRD is established
   example.com, scope: Namespaced, short: dbconn
   Versions: v1alpha1 [storage]
-  NamesAccepted:True NoConflicts, no conflicts found for 1m
   Established:True InitialNamesAccepted, the initial names have been accepted for 1m
+  NamesAccepted:True NoConflicts, no conflicts found for 1m
