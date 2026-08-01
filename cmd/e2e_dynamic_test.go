@@ -39,6 +39,37 @@ func buildHelmReleaseSecretData(t *testing.T, release map[string]interface{}) []
 	return []byte(base64.StdEncoding.EncodeToString(buf.Bytes()))
 }
 
+// TestE2EDynamicManifests holds the scenarios that have a specific, stated reason not to be in
+// TestE2EParallel's pool. It is the exception, not the default: a new subtest belongs in the pool
+// (cmd/main_test.go) unless it trips one of that function's two criteria, and the reason goes in a
+// comment on the subtest -- every one below has one.
+//
+// The reasons that actually qualify are narrow, and all of them are about what the subtest does
+// *to* its neighbours:
+//   - it perturbs cluster-wide state they read (the metrics-server APIService subtest deletes the
+//     APIService other renders depend on),
+//   - it starves a shared dependency (the VPA subtest pegs a full CPU to give the recommender
+//     something to act on, which on a single-node cluster takes metrics-server's readiness probe
+//     down with it),
+//   - it can't be given a namespace or generated name of its own.
+//
+// Several things that look disqualifying aren't. Needing a live cluster interaction the offline
+// artifacts can't reach ($.KubeGetFirst, $.IncludeRenderableObject/$.Include) doesn't -- most of the
+// pool needs one. Installing a real controller and waiting for it to reconcile doesn't either: the
+// installers are shared onceInstallers serialized by installMu, so ensureX is safe from inside a
+// t.Parallel() subtest, and the Flux scenario (runFluxSubtests, cmd/e2e_flux_test.go) is in the pool
+// on exactly that basis. Nor does depending on metrics, as long as the subtest is a consumer of them
+// rather than a threat to them. And how the objects come into being certainly doesn't, whatever the
+// "DynamicManifests" name suggests: the subtests below build objects in Go, apply static YAML from
+// tests/e2e-artifacts, and mutate objects the cluster already has, in no particular pattern.
+//
+// See #784, where the Flux scenario went from a standalone top-level test to a subtest here before
+// anyone checked it against the pool's criteria -- which it met.
+//
+// The other two entry points exist for reasons this one can't absorb: TestE2EParallel owns the
+// concurrent pool and the single e2eClients() setup its subtests share (see #719), and
+// TestE2EAgainstVanillaMinikube (cmd/e2e_vanilla_test.go) covers CLI error/usage paths that need no
+// cluster dependency at all. Don't add a fourth.
 func TestE2EDynamicManifests(t *testing.T) {
 	e2eMinikubeTest(t)
 	hackOpts, clientset, dynamicClient := e2eClients(t)

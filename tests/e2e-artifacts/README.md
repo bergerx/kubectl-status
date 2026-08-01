@@ -3,7 +3,7 @@
 This file holds setup commands and sample manifests for third-party tools whose CRDs kubectl-status
 renders, kept here as reference material for whoever picks up live e2e coverage for them. See
 CONTRIBUTING.md's "Running e2e Tests Locally" section for how the two-tier test suite works and the
-recipe for adding a new `TestE2EDynamicManifests` subtest.
+recipe for adding a new live e2e subtest (and for choosing which entry point it runs under).
 
 None of the gaps below currently have an open GitHub issue — they're test-coverage gaps for
 templates that already render correctly under Tier 1 (static fixtures), just not yet exercised by
@@ -109,9 +109,10 @@ flux get helmreleases
 
 Both templates now exist (issue #660). `Kustomization.tmpl`'s live-query branches — resolving
 `status.inventory` entries into health summaries, inlining them under `--deep`, and flagging entries
-whose object is gone — are covered by `TestE2EFluxKustomizationInventory`. That test installs Flux
-and lets it reconcile `tests/e2e-artifacts/flux-kustomization-inventory.yaml`: a `GitRepository` on
-podinfo pinned to an immutable tag, and a `Kustomization` over it. Nothing in its `.status` is
+whose object is gone — are covered by the Flux subtest of `TestE2EParallel`
+(`runFluxSubtests`, cmd/e2e_flux_test.go). That subtest installs Flux and lets it reconcile
+`tests/e2e-artifacts/flux-kustomization-inventory.yaml`: a `GitRepository` on podinfo pinned to an
+immutable tag, and a `Kustomization` over it. Nothing in its `.status` is
 written by the test — the inventory, `lastAppliedRevision` and the `kustomize.toolkit.fluxcd.io`
 ownership labels on the applied objects are all kustomize-controller's, which is the only way an
 assertion about them tests Flux rather than our reading of it.

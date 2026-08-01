@@ -727,15 +727,16 @@ type onceInstaller struct {
 
 // installMu serializes every install against every other one, across all onceInstallers. The
 // sync.Once above only keeps a single dependency from being installed twice; it says nothing about
-// two *different* ones overlapping. Today they can't -- no top-level TestE2E* calls t.Parallel(),
-// TestE2EDynamicManifests has no parallel subtests at all, and TestE2EParallel's group-level
-// ensureX calls all run in its own goroutine, which a parallel subtest can't resume ahead of (t.Run
-// parks such a subtest and only releases it once the parent function returns). But that's a
-// property of where the call sites happen to sit, not something the type enforces: an ensureX added
-// inside a t.Parallel() subtest would quietly start racing installs of unrelated dependencies
-// against each other. Serializing here costs nothing to be sure of -- a warm re-run of every
-// installer totals ~15s, and a cold one is exactly the case you want taking the cluster one
-// dependency at a time rather than several controller rollouts at once.
+// two *different* ones overlapping. Most call sites can't overlap on their own: a group-level
+// ensureX in TestE2EParallel runs in that function's own goroutine, which a parallel subtest can't
+// resume ahead of (t.Run parks such a subtest and only releases it once the parent function
+// returns), and TestE2EDynamicManifests has no parallel subtests at all. But that's a property of
+// where those call sites happen to sit, not something the type enforces, and ensureFlux is already
+// the exception: it's called from inside a t.Parallel() subtest (runFluxSubtests,
+// cmd/e2e_flux_test.go), where without this mutex it would race installs of unrelated dependencies
+// running concurrently in sibling subtests. Serializing here costs nothing to be sure of -- a warm
+// re-run of every installer totals ~15s, and a cold one is exactly the case you want taking the
+// cluster one dependency at a time rather than several controller rollouts at once.
 //
 // Held only around the install itself, never around require.NoError: install closures are t-free by
 // contract (see above), but keeping the assertion outside means even a stray require inside one
@@ -1016,7 +1017,7 @@ func ensureCrossplane(t *testing.T) {
 
 var fluxInstaller onceInstaller
 
-// ensureFlux installs Flux, needed by TestE2EFluxKustomizationInventory. Unlike the CRDs-only
+// ensureFlux installs Flux, needed by TestE2EParallel's Flux subtest. Unlike the CRDs-only
 // installs above, this one has to actually reconcile: what that test asserts on is
 // status.inventory, status.lastAppliedRevision and the kustomize.toolkit.fluxcd.io ownership
 // labels -- all of them written by kustomize-controller as it applies a real source, none of them

@@ -1,4 +1,5 @@
-# A real Flux source and Kustomization for TestE2EFluxKustomizationInventory. Everything the test
+# A real Flux source and Kustomization for the Flux subtest of TestE2EParallel
+# (runFluxSubtests, cmd/e2e_flux_test.go). Everything the test
 # asserts on -- status.inventory, status.lastAppliedRevision, and the kustomize.toolkit.fluxcd.io
 # ownership labels on the applied objects -- is written by source-controller and
 # kustomize-controller as they reconcile this, so there is no status here to fabricate.
@@ -7,8 +8,7 @@
 # (applyManifestInNamespace). spec.targetNamespace is the exception and has to name the namespace
 # outright -- kustomize-controller does *not* fall back to the Kustomization's own namespace for
 # manifests that leave it unset (it fails the apply with "namespace not specified"), and podinfo's
-# manifests set no namespace. It must stay in step with the `ns` constant in
-# TestE2EFluxKustomizationInventory.
+# manifests set no namespace. It must stay in step with the `ns` constant in that subtest.
 ---
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
