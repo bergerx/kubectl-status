@@ -261,12 +261,12 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
 
 ### Running e2e Tests Locally
 
-`make test-e2e` runs the `TestE2E*` suite against a real cluster. That suite has four top-level
+`make test-e2e` runs the `TestE2E*` suite against a real cluster. That suite has three top-level
 entry points — `TestE2EParallel` (`cmd/main_test.go`), which calls one topical `runXSubtests`
-function per `cmd/e2e_*_test.go` file, plus `TestE2EDynamicManifests` (`cmd/e2e_dynamic_test.go`),
-`TestE2EFluxKustomizationInventory` (`cmd/e2e_flux_test.go`) and `TestE2EAgainstVanillaMinikube`
-(`cmd/e2e_vanilla_test.go`) — sharing the harness in `cmd/e2e_helpers_test.go` (`cmdTest`,
-`applyManifest`/`waitFor`, the `ensureX` dependency installers). `cmd/local_test.go` holds the
+function per `cmd/e2e_*_test.go` file, plus `TestE2EDynamicManifests` (`cmd/e2e_dynamic_test.go`)
+and `TestE2EAgainstVanillaMinikube` (`cmd/e2e_vanilla_test.go`) — sharing the harness in
+`cmd/e2e_helpers_test.go` (`cmdTest`, `applyManifest`/`waitFor`, the `ensureX` dependency
+installers). `cmd/local_test.go` holds the
 tests that need no cluster and so run under plain `make test` instead. `make test-e2e` manages one
 **shared** minikube cluster/profile (`kstat-e2e-shared`), reused across every worktree, branch, and
 session on your machine — not one per branch/session. Run `make print-e2e-profile` to see the
@@ -317,11 +317,15 @@ the filter — cert-manager, Gateway API CRDs and Cilium/Calico CRDs go in even 
 matches nothing. On a warm cluster that's a few seconds and not worth restructuring for; on a fresh
 one it's the bulk of a narrow run's wall clock. `TestE2EDynamicManifests` doesn't have this
 property: its `ensureX` calls sit inside the subtest bodies, so filtering does skip them.
+`runFluxSubtests` is the one pool group that does the same, for the same reason — `ensureFlux` is
+the suite's heaviest install, so it sits inside the `t.Run` rather than at the top of the group,
+where it would go in on any `TestE2EParallel` run whose pattern doesn't even reach that subtest.
 
 The installers are the `ensureX(t)` functions in `cmd/e2e_helpers_test.go`; keep new ones there
-rather than inline in a test file. A topical group calls the ones it needs at the top of its
-`runXSubtests` function; in `TestE2EDynamicManifests`, where a dependency usually serves a single
-scenario, the call goes at the top of that subtest instead. Most install CRDs only —
+rather than inline in a test file. A topical group in `TestE2EParallel` calls the ones it needs at
+the top of its `runXSubtests` function; under `TestE2EDynamicManifests`, where a dependency usually
+serves a single scenario, the call goes at the top of that subtest instead — including when the
+scenario lives in its own file behind a `runXSubtests` function. Most install CRDs only —
 kubectl-status reads and matches these objects client-side, so no real controller is needed;
 `ensureVPA`/`ensureCrossplane`/`ensureFlux` are the exceptions, where the test asserts on state
 only a running controller writes.
@@ -368,12 +372,41 @@ pre-push/CI gate — the targeted `test-e2e-quick` checks above are what a dev-l
 check should use, not the full suite.
 
 When a template change adds or touches `$.KubeGetFirst`, `$.IncludeRenderableObject`/`$.Include`,
-or any other interaction with a live cluster, add or extend a case in `TestE2EDynamicManifests`
-(`cmd/e2e_dynamic_test.go`) plus matching manifests/regex fixtures under `tests/e2e-artifacts/`. The
-offline golden-file tests (`TestAllArtifactsLocal*`) run with `--shallow` (alongside `--local`,
-since there's no live cluster to query either way), which makes `KubeGetFirst` a no-op — they
-can't exercise the "found the related object" or `--deep` include branches, so the live e2e suite
-is the only place that covers them.
+or any other interaction with a live cluster, add or extend a live e2e subtest plus matching
+manifests/regex fixtures under `tests/e2e-artifacts/`. The offline golden-file tests
+(`TestAllArtifactsLocal*`) run with `--shallow` (alongside `--local`, since there's no live cluster
+to query either way), which makes `KubeGetFirst` a no-op — they can't exercise the "found the
+related object" or `--deep` include branches, so the live e2e suite is the only place that covers
+them.
+
+**Put new subtests in `TestE2EParallel`'s pool by default.** `TestE2EDynamicManifests` is the
+exception, and a subtest only earns a place in it by tripping one of the two criteria in
+`TestE2EParallel`'s doc comment (`cmd/main_test.go`) — with the reason written on the subtest, so
+the next person inherits a rule rather than a precedent. The qualifying reasons are all about what
+a subtest does *to* its neighbours: it perturbs cluster-wide state they read (deleting the
+metrics-server `APIService`), it starves a shared dependency (the VPA subtest pegs a full CPU and
+takes metrics-server's readiness probe down with it on a single-node cluster), or it can't be given
+a namespace/generated name of its own.
+
+Several things look disqualifying but aren't, and shouldn't be used to justify a serial subtest:
+
+- **Needing a live-cluster query.** Most of the pool needs one; that's the normal case, not an
+  exception.
+- **Installing a real controller and waiting for it to reconcile.** The `ensureX` installers are
+  shared `onceInstaller`s serialized by `installMu`, so calling one from inside a `t.Parallel()`
+  subtest is safe — `ensureFlux` does exactly that.
+- **Depending on metrics.** Fine as long as the subtest *consumes* metrics rather than threatening
+  them, and its fixtures pin values that are a function of its own workload rather than of cluster
+  load. Relative timestamps aren't a hazard either: `ApplyTestHack` freezes `DurationRound`, so
+  `created 1m ago` is a constant, not elapsed time.
+- **How the objects come into being** (built in Go, applied from static YAML, or patched in place).
+  This distinguishes nothing, whatever the `DynamicManifests` name suggests.
+
+See #784: the Flux scenario was a standalone top-level test, then a serial subtest, before anyone
+checked it against the criteria — which it met, so it's a pool group now. Don't add a fourth
+top-level `TestE2E*` function either; a scenario long enough to crowd its host file can live in its
+own `cmd/e2e_*_test.go` behind a `runXSubtests` function, the way `runFluxSubtests` does. The file a
+subtest sits in and the entry point it runs under are separate choices.
 
 Assert on stdout with a whole-output `.regex` fixture (`stdoutRegexPath`, or
 `assertStdoutMatchesRegexFixture` when the subtest also needs to assert something the fixture can't

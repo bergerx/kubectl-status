@@ -47,4 +47,5 @@ func TestE2EParallel(t *testing.T) {
 	runTLSValidationSubtests(t, hackOpts, clientset)
 	runPodVolumeSubtests(t, hackOpts, clientset)
 	runPodLogsAndMetricsSubtests(t, hackOpts, clientset)
+	runFluxSubtests(t, hackOpts, clientset)
 }
