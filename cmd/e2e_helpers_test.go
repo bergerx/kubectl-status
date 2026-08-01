@@ -725,11 +725,32 @@ type onceInstaller struct {
 	err  error
 }
 
+// installMu serializes every install against every other one, across all onceInstallers. The
+// sync.Once above only keeps a single dependency from being installed twice; it says nothing about
+// two *different* ones overlapping. Today they can't -- no top-level TestE2E* calls t.Parallel(),
+// TestE2EDynamicManifests has no parallel subtests at all, and TestE2EParallel's group-level
+// ensureX calls all run in its own goroutine, which a parallel subtest can't resume ahead of (t.Run
+// parks such a subtest and only releases it once the parent function returns). But that's a
+// property of where the call sites happen to sit, not something the type enforces: an ensureX added
+// inside a t.Parallel() subtest would quietly start racing installs of unrelated dependencies
+// against each other. Serializing here costs nothing to be sure of -- a warm re-run of every
+// installer totals ~15s, and a cold one is exactly the case you want taking the cluster one
+// dependency at a time rather than several controller rollouts at once.
+//
+// Held only around the install itself, never around require.NoError: install closures are t-free by
+// contract (see above), but keeping the assertion outside means even a stray require inside one
+// unwinds via runtime.Goexit without stranding the lock.
+var installMu sync.Mutex
+
 func (o *onceInstaller) ensure(t *testing.T, install func() error) {
 	t.Helper()
-	o.once.Do(func() {
-		o.err = install()
-	})
+	func() {
+		installMu.Lock()
+		defer installMu.Unlock()
+		o.once.Do(func() {
+			o.err = install()
+		})
+	}()
 	require.NoError(t, o.err)
 }
 
