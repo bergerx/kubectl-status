@@ -261,22 +261,21 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
 
 ### Running e2e Tests Locally
 
-`make test-e2e` runs the `TestE2E*` suite against a real cluster. That suite has two top-level
+`make test-e2e` runs the `TestE2E*` suite against a real cluster. That suite has four top-level
 entry points — `TestE2EParallel` (`cmd/main_test.go`), which calls one topical `runXSubtests`
-function per `cmd/e2e_*_test.go` file, and `TestE2EDynamicManifests` (`cmd/e2e_dynamic_test.go`) —
-sharing the harness in `cmd/e2e_helpers_test.go` (`cmdTest`, `applyManifest`/`waitFor`, the
-`ensureX` dependency installers). `cmd/local_test.go` holds the tests that need no cluster and so
-run under plain `make test` instead. `make test-e2e` manages one **shared** minikube
-cluster/profile (`kstat-e2e-shared`), reused across every worktree, branch, and session on your
-machine — not one per branch/session. Run
-`make print-e2e-profile` to see the profile name and kubeconfig path (`~/.kstat-e2e/shared.kubeconfig`)
-it uses. `install-e2e-deps` (metrics-server only — everything else is installed on demand by the
-`ensureX` functions of whichever topical group needs it: cert-manager, Gateway API CRDs,
-Cilium/Calico CRDs, VPA, Crossplane, Flux) runs against that same cluster right
-after it's created, so deps always land on the cluster the tests actually use. The cluster is left
-running after the tests finish, for fast reruns from any worktree/session; delete it explicitly
-with `make e2e-minikube-down` when you're sure no other worktree/session still needs it — this
-tears it down for everyone sharing it, not just you.
+function per `cmd/e2e_*_test.go` file, plus `TestE2EDynamicManifests` (`cmd/e2e_dynamic_test.go`),
+`TestE2EFluxKustomizationInventory` (`cmd/e2e_flux_test.go`) and `TestE2EAgainstVanillaMinikube`
+(`cmd/e2e_vanilla_test.go`) — sharing the harness in `cmd/e2e_helpers_test.go` (`cmdTest`,
+`applyManifest`/`waitFor`, the `ensureX` dependency installers). `cmd/local_test.go` holds the
+tests that need no cluster and so run under plain `make test` instead. `make test-e2e` manages one
+**shared** minikube cluster/profile (`kstat-e2e-shared`), reused across every worktree, branch, and
+session on your machine — not one per branch/session. Run `make print-e2e-profile` to see the
+profile name and kubeconfig path (`~/.kstat-e2e/shared.kubeconfig`) it uses. `install-e2e-deps`
+runs against that same cluster right after it's created, so deps always land on the cluster the
+tests actually use (see [Cluster Dependencies](#cluster-dependencies) below for what it does and
+doesn't install). The cluster is left running after the tests finish, for fast reruns from any
+worktree/session; delete it explicitly with `make e2e-minikube-down` when you're sure no other
+worktree/session still needs it — this tears it down for everyone sharing it, not just you.
 
 Because the cluster is shared and the e2e suite uses fixed (not generated) scratch namespace
 names, two `test-e2e`/`test-e2e-quick` runs against it at the same time would collide with
@@ -297,17 +296,53 @@ above and use whatever cluster your current kubeconfig context already points at
 `medyagh/setup-minikube` in `ci-test.yml` provisions) — set the same var locally if you'd rather
 manage the cluster yourself.
 
-Some e2e scenarios exercise cert-manager-issued TLS `Secret`s and Gateway API objects.
-`make test-e2e` installs both automatically (via its `install-e2e-deps` prerequisite target
-in the `Makefile`) — no separate manual setup needed. Bump the pinned versions in that target
-periodically to track upstream stable releases; CI uses the same `make test-e2e` target, so it
-stays in sync automatically.
-
 Note: `TestE2E*` functions invoked directly via `go test -run TestE2E...` (bypassing the
 Makefile) fall back to using the bare test function name as the minikube profile if `E2E_PROFILE`
 isn't set in the environment, which starts (and leaks) a one-off cluster instead of using the
 shared one — export `E2E_PROFILE` yourself (e.g. from `make print-e2e-profile`) to land on the
 shared cluster too.
+
+#### Cluster Dependencies
+
+metrics-server is the only dependency installed upfront, by the `install-e2e-deps` target — see
+the comment there for why it has to be an invariant of the whole run rather than one group's
+concern. Everything else (cert-manager, Gateway API CRDs, Cilium/Calico CRDs, VolumeSnapshot CRDs,
+Karpenter CRDs, VPA, Crossplane, Flux) is installed on demand by the test that needs it, so a
+cluster only ever grows the dependencies the suite actually exercises. No manual setup either way.
+
+Note that "on demand" tracks the *entry point*, not your `-run` pattern. The `runXSubtests`
+functions are plain calls, and `-run` filters at `t.Run` below them, so any
+`RUN='TestE2EParallel/...'` still runs every group's install regardless of which subtests survive
+the filter — cert-manager, Gateway API CRDs and Cilium/Calico CRDs go in even for a pattern that
+matches nothing. On a warm cluster that's a few seconds and not worth restructuring for; on a fresh
+one it's the bulk of a narrow run's wall clock. `TestE2EDynamicManifests` doesn't have this
+property: its `ensureX` calls sit inside the subtest bodies, so filtering does skip them.
+
+The installers are the `ensureX(t)` functions in `cmd/e2e_helpers_test.go`; keep new ones there
+rather than inline in a test file. A topical group calls the ones it needs at the top of its
+`runXSubtests` function; in `TestE2EDynamicManifests`, where a dependency usually serves a single
+scenario, the call goes at the top of that subtest instead. Most install CRDs only —
+kubectl-status reads and matches these objects client-side, so no real controller is needed;
+`ensureVPA`/`ensureCrossplane`/`ensureFlux` are the exceptions, where the test asserts on state
+only a running controller writes.
+
+Each installer is a package-level `onceInstaller` (`sync.Once` plus a cached error), so a
+dependency two groups share installs exactly once per run, and the underlying `kubectl apply
+--server-side`/`helm upgrade --install` commands are idempotent against the shared cluster across
+reruns. Subtests run in parallel; installs never do — a package-level mutex serializes every
+install against every other, so a cold run brings dependencies up one at a time instead of putting
+several controller rollouts on the cluster at once. That costs nothing on a warm cluster, where
+re-running every installer totals well under a minute.
+
+When adding one, keep its install closure free of `t`/`require` and return a plain `error`:
+`sync.Once` marks itself done even when its function exits via `runtime.Goexit` (which `require`
+uses), so a `t`-based failure inside would leave every later caller believing the install
+succeeded. `onceInstaller.ensure` replays the cached error to all of them instead, and keeps the
+assertion outside the lock so a stray `require` can't strand it.
+
+Versions are pinned in `hack/versions.env`, shared with `hack/generate-screenshots.sh` so both stay
+on the same releases — bump them there periodically to track upstream stable releases. CI uses the
+same `make test-e2e` target, so it stays in sync automatically.
 
 #### Fast Iteration: `make test-e2e-quick`
 
