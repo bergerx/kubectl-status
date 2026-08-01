@@ -431,9 +431,16 @@ func applyManifestInNamespace(t *testing.T, filepath, namespace string) {
 // waitForInNamespace targets a namespace explicitly via `kubectl -n` instead of the kubeconfig's
 // default -- pairs with applyManifestInNamespace for subtests moved off the shared default
 // namespace.
+//
+// The timeout has margin above what any single wait needs on an idle cluster: TestE2EParallel's
+// pool shares one minikube VM across -parallel subtests, and runFluxSubtests' ensureFlux install
+// is the heaviest of them, so a controller (e.g. the PDB/disruption controller another subtest is
+// waiting on) can legitimately take longer to reconcile while it's running. A 4m budget measured
+// this timing out at ~248s on a loaded CI runner; 8m keeps a real hang catchable well inside the
+// job's -timeout=25m without the wait racing pool contention it doesn't control.
 func waitForInNamespace(t *testing.T, resource, forParam, namespace string) {
 	t.Helper()
-	cmd := exec.Command("kubectl", "wait", "-n", namespace, "--for", forParam, resource, "--timeout=4m")
+	cmd := exec.Command("kubectl", "wait", "-n", namespace, "--for", forParam, resource, "--timeout=8m")
 	output, err := cmd.CombinedOutput()
 	t.Logf("wait result for %s in namespace %s: %s", resource, namespace, string(output))
 	require.NoError(t, err)
