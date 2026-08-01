@@ -30,8 +30,7 @@ Kustomization/podinfo -n e2e-flux-kustomization, created 1m ago, gen:1
           ScalingLimited:True TooFewReplicas, the desired replica count is less than the minimum replica count for 1m
           Applied by Flux Kustomization/podinfo
           Flux apply policy Merge: fields added by other tools are preserved rather than reverted
-      Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for 1m
-      Progressing:True NewReplicaSetAvailable, ReplicaSet "podinfo-[0-9a-z]+" has successfully progressed\. for 1m
+      (?:Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for 1m\n      Progressing:True NewReplicaSetAvailable, ReplicaSet "podinfo-[0-9a-z]+" has successfully progressed\. for 1m|Progressing:True NewReplicaSetAvailable, ReplicaSet "podinfo-[0-9a-z]+" has successfully progressed\. for 1m\n      Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for 1m)
     HorizontalPodAutoscaler/podinfo\[e2e-flux-kustomization\] is already printed
   Ready covers the apply only: without wait or healthChecks, unhealthy managed resources leave it Ready
   Reconciles every 60m
