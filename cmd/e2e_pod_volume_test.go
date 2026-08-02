@@ -23,10 +23,8 @@ func runPodVolumeSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), c
 		ns := "e2e-pod-image-pull-secrets"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/pod-image-pull-secrets.yaml", ns)
 
 		// The kubelet keeps cycling a failing pull between ErrImagePull and ImagePullBackOff on
@@ -65,10 +63,8 @@ func runPodVolumeSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), c
 		ns := "e2e-pod-volume-configmap-secret"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/pod-volume-configmap-secret.yaml", ns)
 		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-volume-missing-configmap", "main", "ContainerCreating", ns)
 		waitForContainerWaitingReasonInNamespace(t, "pod/e2e-pod-volume-missing-secret", "main", "ContainerCreating", ns)

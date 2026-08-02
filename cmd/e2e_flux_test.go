@@ -69,10 +69,8 @@ func runFluxSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), client
 		ns := "e2e-flux-kustomization"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		applyManifestInNamespace(t, "e2e-artifacts/flux-kustomization-inventory.yaml", ns)
 		// Ready on the Kustomization means the apply succeeded and the inventory has been written --

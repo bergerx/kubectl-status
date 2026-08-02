@@ -19,10 +19,8 @@ func runOwnersSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), clie
 		ns := "e2e-owner-secret"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		owner := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{

@@ -23,10 +23,8 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		ns := "e2e-rollout-diff"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		name := "rollout-diff-test"
 		one := int32(1)
@@ -80,10 +78,8 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 			ns := "e2e-rollouts-blocked-deployment"
 			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 			require.NoError(t, err)
-			t.Cleanup(func() {
-				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-			})
 			name := "e2e-rollouts-blocked-deployment"
 			one := int32(1)
 			dep := &appsv1.Deployment{
@@ -113,10 +109,8 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 			ns := "e2e-rollouts-blocked-statefulset"
 			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 			require.NoError(t, err)
-			t.Cleanup(func() {
-				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-			})
 			name := "e2e-rollouts-blocked-statefulset"
 			one := int32(1)
 			sts := &appsv1.StatefulSet{
@@ -151,10 +145,8 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 			ns := "e2e-rollouts-statefulset-rollback-trap"
 			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 			require.NoError(t, err)
-			t.Cleanup(func() {
-				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-			})
 			name := "e2e-rollouts-statefulset-rollback-trap"
 			one := int32(1)
 			goodImage := "nginx:1.27"
@@ -214,10 +206,8 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 			ns := "e2e-rollouts-blocked-daemonset"
 			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 			require.NoError(t, err)
-			t.Cleanup(func() {
-				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-			})
 			name := "e2e-rollouts-blocked-daemonset"
 			ds := &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
@@ -245,10 +235,8 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 			ns := "e2e-rollouts-healthy-deployment"
 			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 			require.NoError(t, err)
-			t.Cleanup(func() {
-				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-			})
 			name := "e2e-rollouts-healthy-deployment"
 			one := int32(1)
 			dep := &appsv1.Deployment{
@@ -280,10 +268,8 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 			ns := "e2e-rollouts-three-revisions"
 			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 			require.NoError(t, err)
-			t.Cleanup(func() {
-				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-			})
 			name := "e2e-rollouts-three-revisions"
 			applyManifestInNamespace(t, "e2e-artifacts/rollouts-three-revisions.yaml", ns)
 			waitForInNamespace(t, "deployment/"+name, "condition=Available", ns)
@@ -319,10 +305,8 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		ns := "e2e-quota-headroom"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		_, err = clientset.CoreV1().ResourceQuotas(ns).Create(context.TODO(), &corev1.ResourceQuota{
 			ObjectMeta: metav1.ObjectMeta{Name: "compute", Namespace: ns},

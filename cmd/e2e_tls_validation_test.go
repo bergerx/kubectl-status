@@ -24,10 +24,8 @@ func copyLeafSecretToNamespace(t *testing.T, clientset *kubernetes.Clientset, sr
 	t.Helper()
 	_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: dstNS}}, metav1.CreateOptions{})
+	t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, dstNS) })
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		clientset.CoreV1().Namespaces().Delete(context.TODO(), dstNS, metav1.DeleteOptions{})
-	})
 	src, err := clientset.CoreV1().Secrets(srcNS).Get(context.TODO(), "e2e-tls-leaf-tls", metav1.GetOptions{})
 	require.NoError(t, err)
 	_, err = clientset.CoreV1().Secrets(dstNS).Create(context.TODO(), &corev1.Secret{
@@ -53,10 +51,8 @@ func runTLSValidationSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		ns := "e2e-tls-validation"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/tls-validation-ca.yaml", ns)
 		waitForInNamespace(t, "certificate/e2e-tls-root-ca", "condition=Ready", ns)
 		waitForInNamespace(t, "issuer/e2e-tls-ca-issuer", "condition=Ready", ns)

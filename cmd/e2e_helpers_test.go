@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -385,6 +386,30 @@ func waitForCrossplaneComposedRefs(t *testing.T, namespace, name string, wantCou
 		time.Sleep(2 * time.Second)
 	}
 	t.Fatalf("timed out waiting for xstatusprobe %s in namespace %s to have %d composed resource refs", name, namespace, wantCount)
+}
+
+// deleteNamespaceAndWait deletes a namespace and waits for it to be fully gone, instead of firing
+// the delete and moving on -- a fixed namespace name reused on the next run would otherwise race a
+// namespace this run left Terminating. Runs from t.Cleanup, so a slow or failed teardown only logs
+// a warning: it must not fail the test whose cleanup is calling it, and it must not stop other
+// subtests' cleanup from running.
+func deleteNamespaceAndWait(t *testing.T, clientset *kubernetes.Clientset, namespace string) {
+	t.Helper()
+	err := clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		t.Logf("warning: failed to delete namespace %s: %v", namespace, err)
+		return
+	}
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		_, err := clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			t.Logf("namespace %s fully deleted", namespace)
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
+	t.Logf("warning: namespace %s still terminating after 2m, leaving it be", namespace)
 }
 
 func applyManifest(t *testing.T, filepath string) {
