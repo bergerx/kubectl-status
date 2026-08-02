@@ -1,0 +1,48 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  generation: 4
+  name: reviews
+  namespace: bookinfo
+  resourceVersion: "40213"
+  uid: 3f9c1c2e-2f2b-4e2a-9c4a-6bd0e2a1b001
+spec:
+  exportTo:
+  - .
+  hosts:
+  - reviews
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+      uri:
+        prefix: /reviews
+    name: internal-users
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+      retryOn: gateway-error,connect-failure,refused-stream
+    route:
+    - destination:
+        host: reviews
+        port:
+          number: 9080
+        subset: v3
+    timeout: 10s
+  - name: canary
+    route:
+    - destination:
+        host: reviews
+        port:
+          number: 9080
+        subset: v1
+      weight: 90
+    - destination:
+        host: reviews
+        port:
+          number: 9080
+        subset: v2
+      weight: 10
+    timeout: 5s

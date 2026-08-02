@@ -118,7 +118,7 @@ kubectl status node -l node-role.kubernetes.io/master  # Show status of nodes ma
 ## Scope and extending it
 
 Out of the box, `kubectl status` has dedicated templates for ~40 resource kinds: core workloads (Pods, Deployments,
-ReplicaSets, DaemonSets, StatefulSets, Jobs, CronJobs), Nodes, Services, Ingress, and more — plus Gateway API,
+ReplicaSets, DaemonSets, StatefulSets, Jobs, CronJobs), Nodes, Services, Ingress, and more — plus Gateway API, Istio,
 cert-manager, external-secrets, and Prometheus Operator resources. Anything without a template falls back to a
 generic view.
 

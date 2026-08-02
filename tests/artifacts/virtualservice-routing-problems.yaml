@@ -1,0 +1,110 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  generation: 11
+  name: productpage
+  namespace: bookinfo
+  resourceVersion: "40311"
+  uid: 3f9c1c2e-2f2b-4e2a-9c4a-6bd0e2a1b002
+spec:
+  gateways:
+  - bookinfo-gateway
+  - istio-system/shared-gateway
+  - mesh
+  hosts:
+  - bookinfo.example.com
+  http:
+  - match:
+    - uri:
+        exact: /legacy
+    - uri:
+        prefix: /v0/
+    name: retired
+    redirect:
+      authority: bookinfo.example.com
+      redirectCode: 301
+      uri: /
+  - match:
+    - uri:
+        prefix: /api/
+    name: api
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: productpage.bookinfo.svc.cluster.local
+        port:
+          number: 9080
+        subset: stable
+      weight: 70
+    - destination:
+        host: productpage
+        port:
+          number: 9080
+        subset: next
+      weight: 20
+    retries:
+      attempts: 0
+    timeout: 3s
+  - fault:
+      abort:
+        httpStatus: 503
+        percentage:
+          value: 10
+      delay:
+        fixedDelay: 7s
+        percentage:
+          value: 100
+    match:
+    - sourceLabels:
+        app: loadgen
+      uri:
+        prefix: /chaos
+    mirror:
+      host: productpage-shadow
+      subset: next
+    mirrorPercentage:
+      value: 5
+    route:
+    - destination:
+        host: productpage
+  - delegate:
+      name: ratings
+      namespace: bookinfo
+    match:
+    - uri:
+        prefix: /ratings
+    name: delegated
+  - directResponse:
+      status: 404
+  tcp:
+  - match:
+    - port: 27017
+    route:
+    - destination:
+        host: mongo.db.svc.cluster.local
+        port:
+          number: 27017
+  tls:
+  - match:
+    - port: 443
+      sniHosts:
+      - api.example.com
+    route:
+    - destination:
+        host: api.example.com
+        port:
+          number: 443
+status:
+  validationMessages:
+  - documentationUrl: https://istio.io/latest/docs/reference/config/analysis/ist0101/
+    level: ERROR
+    type:
+      code: IST0101
+      name: ReferencedResourceNotFound
+  - documentationUrl: https://istio.io/latest/docs/reference/config/analysis/ist0118/
+    level: INFO
+    type:
+      code: IST0118
+      name: PortNameIsNotUnderNamingConvention

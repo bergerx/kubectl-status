@@ -156,6 +156,7 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"withinLastHour":                  cfg.withinLastHour,
 		"parseTLSSecretCertificate":       cfg.parseTLSSecretCertificate,
 		"hostnameIntersections":           hostnameIntersections,
+		"istioHost":                       istioHost,
 		"certificatesInSecret":            cfg.certificatesInSecret,
 		"certificatesInConfigMap":         cfg.certificatesInConfigMap,
 		"certificateInCSR":                cfg.certificateInCSR,
@@ -2072,6 +2073,59 @@ func narrowerHostname(a, b string) string {
 // hostnameUnder reports whether host is a strict subdomain of suffix.
 func hostnameUnder(host, suffix string) bool {
 	return strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(suffix))
+}
+
+// IstioHostRef is the resolved form of an Istio host reference -- the string a VirtualService
+// destination, a VirtualService/DestinationRule host or a mirror target points at.
+type IstioHostRef struct {
+	// Key is the canonical form two host references compare on. Two references with the same
+	// Key name the same thing; an empty Key means there was nothing to resolve.
+	Key string
+	// Name and Namespace are the Service the reference resolves to. Both empty unless InCluster.
+	Name      string
+	Namespace string
+	// InCluster is true when the reference names a Service in this cluster, as opposed to an
+	// external host (usually backed by a ServiceEntry) or a wildcard pattern.
+	InCluster bool
+}
+
+// istioHost resolves an Istio host reference against the namespace of the object naming it, so
+// that two spellings of the same service compare equal.
+//
+// Istio accepts a short name, a namespaced name, and both service-domain forms for one and the
+// same Service -- "reviews", "reviews.default", "reviews.default.svc" and
+// "reviews.default.svc.cluster.local" are interchangeable -- and resolves the short form
+// against the namespace of the object doing the naming, not the destination's. So a
+// VirtualService destination and the DestinationRule meant to pair with it routinely disagree
+// on spelling while meaning the same Service, and a string comparison of the two would miss
+// most real pairs.
+//
+// Anything that isn't an in-cluster Service -- an external host a ServiceEntry backs
+// ("api.example.com"), a wildcard ("*.example.com") -- keeps its own spelling as the Key and is
+// left InCluster=false, so those only ever pair with an identical spelling and never get looked
+// up as a Service. That is deliberately conservative: callers use the result to decide whether
+// two objects are talking about the same thing before reporting a problem with the pair, and a
+// wrong pairing would invent a problem that isn't there.
+func istioHost(host, namespace string) IstioHostRef {
+	h := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	if h == "" || strings.Contains(h, "*") {
+		return IstioHostRef{Key: h}
+	}
+	parts := strings.Split(h, ".")
+	name := parts[0]
+	// A bare name is the destination's own namespace; "name.namespace" and the ".svc"/
+	// ".svc.cluster.local" forms carry it in the second label. Everything else -- an external
+	// DNS name like "api.example.com" -- has no namespace to speak of.
+	switch {
+	case len(parts) == 1:
+		if namespace == "" {
+			break
+		}
+		return IstioHostRef{Key: name + "." + namespace, Name: name, Namespace: namespace, InCluster: true}
+	case len(parts) == 2, parts[2] == "svc":
+		return IstioHostRef{Key: name + "." + parts[1], Name: name, Namespace: parts[1], InCluster: true}
+	}
+	return IstioHostRef{Key: h}
 }
 
 // certServesHostname reports whether cert can serve the hostname a caller expects it to serve.

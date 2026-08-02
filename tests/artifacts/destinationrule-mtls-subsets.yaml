@@ -1,0 +1,100 @@
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  generation: 2
+  name: reviews
+  namespace: bookinfo
+  resourceVersion: "40408"
+  uid: 3f9c1c2e-2f2b-4e2a-9c4a-6bd0e2a1b003
+spec:
+  host: reviews.bookinfo.svc.cluster.local
+  subsets:
+  - labels:
+      version: v1
+    name: v1
+  - labels:
+      version: v2
+    name: v2
+    trafficPolicy:
+      loadBalancer:
+        consistentHash:
+          httpHeaderName: x-user
+  - labels:
+      version: v3
+    name: v3
+  trafficPolicy:
+    connectionPool:
+      http:
+        http1MaxPendingRequests: 1024
+        http2MaxRequests: 1000
+        idleTimeout: 1h
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+      tcp:
+        connectTimeout: 30ms
+        maxConnections: 100
+    loadBalancer:
+      simple: LEAST_REQUEST
+    outlierDetection:
+      baseEjectionTime: 30s
+      consecutive5xxErrors: 5
+      interval: 10s
+      maxEjectionPercent: 100
+    tls:
+      mode: ISTIO_MUTUAL
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  generation: 1
+  name: legacy-ratings
+  namespace: bookinfo
+  resourceVersion: "40409"
+  uid: 3f9c1c2e-2f2b-4e2a-9c4a-6bd0e2a1b004
+spec:
+  exportTo:
+  - bookinfo
+  - istio-system
+  host: ratings
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 1
+    outlierDetection:
+      baseEjectionTime: 15m
+      consecutive5xxErrors: 1
+      interval: 1s
+      maxEjectionPercent: 100
+    portLevelSettings:
+    - port:
+        number: 9080
+      tls:
+        mode: DISABLE
+    tls:
+      mode: SIMPLE
+      sni: ratings.internal
+  workloadSelector:
+    matchLabels:
+      app: ratings
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  generation: 1
+  name: external-api
+  namespace: bookinfo
+  resourceVersion: "40410"
+  uid: 3f9c1c2e-2f2b-4e2a-9c4a-6bd0e2a1b005
+spec:
+  host: api.example.com
+  trafficPolicy:
+    loadBalancer:
+      localityLbSetting:
+        enabled: true
+      simple: ROUND_ROBIN
+    tls:
+      insecureSkipVerify: true
+      mode: SIMPLE

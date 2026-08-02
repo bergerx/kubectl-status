@@ -1,0 +1,337 @@
+{{- define "VirtualService" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: networking.istio.io/v1, Kind=VirtualService */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "istio_export_to" . }}
+    {{- with .Spec.hosts }}
+        {{- "Hosts" | bold | nindent 2 }}:
+        {{- if eq (len .) 1 }}
+            {{- " " }}{{ index . 0 | toString | cyan }}
+        {{- else }}
+            {{- range . }}
+                {{- . | toString | cyan | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- /* An absent spec.gateways means "mesh" -- sidecars only, no ingress -- which is the
+           default and so goes unsaid.
+
+           The refs are named but not fetched. Istio's Gateway and the Gateway API's are both
+           Kind=Gateway, and KubeGetFirst resolves an unqualified kind across every group and
+           silently picks one -- on a cluster running both, the Gateway API's wins, so a
+           "no such Gateway" check here would report every healthy Istio Gateway as missing.
+           See #789; naming the ref without claiming anything about it is correct under either
+           resolution. */ -}}
+    {{- with .Spec.gateways }}
+        {{- "Gateways" | bold | nindent 2 }}:
+        {{- $single := eq (len .) 1 }}
+        {{- range . }}
+            {{- $entry := "" }}
+            {{- if eq (. | toString) "mesh" }}
+                {{- $entry = printf "%s (sidecars)" ("mesh" | cyan) }}
+            {{- else }}
+                {{- /* An entry is "name" in this VirtualService's own namespace, or "ns/name". */ -}}
+                {{- $parts := . | toString | splitList "/" }}
+                {{- $gwNs := $.Namespace }}{{ $gwName := . | toString }}
+                {{- if eq (len $parts) 2 }}{{ $gwNs = index $parts 0 }}{{ $gwName = index $parts 1 }}{{ end }}
+                {{- $entry = $.Include "resource_ref" (dict "kind" "Gateway" "name" $gwName "namespace" $gwNs "callerNamespace" $.Namespace) }}
+            {{- end }}
+            {{- if $single }} {{ $entry }}{{ else }}{{ $entry | nindent 4 }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- range $protocol := list "http" "tls" "tcp" }}
+        {{- with index $.Spec $protocol }}
+            {{- $protocol | upper | bold | nindent 2 }}:
+            {{- range . }}
+                {{- $route := . }}
+                {{- /* Route order is significant -- the first route whose match block accepts a
+                       request wins -- so these are rendered in spec order, and a route with no
+                       match at all is where everything that got this far ends up. */ -}}
+                {{- $header := "" }}
+                {{- with .name }}{{ $header = . | toString | cyan }}{{ end }}
+                {{- with .match }}
+                    {{- /* Match entries are ORed with each other while the conditions inside one
+                           are ANDed, and both end up comma-joined on the same line -- so more
+                           than one entry gets bracketed, or "a, b or c" reads as a single list
+                           with the wrong precedence. */ -}}
+                    {{- $wrap := gt (len .) 1 }}
+                    {{- range $i, $m := . }}
+                        {{- if $i }}{{ $header = printf "%s or" $header }}{{ else if $header }}{{ $header = printf "%s when" $header }}{{ else }}{{ $header = "when" }}{{ end }}
+                        {{- $summary := $.Include "istio_match_summary" $m }}
+                        {{- if $wrap }}{{ $summary = printf "(%s)" $summary }}{{ end }}
+                        {{- $header = printf "%s %s" $header $summary }}
+                    {{- end }}
+                {{- end }}
+                {{- if $header }}{{ $header | nindent 4 }}{{ else }}{{ "catch-all" | nindent 4 }}{{ end }}
+                {{- with .delegate }}
+                    {{- "→ delegate to" | nindent 6 }} {{ $.Include "resource_ref" (dict "kind" "VirtualService" "name" .name "namespace" .namespace "callerNamespace" $.Namespace) }}
+                {{- end }}
+                {{- with .redirect }}
+                    {{- /* scheme/authority/uri each replace one part of the request URL and any
+                           subset of them may be set, so they're reassembled into the URL the
+                           client is actually sent to rather than listed as three fields. */ -}}
+                    {{- $target := "" }}
+                    {{- with .scheme }}{{ $target = printf "%s://" (. | toString) }}{{ end }}
+                    {{- with .authority }}{{ $target = printf "%s%s" $target (. | toString) }}{{ end }}
+                    {{- with .uri }}{{ $target = printf "%s%s" $target (. | toString) }}{{ end }}
+                    {{- "→ redirect" | yellow | nindent 6 }}
+                    {{- with $target }} to {{ . | cyan }}{{ end }}
+                    {{- with .redirectCode }} ({{ . | toString | cyan }}){{ end }}
+                {{- end }}
+                {{- with .directResponse }}
+                    {{- "→ direct response" | yellow | nindent 6 }} {{ .status | default 0 | toString | cyan }}
+                {{- end }}
+                {{- with .rewrite }}
+                    {{- /* uriRegexRewrite is the third form the uri can be rewritten by. The
+                           label is gated on something being there to follow it, so a rewrite
+                           block carrying only fields this doesn't render can't leave a bare
+                           "rewrite" on screen. */ -}}
+                    {{- if or .uri .uriRegexRewrite .authority }}
+                        {{- "rewrite" | nindent 6 }}
+                        {{- with .uri }} uri → {{ . | cyan }}{{ end }}
+                        {{- with .uriRegexRewrite }} uri {{ .match | default "" | cyan }} → {{ .rewrite | default "" | cyan }}{{ end }}
+                        {{- with .authority }} authority → {{ . | cyan }}{{ end }}
+                    {{- end }}
+                {{- end }}
+                {{- $.Include "istio_route_destinations" (dict "ctx" $ "route" .route) }}
+                {{- with .mirror }}
+                    {{- "mirror →" | nindent 6 }} {{ $.Include "istio_destination" (dict "ctx" $ "dest" .) }}
+                    {{- /* mirrorPercentage superseded the flat mirrorPercent, which is still
+                           accepted and still in older manifests; reading only the new one would
+                           show a mirror that copies 5% of production traffic as if it copied
+                           all of it. */ -}}
+                    {{- with $route.mirrorPercentage }}
+                        {{- with .value }} for {{ . | toString | cyan }}%{{ end }}
+                    {{- else }}
+                        {{- with $route.mirrorPercent }} for {{ . | toString | cyan }}%{{ end }}
+                    {{- end }}
+                    {{- $.Include "istio_destination_problems" (dict "ctx" $ "dest" .) }}
+                {{- end }}
+                {{- with .mirrors }}
+                    {{- range . }}
+                        {{- "mirror →" | nindent 6 }} {{ $.Include "istio_destination" (dict "ctx" $ "dest" .destination) }}
+                        {{- with .percentage }}{{ with .value }} for {{ . | toString | cyan }}%{{ end }}{{ end }}
+                        {{- $.Include "istio_destination_problems" (dict "ctx" $ "dest" .destination) }}
+                    {{- end }}
+                {{- end }}
+                {{- $timeout := .timeout }}
+                {{- $retries := .retries }}
+                {{- if $timeout }}
+                    {{- "timeout" | nindent 6 }} {{ $timeout | toString | cyan }}
+                    {{- with $retries }}, {{ $.Include "istio_retry_summary" . }}{{ end }}
+                {{- else }}
+                    {{- with $retries }}{{ $.Include "istio_retry_summary" . | nindent 6 }}{{ end }}
+                {{- end }}
+                {{- /* Fault injection is deliberate, but it is also the thing nobody remembers
+                       leaving behind, and a route that drops a tenth of its requests looks
+                       exactly like a broken upstream from the outside. */ -}}
+                {{- with .fault }}
+                    {{- if or .delay .abort }}
+                        {{- "fault" | yellow | bold | nindent 6 }}:
+                        {{- $needsComma := false }}
+                        {{- with .delay }}
+                            {{- " delay" }}
+                            {{- with .fixedDelay }} {{ . | toString | cyan }}{{ end }}
+                            {{- with .exponentialDelay }} exponential {{ . | toString | cyan }}{{ end }}
+                            {{- " for" }} {{ $.Include "istio_fault_percentage" . }}
+                            {{- $needsComma = true }}
+                        {{- end }}
+                        {{- with .abort }}
+                            {{- if $needsComma }},{{ end }}
+                            {{- " abort" }}
+                            {{- with .httpStatus }} {{ . | toString | cyan }}{{ end }}
+                            {{- with .grpcStatus }} gRPC {{ . | toString | cyan }}{{ end }}
+                            {{- " for" }} {{ $.Include "istio_fault_percentage" . }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "istio_validation_messages" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "istio_route_destinations" }}
+    {{- /* Expects dict "ctx" (the VirtualService RenderableObject) "route" (a spec.http[].route,
+           spec.tls[].route or spec.tcp[].route list). Renders one "→ destination weight" line
+           per entry, plus the split's own arithmetic.
+
+           Istio only defaults a weight when a route has a single destination; with more than
+           one every destination must carry a weight and the weights must total 100, and a split
+           that doesn't add up is silently truncated rather than rejected -- so a canary that was
+           meant to take 10% takes none of it. That total is the whole reason to read this
+           section during a routing incident, so it's checked here rather than left to the
+           reader. */ -}}
+    {{- $ctx := .ctx }}
+    {{- with .route }}
+        {{- $multi := gt (len .) 1 }}
+        {{- $sum := 0 }}
+        {{- range . }}
+            {{- "→" | nindent 6 }} {{ $ctx.Include "istio_destination" (dict "ctx" $ctx "dest" .destination) }}
+            {{- if or $multi (hasKey . "weight") }} {{ .weight | default 0 | toString | cyan }}%{{ end }}
+            {{- $sum = add $sum (.weight | default 0 | int) }}
+            {{- $ctx.Include "istio_destination_problems" (dict "ctx" $ctx "dest" .destination) }}
+        {{- end }}
+        {{- if and $multi (ne $sum 100) }}
+            {{- printf "weights sum to %d, not 100" $sum | red | bold | nindent 6 }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "istio_destination" }}
+    {{- /* Expects dict "ctx" (the RenderableObject naming the destination) "dest" (a
+           route[].destination or mirror block). Renders "Service/reviews:9080 subset:v2" with no
+           leading separator, so callers can place it mid-line. An external host (one a
+           ServiceEntry backs) has no Service to name and is printed as it was written. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $dest := .dest | default dict }}
+    {{- $port := "" }}
+    {{- with $dest.port }}{{ with .number }}{{ $port = printf ":%s" (. | toString | cyan) }}{{ end }}{{ end }}
+    {{- $ref := istioHost ($dest.host | default "") $ctx.Namespace }}
+    {{- if $ref.InCluster }}
+        {{- $ctx.Include "resource_ref" (dict "kind" "Service" "name" $ref.Name "namespace" $ref.Namespace "callerNamespace" $ctx.Namespace "nameSuffix" $port) }}
+    {{- else }}
+        {{- $dest.host | default "" | toString | cyan }}{{ $port }}
+    {{- end }}
+    {{- with $dest.subset }} subset:{{ . | toString | cyan }}{{ end }}
+{{- end -}}
+
+{{- define "istio_destination_problems" }}
+    {{- /* Expects dict "ctx" "dest", the same pair istio_destination takes. Renders whatever is
+           wrong with the destination as trailing ", problem" clauses, or nothing.
+
+           Two things break a destination without anything in the VirtualService itself looking
+           wrong: the Service isn't there (a typo, or a namespace the short-form host resolved
+           differently than intended), and the subset it picks isn't defined by the
+           DestinationRule that pairs with the host -- Istio then has no endpoints for the
+           subset and the route 503s, which reads as an upstream outage rather than a config
+           error. Both are one cached list away, which is what makes them worth checking here
+           and why the more speculative mesh-wide inference isn't.
+
+           The subset check only speaks up when a paired DestinationRule was actually found:
+           silence there means "the pairing couldn't be established" (the rule may live in the
+           mesh's root namespace, or be exported from a third one), not "no rule exists", and
+           calling that a missing subset would be a guess. Istio resolves a DestinationRule from
+           the client's namespace first and the destination's second, so those are the two
+           looked at. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $dest := .dest | default dict }}
+    {{- if not $ctx.LiveQueriesDisabled }}
+        {{- $ref := istioHost ($dest.host | default "") $ctx.Namespace }}
+        {{- if $ref.InCluster }}
+            {{- if not ($ctx.KubeGetFirst $ref.Namespace "Service" $ref.Name).Object }}
+                {{- ", " }}{{ "no such Service" | red | bold }}
+            {{- end }}
+        {{- end }}
+        {{- if and $dest.subset $ref.Key }}
+            {{- $subset := $dest.subset | toString }}
+            {{- $namespaces := list $ctx.Namespace }}
+            {{- if and $ref.InCluster (ne $ref.Namespace $ctx.Namespace) }}
+                {{- $namespaces = append $namespaces $ref.Namespace }}
+            {{- end }}
+            {{- $pairedName := "" }}
+            {{- $pairedNamespace := "" }}
+            {{- $defined := false }}
+            {{- range $ns := $namespaces }}
+                {{- range $ctx.KubeGet $ns "DestinationRule" }}
+                    {{- if eq (istioHost (.Spec.host | default "") .Namespace).Key $ref.Key }}
+                        {{- if not $pairedName }}{{ $pairedName = .Name }}{{ $pairedNamespace = .Namespace }}{{ end }}
+                        {{- with .Spec.subsets }}
+                            {{- range . }}
+                                {{- if eq (.name | default "" | toString) $subset }}{{ $defined = true }}{{ end }}
+                            {{- end }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+            {{- if and $pairedName (not $defined) }}
+                {{- ", " }}{{ "no such subset" | red | bold }} in {{ $ctx.Include "resource_ref" (dict "kind" "DestinationRule" "name" $pairedName "namespace" $pairedNamespace "callerNamespace" $ctx.Namespace) }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "istio_retry_summary" }}
+    {{- /* Expects a spec.http[].retries block. attempts:0 is not an omitted field but an
+           explicit opt-out of the retry policy Istio would otherwise apply by default, so it
+           reads as "retries disabled" rather than as a count. */ -}}
+    {{- if and (hasKey . "attempts") (eq (.attempts | default 0 | int) 0) }}
+        {{- "retries disabled" }}
+    {{- else }}
+        {{- "retries" }} {{ .attempts | default 0 | toString | cyan }} attempts
+        {{- with .retryOn }} on {{ . | toString | cyan }}{{ end }}
+        {{- with .perTryTimeout }}, {{ . | toString | cyan }} per try{{ end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "istio_fault_percentage" }}
+    {{- /* Expects a fault delay/abort block. An absent percentage means the fault applies to
+           every request, which is the case worth being loudest about, so it is spelled out
+           rather than left to the reader to know the default. */ -}}
+    {{- with .percentage }}{{ .value | default 0 | toString | cyan }}%
+    {{- else }}{{ with .percent }}{{ . | toString | cyan }}%
+    {{- else }}{{ "100" | cyan }}%
+    {{- end }}{{ end }}
+{{- end -}}
+
+{{- define "istio_match_summary" }}
+    {{- /* Expects one entry of spec.http[].match, spec.tls[].match or spec.tcp[].match. All
+           three are unioned with their siblings and their own conditions are ANDed, so this
+           renders one comma-joined clause and the caller joins entries with "or".
+
+           Fields are tracked with $needsComma rather than hardcoded separators: which ones are
+           present varies per protocol and per entry, and every subset has to read correctly. */ -}}
+    {{- $needsComma := false }}
+    {{- $headers := .headers }}
+    {{- $queryParams := .queryParams }}
+    {{- $sourceLabels := .sourceLabels }}
+    {{- with .uri }}{{ "uri" }}{{ template "istio_string_match" . }}{{ $needsComma = true }}{{ end }}
+    {{- with .method }}{{ if $needsComma }}, {{ end }}{{ "method" }}{{ template "istio_string_match" . }}{{ $needsComma = true }}{{ end }}
+    {{- with .scheme }}{{ if $needsComma }}, {{ end }}{{ "scheme" }}{{ template "istio_string_match" . }}{{ $needsComma = true }}{{ end }}
+    {{- with .authority }}{{ if $needsComma }}, {{ end }}{{ "authority" }}{{ template "istio_string_match" . }}{{ $needsComma = true }}{{ end }}
+    {{- with $headers }}
+        {{- range $name := keys . | sortAlpha }}
+            {{- if $needsComma }}, {{ end }}{{ "header " }}{{ $name }}{{ template "istio_string_match" (index $headers $name) }}{{ $needsComma = true }}
+        {{- end }}
+    {{- end }}
+    {{- with $queryParams }}
+        {{- range $name := keys . | sortAlpha }}
+            {{- if $needsComma }}, {{ end }}{{ "query " }}{{ $name }}{{ template "istio_string_match" (index $queryParams $name) }}{{ $needsComma = true }}
+        {{- end }}
+    {{- end }}
+    {{- with .withoutHeaders }}
+        {{- range $name := keys . | sortAlpha }}
+            {{- if $needsComma }}, {{ end }}{{ "without header " }}{{ $name }}{{ $needsComma = true }}
+        {{- end }}
+    {{- end }}
+    {{- with .sniHosts }}{{ if $needsComma }}, {{ end }}sni {{ join "," . | cyan }}{{ $needsComma = true }}{{ end }}
+    {{- with .destinationSubnets }}{{ if $needsComma }}, {{ end }}to {{ join "," . | cyan }}{{ $needsComma = true }}{{ end }}
+    {{- with .port }}{{ if $needsComma }}, {{ end }}port {{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+    {{- with $sourceLabels }}
+        {{- if $needsComma }}, {{ end }}{{ "from " }}
+        {{- $pairs := list }}
+        {{- range $name := keys . | sortAlpha }}{{ $pairs = append $pairs (printf "%s=%v" $name (index $sourceLabels $name)) }}{{ end }}
+        {{- join "," $pairs | cyan }}{{ $needsComma = true }}
+    {{- end }}
+    {{- with .sourceNamespace }}{{ if $needsComma }}, {{ end }}from namespace {{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+    {{- with .gateways }}{{ if $needsComma }}, {{ end }}via {{ join "," . | cyan }}{{ $needsComma = true }}{{ end }}
+    {{- if not $needsComma }}{{ "anything" }}{{ end }}
+{{- end -}}
+
+{{- define "istio_string_match" }}
+    {{- /* Expects an Istio StringMatch ({exact|prefix|regex}: value), rendered as a suffix to
+           whatever field name the caller just printed -- "=/reviews" for the exact form it
+           reads as, " prefix /reviews" for the others. */ -}}
+    {{- with .exact }}={{ . | toString | cyan }}
+    {{- else }}{{ with .prefix }} prefix {{ . | toString | cyan }}
+    {{- else }}{{ with .regex }} regex {{ . | toString | cyan }}
+    {{- end }}{{ end }}{{ end }}
+{{- end -}}
