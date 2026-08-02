@@ -3,8 +3,8 @@ Pod/probe-liveness-restarting -n default, created 1m ago, gen:1, started after 1
   InProgress: Pod is running but is not Ready
     Reconciling: PodRunningNotReady, Pod is running but is not Ready
   PodScheduled:True -> Initialized:True -> ContainersReady:False -> Ready:False
-    Ready:False ContainersNotReady, containers with unready status: [app] for 1m
     ContainersReady:False ContainersNotReady, containers with unready status: [app] for 1m
+    Ready:False ContainersNotReady, containers with unready status: [app] for 1m
   Standalone POD.
   Containers: app (registry.k8s.io/pause:3.9) Running for 1m but Not Ready, restarted 1 times
   previously: Started 1m ago and Completed after 1m

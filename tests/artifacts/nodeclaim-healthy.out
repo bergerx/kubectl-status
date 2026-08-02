@@ -4,7 +4,7 @@ NodeClaim/default-abcde, created 1m ago by NodePool/default, gen:1
   NodeClass: EC2NodeClass/default
   Capacity: m5.large (spot) in us-east-1a
   Node: Node/ip-10-0-1-23.ec2.internal
-  Launched:True Launched for 1m
-  Registered:True Registered for 1m
   Initialized:True Initialized for 1m
+  Launched:True Launched for 1m
   Ready:True Ready for 1m
+  Registered:True Registered for 1m

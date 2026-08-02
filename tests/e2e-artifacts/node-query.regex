@@ -3,8 +3,8 @@ Node/[a-z0-9-]+, created 1m ago
   linux [^\n]+ \(amd64\), kernel [^\n,]+, kubelet v[0-9][^\n,]*(?:, kube-proxy v[0-9][^\n,]*)?, [a-z]+://[0-9][^\n,]*
   images [0-9]+
   Current: Resource is Ready
-  MemoryPressure:False KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m
   DiskPressure:False KubeletHasNoDiskPressure, kubelet has no disk pressure for 1m
+  MemoryPressure:False KubeletHasSufficientMemory, kubelet has sufficient memory available for 1m
   PIDPressure:False KubeletHasSufficientPID, kubelet has sufficient PID available for 1m
   Ready:True KubeletReady, kubelet is posting ready status for 1m
   addresses: InternalIP=[0-9.]+ Hostname=[a-z0-9-]+
