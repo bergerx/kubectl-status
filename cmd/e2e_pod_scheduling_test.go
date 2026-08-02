@@ -24,10 +24,8 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		ns := "e2e-bad-node-pod"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		nodeName := createBadNode(t, clientset)
 
@@ -73,10 +71,8 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		ns := "e2e-pod-custom-sa"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		f := false
 		sa := &corev1.ServiceAccount{
@@ -134,10 +130,8 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		ns := "e2e-pod-missing-sa"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		sa := &corev1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{Name: "will-be-deleted", Namespace: ns},
@@ -183,10 +177,8 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		ns := "e2e-pod-runtimeclass-overhead"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		rc := &nodev1.RuntimeClass{
 			ObjectMeta: metav1.ObjectMeta{Name: "e2e-test-gvisor"},
@@ -228,10 +220,8 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		ns := "e2e-pod-priorityclass"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		// A minikube cluster has no globalDefault PriorityClass out of the box, so setting it here
 		// is safe: it won't clash with any other PriorityClass in the (parallel) test pool.
@@ -272,10 +262,8 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		ns := "e2e-bad-node-rs"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		nodeName := createBadNode(t, clientset)
 

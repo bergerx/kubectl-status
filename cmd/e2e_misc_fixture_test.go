@@ -23,10 +23,8 @@ func runMiscFixtureSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig),
 		ns := "e2e-vap-binding"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifest(t, "e2e-artifacts/vap-binding.yaml")
 		cmdTest{
 			args:            []string{"validatingadmissionpolicybinding/e2e-require-team-label-binding", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -66,10 +64,8 @@ func runMiscFixtureSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig),
 		ns := "e2e-web-cert"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/web-cert.yaml", ns)
 		waitForInNamespace(t, "certificate/web-ca", "condition=Ready", ns)
 		waitForInNamespace(t, "certificate/web-tls", "condition=Ready", ns)
@@ -90,10 +86,8 @@ func runMiscFixtureSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig),
 		ns := "e2e-web-policies"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/web.yaml", ns)
 		applyManifestInNamespace(t, "e2e-artifacts/web-policies.yaml", ns)
 		waitForInNamespace(t, "deployment/web", "condition=Available", ns)
@@ -109,10 +103,8 @@ func runMiscFixtureSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig),
 		ns := "e2e-sts-without-service"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/sts-without-service.yaml", ns)
 		waitForInNamespace(t, "sts/sts-without-service", "jsonpath={.status.readyReplicas}=1", ns)
 		cmdTest{

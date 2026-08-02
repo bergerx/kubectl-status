@@ -34,10 +34,8 @@ func runPodLogsAndMetricsSubtests(t *testing.T, hackOpts []func(*plugin.RenderCo
 		ns := "e2e-pod-container-logs"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/pod-container-logs.yaml", ns)
 		// The fixture pins a usage line for both healthy containers -- wait for metrics-server to
 		// have scraped each of them specifically, not just the Pod overall: a container that
@@ -93,10 +91,8 @@ func runPodLogsAndMetricsSubtests(t *testing.T, hackOpts []func(*plugin.RenderCo
 		for _, ns := range []string{"e2e-node-metrics-a", "e2e-node-metrics-b"} {
 			_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+			t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 			require.NoError(t, err)
-			t.Cleanup(func() {
-				clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-			})
 			_, err = clientset.CoreV1().Pods(ns).Create(context.TODO(), &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: "e2e-metrics-pod", Namespace: ns},
 				Spec: corev1.PodSpec{

@@ -37,10 +37,8 @@ func runIstioSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), clien
 		ns := "e2e-istio-routing"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		// A StatefulSet rather than a Deployment so the Pod the --deep render inlines has a
 		// predictable name, the same reason the service-routing scenarios use one.
 		applyManifestInNamespace(t, "e2e-artifacts/istio-routing.yaml", ns)

@@ -29,10 +29,8 @@ func runNetworkPolicySubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		ns := "e2e-netpol-pod"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -84,10 +82,8 @@ func runNetworkPolicySubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		ns := "e2e-netpol-multi-pod"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		podLabels := map[string]string{"app": "kubectl-status-test-netpol-multi-target"}
 		pod := &corev1.Pod{
@@ -159,10 +155,8 @@ func runNetworkPolicySubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		ns := "e2e-cni-policy-pod"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		appLabel := "kubectl-status-test-cni-policy-target"
 		pod := &corev1.Pod{
