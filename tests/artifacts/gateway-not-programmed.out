@@ -6,6 +6,6 @@ Gateway/eg -n default, created 1m ago, gen:1
   Programmed:False AddressNotAssigned, No addresses have been assigned to the Gateway for 1m
   Listeners:
     http: port=80/HTTP, namespaces=Same, accepts=HTTPRoute/GRPCRoute, routes=1
-      Programmed:True Programmed, Sending translated listener configuration to the data plane for 1m
       Accepted:True Accepted, Listener has been successfully translated for 1m
+      Programmed:True Programmed, Sending translated listener configuration to the data plane for 1m
       ResolvedRefs:True ResolvedRefs, Listener references have been resolved for 1m

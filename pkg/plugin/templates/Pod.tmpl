@@ -651,7 +651,7 @@
     {{- else }}
         {{- $.Include "pod_condition_arrow_label" (dict "condition" $readyCondition "label" "Ready") }}
     {{- end }}
-    {{- range .Status.conditions }}
+    {{- range .StatusConditions }}
         {{- /* show details for only unhealthy conditions */ -}}
         {{- if (not (isStatusConditionHealthy .)) }}
             {{- $.Include "condition_summary" . | nindent 2}}

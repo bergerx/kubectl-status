@@ -4,8 +4,8 @@ Node/[a-z0-9.-]+, created \d+[a-z]+ ago
   images \d+
   Current: Resource is Ready
   kubelet ok(?:, \S+:\S+)*, container logs: retains up to [\d.]+[A-Za-z]+ per container \(\S+ x \d+ files\)
-  MemoryPressure:False KubeletHasSufficientMemory, kubelet has sufficient memory available for \d+[a-z]+
   DiskPressure:False KubeletHasNoDiskPressure, kubelet has no disk pressure for \d+[a-z]+
+  MemoryPressure:False KubeletHasSufficientMemory, kubelet has sufficient memory available for \d+[a-z]+
   PIDPressure:False KubeletHasSufficientPID, kubelet has sufficient PID available for \d+[a-z]+
   Ready:True KubeletReady, kubelet is posting ready status for \d+[a-z]+
   addresses: InternalIP=[\d.]+ Hostname=[a-z0-9.-]+

@@ -4,8 +4,8 @@ Pod/pod-on-bad-node -n e2e-bad-node-pod, created 1m ago, gen:1 Pending BestEffor
     Reconciling: PodPending, Pod is in the Pending phase
   PodScheduled:Unknown -> Initialized:Unknown -> ContainersReady:Unknown -> Ready:Unknown
   Node/kubectl-status-test-bad-node-[a-z0-9]+ cordoned \(unschedulable\)
-    Ready:False KubeletNotReady, kubelet is not ready for 1m
     MemoryPressure:True KubeletHasInsufficientMemory, kubelet has insufficient memory available for 1m
+    Ready:False KubeletNotReady, kubelet is not ready for 1m
     taint dedicated=gpu:NoSchedule \(not tolerated\)
     taint node\.kubernetes\.io/unschedulable:NoSchedule \(not tolerated\)
 (?:    taint node\.kubernetes\.io/memory-pressure:NoSchedule \(not tolerated\)
