@@ -11,7 +11,7 @@
         {{- range . }}
             {{- if $.Config.GetBool "deep" }}
                 {{- $ns := coalesce .namespace $.Namespace }}
-                {{- $obj := $.KubeGetFirst $ns (.kind | default "Gateway") .name }}
+                {{- $obj := $.KubeGetFirst $ns (qualifyKind (.kind | default "Gateway") (.group | default "gateway.networking.k8s.io")) .name }}
                 {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
             {{- else }}
                 {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}

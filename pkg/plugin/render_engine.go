@@ -176,8 +176,17 @@ func parseTemplates(tmpl *template.Template) (*template.Template, error) {
 	return parsedTemplates, nil
 }
 
-// Use kind name if such template exists in templates, else returnDefaultResource
-func findTemplateName(tmpl template.Template, kind string) string {
+// findTemplateName picks the template to render an object with. Kind alone doesn't uniquely
+// identify a resource type -- e.g. Gateway API and Istio both define a Kind=Gateway in different
+// API groups -- so a "<Kind>.<group>" template is preferred when one exists, falling back to the
+// bare kind name (which is also what every template not part of such a collision is named), and
+// finally to DefaultResource. See https://github.com/bergerx/kubectl-status/issues/789.
+func findTemplateName(tmpl template.Template, kind, group string) string {
+	if group != "" {
+		if qualified := kind + "." + group; tmpl.Lookup(qualified) != nil {
+			return qualified
+		}
+	}
 	if tmpl.Lookup(kind) == nil {
 		return "DefaultResource"
 	}

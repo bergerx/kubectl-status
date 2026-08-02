@@ -1961,6 +1961,26 @@ func TestParseTLSSecretCertificateHostnameLists(t *testing.T) {
 	}
 }
 
+func TestQualifyKind(t *testing.T) {
+	tests := []struct {
+		name  string
+		kind  string
+		group string
+		want  string
+	}{
+		{"empty group returns kind unchanged", "Gateway", "", "Gateway"},
+		{"non-empty group qualifies the kind", "Gateway", "gateway.networking.k8s.io", "Gateway.gateway.networking.k8s.io"},
+		{"a different group produces a different qualified kind", "Gateway", "networking.istio.io", "Gateway.networking.istio.io"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := qualifyKind(tt.kind, tt.group); got != tt.want {
+				t.Errorf("qualifyKind(%q, %q) = %q, want %q", tt.kind, tt.group, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHostnameIntersections(t *testing.T) {
 	tests := []struct {
 		name             string
