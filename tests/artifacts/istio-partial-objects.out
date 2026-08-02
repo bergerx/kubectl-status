@@ -1,0 +1,30 @@
+
+VirtualService/bare -n default, created 1m ago
+  Current: Resource is current
+
+VirtualService/empty-fields -n default, created 1m ago
+  Current: Resource is current
+  HTTP:
+    catch-all
+    catch-all
+    when anything
+      →  0%
+      →  0%
+      weights sum to 0, not 100
+    catch-all
+      → Service/reviews
+    catch-all
+      → Service/reviews
+  TCP:
+    catch-all
+      → 
+
+DestinationRule/bare -n default, created 1m ago
+  Current: Resource is current
+
+DestinationRule/empty-fields -n default, created 1m ago
+  Current: Resource is current
+  Subsets:
+    
+    nolabels
+    emptylabels

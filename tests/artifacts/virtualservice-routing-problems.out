@@ -1,0 +1,34 @@
+
+VirtualService/productpage -n bookinfo, created 1m ago, gen:11
+  Current: Resource is current
+  Hosts: bookinfo.example.com
+  Gateways:
+    Gateway/bookinfo-gateway
+    Gateway/shared-gateway -n istio-system
+    mesh (sidecars)
+  HTTP:
+    retired when (uri=/legacy) or (uri prefix /v0/)
+      → redirect to bookinfo.example.com/ (301)
+    api when uri prefix /api/
+      rewrite uri → /
+      → Service/productpage:9080 subset:stable 70%
+      → Service/productpage:9080 subset:next 20%
+      weights sum to 90, not 100
+      timeout 3s, retries disabled
+    when uri prefix /chaos, from app=loadgen
+      → Service/productpage
+      mirror → Service/productpage-shadow subset:next for 5%
+      fault: delay 7s for 100%, abort 503 for 10%
+    delegated when uri prefix /ratings
+      → delegate to VirtualService/ratings
+    catch-all
+      → direct response 404
+  TLS:
+    when sni api.example.com, port 443
+      → api.example.com:443
+  TCP:
+    when port 27017
+      → Service/mongo:27017 -n db
+  Validation:
+    ERROR:ReferencedResourceNotFound (IST0101)
+    INFO:PortNameIsNotUnderNamingConvention (IST0118)

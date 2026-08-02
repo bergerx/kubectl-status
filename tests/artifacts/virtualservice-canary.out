@@ -1,0 +1,13 @@
+
+VirtualService/reviews -n bookinfo, created 1m ago, gen:4
+  Current: Resource is current
+  Exported to: this namespace only
+  Hosts: reviews
+  HTTP:
+    internal-users when uri prefix /reviews, header end-user=jason
+      → Service/reviews:9080 subset:v3
+      timeout 10s, retries 3 attempts on gateway-error,connect-failure,refused-stream, 2s per try
+    canary
+      → Service/reviews:9080 subset:v1 90%
+      → Service/reviews:9080 subset:v2 10%
+      timeout 5s

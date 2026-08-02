@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -1099,4 +1101,73 @@ func crossplaneDiagnostics() string {
 		}
 	}
 	return b.String()
+}
+
+var istioCRDsInstaller onceInstaller
+
+// istioCRDsWanted are the CRDs ensureIstioCRDs installs out of Istio's crd-all.gen.yaml bundle.
+//
+// Deliberately just the two the templates render, not the whole bundle: it also carries
+// gateways.networking.istio.io, and a cluster serving both that and the Gateway API's
+// gateways.gateway.networking.k8s.io has two resources answering to Kind=Gateway. The RESTMapper
+// behind KubeGet/KubeGetFirst resolves an unqualified kind across all groups and silently picks
+// one (#789). The Gateway API's wins as things stand, so the existing Gateway subtests would
+// keep passing -- but that tie-break is a property of discovery ordering rather than anything
+// this repo sets, and a shared cluster every other group's fixtures run against is the last
+// place to let a silent resolution decide whether they pass. Istio Gateway support has to settle
+// the collision before it can land; until then this suite doesn't put the CRD on the cluster.
+var istioCRDsWanted = []string{
+	"virtualservices.networking.istio.io",
+	"destinationrules.networking.istio.io",
+}
+
+// ensureIstioCRDs installs the VirtualService/DestinationRule CRDs, needed by runIstioSubtests.
+// CRDs only: kubectl-status reads these objects and matches them against Services/Pods
+// client-side, and istiod writes no status to them that the templates render, so no control
+// plane needs to be running -- same reasoning as ensureGatewayAPICRDs/ensureCiliumCalicoCRDs.
+// That also keeps `istioctl install` (and a full mesh's worth of pods) off a shared single-node
+// cluster the rest of the suite is using.
+//
+// Istio publishes its CRDs only as one bundle, so the bundle is fetched and the two wanted
+// documents are applied from stdin rather than the URL being handed to kubectl whole.
+// --server-side: these CRDs' embedded schemas are large enough to trip client-side apply's
+// last-applied-configuration annotation limit, as the Gateway API's do.
+func ensureIstioCRDs(t *testing.T) {
+	t.Helper()
+	istioCRDsInstaller.ensure(t, func() error {
+		version, err := versionsEnvValue("ISTIO_VERSION")
+		if err != nil {
+			return err
+		}
+		url := fmt.Sprintf("https://raw.githubusercontent.com/istio/istio/%s/manifests/charts/base/files/crd-all.gen.yaml", version)
+		resp, err := http.Get(url)
+		if err != nil {
+			return fmt.Errorf("fetch istio CRD bundle: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("fetch istio CRD bundle: %s returned %s", url, resp.Status)
+		}
+		bundle, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read istio CRD bundle: %w", err)
+		}
+		var wanted []string
+		for _, doc := range strings.Split(string(bundle), "\n---\n") {
+			for _, name := range istioCRDsWanted {
+				if strings.Contains(doc, "\n  name: "+name+"\n") {
+					wanted = append(wanted, doc)
+				}
+			}
+		}
+		if len(wanted) != len(istioCRDsWanted) {
+			return fmt.Errorf("istio CRD bundle %s: found %d of %v", url, len(wanted), istioCRDsWanted)
+		}
+		cmd := exec.Command("kubectl", "apply", "--server-side", "-f", "-")
+		cmd.Stdin = strings.NewReader(strings.Join(wanted, "\n---\n"))
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("kubectl apply istio CRDs: %w: %s", err, output)
+		}
+		return nil
+	})
 }

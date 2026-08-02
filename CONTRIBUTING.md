@@ -307,8 +307,9 @@ shared cluster too.
 metrics-server is the only dependency installed upfront, by the `install-e2e-deps` target — see
 the comment there for why it has to be an invariant of the whole run rather than one group's
 concern. Everything else (cert-manager, Gateway API CRDs, Cilium/Calico CRDs, VolumeSnapshot CRDs,
-Karpenter CRDs, VPA, Crossplane, Flux) is installed on demand by the test that needs it, so a
-cluster only ever grows the dependencies the suite actually exercises. No manual setup either way.
+Karpenter CRDs, Istio CRDs, VPA, Crossplane, Flux) is installed on demand by the test that needs it,
+so a cluster only ever grows the dependencies the suite actually exercises. No manual setup either
+way.
 
 Note that "on demand" tracks the *entry point*, not your `-run` pattern. The `runXSubtests`
 functions are plain calls, and `-run` filters at `t.Run` below them, so any
