@@ -10,7 +10,7 @@
         {{- "Targets" | bold | nindent 2 }}:
         {{- range . }}
             {{- if $.Config.GetBool "deep" }}
-                {{- $obj := $.KubeGetFirst $.Namespace .kind .name }}
+                {{- $obj := $.KubeGetFirst $.Namespace (qualifyKind .kind .group) .name }}
                 {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
             {{- else }}
                 {{- $.Include "resource_ref" (dict "kind" .kind "name" .name) | nindent 4 }}

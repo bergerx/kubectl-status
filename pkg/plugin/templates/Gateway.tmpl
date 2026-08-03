@@ -70,7 +70,7 @@
     {{- with .Spec.infrastructure.parametersRef }}
         {{- if $.Config.GetBool "deep" }}
             {{- $ns := coalesce .namespace $.Namespace }}
-            {{- $obj := $.KubeGetFirst $ns .kind .name }}
+            {{- $obj := $.KubeGetFirst $ns (qualifyKind .kind .group) .name }}
             {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 2 }}{{ end }}
         {{- else }}
             {{- "Infrastructure" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" .kind "name" .name) }}

@@ -155,6 +155,7 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"cronNextTime":                    cfg.cronNextTime,
 		"withinLastHour":                  cfg.withinLastHour,
 		"parseTLSSecretCertificate":       cfg.parseTLSSecretCertificate,
+		"qualifyKind":                     qualifyKind,
 		"hostnameIntersections":           hostnameIntersections,
 		"istioHost":                       istioHost,
 		"certificatesInSecret":            cfg.certificatesInSecret,
@@ -2005,6 +2006,20 @@ func expectedHostnames(hostnames interface{}) []string {
 		}
 	}
 	return out
+}
+
+// qualifyKind builds the group-qualified TYPE argument for KubeGet/KubeGetFirst: kind unchanged
+// when group is empty (the core API group), "kind.group" otherwise. Templates resolving a
+// reference whose API group they know -- e.g. a Gateway API ParentReference, which defaults to
+// group "gateway.networking.k8s.io" -- should always qualify it, since a bare kind lets the
+// RESTMapper resolve across every group sharing that Kind name (e.g. Gateway API's Gateway vs.
+// Istio's) and silently pick whichever wins the tie.
+// See https://github.com/bergerx/kubectl-status/issues/789.
+func qualifyKind(kind, group string) string {
+	if group == "" {
+		return kind
+	}
+	return kind + "." + group
 }
 
 // hostnameIntersections narrows a Gateway listener's hostname against a route's hostnames the

@@ -15,7 +15,7 @@
         {{- range . }}
             {{- if $.Config.GetBool "deep" }}
                 {{- $ns := coalesce .namespace $.Namespace }}
-                {{- $obj := $.KubeGetFirst $ns (.kind | default "Gateway") .name }}
+                {{- $obj := $.KubeGetFirst $ns (qualifyKind (.kind | default "Gateway") (.group | default "gateway.networking.k8s.io")) .name }}
                 {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
             {{- else }}
                 {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
@@ -23,7 +23,7 @@
                 {{- $parentRef := . }}
                 {{- if and (not ($.LiveQueriesDisabled)) (or (not $parentRef.kind) (eq $parentRef.kind "Gateway")) }}
                     {{- $gwNs := coalesce $parentRef.namespace $.Namespace }}
-                    {{- $gw := $.KubeGetFirst $gwNs (coalesce $parentRef.kind "Gateway") $parentRef.name }}
+                    {{- $gw := $.KubeGetFirst $gwNs (qualifyKind (coalesce $parentRef.kind "Gateway") (coalesce $parentRef.group "gateway.networking.k8s.io")) $parentRef.name }}
                     {{- if $gw.Object }}
                         {{- range $gw.Spec.listeners }}
                             {{- /* See the HTTPRoute template for what this intersection means. Without

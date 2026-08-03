@@ -131,7 +131,7 @@ func (r RenderableObject) StatusConditions() (conditions []interface{}) {
 
 func (r RenderableObject) render(wr io.Writer) error {
 	klog.V(5).InfoS("called render, calling findTemplateName", "r", r)
-	templateName := findTemplateName(r.engine.Template, r.Kind())
+	templateName := findTemplateName(r.engine.Template, r.Kind(), r.GroupVersionKind().Group)
 	klog.V(5).InfoS("calling executeTemplate on renderable", "r", r, "templateName", templateName)
 	err := r.executeTemplate(wr, templateName, r)
 	if err != nil {
