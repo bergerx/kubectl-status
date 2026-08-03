@@ -11,14 +11,29 @@
     {{- template "gatekeeper_constraint_match_and_enforcement" . }}
     {{- with .Spec.parameters }}
         {{- with .labels }}
+            {{- /* This template is matched purely by the Kind name "K8sRequiredLabels", with no
+                   group/schema check (see findTemplateName) -- so it renders for ANY
+                   ConstraintTemplate that happens to use that name, not just the
+                   gatekeeper-library one it was written against. Gatekeeper's own quickstart
+                   demo, for instance, declares "labels" as a plain list of strings rather than
+                   {key, allowedRegex} objects. Rendering .key on a plain string errors out, so
+                   each item's shape is checked before assuming it's a map. */ -}}
             {{- if eq (len .) 1 }}
                 {{- with index . 0 }}
-                    {{- "Required labels" | bold | nindent 2 }}: {{ .key | cyan }}{{ with .allowedRegex }} matching {{ . | cyan }}{{ end }}
+                    {{- if kindIs "map" . }}
+                        {{- "Required labels" | bold | nindent 2 }}: {{ .key | cyan }}{{ with .allowedRegex }} matching {{ . | cyan }}{{ end }}
+                    {{- else }}
+                        {{- "Required labels" | bold | nindent 2 }}: {{ . | toString | cyan }}
+                    {{- end }}
                 {{- end }}
             {{- else }}
                 {{- "Required labels" | bold | nindent 2 }}:
                 {{- range . }}
-                    {{- "" | nindent 4 }}{{ .key | cyan }}{{ with .allowedRegex }} matching {{ . | cyan }}{{ end }}
+                    {{- if kindIs "map" . }}
+                        {{- "" | nindent 4 }}{{ .key | cyan }}{{ with .allowedRegex }} matching {{ . | cyan }}{{ end }}
+                    {{- else }}
+                        {{- "" | nindent 4 }}{{ . | toString | cyan }}
+                    {{- end }}
                 {{- end }}
             {{- end }}
         {{- end }}

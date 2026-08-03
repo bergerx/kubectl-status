@@ -6,14 +6,14 @@ K8sRequiredLabels/all-must-have-owner, created 1m ago, gen:5
   Message: All namespaces must have an `owner` label that points to your company username
   Last audited: 1m ago
   Violations: 22
-    Namespace/test-violation-5: regex mismatch
-    Namespace/test-violation-5: missing required label, requires all of: owner
-    Namespace/test-violation-4: regex mismatch
-    Namespace/test-violation-4: missing required label, requires all of: owner
-    Namespace/test-violation-3: regex mismatch
-    Namespace/test-violation-3: missing required label, requires all of: owner
-    Namespace/test-violation-2: regex mismatch
-    Namespace/test-violation-2: missing required label, requires all of: owner
-    Namespace/test-violation-1: regex mismatch
-    Namespace/test-violation-1: missing required label, requires all of: owner
-    … 12 more
+    Namespace/test-violation-5: regex mismatch; missing required label, requires all of: owner
+    Namespace/test-violation-4: regex mismatch; missing required label, requires all of: owner
+    Namespace/test-violation-3: regex mismatch; missing required label, requires all of: owner
+    Namespace/test-violation-2: regex mismatch; missing required label, requires all of: owner
+    Namespace/test-violation-1: regex mismatch; missing required label, requires all of: owner
+    Namespace/kube-system: regex mismatch; missing required label, requires all of: owner
+    Namespace/kube-public: regex mismatch; missing required label, requires all of: owner
+    Namespace/kube-node-lease: regex mismatch; missing required label, requires all of: owner
+    Namespace/gatekeeper-system: regex mismatch; missing required label, requires all of: owner
+    Namespace/default: regex mismatch; missing required label, requires all of: owner
+    … 2 more
