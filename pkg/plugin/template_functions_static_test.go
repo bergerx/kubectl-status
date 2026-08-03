@@ -2079,6 +2079,95 @@ func TestHostnameIntersections(t *testing.T) {
 	}
 }
 
+func TestIstioHost(t *testing.T) {
+	tests := []struct {
+		name      string
+		host      string
+		namespace string
+		want      IstioHostRef
+	}{
+		{
+			name:      "short name resolves against the naming object's namespace",
+			host:      "reviews",
+			namespace: "bookinfo",
+			want:      IstioHostRef{Key: "reviews.bookinfo", Name: "reviews", Namespace: "bookinfo", InCluster: true},
+		},
+		{
+			name:      "namespaced name carries its own namespace",
+			host:      "reviews.other",
+			namespace: "bookinfo",
+			want:      IstioHostRef{Key: "reviews.other", Name: "reviews", Namespace: "other", InCluster: true},
+		},
+		{
+			name:      "svc form",
+			host:      "reviews.other.svc",
+			namespace: "bookinfo",
+			want:      IstioHostRef{Key: "reviews.other", Name: "reviews", Namespace: "other", InCluster: true},
+		},
+		{
+			name:      "fully qualified cluster-local form",
+			host:      "reviews.other.svc.cluster.local",
+			namespace: "bookinfo",
+			want:      IstioHostRef{Key: "reviews.other", Name: "reviews", Namespace: "other", InCluster: true},
+		},
+		{
+			// The whole point: these four spellings have to pair with each other, which is what
+			// a VirtualService destination and its DestinationRule routinely disagree on.
+			name:      "trailing dot and casing don't change the key",
+			host:      "Reviews.Other.SVC.Cluster.Local.",
+			namespace: "bookinfo",
+			want:      IstioHostRef{Key: "reviews.other", Name: "reviews", Namespace: "other", InCluster: true},
+		},
+		{
+			name:      "external host keeps its own spelling and resolves to no Service",
+			host:      "api.example.com",
+			namespace: "bookinfo",
+			want:      IstioHostRef{Key: "api.example.com"},
+		},
+		{
+			name:      "a custom cluster domain is still recognised by its svc label",
+			host:      "reviews.other.svc.mesh.internal",
+			namespace: "bookinfo",
+			want:      IstioHostRef{Key: "reviews.other", Name: "reviews", Namespace: "other", InCluster: true},
+		},
+		{
+			name:      "wildcard never resolves to a Service",
+			host:      "*.example.com",
+			namespace: "bookinfo",
+			want:      IstioHostRef{Key: "*.example.com"},
+		},
+		{
+			name:      "bare wildcard",
+			host:      "*",
+			namespace: "bookinfo",
+			want:      IstioHostRef{Key: "*"},
+		},
+		{
+			name:      "empty host",
+			host:      "",
+			namespace: "bookinfo",
+			want:      IstioHostRef{},
+		},
+		{
+			// Cluster-scoped renders (and -f files with no namespace) have nothing to resolve a
+			// short name against, so it stays unresolved rather than pairing with whatever
+			// short name happens to match.
+			name:      "short name without a namespace to resolve against",
+			host:      "reviews",
+			namespace: "",
+			want:      IstioHostRef{Key: "reviews"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := istioHost(tt.host, tt.namespace)
+			if got != tt.want {
+				t.Errorf("istioHost(%q, %q) = %#v, want %#v", tt.host, tt.namespace, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCertificatesInSecret(t *testing.T) {
 	cfg := NewRenderConfig(viper.New())
 	caPEM, caCert, caKey := generateTestCert(t, genCertOptions{

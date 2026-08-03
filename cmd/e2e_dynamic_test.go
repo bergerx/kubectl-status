@@ -119,10 +119,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-vpa"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		name := "vpa-burner"
 		one := int32(1)
@@ -210,10 +208,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-crossplane-xr"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		applyManifest(t, "e2e-artifacts/crossplane-xstatusprobe.yaml")
 		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Established",
@@ -261,10 +257,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-storageclass"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		storageClasses, err := clientset.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
 		require.NoError(t, err)
@@ -356,10 +350,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-rwop"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		// No storageClassName -- picks up the cluster's default class (Immediate binding), so
 		// the claim binds to a real PV before any Pod exists.
@@ -445,10 +437,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-rwop-conflict"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		const nodeName = "e2e-rwop-conflict-no-such-node"
 
@@ -512,10 +502,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-volumeattachment"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 		require.NoError(t, err)
@@ -591,10 +579,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-volumesnapshot"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		// Source PVC the snapshot is (nominally) taken from.
 		sourcePVCName := "e2e-vs-source-pvc"
@@ -726,10 +712,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-pv-zone"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		pvName := "e2e-pv-zone-restricted"
 		_, err = clientset.CoreV1().PersistentVolumes().Create(context.TODO(), &corev1.PersistentVolume{
@@ -823,10 +807,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-pv-zone-wfc"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		storageClasses, err := clientset.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
 		require.NoError(t, err)
@@ -916,10 +898,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-karpenter-pod"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		// This NodePool only declares a zone requirement -- it says nothing about the custom
 		// label the first Pod below hard-requires (so every NodePool disqualifies on that key),
@@ -1008,10 +988,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		ns := "e2e-helm-release"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 
 		configMapName := "e2e-helm-release-config"
 		_, err = clientset.CoreV1().ConfigMaps(ns).Create(context.TODO(), &corev1.ConfigMap{

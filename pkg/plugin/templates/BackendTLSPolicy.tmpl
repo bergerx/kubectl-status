@@ -39,7 +39,7 @@
         {{- range . }}
             {{- $.Include "resource_ref" (dict "kind" (.ancestorRef.kind | default "Gateway") "name" .ancestorRef.name "namespace" .ancestorRef.namespace "callerNamespace" $.Namespace) | nindent 4 }}
             {{- with .controllerName }} ({{ . }}){{ end }}
-            {{- range .conditions }}
+            {{- range .conditions | sortMapListByKeysValue "type" }}
                 {{- $.Include "condition_summary" . | nindent 6 }}
             {{- end }}
         {{- end }}

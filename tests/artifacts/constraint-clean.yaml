@@ -1,0 +1,60 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"constraints.gatekeeper.sh/v1beta1","kind":"K8sRequiredLabels","metadata":{"annotations":{},"name":"always-satisfied"},"spec":{"match":{"kinds":[{"apiGroups":[""],"kinds":["Namespace"]}]},"parameters":{"labels":[{"key":"kubernetes.io/metadata.name"}]}}}
+  creationTimestamp: "2026-07-28T10:45:17Z"
+  generation: 1
+  name: always-satisfied
+  resourceVersion: "24018"
+  uid: db454f41-770b-4da3-bd48-3c409ede6fd7
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+    - apiGroups:
+      - ""
+      kinds:
+      - Namespace
+  parameters:
+    labels:
+    - key: kubernetes.io/metadata.name
+status:
+  auditTimestamp: "2026-07-28T13:33:23Z"
+  byPod:
+  - constraintUID: db454f41-770b-4da3-bd48-3c409ede6fd7
+    enforced: true
+    enforcementPointsStatus:
+    - enforcementPoint: vap.k8s.io
+      observedGeneration: 1
+      state: generated
+    id: gatekeeper-audit-5cc96fbf64-8rlsb
+    observedGeneration: 1
+    operations:
+    - audit
+    - generate
+    - mutation-status
+    - status
+  - constraintUID: db454f41-770b-4da3-bd48-3c409ede6fd7
+    enforced: true
+    id: gatekeeper-controller-manager-77cccb6c69-9vpj8
+    observedGeneration: 1
+    operations:
+    - mutation-webhook
+    - webhook
+  - constraintUID: db454f41-770b-4da3-bd48-3c409ede6fd7
+    enforced: true
+    id: gatekeeper-controller-manager-77cccb6c69-jkc4d
+    observedGeneration: 1
+    operations:
+    - mutation-webhook
+    - webhook
+  - constraintUID: db454f41-770b-4da3-bd48-3c409ede6fd7
+    enforced: true
+    id: gatekeeper-controller-manager-77cccb6c69-pfnjr
+    observedGeneration: 1
+    operations:
+    - mutation-webhook
+    - webhook
+  totalViolations: 0

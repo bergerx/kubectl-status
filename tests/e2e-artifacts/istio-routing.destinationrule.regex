@@ -1,0 +1,10 @@
+\A
+DestinationRule/reviews -n e2e-istio-routing, created 1m ago, gen:1
+  Current: Resource is current
+  Host: Service/reviews
+  mTLS: ISTIO_MUTUAL
+  Outlier detection: eject on 5 consecutive 5xx, checked every 10s, for 30s, up to 100% of the pool
+  Subsets:
+    v1 version=v1, 1 pod
+    v2 version=v2, no pods
+\z

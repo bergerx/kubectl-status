@@ -20,10 +20,8 @@ func runServiceRoutingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfi
 		ns := "e2e-sts-with-ingress"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		// using sts here as the pod name is predictable in that case, not true for deployments and ds
 		applyManifestInNamespace(t, "e2e-artifacts/sts-with-ingress.yaml", ns)
 		waitForInNamespace(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1", ns)
@@ -51,10 +49,8 @@ func runServiceRoutingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfi
 		ns := "e2e-sts-with-ingress-routes"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/sts-with-ingress.yaml", ns)
 		applyManifestInNamespace(t, "e2e-artifacts/sts-with-ingress-routes.yaml", ns)
 		waitForInNamespace(t, "sts/sts-with-ingress", "jsonpath={.status.readyReplicas}=1", ns)
@@ -73,10 +69,8 @@ func runServiceRoutingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfi
 		ns := "e2e-svc-httproute"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/svc-with-httproute.yaml", ns)
 		cmdTest{
 			args:            []string{"service/svc-with-httproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -93,10 +87,8 @@ func runServiceRoutingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfi
 		ns := "e2e-sts-nodeport"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		// using sts here as the pod name is predictable in that case, not true for deployments and ds
 		applyManifestInNamespace(t, "e2e-artifacts/sts-with-nodeport.yaml", ns)
 		waitForInNamespace(t, "sts/sts-with-nodeport", "jsonpath={.status.readyReplicas}=1", ns)
@@ -122,10 +114,8 @@ func runServiceRoutingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfi
 		ns := "e2e-pdb-conflict"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/pdb-empty-selector-conflict.yaml", ns)
 		waitForInNamespace(t, "sts/pdb-conflict-test", "jsonpath={.status.readyReplicas}=1", ns)
 		// Kubernetes' disruption controller picks one of the two overlapping PDBs arbitrarily
@@ -152,10 +142,8 @@ func runServiceRoutingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfi
 		ns := "e2e-tcproute"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/tcproute-with-gateway.yaml", ns)
 		cmdTest{
 			args:            []string{"tcproute/e2e-tcproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -172,10 +160,8 @@ func runServiceRoutingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfi
 		ns := "e2e-udproute"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/udproute-with-gateway.yaml", ns)
 		cmdTest{
 			args:            []string{"udproute/e2e-udproute", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -192,10 +178,8 @@ func runServiceRoutingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfi
 		ns := "e2e-listenerset"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/listenerset-with-gateway.yaml", ns)
 		cmdTest{
 			args:            []string{"listenerset/e2e-listenerset", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
@@ -212,10 +196,8 @@ func runServiceRoutingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfi
 		ns := "e2e-backendtlspolicy"
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
-		t.Cleanup(func() {
-			clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
-		})
 		applyManifestInNamespace(t, "e2e-artifacts/backendtlspolicy-with-target.yaml", ns)
 		cmdTest{
 			args:            []string{"backendtlspolicy/e2e-backendtlspolicy", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},

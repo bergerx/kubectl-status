@@ -37,7 +37,7 @@
                     {{- end }}
                 {{- end }}
             {{- end }}
-            {{- range $statusListener.conditions }}
+            {{- range $statusListener.conditions | sortMapListByKeysValue "type" }}
                 {{- $.Include "condition_summary" . | nindent 6 }}
             {{- end }}
         {{- end }}

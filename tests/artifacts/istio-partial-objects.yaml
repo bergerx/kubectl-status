@@ -1,0 +1,89 @@
+# Hand-written rather than captured from a cluster: every field an Istio VirtualService or
+# DestinationRule leaves optional is absent or empty here, which the fully-populated artifacts
+# next to this one never exercise. A `Failed to render:` line or a literal <nil> in the .out is
+# the bug this case exists to catch -- a render error aborts the whole object, so a template that
+# trips over one missing field takes the conditions and events of the object someone is trying to
+# debug down with it. See CONTRIBUTING.md § Working with Test Artifacts.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  name: bare
+  namespace: default
+spec: {}
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  name: empty-fields
+  namespace: default
+spec:
+  exportTo: []
+  gateways: []
+  hosts: []
+  http:
+  - {}
+  - match: []
+    route: []
+  - fault: {}
+    match:
+    - {}
+    mirror: {}
+    retries: {}
+    route:
+    - {}
+    - destination: {}
+      weight: 0
+  - fault:
+      abort: {}
+      delay: {}
+    rewrite: {}
+    route:
+    - destination:
+        host: reviews
+        port: {}
+  - mirror: {}
+    mirrorPercent: 0
+    rewrite:
+      uriRegexRewrite: {}
+    route:
+    - destination:
+        host: reviews
+  tcp:
+  - route:
+    - destination:
+        host: ""
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  name: bare
+  namespace: default
+spec: {}
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  name: empty-fields
+  namespace: default
+spec:
+  exportTo: []
+  host: ""
+  subsets:
+  - {}
+  - name: nolabels
+  - labels: {}
+    name: emptylabels
+    trafficPolicy: {}
+  trafficPolicy:
+    connectionPool: {}
+    loadBalancer:
+      consistentHash: {}
+      warmup: {}
+    outlierDetection: {}
+    portLevelSettings:
+    - {}
+    tls: {}

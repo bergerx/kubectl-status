@@ -1,0 +1,206 @@
+{{- define "DestinationRule" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: networking.istio.io/v1, Kind=DestinationRule */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "istio_export_to" . }}
+    {{- /* A DestinationRule only applies to traffic addressed to exactly this host, and the host
+           is resolved against the rule's own namespace -- so a short name copied between
+           namespaces silently stops applying to anything, with the rule still reading as
+           correct. Naming the Service it lands on, and saying so when there isn't one, is the
+           cheapest way to see that. */ -}}
+    {{- $host := istioHost (.Spec.host | default "") .Namespace }}
+    {{- $svcSelector := dict }}
+    {{- $svcNamespace := "" }}
+    {{- $svcMissing := false }}
+    {{- if and $host.InCluster (not .LiveQueriesDisabled) }}
+        {{- $svcObj := .KubeGetFirst $host.Namespace "Service" $host.Name }}
+        {{- if $svcObj.Object }}
+            {{- $svcNamespace = $svcObj.Namespace }}
+            {{- /* Kept for the subsets below, which can't be counted without it. */ -}}
+            {{- with $svcObj.Spec.selector }}{{ $svcSelector = . }}{{ end }}
+        {{- else }}
+            {{- $svcMissing = true }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.host }}
+        {{- "Host" | bold | nindent 2 }}:
+        {{- if $host.InCluster }}
+            {{- " " }}{{ $.Include "resource_ref" (dict "kind" "Service" "name" $host.Name "namespace" $host.Namespace "callerNamespace" $.Namespace) }}
+        {{- else }}
+            {{- " " }}{{ . | toString | cyan }}
+        {{- end }}
+        {{- if $svcMissing }}, {{ "no such Service" | red | bold }}{{ end }}
+    {{- end }}
+    {{- with .Spec.workloadSelector }}
+        {{- "Applies only to workloads" | bold | nindent 2 }}: {{ . | labelSelector | cyan }}
+    {{- end }}
+    {{- with .Spec.trafficPolicy }}
+        {{- $.Include "istio_traffic_policy" (dict "ctx" $ "policy" . "indent" 2) }}
+    {{- end }}
+    {{- with .Spec.subsets }}
+        {{- "Subsets" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- .name | default "" | toString | cyan | nindent 4 }}
+            {{- with .labels }}
+                {{- $labels := . }}
+                {{- $pairs := list }}
+                {{- range $key := keys . | sortAlpha }}{{ $pairs = append $pairs (printf "%s=%v" $key (index $labels $key)) }}{{ end }}
+                {{- " " }}{{ join "," $pairs | cyan }}
+            {{- end }}
+            {{- /* A subset is the Service's endpoints narrowed by these labels, so it goes empty
+                   the moment the labels and the Pods drift apart -- a version label renamed, a
+                   canary Deployment scaled to zero -- and every request routed to it 503s while
+                   both the DestinationRule and the Deployment still read as correct. Answering
+                   that needs both halves of the intersection, so it's only attempted where the
+                   Service and its selector are actually in hand.
+
+                   --deep names the Pods instead of counting them, but stops at their health
+                   summaries rather than inlining them whole the way a workload's own selector
+                   does: a full Pod render pulls in its Node, and a Node render is a report on
+                   the entire cluster. Under a routing rule, several times over -- once per Pod
+                   per subset -- that buries the four lines of traffic policy this object is
+                   actually about. */ -}}
+            {{- if and $svcSelector .labels }}
+                {{- $pods := $.KubeGetByLabelsMap $svcNamespace "pods" (merge (dict) .labels $svcSelector) }}
+                {{- if not $pods }}
+                    {{- ", " }}{{ "no pods" | red | bold }}
+                {{- else if $.Config.GetBool "deep" }}
+                    {{- range $pods }}
+                        {{- $.Include "pod_health_summary" (dict "pod" . "callerNamespace" $.Namespace) | nindent 6 }}
+                    {{- end }}
+                {{- else }}
+                    {{- ", " }}{{ len $pods | toString | cyan }} pod{{ if ne (len $pods) 1 }}s{{ end }}
+                {{- end }}
+            {{- end }}
+            {{- with .trafficPolicy }}
+                {{- $.Include "istio_traffic_policy" (dict "ctx" $ "policy" . "indent" 6) }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- template "istio_validation_messages" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "istio_traffic_policy" }}
+    {{- /* Expects dict "ctx" (the DestinationRule RenderableObject) "policy" (a trafficPolicy
+           block) "indent" (the column its lines start at). The same block appears at three
+           levels of a DestinationRule -- the rule's own, a subset's, and a port's within either
+           -- with the innermost one replacing rather than merging with the outer, so all three
+           get rendered the same way and the reader compares them by eye instead of by field
+           path.
+
+           Only fields that are actually set are printed. Istio's defaults for the connection
+           pool and outlier detection are far apart from each other in aggressiveness, and
+           spelling them out for a policy that doesn't set them would put numbers on screen that
+           the object never chose. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $indent := int (.indent | default 2) }}
+    {{- with .policy }}
+        {{- /* mTLS mode is the first thing to check when a workload is suddenly returning
+               connection resets: DISABLE against a STRICT-mode upstream, or a plaintext port
+               that both sides thought was mutually authenticated, fail in exactly that shape.
+               DISABLE is worth a colour of its own -- it is legitimate for an upstream outside
+               the mesh, and a mistake everywhere else. */ -}}
+        {{- with .tls }}
+            {{- $mode := .mode | default "DISABLE" | toString }}
+            {{- "mTLS" | bold | nindent $indent }}: {{ if eq $mode "DISABLE" }}{{ $mode | yellow | bold }}{{ else }}{{ $mode | cyan }}{{ end }}
+            {{- with .sni }}, sni {{ . | toString | cyan }}{{ end }}
+            {{- with .credentialName }}, credentials {{ . | toString | cyan }}{{ end }}
+            {{- if .insecureSkipVerify }}, {{ "insecureSkipVerify" | red | bold }}{{ end }}
+        {{- end }}
+        {{- /* Rendered first and labelled only if it came to something: unlike the two sections
+               below, which have a fallback to fall back to, every part of a load balancer
+               policy is optional, and a block setting only fields this doesn't render would
+               otherwise leave a bare "Load balancing:" behind. */ -}}
+        {{- with .loadBalancer }}
+            {{- $lb := $ctx.Include "istio_load_balancer" . }}
+            {{- with $lb }}{{ "Load balancing" | bold | nindent $indent }}:{{ . }}{{ end }}
+        {{- end }}
+        {{- with .connectionPool }}
+            {{- "Connection pool" | bold | nindent $indent }}:
+            {{- $needsComma := false }}
+            {{- /* Every setting the schema defines is listed, since the fallback below claims
+                   there are none when nothing matched -- a field dropped here would turn a
+                   configured limit into "no limits" on screen. */ -}}
+            {{- with .tcp }}
+                {{- with .maxConnections }} maxConnections={{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- with .connectTimeout }}{{ if $needsComma }},{{ end }} connectTimeout={{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- with .maxConnectionDuration }}{{ if $needsComma }},{{ end }} maxConnectionDuration={{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- with .idleTimeout }}{{ if $needsComma }},{{ end }} tcpIdleTimeout={{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- with .tcpKeepalive }}{{ if $needsComma }},{{ end }} keepalive{{ $needsComma = true }}{{ end }}
+            {{- end }}
+            {{- with .http }}
+                {{- with .http1MaxPendingRequests }}{{ if $needsComma }},{{ end }} http1MaxPendingRequests={{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- with .http2MaxRequests }}{{ if $needsComma }},{{ end }} http2MaxRequests={{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- with .maxConcurrentStreams }}{{ if $needsComma }},{{ end }} maxConcurrentStreams={{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- with .maxRequestsPerConnection }}{{ if $needsComma }},{{ end }} maxRequestsPerConnection={{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- with .maxRetries }}{{ if $needsComma }},{{ end }} maxRetries={{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- with .idleTimeout }}{{ if $needsComma }},{{ end }} idleTimeout={{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- with .h2UpgradePolicy }}{{ if $needsComma }},{{ end }} {{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+                {{- if .useClientProtocol }}{{ if $needsComma }},{{ end }} useClientProtocol{{ $needsComma = true }}{{ end }}
+            {{- end }}
+            {{- if not $needsComma }} {{ "set, no limits" }}{{ end }}
+        {{- end }}
+        {{- /* Outlier detection is the one traffic policy that removes capacity on its own. Read
+               together -- how many errors, how often, for how long, and how much of the pool it
+               may take out at once -- these are the numbers that decide whether it sheds a bad
+               endpoint or amplifies a partial failure into a full one. */ -}}
+        {{- with .outlierDetection }}
+            {{- "Outlier detection" | bold | nindent $indent }}:
+            {{- $needsComma := false }}
+            {{- with .consecutive5xxErrors }} eject on {{ . | toString | cyan }} consecutive 5xx{{ $needsComma = true }}{{ end }}
+            {{- with .consecutiveGatewayErrors }}{{ if $needsComma }},{{ end }} eject on {{ . | toString | cyan }} consecutive gateway errors{{ $needsComma = true }}{{ end }}
+            {{- with .consecutiveLocalOriginFailures }}{{ if $needsComma }},{{ end }} eject on {{ . | toString | cyan }} consecutive local failures{{ $needsComma = true }}{{ end }}
+            {{- with .consecutiveErrors }}{{ if $needsComma }},{{ end }} eject on {{ . | toString | cyan }} consecutive errors{{ $needsComma = true }}{{ end }}
+            {{- with .interval }}{{ if $needsComma }},{{ end }} checked every {{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+            {{- with .baseEjectionTime }}{{ if $needsComma }},{{ end }} for {{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
+            {{- if hasKey . "maxEjectionPercent" }}{{ if $needsComma }},{{ end }} up to {{ .maxEjectionPercent | toString | cyan }}% of the pool{{ $needsComma = true }}{{ end }}
+            {{- if hasKey . "minHealthPercent" }}{{ if $needsComma }},{{ end }} while {{ .minHealthPercent | toString | cyan }}% stays healthy{{ $needsComma = true }}{{ end }}
+            {{- if not $needsComma }} {{ "enabled with defaults" }}{{ end }}
+        {{- end }}
+        {{- /* Recurses: a port's settings are a whole traffic policy of their own, and they
+               replace the enclosing one for that port rather than adding to it. Same
+               render-then-label order as the load balancer above, so an entry that names a port
+               and configures nothing doesn't leave a heading over an empty block. */ -}}
+        {{- with .portLevelSettings }}
+            {{- range . }}
+                {{- $port := . }}
+                {{- $settings := $ctx.Include "istio_traffic_policy" (dict "ctx" $ctx "policy" $port "indent" (add $indent 2)) }}
+                {{- with $settings }}
+                    {{- "Port" | bold | nindent $indent }} {{ ($port.port | default dict).number | default 0 | toString | cyan }}:{{ . }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "istio_load_balancer" }}
+    {{- /* Expects a trafficPolicy.loadBalancer block. Returns the value half of the "Load
+           balancing:" line -- each clause carries its own leading separator so any subset of
+           them composes -- or "" when nothing in the block is worth a line, which is what lets
+           the caller decide whether to print the label at all. */ -}}
+    {{- with .simple }} {{ . | toString | cyan }}{{ end }}
+    {{- with .consistentHash }}
+        {{- " consistent hash" }}
+        {{- with .httpHeaderName }} on header {{ . | toString | cyan }}{{ end }}
+        {{- with .httpCookie }} on cookie {{ .name | default "" | toString | cyan }}{{ end }}
+        {{- with .httpQueryParameterName }} on query {{ . | toString | cyan }}{{ end }}
+        {{- if .useSourceIp }} on source IP{{ end }}
+        {{- with .ringHash }}{{ with .minimumRingSize }}, ring {{ . | toString | cyan }}{{ end }}
+        {{- else }}{{ with .minimumRingSize }}, ring {{ . | toString | cyan }}{{ end }}
+        {{- end }}
+        {{- if .maglev }}, maglev{{ end }}
+    {{- end }}
+    {{- with .localityLbSetting }}{{ if .enabled }}, locality-aware{{ end }}{{ end }}
+    {{- /* warmup superseded the flat warmupDurationSecs; both still appear in the wild. */ -}}
+    {{- with .warmup }}{{ with .duration }}, warmup {{ . | toString | cyan }}{{ end }}
+    {{- else }}{{ with .warmupDurationSecs }}, warmup {{ . | toString | cyan }}s{{ end }}
+    {{- end }}
+{{- end -}}

@@ -1,0 +1,13 @@
+\A
+VirtualService/reviews -n e2e-istio-routing, created 1m ago, gen:1
+  Current: Resource is current
+  Hosts: reviews
+  HTTP:
+    canary when uri prefix /reviews
+      → Service/reviews:9080 subset:v1 90%
+      → Service/reviews:9080 subset:v2 10%
+      timeout 10s, retries 3 attempts on gateway-error,connect-failure, 2s per try
+    broken
+      → Service/reviews subset:v3 50%
+      → Service/reviews-legacy 50%
+\z

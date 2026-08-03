@@ -6,6 +6,6 @@ XStatusProbe/probe-a, created 1m ago, gen:3
   Composed resources:
     Deployment/probe-a-blocked
     ConfigMap/probe-a-config
-  Synced:True ReconcileSuccess for 1m
   Ready:False Creating, Unready resources: blocked-workload, config for 1m
   Responsive:True WatchCircuitClosed for 1m
+  Synced:True ReconcileSuccess for 1m

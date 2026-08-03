@@ -99,7 +99,7 @@
             {{- $.Include "resource_ref" (dict "kind" (.parentRef.kind | default "Gateway") "name" .parentRef.name "namespace" .parentRef.namespace "callerNamespace" $.Namespace) | nindent 4 }}
             {{- with .parentRef.sectionName }} [{{ . }}]{{ end }}
             {{- with .controllerName }} ({{ . }}){{ end }}
-            {{- range .conditions }}
+            {{- range .conditions | sortMapListByKeysValue "type" }}
                 {{- $.Include "condition_summary" . | nindent 6 }}
             {{- end }}
         {{- end }}

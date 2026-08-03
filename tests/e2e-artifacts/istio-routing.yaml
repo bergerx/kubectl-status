@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: reviews-v1
+spec:
+  replicas: 1
+  serviceName: reviews
+  selector:
+    matchLabels:
+      app: reviews
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: reviews
+        version: v1
+    spec:
+      containers:
+      - name: reviews
+        image: registry.k8s.io/pause:3.9
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reviews
+spec:
+  selector:
+    app: reviews
+  ports:
+  - protocol: TCP
+    port: 9080
+    targetPort: 9080
+---
+# Defines v1 and v2 only: the VirtualService below routes to a v3 that nobody declares, which is
+# what the "no such subset" check has to catch. v2 is declared but selects no Pod, the other half
+# of the same failure -- both read as an upstream outage from outside the mesh.
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: reviews
+spec:
+  host: reviews
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 100
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: reviews-legacy
+spec:
+  host: reviews-legacy
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - name: canary
+    match:
+    - uri:
+        prefix: /reviews
+    route:
+    - destination:
+        host: reviews
+        port:
+          number: 9080
+        subset: v1
+      weight: 90
+    - destination:
+        host: reviews
+        port:
+          number: 9080
+        subset: v2
+      weight: 10
+    timeout: 10s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+      retryOn: gateway-error,connect-failure
+  - name: broken
+    route:
+    - destination:
+        host: reviews
+        subset: v3
+      weight: 50
+    - destination:
+        host: reviews-legacy
+      weight: 50

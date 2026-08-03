@@ -1,0 +1,30 @@
+
+DestinationRule/reviews -n bookinfo, created 1m ago, gen:2
+  Current: Resource is current
+  Host: Service/reviews
+  mTLS: ISTIO_MUTUAL
+  Load balancing: LEAST_REQUEST
+  Connection pool: maxConnections=100, connectTimeout=30ms, http1MaxPendingRequests=1024, http2MaxRequests=1000, maxRequestsPerConnection=10, maxRetries=3, idleTimeout=1h
+  Outlier detection: eject on 5 consecutive 5xx, checked every 10s, for 30s, up to 100% of the pool
+  Subsets:
+    v1 version=v1
+    v2 version=v2
+      Load balancing: consistent hash on header x-user
+    v3 version=v3
+
+DestinationRule/legacy-ratings -n bookinfo, created 1m ago, gen:1
+  Current: Resource is current
+  Exported to: bookinfo, istio-system
+  Host: Service/ratings
+  Applies only to workloads: app=ratings
+  mTLS: SIMPLE, sni ratings.internal
+  Connection pool: maxConnections=1
+  Outlier detection: eject on 1 consecutive 5xx, checked every 1s, for 15m, up to 100% of the pool
+  Port 9080:
+    mTLS: DISABLE
+
+DestinationRule/external-api -n bookinfo, created 1m ago, gen:1
+  Current: Resource is current
+  Host: api.example.com
+  mTLS: SIMPLE, insecureSkipVerify
+  Load balancing: ROUND_ROBIN, locality-aware
