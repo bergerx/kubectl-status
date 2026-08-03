@@ -1,0 +1,127 @@
+{{- define "gatekeeper_constraint_match_and_enforcement" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Shared by all Gatekeeper constraint kinds (constraints.gatekeeper.sh/*, one dynamic Kind
+           per installed ConstraintTemplate -- K8sRequiredLabels, K8sAllowedRepos, etc. -- all with
+           an identical spec.match/spec.enforcementAction and status.violations/byPod shape).
+           Renders spec.match (which objects this constraint evaluates) and the enforcement mode. */ -}}
+    {{- with .Spec.match }}
+        {{- /* .kinds is optional -- matching by namespaces/namespaceSelector alone is valid, and
+               len on a genuinely absent (nil) value errors out rather than returning 0, so check
+               presence with "with" first instead of calling len directly on .kinds. */ -}}
+        {{- $numKinds := 0 }}
+        {{- with .kinds }}{{ $numKinds = len . }}{{ end }}
+        {{- if eq $numKinds 1 }}
+            {{- with index .kinds 0 }}
+                {{- "Match" | bold | nindent 2 }}: {{ .apiGroups | join "," | default "core" }}/{{ .kinds | join "," | cyan }}
+            {{- end }}
+            {{- with .scope }}{{ if ne . "*" }}, scope:{{ . | cyan }}{{ end }}{{ end }}
+            {{- with .name }}, name:{{ . | cyan }}{{ end }}
+            {{- with .namespaces }}, namespaces:{{ join "," . | cyan }}{{ end }}
+            {{- with .excludedNamespaces }}, excludedNamespaces:{{ join "," . | cyan }}{{ end }}
+        {{- else }}
+            {{- /* 0 or 2+ kinds: scope/name/namespaces/excludedNamespaces apply to the whole
+                   match, not to any one kind, so they get their own line instead of trailing
+                   after the last kind in the loop below. */ -}}
+            {{- if gt $numKinds 0 }}
+                {{- "Match" | bold | nindent 2 }}:
+                {{- range .kinds }}
+                    {{- "" | nindent 4 }}{{ .apiGroups | join "," | default "core" }}/{{ .kinds | join "," | cyan }}
+                {{- end }}
+            {{- else }}
+                {{- "Match" | bold | nindent 2 }}: any kind
+            {{- end }}
+            {{- with .scope }}{{ if ne . "*" }}{{ "" | nindent 4 }}scope:{{ . | cyan }}{{ end }}{{ end }}
+            {{- with .name }}{{ "" | nindent 4 }}name:{{ . | cyan }}{{ end }}
+            {{- with .namespaces }}{{ "" | nindent 4 }}namespaces:{{ join "," . | cyan }}{{ end }}
+            {{- with .excludedNamespaces }}{{ "" | nindent 4 }}excludedNamespaces:{{ join "," . | cyan }}{{ end }}
+        {{- end }}
+        {{- with .labelSelector }}
+            {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+                {{- "labelSelector" | bold | nindent 4 }}: {{ . | labelSelector | cyan }}
+            {{- end }}
+        {{- end }}
+        {{- with .namespaceSelector }}
+            {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+                {{- "namespaceSelector" | bold | nindent 4 }}: {{ . | labelSelector | cyan }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- $enforcementAction := .Spec.enforcementAction | default "deny" }}
+    {{- /* "scoped" is decided per-enforcement-point by scopedEnforcementActions below, not by
+           this top-level value, so the blanket "not blocked" parenthetical is only accurate for
+           the deny/dryrun/warn cases -- it must not be printed for "scoped". */ -}}
+    {{- "enforcementAction" | bold | nindent 2 }}: {{ if eq $enforcementAction "deny" }}{{ $enforcementAction | cyan }}{{ else if eq $enforcementAction "scoped" }}{{ $enforcementAction | yellow | bold }}{{ else }}{{ $enforcementAction | yellow | bold }} (violations are not blocked){{ end }}
+    {{- with .Spec.scopedEnforcementActions }}
+        {{- range . }}
+            {{- $action := .action | default "deny" }}
+            {{- $points := list }}
+            {{- range .enforcementPoints }}{{ $points = append $points .name }}{{ end }}
+            {{- "" | nindent 4 }}{{ $action | redBoldIf (ne $action "deny") }} at {{ $points | join "," | cyan }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "gatekeeper_constraint_audit_status" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Shared audit/violations/replica-sync rendering, see gatekeeper_constraint_match_and_enforcement. */ -}}
+    {{- $auditedYet := false }}
+    {{- with .Status.auditTimestamp }}
+        {{- $auditedYet = true }}
+        {{- "Last audited" | bold | nindent 2 }}: {{ . | colorAgo }}{{ agoSuffix }}
+    {{- end }}
+    {{- $total := .Status.totalViolations | default 0 | int }}
+    {{- $violations := .Status.violations | default list }}
+    {{- $topAction := .Spec.enforcementAction | default "deny" }}
+    {{- if gt $total 0 }}
+        {{- "Violations" | red | bold | nindent 2 }}: {{ $total | toString | red | bold }}
+        {{- if eq (len $violations) 0 }}
+            {{- /* Clusters can run with --constraint-violations-limit=0 to keep violation
+                   targets out of status/etcd while still reporting the true count in
+                   totalViolations -- say so instead of printing "... N more" under an empty
+                   list, which reads as a rendering bug. */ -}}
+            {{- "" | nindent 4 }}{{ "(violation targets not recorded in status; see --constraint-violations-limit)" | yellow }}
+        {{- else }}
+            {{- /* Some ConstraintTemplates (e.g. the gatekeeper-library K8sRequiredLabels) emit
+                   more than one violation message per target object. Group by target so the
+                   10-line cap reflects distinct objects rather than being burned on duplicate
+                   entries for the same object. */ -}}
+            {{- $cap := 10 }}
+            {{- $order := list }}
+            {{- $byTarget := dict }}
+            {{- range $violations }}
+                {{- $key := printf "%s/%s/%s" .kind (.namespace | default "") .name }}
+                {{- if not (hasKey $byTarget $key) }}
+                    {{- $order = append $order $key }}
+                    {{- $_ := $byTarget | set $key (dict "kind" .kind "namespace" .namespace "name" .name "messages" list "actions" list) }}
+                {{- end }}
+                {{- $entry := index $byTarget $key }}
+                {{- $_ := $entry | set "messages" (append $entry.messages .message) }}
+                {{- with .enforcementAction }}{{ $_ := $entry | set "actions" (append $entry.actions .) }}{{ end }}
+            {{- end }}
+            {{- $shownRaw := 0 }}
+            {{- range $i, $key := $order }}
+                {{- if lt $i $cap }}
+                    {{- $entry := index $byTarget $key }}
+                    {{- "" | nindent 4 }}{{ $.Include "resource_ref" (dict "kind" $entry.kind "name" $entry.name "namespace" $entry.namespace) }}: {{ join "; " $entry.messages | red }}
+                    {{- range $entry.actions }}{{ if ne . $topAction }} [{{ . | yellow }}]{{ end }}{{ end }}
+                    {{- $shownRaw = add $shownRaw (len $entry.messages) }}
+                {{- end }}
+            {{- end }}
+            {{- with sub $total $shownRaw }}{{ if gt . 0 }}
+                {{- printf "… %d more" . | nindent 4 }}
+            {{- end }}{{ end }}
+        {{- end }}
+    {{- else if $auditedYet }}
+        {{- "Violations" | green | nindent 2 }}: none
+    {{- else }}
+        {{- "Violations" | yellow | nindent 2 }}: not yet audited
+    {{- end }}
+    {{- with .Status.byPod }}
+        {{- $total := len . }}
+        {{- $enforced := 0 }}
+        {{- range . }}{{ if .enforced }}{{ $enforced = add1 $enforced }}{{ end }}{{ end }}
+        {{- if lt $enforced $total }}
+            {{- "Sync" | red | bold | nindent 2 }}: {{ printf "%d/%d" $enforced $total | red | bold }} gatekeeper replicas enforcing this constraint
+        {{- end }}
+    {{- end }}
+{{- end }}

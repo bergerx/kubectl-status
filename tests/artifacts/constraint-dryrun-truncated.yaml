@@ -1,0 +1,181 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"constraints.gatekeeper.sh/v1beta1","kind":"K8sRequiredLabels","metadata":{"annotations":{},"name":"dryrun-check"},"spec":{"enforcementAction":"dryrun","match":{"kinds":[{"apiGroups":[""],"kinds":["Namespace"]}]},"parameters":{"labels":[{"key":"owner"}]}}}
+  creationTimestamp: "2026-07-28T10:45:10Z"
+  generation: 1
+  name: dryrun-check
+  resourceVersion: "24019"
+  uid: 6466f129-f196-48e5-97e3-68718e778736
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+    - apiGroups:
+      - ""
+      kinds:
+      - Namespace
+  parameters:
+    labels:
+    - key: owner
+status:
+  auditTimestamp: "2026-07-28T13:33:23Z"
+  byPod:
+  - constraintUID: 6466f129-f196-48e5-97e3-68718e778736
+    enforced: true
+    enforcementPointsStatus:
+    - enforcementPoint: vap.k8s.io
+      observedGeneration: 1
+      state: generated
+    id: gatekeeper-audit-5cc96fbf64-8rlsb
+    observedGeneration: 1
+    operations:
+    - audit
+    - generate
+    - mutation-status
+    - status
+  - constraintUID: 6466f129-f196-48e5-97e3-68718e778736
+    enforced: true
+    id: gatekeeper-controller-manager-77cccb6c69-9vpj8
+    observedGeneration: 1
+    operations:
+    - mutation-webhook
+    - webhook
+  - constraintUID: 6466f129-f196-48e5-97e3-68718e778736
+    enforced: true
+    id: gatekeeper-controller-manager-77cccb6c69-jkc4d
+    observedGeneration: 1
+    operations:
+    - mutation-webhook
+    - webhook
+  - constraintUID: 6466f129-f196-48e5-97e3-68718e778736
+    enforced: true
+    id: gatekeeper-controller-manager-77cccb6c69-pfnjr
+    observedGeneration: 1
+    operations:
+    - mutation-webhook
+    - webhook
+  totalViolations: 22
+  violations:
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: regex mismatch
+    name: test-violation-5
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: 'missing required label, requires all of: owner'
+    name: test-violation-5
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: regex mismatch
+    name: test-violation-4
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: 'missing required label, requires all of: owner'
+    name: test-violation-4
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: regex mismatch
+    name: test-violation-3
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: 'missing required label, requires all of: owner'
+    name: test-violation-3
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: regex mismatch
+    name: test-violation-2
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: 'missing required label, requires all of: owner'
+    name: test-violation-2
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: regex mismatch
+    name: test-violation-1
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: 'missing required label, requires all of: owner'
+    name: test-violation-1
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: regex mismatch
+    name: kube-system
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: 'missing required label, requires all of: owner'
+    name: kube-system
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: regex mismatch
+    name: kube-public
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: 'missing required label, requires all of: owner'
+    name: kube-public
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: regex mismatch
+    name: kube-node-lease
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: 'missing required label, requires all of: owner'
+    name: kube-node-lease
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: regex mismatch
+    name: gatekeeper-system
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: 'missing required label, requires all of: owner'
+    name: gatekeeper-system
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: regex mismatch
+    name: default
+    version: v1
+  - enforcementAction: dryrun
+    group: ""
+    kind: Namespace
+    message: 'missing required label, requires all of: owner'
+    name: default
+    version: v1
