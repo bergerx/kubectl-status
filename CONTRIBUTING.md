@@ -235,12 +235,25 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
    make test
    ```
 
+   Never make up, hand-craft, or guess `status` fields in a test artifact — a `status` subresource
+   is written by the resource's controller/operator, not by a test author, and a fabricated one can
+   describe a state the real controller would never produce. Get it from a real reconcile instead:
+   if the controller isn't already running against the e2e cluster, deploy it during test setup
+   (see the `ensureX` installer pattern under
+   [Cluster Dependencies](#cluster-dependencies)), create the actual resource against a live
+   minikube cluster, and capture whatever status the controller writes. This applies to both
+   `tests/artifacts/` fixtures and `tests/e2e-artifacts/` manifests.
+
 3. **Include updated artifacts in PRs** - reviewers use `.out` file diffs to verify template changes.
 
 4. **Check the template survives a partial object.** Artifacts captured from a live cluster are
    fully populated, so they never exercise the missing-field paths — and a rendering error aborts
    the whole object, not just the offending line (see CONVENTIONS.md § Never trust a field to be
-   present). Hand-write a stripped manifest with empty/absent fields and render it:
+   present). Hand-write a stripped manifest with empty/absent `spec`/`metadata` fields and render
+   it — this is the one place hand-authoring a manifest is fine, since it's only exercising the
+   template's handling of missing input, not standing in for a controller's output. It still never
+   extends to `status`: don't add a hand-written `status` block to this manifest, since that's
+   exactly the fabrication the rule above forbids.
 
    ```bash
    cat > /tmp/partial.yaml <<'EOF'
