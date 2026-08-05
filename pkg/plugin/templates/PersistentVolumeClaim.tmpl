@@ -30,7 +30,7 @@
                 {{- end }}
                 {{- if not (hasKey $volStats "usedBytes") }}
                     {{- $volName := .name }}
-                    {{- $nodeSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
+                    {{- $nodeSummary := $pod.KubeGetNodeStatsSummary ($pod.Spec | get "nodeName") }}
                     {{- $podStat := dict }}
                     {{- if $nodeSummary }}
                         {{- $podStat = $nodeSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}

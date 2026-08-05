@@ -262,7 +262,7 @@
 {{- define "pod_init_containers" }}
     {{- /* Expects a dict "pod" (Pod RenderableObject) "podPullSecretsBroken" (bool) */ -}}
     {{- $pod := .pod }}
-    {{- $nodeStatsSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
+    {{- $nodeStatsSummary := $pod.KubeGetNodeStatsSummary ($pod.Spec | get "nodeName") }}
     {{- $podStatsSummary := dict }}
     {{- if $nodeStatsSummary }}
         {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
@@ -282,7 +282,7 @@
     {{- $pod := .pod }}
     {{- $defaultLogsContainer := index $pod.Annotations "kubectl.kubernetes.io/default-logs-container" }}
     {{- $defaultContainer := index $pod.Annotations "kubectl.kubernetes.io/default-container" }}
-    {{- $nodeStatsSummary := $pod.KubeGetNodeStatsSummary (get $pod.Spec "nodeName") }}
+    {{- $nodeStatsSummary := $pod.KubeGetNodeStatsSummary ($pod.Spec | get "nodeName") }}
     {{- $podStatsSummary := dict }}
     {{- if $nodeStatsSummary }}
         {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
@@ -494,7 +494,7 @@
 
 {{- define "pod_volumes" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary (get $.Spec "nodeName") }}
+    {{- $nodeStatsSummary := $.KubeGetNodeStatsSummary ($.Spec | get "nodeName") }}
     {{- $podStatsSummary := dict }}
     {{- if $nodeStatsSummary }}
         {{- $podStatsSummary = $nodeStatsSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $.Metadata.uid) }}
@@ -880,7 +880,7 @@
                 {{- "postStart:" | yellow | nindent 2 }} {{ template "lifecycle_hook_summary" . }}
             {{- end }}
         {{- end }}
-        {{- if and (or (eq .reason "ImagePullBackOff") (eq .reason "ErrImagePull")) (ne (get ($.containerSpec | default dict) "imagePullPolicy") "Never") }}
+        {{- if and (or (eq .reason "ImagePullBackOff") (eq .reason "ErrImagePull")) (ne (($.containerSpec | default dict) | get "imagePullPolicy") "Never") }}
             {{- if not $.podImagePullSecrets }}
                 {{- "(no imagePullSecrets on this Pod — if this image is on a private registry not covered by node-level credentials, that's likely why)" | yellow | nindent 2 }}
             {{- else if $.podPullSecretsBroken }}
