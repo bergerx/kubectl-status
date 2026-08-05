@@ -52,12 +52,12 @@
             {{- /* An id that doesn't split into four is bucketed rather than counted under its own
                    text, which would otherwise put the whole malformed id in the kind summary. */ -}}
             {{- $kind := ternary (last $parts) "unparsable" (eq (len $parts) 4) }}
-            {{- $_ := set $countsByKind $kind (add1 (int (get $countsByKind $kind))) }}
+            {{- $_ := set $countsByKind $kind (add1 (int ($countsByKind | get $kind))) }}
             {{- $ids = append $ids (.id | default "" | toString) }}
         {{- end }}
         {{- $kindSummaries := list }}
         {{- range $kind := keys $countsByKind | sortAlpha }}
-            {{- $kindSummaries = append $kindSummaries (printf "%s×%d" $kind (int (get $countsByKind $kind))) }}
+            {{- $kindSummaries = append $kindSummaries (printf "%s×%d" $kind (int ($countsByKind | get $kind))) }}
         {{- end }}
         {{- "Manages" | bold | nindent 2 }} {{ len $entries | toString | cyan }} resources: {{ join ", " $kindSummaries | cyan }}
         {{- /* Sorted by id so the list is stable across reconciliations -- the controller writes

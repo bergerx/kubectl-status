@@ -582,14 +582,14 @@
     {{- $forProvider := .Spec.forProvider }}
     {{- if and (kindIs "map" $forProvider) $forProvider }}
         {{- $annotations := .Annotations }}
-        {{- with get $annotations "crossplane.io/external-name" }}
+        {{- with $annotations | get "crossplane.io/external-name" }}
             {{- "External name" | bold | nindent 2 }}: {{ . | cyan }}
         {{- end }}
-        {{- with get $annotations "crossplane.io/composition-resource-name" }}
+        {{- with $annotations | get "crossplane.io/composition-resource-name" }}
             {{- "Composition resource name" | bold | nindent 2 }}: {{ . | cyan }}
         {{- end }}
-        {{- $pending := get $annotations "crossplane.io/external-create-pending" }}
-        {{- $succeeded := get $annotations "crossplane.io/external-create-succeeded" }}
+        {{- $pending := $annotations | get "crossplane.io/external-create-pending" }}
+        {{- $succeeded := $annotations | get "crossplane.io/external-create-succeeded" }}
         {{- if $pending }}
             {{- if not $succeeded }}
                 {{- "External create" | red | bold | nindent 2 }}: pending since {{ $pending | colorAgo }}{{ agoSuffix }}, {{ "external-create-succeeded not set yet" | yellow }}
@@ -635,21 +635,21 @@
     {{- if .Config.GetBool "include-application-details" }}
         {{- $labels := .Labels }}
         {{- $annotations := .Annotations }}
-        {{- $clusterService := get $labels "kubernetes.io/cluster-service" }}
-        {{- $addonManager := get $labels "addonmanager.kubernetes.io/mode" }}
-        {{- $managedBy := coalesce (get $labels "app.kubernetes.io/managed-by") $labels.heritage }}
-        {{- $createdBy := get $labels "app.kubernetes.io/created-by" }}
-        {{- $name := coalesce (get $labels "helm.sh/chart") $labels.chart (get $labels "app.kubernetes.io/name") $labels.app (get $labels "k8s-app") (get $labels "kubernetes.io/name") $labels.ame | default "" }}
-        {{- $partOf := get $labels "app.kubernetes.io/part-of" }}
-        {{- $component := get $labels "app.kubernetes.io/component" }}
-        {{- $instance := coalesce (get $annotations "meta.helm.sh/release-name") $labels.release (get $labels "app.kubernetes.io/instance") }}
-        {{- $releaseNamespace := get $annotations "meta.helm.sh/release-namespace" }}
+        {{- $clusterService := $labels | get "kubernetes.io/cluster-service" }}
+        {{- $addonManager := $labels | get "addonmanager.kubernetes.io/mode" }}
+        {{- $managedBy := coalesce ($labels | get "app.kubernetes.io/managed-by") $labels.heritage }}
+        {{- $createdBy := $labels | get "app.kubernetes.io/created-by" }}
+        {{- $name := coalesce ($labels | get "helm.sh/chart") $labels.chart ($labels | get "app.kubernetes.io/name") $labels.app ($labels | get "k8s-app") ($labels | get "kubernetes.io/name") $labels.ame | default "" }}
+        {{- $partOf := $labels | get "app.kubernetes.io/part-of" }}
+        {{- $component := $labels | get "app.kubernetes.io/component" }}
+        {{- $instance := coalesce ($annotations | get "meta.helm.sh/release-name") $labels.release ($labels | get "app.kubernetes.io/instance") }}
+        {{- $releaseNamespace := $annotations | get "meta.helm.sh/release-namespace" }}
         {{- $namespace := eq $releaseNamespace .Namespace | ternary "" $releaseNamespace }}
         {{- /* Helm's own release-storage Secret (type helm.sh/release.v1) carries a "version"
                label too, but there it's the release revision number, not an app version -- the
                dedicated Helm section in Secret.tmpl already reports the revision explicitly, so
                falling back to it here would print a misleading "using version 1" line. */ -}}
-        {{- $version := coalesce (get $labels "app.kubernetes.io/version") (ternary "" $labels.version (eq .Object.type "helm.sh/release.v1")) }}
+        {{- $version := coalesce ($labels | get "app.kubernetes.io/version") (ternary "" $labels.version (eq .Object.type "helm.sh/release.v1")) }}
         {{- if or $clusterService $addonManager $managedBy $createdBy $name $partOf $component $instance $namespace $version }}
             {{- "Managed" | nindent 2 }}
             {{- with $addonManager }} by {{ "AddonManager" | bold | yellow }} in {{ . | redBoldIf (eq . "Reconcile") }} mode{{ end }}
@@ -1467,9 +1467,9 @@
     {{- /* The ownership pair is read from labels alone: kustomize-controller writes it there
            (fluxcd/pkg/ssa/manager.go GetOwnerLabels) and matches on labels alone when deciding
            what to garbage collect, so an annotation of the same name owns nothing. */ -}}
-    {{- $owner := get (.Labels | default dict) "kustomize.toolkit.fluxcd.io/name" | default "" | toString }}
+    {{- $owner := (.Labels | default dict) | get "kustomize.toolkit.fluxcd.io/name" | default "" | toString }}
     {{- with $owner }}
-        {{- $ownerNamespace := get ($.Labels | default dict) "kustomize.toolkit.fluxcd.io/namespace" | default "" | toString }}
+        {{- $ownerNamespace := ($.Labels | default dict) | get "kustomize.toolkit.fluxcd.io/namespace" | default "" | toString }}
         {{- /* Not paired with deep_render_ref, unlike every other ref in the Flux templates: a
                Kustomization deep-renders its own healthChecks, each of which would then deep-render
                the Kustomization that owns it. The render engine has no cycle or depth guard, so
@@ -1479,10 +1479,10 @@
     {{- /* reconcile:disabled and ssa:Ignore both drop the object out of apply *and* prune, so it
            keeps whatever state it has however far the source moves on -- and its Kustomization
            still reports Ready, because skipping is a success. */ -}}
-    {{- if eq (get $meta "kustomize.toolkit.fluxcd.io/reconcile" | default "" | toString | lower) "disabled" }}
+    {{- if eq ($meta | get "kustomize.toolkit.fluxcd.io/reconcile" | default "" | toString | lower) "disabled" }}
         {{- "Flux reconcile disabled" | yellow | bold | nindent 2 }}: neither applied nor pruned by its Kustomization, however far the source moves on
     {{- end }}
-    {{- $ssa := get $meta "kustomize.toolkit.fluxcd.io/ssa" | default "" | toString | lower }}
+    {{- $ssa := $meta | get "kustomize.toolkit.fluxcd.io/ssa" | default "" | toString | lower }}
     {{- if eq $ssa "ignore" }}
         {{- "Flux apply policy Ignore" | yellow | bold | nindent 2 }}: never applied and never pruned, even while it is still in the source
     {{- else if eq $ssa "merge" }}
@@ -1492,17 +1492,17 @@
     {{- end }}
     {{- /* Usually set on a Namespace, PVC or PV to protect it from an accidental prune, and just as
            usually forgotten -- after which deleting it from the source silently leaves it running. */ -}}
-    {{- if eq (get $meta "kustomize.toolkit.fluxcd.io/prune" | default "" | toString | lower) "disabled" }}
+    {{- if eq ($meta | get "kustomize.toolkit.fluxcd.io/prune" | default "" | toString | lower) "disabled" }}
         {{- "Flux prune disabled" | yellow | bold | nindent 2 }}: kept running in the cluster after it is removed from the source
     {{- end }}
     {{- /* Meant to be removed once the immutable change is through; left on a StatefulSet it turns
            an ordinary field change into a delete and recreate. */ -}}
-    {{- if eq (get $meta "kustomize.toolkit.fluxcd.io/force" | default "" | toString | lower) "enabled" }}
+    {{- if eq ($meta | get "kustomize.toolkit.fluxcd.io/force" | default "" | toString | lower) "enabled" }}
         {{- "Flux force enabled" | yellow | bold | nindent 2 }}: deleted and recreated when a patch hits an immutable field
     {{- end }}
     {{- /* Only bites on a HelmRelease that turned drift detection on; there it is the reason one
            object in the release keeps its out-of-band edits while the rest lose theirs. */ -}}
-    {{- if eq (get $meta "helm.toolkit.fluxcd.io/driftDetection" | default "" | toString | lower) "disabled" }}
+    {{- if eq ($meta | get "helm.toolkit.fluxcd.io/driftDetection" | default "" | toString | lower) "disabled" }}
         {{- "Flux drift detection disabled" | bold | nindent 2 }}: out-of-band changes to this object are not reverted
     {{- end }}
 {{- end -}}
