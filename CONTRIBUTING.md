@@ -393,14 +393,26 @@ to query either way), which makes `KubeGetFirst` a no-op — they can't exercise
 related object" or `--deep` include branches, so the live e2e suite is the only place that covers
 them.
 
-**Put new subtests in `TestE2EParallel`'s pool by default.** `TestE2EDynamicManifests` is the
-exception, and a subtest only earns a place in it by tripping one of the two criteria in
-`TestE2EParallel`'s doc comment (`cmd/main_test.go`) — with the reason written on the subtest, so
-the next person inherits a rule rather than a precedent. The qualifying reasons are all about what
-a subtest does *to* its neighbours: it perturbs cluster-wide state they read (deleting the
-metrics-server `APIService`), it starves a shared dependency (the VPA subtest pegs a full CPU and
-takes metrics-server's readiness probe down with it on a single-node cluster), or it can't be given
-a namespace/generated name of its own.
+**Put new subtests in `TestE2EParallel`'s pool by default, running with `t.Parallel()`.** Don't
+opt a new subtest out of the pool just because it feels risky or touches cluster state — write it
+parallel and dedicated (own namespace/generated names, see [Parallel-Safe e2e
+Subtests](#parallel-safe-e2e-subtests) below) unless it actually trips one of the exceptions below.
+`TestE2EDynamicManifests` (or a serial subtest) is the exception, and a subtest only earns a place
+there by tripping one of the two criteria in `TestE2EParallel`'s doc comment (`cmd/main_test.go`) —
+with the reason written on the subtest, so the next person inherits a rule rather than a precedent.
+The qualifying reasons are all about what a subtest does *to* its neighbours: it perturbs
+cluster-wide state they read (deleting the metrics-server `APIService`), it starves a shared
+dependency (the VPA subtest pegs a full CPU and takes metrics-server's readiness probe down with it
+on a single-node cluster), or it can't be given a namespace/generated name of its own.
+
+Because the shared cluster is reused by every subtest in the pool at once, be especially careful
+with anything cluster-scoped: mutating or deleting a cluster-level resource (a Node, a CRD, a
+ClusterRole, the metrics-server `APIService`, a webhook config, ...), or relying on a *fixed*
+cluster-scoped name another subtest could also use, can silently change another subtest's rendered
+output rather than fail loudly with a name collision. Prefer generated names
+(`GenerateName`/`metav1.GenerateName`, see `createBadNode`) for any cluster-scoped object a subtest
+creates, and never mutate a cluster-scoped resource another subtest might read unless that subtest
+is one of the documented non-parallel exceptions above.
 
 Several things look disqualifying but aren't, and shouldn't be used to justify a serial subtest:
 
