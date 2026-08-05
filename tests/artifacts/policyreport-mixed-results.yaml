@@ -1,0 +1,66 @@
+# Captured verbatim (kubectl get policyreport <name> -n e2e-kyverno-report -o yaml) from a real
+# Kyverno v1.18.2 install evaluating tests/e2e-artifacts/kyverno-policies.yaml against
+# tests/e2e-artifacts/kyverno-pod.yaml on the shared e2e cluster -- not hand-written. Only
+# resourceVersion/uid were dropped as noise; every result (policy/rule/message/category/severity/
+# scored/source/timestamp), the scope, and the summary counts are exactly what Kyverno wrote.
+apiVersion: wgpolicyk8s.io/v1alpha2
+kind: PolicyReport
+metadata:
+  name: ae5665a9-485e-402f-bfed-95b9e0afaafe
+  namespace: e2e-kyverno-report
+  creationTimestamp: "2026-08-05T19:09:31Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/managed-by: kyverno
+  ownerReferences:
+    - apiVersion: v1
+      kind: Pod
+      name: report-target
+      uid: ae5665a9-485e-402f-bfed-95b9e0afaafe
+scope:
+  apiVersion: v1
+  kind: Pod
+  name: report-target
+  namespace: e2e-kyverno-report
+  uid: ae5665a9-485e-402f-bfed-95b9e0afaafe
+results:
+  - policy: e2e-kyverno-check-image-tag
+    rule: check-image-tag
+    message: "validation rule 'check-image-tag' passed."
+    result: pass
+    scored: true
+    source: kyverno
+    properties:
+      process: background scan
+    timestamp:
+      seconds: 1785956951
+      nanos: 0
+  - policy: e2e-kyverno-recommend-resource-limits
+    rule: recommend-resource-limits
+    message: "validation error: resource limits are recommended. rule recommend-resource-limits failed at path /spec/containers/0/resources/limits/"
+    result: warn
+    source: kyverno
+    properties:
+      process: background scan
+    timestamp:
+      seconds: 1785956951
+      nanos: 0
+  - policy: e2e-kyverno-require-team-label
+    rule: require-team-label
+    message: "validation error: label 'team' is required. rule require-team-label failed at path /metadata/labels/team/"
+    result: fail
+    scored: true
+    category: "Best Practices"
+    severity: high
+    source: kyverno
+    properties:
+      process: background scan
+    timestamp:
+      seconds: 1785956951
+      nanos: 0
+summary:
+  pass: 1
+  fail: 1
+  warn: 1
+  error: 0
+  skip: 0
