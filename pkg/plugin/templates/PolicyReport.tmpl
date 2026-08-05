@@ -1,0 +1,17 @@
+{{- define "PolicyReport" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: wgpolicyk8s.io/v1alpha2, Kind=PolicyReport */ -}}
+    {{- /* kstatus_summary and conditions_summary are both omitted: this CRD carries no
+           status.conditions at all (see policy_report_common.tmpl), so both would only ever
+           report a generic, uninformative status -- the Results/Failing/Warnings sections below
+           are the actual health signal, the same reasoning K8sRequiredLabels.tmpl applies to its
+           own conditionless Gatekeeper constraints. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "policy_report_body" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

@@ -1,0 +1,66 @@
+# Hand-written, unlike policyreport-mixed-results.yaml/clusterpolicyreport-namespace-fail.yaml --
+# this pins the missing-field degradation paths CONTRIBUTING.md's "Working with Test Artifacts"
+# section asks for (§ Never trust a field to be present), which no real Kyverno-produced object
+# exercises since Kyverno always populates scope/results/summary together. Three documents: no
+# scope/results/summary at all (a report --local/-f renders before any controller has written to
+# it), a scopeSelector-only report with no per-result severity/category, and a result missing rule
+# (only "policy" is in the CRD's required: list at the item level -- see
+# pkg/plugin/templates/policy_report_common.tmpl).
+apiVersion: wgpolicyk8s.io/v1alpha2
+kind: PolicyReport
+metadata:
+  name: bare
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec: {}
+---
+apiVersion: wgpolicyk8s.io/v1alpha2
+kind: PolicyReport
+metadata:
+  name: selector-scoped
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+scopeSelector:
+  matchLabels:
+    app: web
+results:
+  - policy: cpol-e
+    rule: rule-e
+    message: "e failed on pod x"
+    result: fail
+    resources:
+      - kind: Pod
+        name: web-1
+        namespace: default
+  - policy: cpol-e
+    rule: rule-e
+    message: "e failed on pod y"
+    result: fail
+    resources:
+      - kind: Pod
+        name: web-2
+        namespace: default
+summary:
+  pass: 0
+  fail: 2
+---
+apiVersion: wgpolicyk8s.io/v1alpha2
+kind: PolicyReport
+metadata:
+  name: rule-missing
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+scope:
+  apiVersion: apps/v1
+  kind: Deployment
+  name: api
+  namespace: payments
+results:
+  - policy: cpol-c
+    result: error
+summary:
+  pass: 0
+  fail: 0
+  warn: 0
+  error: 1
+  skip: 0

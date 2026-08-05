@@ -49,4 +49,5 @@ func TestE2EParallel(t *testing.T) {
 	runPodLogsAndMetricsSubtests(t, hackOpts, clientset)
 	runFluxSubtests(t, hackOpts, clientset)
 	runIstioSubtests(t, hackOpts, clientset)
+	runKyvernoSubtests(t, hackOpts, clientset)
 }

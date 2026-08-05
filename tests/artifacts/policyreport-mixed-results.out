@@ -1,0 +1,7 @@
+
+PolicyReport/ae5665a9-485e-402f-bfed-95b9e0afaafe -n e2e-kyverno-report, created 1m ago by Pod/report-target, gen:1
+  Scope: Pod/report-target
+  Results: 1 passed, 1 failed, 1 warning
+  Last evaluated: 1m ago
+  Failing: e2e-kyverno-require-team-label/require-team-label [high]: validation error: label 'team' is required. rule require-team-label failed at path /metadata/labels/team/
+  Warnings: e2e-kyverno-recommend-resource-limits/recommend-resource-limits: validation error: resource limits are recommended. rule recommend-resource-limits failed at path /spec/containers/0/resources/limits/
