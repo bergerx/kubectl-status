@@ -1,18 +1,18 @@
 \A
-Deployment/rollout-diff-test -n e2e-rollout-diff, created \d+[a-z]+ ago, gen:\d+ rev:\d+
+Deployment/rollout-diff-test -n e2e-rollout-diff, created 1m ago, gen:2 rev:2
   Current: Deployment is available\. Replicas: 1
   desired:1, existing:1, ready:1, updated:1, available:1
   Selector: app=rollout-diff-test
-(?:    Pod/rollout-diff-test-[a-z0-9]+-[a-z0-9]+, created \d+[a-z]+ ago Running, 1/1 ready
+(?:    Pod/rollout-diff-test-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready
 )+  Not matched by any Service
-  Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for \d+[a-z]+
-  Progressing:True NewReplicaSetAvailable, ReplicaSet "rollout-diff-test-7cf6c88cf8" has successfully progressed\. for \d+[a-z]+
+  Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for 1m
+  Progressing:True NewReplicaSetAvailable, ReplicaSet "rollout-diff-test-7cf6c88cf8" has successfully progressed\. for 1m
   Rollouts:
-    \d+[a-z]+ ago, managed by ReplicaSet/rollout-diff-test-f96b445cf
-    \d+[a-z]+ ago, managed by ReplicaSet/rollout-diff-test-7cf6c88cf8, has 1 replicas
+    1m ago, managed by ReplicaSet/rollout-diff-test-f96b445cf
+    1m ago, managed by ReplicaSet/rollout-diff-test-7cf6c88cf8, has 1 replicas
       Diff:
-      --- a ReplicaSet/rollout-diff-test-f96b445cf\t\S.*\(\d+[a-z]+ ago\)
-      \+\+\+ b ReplicaSet/rollout-diff-test-7cf6c88cf8\t\S.*\(\d+[a-z]+ ago\)
+      --- a ReplicaSet/rollout-diff-test-f96b445cf\t\S+ \S+ \S+ \S+ \(1m ago\)
+      \+\+\+ b ReplicaSet/rollout-diff-test-7cf6c88cf8\t\S+ \S+ \S+ \S+ \(1m ago\)
       @@ -36,7 \+36,7 @@
              "spec": \{
                "containers": \[
