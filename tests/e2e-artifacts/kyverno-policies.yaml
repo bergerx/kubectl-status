@@ -1,0 +1,126 @@
+# ClusterPolicies for runKyvernoSubtests (cmd/e2e_kyverno_test.go). All four are scoped to the
+# subtest's own namespace/name (never a wildcard match) via match.any[].resources so they *evaluate*
+# nothing outside this one scenario, and all use validationFailureAction: Audit so nothing is ever
+# blocked -- these exist to produce real PolicyReport/ClusterPolicyReport status, not to enforce
+# anything on the shared cluster.
+#
+# match.resources.namespaces/names only narrows what a policy's *rule* matches -- it does not
+# narrow the admission webhook Kyverno generates for the GVKs a policy references (Pod, Namespace),
+# which intercepts every namespace except kube-system/kyverno regardless (confirmed against this
+# exact chart/version: kubectl get validatingwebhookconfiguration kyverno-resource-validating-
+# webhook-cfg -o yaml while these are applied). That means every Pod/Namespace/Deployment/
+# DaemonSet/StatefulSet/ReplicaSet/Job/CronJob create-or-update from every *other* parallel subtest
+# routes through Kyverno's admission-controller for the lifetime of these four ClusterPolicies.
+# webhookConfiguration.failurePolicy: Ignore on every one of them is what keeps that survivable: the
+# chart's own webhook default is Fail, and rules within one policy share its failurePolicy, so
+# leaving even one of these four at the default would flip the whole shared webhook rule set to
+# Fail (fail policy is a property of the webhook config Kyverno derives from *all* active policies
+# for that GVK, not of any one policy in isolation) -- meaning an admission-controller pod that's
+# briefly slow or unavailable (entirely possible sharing a 2-core node with three other parallel
+# subtests) would reject object creation for every namespace but kube-system/kyverno, not just fail
+# to produce a report for this one. Ignore instead fails open: a slow/unavailable webhook just
+# means the request is allowed and (for this subtest) has to fall back to the background scan.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: e2e-kyverno-check-image-tag
+spec:
+  validationFailureAction: Audit
+  webhookConfiguration:
+    failurePolicy: Ignore
+  background: true
+  rules:
+    - name: check-image-tag
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["e2e-kyverno-report"]
+      validate:
+        message: "image tag must not be latest"
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: e2e-kyverno-require-team-label
+  annotations:
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: Audit
+  webhookConfiguration:
+    failurePolicy: Ignore
+  background: true
+  rules:
+    - name: require-team-label
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["e2e-kyverno-report"]
+      validate:
+        message: "label 'team' is required"
+        pattern:
+          metadata:
+            labels:
+              team: "?*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: e2e-kyverno-recommend-resource-limits
+  annotations:
+    # Read by Kyverno for every rule in this policy (see pkg/utils/report/results.go
+    # ToPolicyReportResult upstream) -- scored:"false" is what turns a "fail" result into "warn".
+    policies.kyverno.io/scored: "false"
+spec:
+  validationFailureAction: Audit
+  webhookConfiguration:
+    failurePolicy: Ignore
+  background: true
+  rules:
+    - name: recommend-resource-limits
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["e2e-kyverno-report"]
+      validate:
+        message: "resource limits are recommended"
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  limits:
+                    memory: "?*"
+                    cpu: "?*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: e2e-kyverno-require-namespace-team-label
+  annotations:
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: Audit
+  webhookConfiguration:
+    failurePolicy: Ignore
+  background: true
+  rules:
+    - name: require-namespace-team-label
+      match:
+        any:
+          - resources:
+              kinds: ["Namespace"]
+              names: ["e2e-kyverno-report"]
+      validate:
+        message: "label 'team' is required on namespace"
+        pattern:
+          metadata:
+            labels:
+              team: "?*"

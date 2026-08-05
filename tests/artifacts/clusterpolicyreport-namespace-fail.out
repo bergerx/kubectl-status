@@ -1,0 +1,6 @@
+
+ClusterPolicyReport/5d8a8914-15a0-4ee6-bb1e-9bbf81b2f206, created 1m ago by Namespace/e2e-kyverno-report, gen:2
+  Scope: Namespace/e2e-kyverno-report
+  Results: 0 passed, 1 failed
+  Last evaluated: 1m ago
+  Failing: e2e-kyverno-require-namespace-team-label/require-namespace-team-label: validation error: label 'team' is required on namespace. rule require-namespace-team-label failed at path /metadata/labels/team/

@@ -1,0 +1,159 @@
+{{- define "policy_report_body" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Shared by PolicyReport and ClusterPolicyReport (wgpolicyk8s.io) -- both CRDs have an
+           identical schema (scope/scopeSelector/results/summary), the only difference being
+           namespaced vs cluster scope of the report object itself, which status_summary_line
+           already handles generically. All fields rendered here live at the object root, not
+           under spec/status (unusual for this codebase, but that's how the upstream CRD is
+           shaped), so they're read off .Object directly rather than .Spec/.Status. */ -}}
+    {{- $scope := .Object.scope }}
+    {{- $scopeSelector := .Object.scopeSelector }}
+    {{- if kindIs "map" $scope }}
+        {{- "Scope" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" ($scope.kind | default "") "name" ($scope.name | default "") "namespace" $scope.namespace "callerNamespace" $.Namespace) }}
+    {{- else if kindIs "map" $scopeSelector }}
+        {{- if or (hasKey $scopeSelector "matchLabels") (hasKey $scopeSelector "matchExpressions") }}
+            {{- "Scope selector" | bold | nindent 2 }}: {{ $scopeSelector | labelSelector | cyan }}
+        {{- end }}
+    {{- end }}
+
+    {{- /* Deliberately raw counts, not a "compliance score" percentage: summary is rule-level
+           (one policy can contribute several rule results for the same resource), and skip/warn
+           don't collapse cleanly into pass/total -- a skip is a deliberate non-evaluation (a
+           PolicyException match, an unmet precondition), not a pass, and warn is a fail the
+           policy author marked non-blocking (see policy_report_findings below). Showing raw
+           counts instead of manufacturing a percentage from them keeps the render honest about
+           what the API actually reports. */ -}}
+    {{- $summary := .Object.summary | default dict }}
+    {{- $pass := $summary.pass | default 0 | int }}
+    {{- $fail := $summary.fail | default 0 | int }}
+    {{- $warn := $summary.warn | default 0 | int }}
+    {{- $error := $summary.error | default 0 | int }}
+    {{- $skip := $summary.skip | default 0 | int }}
+    {{- "Results" | bold | nindent 2 }}: {{ printf "%d passed" $pass | green }}
+    {{- if gt $fail 0 }}, {{ printf "%d failed" $fail | red | bold }}{{ end }}
+    {{- if gt $error 0 }}
+        {{- $suffix := "" }}{{ if ne $error 1 }}{{ $suffix = "s" }}{{ end }}
+        {{- printf ", %d error%s" $error $suffix | red | bold }}
+    {{- end }}
+    {{- if gt $warn 0 }}
+        {{- $suffix := "" }}{{ if ne $warn 1 }}{{ $suffix = "s" }}{{ end }}
+        {{- printf ", %d warning%s" $warn $suffix | yellow }}
+    {{- end }}
+    {{- if gt $skip 0 }}, {{ printf "%d skipped" $skip }}{{ end }}
+
+    {{- $results := .Object.results | default list }}
+
+    {{- /* A single "Last evaluated" line beats repeating a timestamp on every finding below.
+           Kyverno's results carry timestamp as a google.protobuf.Timestamp {seconds,nanos} pair
+           rather than this codebase's usual RFC3339 string, so it's converted to Unix nanoseconds
+           here and handed to colorAgoUnixNano (the same helper VolumeSnapshotContent.tmpl uses
+           for its own non-RFC3339 timestamp field) rather than colorAgo. */ -}}
+    {{- $maxUnixNano := 0 }}
+    {{- range $results }}
+        {{- with .timestamp }}
+            {{- $val := add (mul (.seconds | default 0 | int) 1000000000) (.nanos | default 0 | int) }}
+            {{- if gt $val $maxUnixNano }}{{ $maxUnixNano = $val }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- if gt $maxUnixNano 0 }}
+        {{- "Last evaluated" | bold | nindent 2 }}: {{ $maxUnixNano | colorAgoUnixNano }}{{ agoSuffix }}
+    {{- end }}
+
+    {{- $.Include "policy_report_findings" (dict "ctx" $ "results" $results "types" (list "fail" "error") "label" "Failing" "warn" false) }}
+    {{- $.Include "policy_report_findings" (dict "ctx" $ "results" $results "types" (list "warn") "label" "Warnings" "warn" true) }}
+{{- end -}}
+
+{{- define "policy_report_findings" }}
+    {{- /* Expects dict "ctx" (the PolicyReport/ClusterPolicyReport RenderableObject) "results"
+           (the object's .results list) "types" (list of PolicyReportResult.result values to
+           include, e.g. list "fail" "error") "label" (section heading) "warn" (bool -- selects
+           yellow instead of red, for the warn-only call).
+           Dedupes by (policy, rule): Kyverno's admission-review path never sets a result's own
+           .resources (only .scope identifies the resource, see ToPolicyReportResult upstream), so
+           this almost never fires for Kyverno-authored reports in practice, but the CRD schema
+           allows a report to cover several resources via scopeSelector, and a rule matching
+           several of them would otherwise repeat the same policy/rule line once per resource.
+           A finding's own .resources is only shown when it says something the report's .scope
+           line doesn't already: gate on scope being unknown or the finding covering a resource
+           other than the report's own scope. The first distinct resource is shown by name, with
+           "(+N more)" for the rest, rather than repeating the resource_ref once per hit. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $types := .types }}
+    {{- $label := .label }}
+    {{- $warn := .warn }}
+    {{- $scope := $ctx.Object.scope }}
+    {{- $scopeKey := "" }}
+    {{- if kindIs "map" $scope }}
+        {{- $scopeKey = printf "%s/%s/%s" ($scope.kind | default "") ($scope.namespace | default "") ($scope.name | default "") }}
+    {{- end }}
+    {{- $order := list }}
+    {{- $byKey := dict }}
+    {{- range .results }}
+        {{- $r := . }}
+        {{- if has ($r.result | default "") $types }}
+            {{- $policy := $r.policy | default "" }}
+            {{- $rule := $r.rule | default "" }}
+            {{- $key := printf "%s/%s" $policy $rule }}
+            {{- if not (hasKey $byKey $key) }}
+                {{- $order = append $order $key }}
+                {{- $_ := $byKey | set $key (dict "policy" $policy "rule" $rule "messages" list "resourceRef" "" "resourceKeys" list "isError" false "severe" false) }}
+            {{- end }}
+            {{- $entry := index $byKey $key }}
+            {{- with $r.message }}
+                {{- if not (has . $entry.messages) }}{{ $_ := $entry | set "messages" (append $entry.messages .) }}{{ end }}
+            {{- end }}
+            {{- if eq ($r.result | default "") "error" }}{{ $_ := $entry | set "isError" true }}{{ end }}
+            {{- if has ($r.severity | default "") (list "critical" "high") }}{{ $_ := $entry | set "severe" true }}{{ end }}
+            {{- range $r.resources }}
+                {{- $resKey := printf "%s/%s/%s" (.kind | default "") (.namespace | default "") (.name | default "") }}
+                {{- if or (not $scopeKey) (ne $resKey $scopeKey) }}
+                    {{- if not (has $resKey $entry.resourceKeys) }}
+                        {{- $_ := $entry | set "resourceKeys" (append $entry.resourceKeys $resKey) }}
+                        {{- if not $entry.resourceRef }}
+                            {{- $_ := $entry | set "resourceRef" ($ctx.Include "resource_ref" (dict "kind" (.kind | default "") "name" (.name | default "") "namespace" .namespace "callerNamespace" $ctx.Namespace)) }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+
+    {{- $color := "red" }}{{ if $warn }}{{ $color = "yellow" }}{{ end }}
+    {{- $cap := 10 }}
+    {{- with $order }}
+        {{- if eq (len .) 1 }}
+            {{- $entry := index $byKey (index . 0) }}
+            {{- $label | bold | nindent 2 }}: {{ $ctx.Include "policy_report_finding_line" (dict "entry" $entry "color" $color) }}
+        {{- else }}
+            {{- $label | bold | nindent 2 }}:
+            {{- range $i, $key := . }}
+                {{- if lt $i $cap }}
+                    {{- "" | nindent 4 }}{{ $ctx.Include "policy_report_finding_line" (dict "entry" (index $byKey $key) "color" $color) }}
+                {{- end }}
+            {{- end }}
+            {{- with sub (len .) $cap }}{{ if gt . 0 }}
+                {{- printf "… %d more" . | nindent 4 }}
+            {{- end }}{{ end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "policy_report_finding_line" }}
+    {{- /* Expects dict "entry" (one grouped finding built by policy_report_findings) "color"
+           ("red" or "yellow", as a string since Go templates can't pass a color func by value
+           cleanly -- resolved back into an actual color call below). */ -}}
+    {{- $entry := .entry }}
+    {{- $red := eq .color "red" }}
+    {{- $text := $entry.policy }}{{ if $entry.rule }}{{ $text = printf "%s/%s" $entry.policy $entry.rule }}{{ end }}
+    {{- if $red }}{{ $text | red | bold }}{{ else }}{{ $text | yellow | bold }}{{ end }}
+    {{- if $entry.isError }} {{ "[could not evaluate]" | red | bold }}{{ end }}
+    {{- if $entry.severe }} {{ "[high]" | red | bold }}{{ end }}
+    {{- with $entry.resourceRef }}
+        {{- " · " }}{{ . }}
+        {{- with sub (len $entry.resourceKeys) 1 }}{{ if gt . 0 }} {{ printf "(+%d more)" . }}{{ end }}{{ end }}
+    {{- end }}
+    {{- with $entry.messages }}
+        {{- $joined := join "; " . }}
+        {{- if $red }}: {{ $joined | red }}{{ else }}: {{ $joined | yellow }}{{ end }}
+    {{- end }}
+{{- end -}}

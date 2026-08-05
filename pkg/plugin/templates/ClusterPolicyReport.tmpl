@@ -1,0 +1,17 @@
+{{- define "ClusterPolicyReport" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: wgpolicyk8s.io/v1alpha2, Kind=ClusterPolicyReport */ -}}
+    {{- /* Identical schema to PolicyReport (see policy_report_common.tmpl) -- the only
+           difference is that this report covers a cluster-scoped resource (Namespace, Node, ...),
+           which is why upstream models it as a separate, cluster-scoped Kind rather than a
+           namespace field on the same one. kstatus_summary/conditions_summary omitted for the
+           same reason as PolicyReport.tmpl. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "policy_report_body" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end }}

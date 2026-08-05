@@ -1,0 +1,13 @@
+
+PolicyReport/bare -n default, created 1m ago
+  Results: 0 passed
+
+PolicyReport/selector-scoped -n default, created 1m ago
+  Scope selector: app=web
+  Results: 0 passed, 2 failed
+  Failing: cpol-e/rule-e · Pod/web-1 (+1 more): e failed on pod x; e failed on pod y
+
+PolicyReport/rule-missing -n default, created 1m ago
+  Scope: Deployment/api -n payments
+  Results: 0 passed, 1 error
+  Failing: cpol-c [could not evaluate]

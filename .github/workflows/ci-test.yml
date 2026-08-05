@@ -40,6 +40,14 @@ jobs:
       - name: Run e2e tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
-          timeout_minutes: 15
+          # `make test-e2e` runs `go test ... -timeout=25m`, but this step's own timeout was
+          # left at 15 -- lower than the test binary's own timeout, so a slow-but-legitimate run
+          # gets hard-killed by this wrapper (Terminated, no per-subtest output) well before the
+          # test binary would have reported a real -timeout failure, and the SIGTERM leaves the
+          # cluster mid-install for whatever the retry's next attempt finds. A group that installs
+          # a real controller via Helm (image pulls, multi-minute --wait) is the likeliest to push
+          # total wall-clock past 15m on a slower runner, so 30 gives the 25m test timeout its own
+          # headroom plus setup slack.
+          timeout_minutes: 30
           max_attempts: 2
           command: ASSUME_MINIKUBE_IS_CONFIGURED=true make test-e2e

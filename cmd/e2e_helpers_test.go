@@ -1196,3 +1196,83 @@ func ensureIstioCRDs(t *testing.T) {
 		return nil
 	})
 }
+
+var kyvernoInstaller onceInstaller
+
+// ensureKyverno installs Kyverno, needed by runKyvernoSubtests. PolicyReport.tmpl/
+// ClusterPolicyReport.tmpl render results/summary/scope that only Kyverno's own
+// admission-controller and reports-controller write as they actually evaluate a real
+// ClusterPolicy against a real resource -- fabricating that status would only confirm our own
+// idea of the wgpolicyk8s.io shape, never Kyverno's actual behaviour, which is the whole point of
+// covering this live rather than with hand-written fixtures. Same "controller must actually run"
+// reasoning as ensureFlux/ensureCrossplane/ensureVPA.
+//
+// Chart version is pinned in hack/versions.env as KYVERNO_VERSION (the chart version, e.g.
+// "3.8.2" -- Kyverno's Helm chart and app versions diverge, chart 3.8.2 ships app v1.18.2).
+func ensureKyverno(t *testing.T) {
+	t.Helper()
+	kyvernoInstaller.ensure(t, func() error {
+		version, err := versionsEnvValue("KYVERNO_VERSION")
+		if err != nil {
+			return err
+		}
+		if output, err := exec.Command("helm", "repo", "add", "kyverno", "https://kyverno.github.io/kyverno/").CombinedOutput(); err != nil {
+			return fmt.Errorf("helm repo add kyverno: %w: %s", err, output)
+		}
+		if output, err := exec.Command("helm", "repo", "update", "kyverno").CombinedOutput(); err != nil {
+			return fmt.Errorf("helm repo update kyverno: %w: %s", err, output)
+		}
+		// features.backgroundScan.backgroundScanInterval: default 1h, far longer than any test
+		// should wait. autoUpdateWebhooks (chart default) reconciles the ValidatingWebhookConfiguration
+		// within seconds of a ClusterPolicy being created, so the admission path is the one
+		// runKyvernoSubtests' Pod/Namespace creates normally take; this short interval is only the
+		// fallback for whatever fraction of that reconcile window it races.
+		//
+		// cleanupController.enabled=false: that controller only serves CleanupPolicy/
+		// ClusterCleanupPolicy, unrelated to PolicyReport generation, so it's pure unused
+		// footprint here. The three *Controller.resources.requests.cpu overrides shrink the chart's
+		// default 100m/controller: the shared cluster's node measured Allocatable cpu: 2 (not the
+		// 4 `make e2e-minikube-up` requests -- the docker driver caps it to whatever the host
+		// actually has), and every other onceInstaller's controllers plus kube-system already sit
+		// at ~97% of that before Kyverno's own pods are counted, so the chart's defaults leave the
+		// reports-controller Pending on "Insufficient cpu" (confirmed against this exact cluster).
+		// 10m each is still generous for a controller that's idle between the handful of events
+		// this one test namespace produces.
+		if output, err := exec.Command("helm", "upgrade", "--install", "kyverno", "kyverno/kyverno",
+			"--version", version, "-n", "kyverno", "--create-namespace", "--wait", "--timeout", "5m",
+			"--set", "features.backgroundScan.backgroundScanInterval=30s",
+			"--set", "cleanupController.enabled=false",
+			"--set", "admissionController.resources.requests.cpu=10m",
+			"--set", "backgroundController.resources.requests.cpu=10m",
+			"--set", "reportsController.resources.requests.cpu=10m").CombinedOutput(); err != nil {
+			return fmt.Errorf("helm upgrade kyverno: %w: %s%s", err, output, kyvernoDiagnostics())
+		}
+		// Belt-and-suspenders alongside helm --wait above, matching ensureVPA: confirms the
+		// specific signal (Deployments Available) the rest of the suite depends on, with its own
+		// diagnostics if it's ever the one that times out instead of helm's own wait.
+		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=300s",
+			"deployment", "--all", "-n", "kyverno").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("kubectl wait kyverno deployments: %w: %s%s", err, output, kyvernoDiagnostics())
+		}
+		return nil
+	})
+}
+
+// kyvernoDiagnostics dumps why the controllers never came up, for the same reason
+// fluxDiagnostics/crossplaneDiagnostics exist: a bare timeout names no cause, and this install
+// runs unattended on a cluster the rest of the suite is loading.
+func kyvernoDiagnostics() string {
+	var b strings.Builder
+	for _, args := range [][]string{
+		{"get", "pods", "-n", "kyverno", "-o", "wide"},
+		{"get", "events", "-n", "kyverno", "--sort-by=.lastTimestamp"},
+	} {
+		out, err := exec.Command("kubectl", args...).CombinedOutput()
+		fmt.Fprintf(&b, "\n--- kubectl %s ---\n%s", strings.Join(args, " "), out)
+		if err != nil {
+			fmt.Fprintf(&b, "(%v)\n", err)
+		}
+	}
+	return b.String()
+}

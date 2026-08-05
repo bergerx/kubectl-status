@@ -1,0 +1,42 @@
+# Captured verbatim (kubectl get clusterpolicyreport <name> -o yaml) from the same real Kyverno
+# v1.18.2 install as policyreport-mixed-results.yaml, evaluating
+# tests/e2e-artifacts/kyverno-policies.yaml's Namespace-scoped rule against the
+# e2e-kyverno-report Namespace itself -- not hand-written. Only resourceVersion/uid were dropped.
+apiVersion: wgpolicyk8s.io/v1alpha2
+kind: ClusterPolicyReport
+metadata:
+  name: 5d8a8914-15a0-4ee6-bb1e-9bbf81b2f206
+  creationTimestamp: "2026-08-05T19:09:31Z"
+  generation: 2
+  labels:
+    app.kubernetes.io/managed-by: kyverno
+  ownerReferences:
+    - apiVersion: v1
+      kind: Namespace
+      name: e2e-kyverno-report
+      uid: 5d8a8914-15a0-4ee6-bb1e-9bbf81b2f206
+scope:
+  apiVersion: v1
+  kind: Namespace
+  name: e2e-kyverno-report
+  uid: 5d8a8914-15a0-4ee6-bb1e-9bbf81b2f206
+results:
+  - policy: e2e-kyverno-require-namespace-team-label
+    rule: require-namespace-team-label
+    message: "validation error: label 'team' is required on namespace. rule require-namespace-team-label failed at path /metadata/labels/team/"
+    result: fail
+    scored: true
+    category: "Best Practices"
+    severity: medium
+    source: kyverno
+    properties:
+      process: background scan
+    timestamp:
+      seconds: 1785956981
+      nanos: 0
+summary:
+  pass: 0
+  fail: 1
+  warn: 0
+  error: 0
+  skip: 0
