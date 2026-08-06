@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -974,6 +975,25 @@ func ensureKarpenterCRDs(t *testing.T) {
 	})
 }
 
+// helmRepoAddUpdate runs `helm repo add`+`helm repo update` for name/url, retrying both on
+// failure. Chart repos here (charts.crossplane.io, cowboysysop.github.io, kyverno.github.io) are
+// static-site CDNs that occasionally 403 GitHub Actions' shared runner IPs (seen live on
+// charts.crossplane.io, which was reachable moments later from an unrelated network) -- a transient
+// block, not a broken repo, so a short backoff is enough to get past it without waiting for the
+// whole suite's own outer retry (nick-fields/retry, ~15 minutes per attempt) to cycle around.
+func helmRepoAddUpdate(name, url string) error {
+	backoff := wait.Backoff{Duration: 5 * time.Second, Factor: 2, Steps: 4}
+	return retry.OnError(backoff, func(error) bool { return true }, func() error {
+		if output, err := exec.Command("helm", "repo", "add", name, url).CombinedOutput(); err != nil {
+			return fmt.Errorf("helm repo add %s: %w: %s", name, err, output)
+		}
+		if output, err := exec.Command("helm", "repo", "update", name).CombinedOutput(); err != nil {
+			return fmt.Errorf("helm repo update %s: %w: %s", name, err, output)
+		}
+		return nil
+	})
+}
+
 var vpaInstaller onceInstaller
 
 // ensureVPA installs VerticalPodAutoscaler, needed by TestE2EDynamicManifests' VPA subtest.
@@ -985,11 +1005,8 @@ var vpaInstaller onceInstaller
 func ensureVPA(t *testing.T) {
 	t.Helper()
 	vpaInstaller.ensure(t, func() error {
-		if output, err := exec.Command("helm", "repo", "add", "cowboysysop", "https://cowboysysop.github.io/charts/").CombinedOutput(); err != nil {
-			return fmt.Errorf("helm repo add cowboysysop: %w: %s", err, output)
-		}
-		if output, err := exec.Command("helm", "repo", "update", "cowboysysop").CombinedOutput(); err != nil {
-			return fmt.Errorf("helm repo update cowboysysop: %w: %s", err, output)
+		if err := helmRepoAddUpdate("cowboysysop", "https://cowboysysop.github.io/charts/"); err != nil {
+			return err
 		}
 		if output, err := exec.Command("helm", "upgrade", "--install", "vpa", "cowboysysop/vertical-pod-autoscaler",
 			"--version", "11.1.1", "-n", "kube-system", "--wait", "--timeout", "5m").CombinedOutput(); err != nil {
@@ -1023,11 +1040,8 @@ func ensureCrossplane(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if output, err := exec.Command("helm", "repo", "add", "crossplane-stable", "https://charts.crossplane.io/stable").CombinedOutput(); err != nil {
-			return fmt.Errorf("helm repo add crossplane-stable: %w: %s", err, output)
-		}
-		if output, err := exec.Command("helm", "repo", "update", "crossplane-stable").CombinedOutput(); err != nil {
-			return fmt.Errorf("helm repo update crossplane-stable: %w: %s", err, output)
+		if err := helmRepoAddUpdate("crossplane-stable", "https://charts.crossplane.io/stable"); err != nil {
+			return err
 		}
 		if output, err := exec.Command("helm", "upgrade", "--install", "crossplane", "crossplane-stable/crossplane",
 			"--version", version, "-n", "crossplane-system", "--create-namespace", "--wait", "--timeout", "5m").CombinedOutput(); err != nil {
@@ -1216,11 +1230,8 @@ func ensureKyverno(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if output, err := exec.Command("helm", "repo", "add", "kyverno", "https://kyverno.github.io/kyverno/").CombinedOutput(); err != nil {
-			return fmt.Errorf("helm repo add kyverno: %w: %s", err, output)
-		}
-		if output, err := exec.Command("helm", "repo", "update", "kyverno").CombinedOutput(); err != nil {
-			return fmt.Errorf("helm repo update kyverno: %w: %s", err, output)
+		if err := helmRepoAddUpdate("kyverno", "https://kyverno.github.io/kyverno/"); err != nil {
+			return err
 		}
 		// features.backgroundScan.backgroundScanInterval: default 1h, far longer than any test
 		// should wait. autoUpdateWebhooks (chart default) reconciles the ValidatingWebhookConfiguration
