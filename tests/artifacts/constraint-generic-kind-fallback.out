@@ -1,0 +1,8 @@
+
+K8sAllowedRepos/repo-must-be-internal, created 1m ago, gen:1
+  Current: Resource is current
+  Match: core/Pod
+  enforcementAction: deny
+  Last audited: 1m ago
+  Violations: 1
+    Pod/checkout-7d9f8c6b5-abcde -n default: container <app> has an invalid image repo <docker.io/library/nginx>, allowed repos are ["internal.registry.example.com/"]

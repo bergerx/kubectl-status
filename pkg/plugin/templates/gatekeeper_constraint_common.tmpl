@@ -1,3 +1,23 @@
+{{- define "gatekeeper_constraint_fallback" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Called unconditionally from DefaultResource, same as the crossplane_* snippets above it
+           -- Gatekeeper generates one CRD Kind per installed ConstraintTemplate (K8sAllowedRepos,
+           a custom one, ...), so findTemplateName can never route most of them to a dedicated
+           <Kind>.tmpl the way K8sRequiredLabels.tmpl is routed to today; they all land here
+           instead. Unlike Crossplane, which has no fixed apiVersion group to key off (every
+           provider owns its own), every Constraint CRD Gatekeeper generates -- regardless of Kind
+           -- shares one fixed group, confirmed against a live-cluster-generated CRD: only the
+           Kind varies, never constraints.gatekeeper.sh. That makes apiVersion an exact eligibility
+           check here, not a shape heuristic that could coincidentally match an unrelated CRD with
+           a similarly named spec.match/spec.enforcementAction field. K8sRequiredLabels itself
+           never reaches this: findTemplateName already routes it to its own template, which calls
+           the same two shared defines below directly. */ -}}
+    {{- if hasPrefix "constraints.gatekeeper.sh/" .APIVersion }}
+        {{- template "gatekeeper_constraint_match_and_enforcement" . }}
+        {{- template "gatekeeper_constraint_audit_status" . }}
+    {{- end }}
+{{- end }}
+
 {{- define "gatekeeper_constraint_match_and_enforcement" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* Shared by all Gatekeeper constraint kinds (constraints.gatekeeper.sh/*, one dynamic Kind
