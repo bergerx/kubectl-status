@@ -456,6 +456,31 @@ func applyManifestInNamespace(t *testing.T, filepath, namespace string) {
 	t.Logf("applied manifest %s to namespace %s: %s", filepath, namespace, string(output))
 }
 
+// createFromManifestCapturingName creates a cluster-scoped object from a manifest whose
+// metadata.generateName (not metadata.name) leaves the apiserver to assign the actual name, and
+// returns that assigned name. Used instead of applyManifest for cluster-scoped test objects per
+// CONTRIBUTING.md's "Parallel-Safe e2e Subtests" guidance to prefer generated names for anything
+// cluster-scoped -- applyManifest's own cleanup re-`kubectl delete -f`s the same file, which
+// doesn't work for a generateName-only manifest (delete needs a concrete name), so kind is passed
+// separately for that.
+func createFromManifestCapturingName(t *testing.T, filepath, kind string) string {
+	t.Helper()
+	filepath = path.Join("..", "tests", filepath)
+	output, err := exec.Command("kubectl", "create", "-f", filepath, "-o", "jsonpath={.metadata.name}").CombinedOutput()
+	require.NoErrorf(t, err, "kubectl create -f %s: %s", filepath, output)
+	name := string(output)
+	t.Cleanup(func() {
+		delOutput, err := exec.Command("kubectl", "delete", kind, name).CombinedOutput()
+		if err != nil {
+			t.Logf("warning: failed to delete %s/%s: %v (output: %s)", kind, name, err, delOutput)
+			return
+		}
+		t.Logf("deleted %s/%s: %s", kind, name, delOutput)
+	})
+	t.Logf("created %s/%s from manifest %s", kind, name, filepath)
+	return name
+}
+
 // waitForInNamespace targets a namespace explicitly via `kubectl -n` instead of the kubeconfig's
 // default -- pairs with applyManifestInNamespace for subtests moved off the shared default
 // namespace.
@@ -1286,4 +1311,89 @@ func kyvernoDiagnostics() string {
 		}
 	}
 	return b.String()
+}
+
+var gatekeeperInstaller onceInstaller
+
+// ensureGatekeeper installs a real Gatekeeper (controller-manager + audit deployments, all CRDs),
+// needed by the Namespace subtest that asserts on KubeGetGatekeeperConstraintsMatchingNamespace.
+// Unlike the CRDs-only installers above, that assertion depends on a real ConstraintTemplate
+// reconcile (status.created, which only a real controller writes, is what lets the follow-on
+// Constraint object -- of the dynamically generated Kind -- be created at all) -- hand-writing
+// that status would only confirm our own reading of the field, never Gatekeeper's actual
+// behaviour, same reasoning as ensureFlux/ensureVPA/ensureCrossplane.
+//
+// The upstream bundle's last two documents -- the cluster-wide MutatingWebhookConfiguration/
+// ValidatingWebhookConfiguration (apiGroups/resources "*", every namespace outside
+// gatekeeper-system) -- are deliberately stripped before applying. Nothing exercised by this
+// suite's templates needs them: KubeGetGatekeeperConstraintsMatchingNamespace only reads
+// spec.match off live Constraint objects client-side, it never relies on Gatekeeper's admission
+// webhook actually enforcing anything. Left in, the webhooks would intercept every Create/Update
+// every other e2e subtest issues against this *shared* cluster (every worktree/branch/session,
+// never torn down) for as long as the cluster lives -- fails open (failurePolicy: Ignore) so it
+// wouldn't break anything outright, but it's an unbounded, indefinite cost this suite has no use
+// for. --server-side: the bundle's embedded CRD schemas are large enough to trip client-side
+// apply's last-applied-configuration annotation limit, same as the Gateway API/Istio bundles.
+//
+// The controller-manager Deployment's replicas: 3 (upstream's HA default) is also turned down to
+// 1 before applying, and both Deployments' 100m CPU requests turned down to 10m: at the upstream
+// defaults, 3 controller-manager replicas + audit cost 400m CPU total, which on this shared
+// single-node cluster's fixed capacity (Allocatable cpu: 2, same constraint ensureKyverno's own
+// resource overrides document -- every other onceInstaller's controllers plus kube-system already
+// sit at ~88% of that before Gatekeeper is counted at all) left crossplane-rbac-manager and
+// kyverno-admission-controller permanently unschedulable ("Insufficient cpu") for as long as
+// Gatekeeper stayed installed -- a real make-test-e2e run surfaced this as spurious VPA/Crossplane/
+// Flux timeouts in unrelated subtests. This suite only needs one replica to get real reconciliation
+// (status.created, Constraint admission by the audit controller); HA has no test value here, and
+// 10m is still generous for a controller reconciling one ConstraintTemplate and auditing one
+// Constraint. Both replacements are scoped to the exact matching Deployment docs, not a blind
+// global replace, so they can't accidentally touch an unrelated document that happens to share
+// that text.
+func ensureGatekeeper(t *testing.T) {
+	t.Helper()
+	gatekeeperInstaller.ensure(t, func() error {
+		version, err := versionsEnvValue("GATEKEEPER_VERSION")
+		if err != nil {
+			return err
+		}
+		url := fmt.Sprintf("https://raw.githubusercontent.com/open-policy-agent/gatekeeper/%s/deploy/gatekeeper.yaml", version)
+		resp, err := http.Get(url)
+		if err != nil {
+			return fmt.Errorf("fetch gatekeeper bundle: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("fetch gatekeeper bundle: %s returned %s", url, resp.Status)
+		}
+		bundle, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read gatekeeper bundle: %w", err)
+		}
+		var docs []string
+		for _, d := range strings.Split(string(bundle), "\n---\n") {
+			if strings.Contains(d, "\nkind: MutatingWebhookConfiguration\n") ||
+				strings.Contains(d, "\nkind: ValidatingWebhookConfiguration\n") {
+				continue
+			}
+			if strings.Contains(d, "\nkind: Deployment\n") && strings.Contains(d, "\n  name: gatekeeper-controller-manager\n") {
+				d = strings.Replace(d, "\n  replicas: 3\n", "\n  replicas: 1\n", 1)
+			}
+			if strings.Contains(d, "\nkind: Deployment\n") &&
+				(strings.Contains(d, "\n  name: gatekeeper-controller-manager\n") || strings.Contains(d, "\n  name: gatekeeper-audit\n")) {
+				d = strings.Replace(d, "\n            cpu: 100m\n", "\n            cpu: 10m\n", 1)
+			}
+			docs = append(docs, d)
+		}
+		cmd := exec.Command("kubectl", "apply", "--server-side", "-f", "-")
+		cmd.Stdin = strings.NewReader(strings.Join(docs, "\n---\n"))
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("kubectl apply gatekeeper bundle: %w: %s", err, output)
+		}
+		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=300s",
+			"deployment", "--all", "-n", "gatekeeper-system").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("kubectl wait gatekeeper deployments: %w: %s", err, output)
+		}
+		return nil
+	})
 }

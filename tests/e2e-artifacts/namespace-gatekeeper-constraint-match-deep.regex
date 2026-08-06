@@ -1,0 +1,11 @@
+\A
+Namespace/e2e-gatekeeper-hint, created 1m ago Active
+  Current: Resource is current
+  PSA: no labels set \(cluster defaults apply — not readable via API\)
+  Gatekeeper: 1 constraint may govern this namespace — PSA labels above may not reflect the effective policy
+    K8sRequiredLabels/e2e-gatekeeper-hint-constraint-[a-z0-9]+, created 1m ago, gen:1
+      Match: core/Pod, namespaces:e2e-gatekeeper-hint
+      enforcementAction: dryrun \(violations are not blocked\)
+      Required labels: team
+      Violations: not yet audited
+\z

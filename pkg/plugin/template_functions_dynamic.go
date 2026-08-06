@@ -385,6 +385,39 @@ func (r RenderableObject) KubeGetNetworkPoliciesMatchingPod(namespace string, po
 	return out
 }
 
+// KubeGetGatekeeperConstraintsMatchingNamespace returns every live Gatekeeper Constraint (of any
+// kind an installed ConstraintTemplate declares) whose spec.match would admit objects created in
+// this Namespace, per gatekeeperConstraintMatchesNamespace. There is no single "constraint"
+// resource to list -- Gatekeeper generates one CRD per ConstraintTemplate (K8sRequiredLabels,
+// K8sAllowedRepos, ...) -- so every installed ConstraintTemplate's declared Kind is discovered
+// first and then listed in turn. Called on the Namespace RenderableObject itself (like
+// KubeGetEvents), not given one as a parameter, since it only ever makes sense for the object
+// being rendered.
+func (r RenderableObject) KubeGetGatekeeperConstraintsMatchingNamespace() (out []RenderableObject) {
+	out = make([]RenderableObject, 0)
+	if r.LiveQueriesDisabled() {
+		return
+	}
+	klog.V(5).InfoS("called KubeGetGatekeeperConstraintsMatchingNamespace", "r", r)
+	namespaceName := r.Name()
+	namespaceLabels := stringifyLabels(r.Labels())
+	seenKinds := map[string]bool{}
+	for _, ct := range r.KubeGet("", "ConstraintTemplate") {
+		kind, _, _ := unstructured.NestedString(ct.Object, "spec", "crd", "spec", "names", "kind")
+		if kind == "" || seenKinds[kind] {
+			continue
+		}
+		seenKinds[kind] = true
+		for _, constraint := range r.KubeGet("", kind) {
+			matchSpec, _, _ := unstructured.NestedMap(constraint.Object, "spec", "match")
+			if gatekeeperConstraintMatchesNamespace(matchSpec, namespaceName, namespaceLabels) {
+				out = append(out, constraint)
+			}
+		}
+	}
+	return out
+}
+
 // KubeGetCiliumNetworkPoliciesMatchingPod returns all CiliumNetworkPolicies in namespace whose
 // spec/specs endpointSelector matches podLabels -- same client-side matching approach as
 // KubeGetNetworkPoliciesMatchingPod, since CiliumNetworkPolicy has no back-reference to the Pods

@@ -1,0 +1,44 @@
+# Gatekeeper's own demo/basic/templates/k8srequiredlabels_template.yaml (pinned at
+# GATEKEEPER_VERSION in hack/versions.env), used as-is rather than a purpose-built fixture: it's
+# the "plain list of strings" parameters.labels shape K8sRequiredLabels.tmpl's comment calls out
+# (as opposed to the {key, allowedRegex} object shape the gatekeeper-library template uses), so
+# reusing it keeps this fixture honest about what a real ConstraintTemplate looks like. This
+# ConstraintTemplate is cluster-scoped, but unlike gatekeeper-constraint.yaml it can't use
+# generateName despite CONTRIBUTING.md's "Parallel-Safe e2e Subtests" preference for one:
+# Gatekeeper's own controller (not a webhook, and not anything this repo enforces) hard-rejects
+# any name other than the lowercase of spec.crd.spec.names.kind -- confirmed live, via the real
+# status.byPod[].errors it writes ("the ConstraintTemplate's name ... is not equal to the
+# lowercase of CRD's Kind") when this was tried with generateName: k8srequiredlabels-. No other
+# e2e subtest creates a ConstraintTemplate, so the fixed name is safe regardless (see
+# TestE2EParallel's doc comment in cmd/main_test.go). See gatekeeper-constraint.yaml for the
+# actual Constraint instance applied against this template, and runMiscFixtureSubtests'
+# "namespace-gatekeeper-constraint-match" subtest for what it's used to verify.
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredlabels
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredLabels
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            labels:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredlabels
+
+        violation[{"msg": msg, "details": {"missing_labels": missing}}] {
+          provided := {label | input.review.object.metadata.labels[label]}
+          required := {label | label := input.parameters.labels[_]}
+          missing := required - provided
+          count(missing) > 0
+          msg := sprintf("you must provide labels: %v", [missing])
+        }

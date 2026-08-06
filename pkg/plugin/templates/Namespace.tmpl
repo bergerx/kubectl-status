@@ -39,6 +39,24 @@
     {{- else }}
         {{- "PSA: no labels set" | yellow | nindent 2 }} (cluster defaults apply — not readable via API)
     {{- end }}
+    {{- /* Only shown when a live Constraint's own spec.match verifiably admits this namespace
+           (see gatekeeperConstraintMatchesNamespace) -- not merely when Gatekeeper/a
+           ConstraintTemplate is installed, which says nothing about whether anything is actually
+           enforced here. */ -}}
+    {{- if not $.LiveQueriesDisabled }}
+        {{- with $.KubeGetGatekeeperConstraintsMatchingNamespace }}
+            {{- "Gatekeeper" | bold | nindent 2 }}: {{ len . }} constraint{{ if ne (len .) 1 }}s{{ end }} may govern this namespace — PSA labels above may not reflect the effective policy
+            {{- if $.Config.GetBool "deep" }}
+                {{- range . }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- end }}
+            {{- else }}
+                {{- range . }}
+                    {{- "" | nindent 4 }}{{ $.Include "resource_ref" (dict "kind" .Kind "name" .Name) }}{{ with .Spec.enforcementAction }} ({{ . | cyan }}){{ end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
     {{- template "conditions_summary" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
