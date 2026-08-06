@@ -36,12 +36,12 @@
             {{- with .excludedNamespaces }}{{ "" | nindent 4 }}excludedNamespaces:{{ join "," . | cyan }}{{ end }}
         {{- end }}
         {{- with .labelSelector }}
-            {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+            {{- if or (. | hasKey "matchLabels") (. | hasKey "matchExpressions") }}
                 {{- "labelSelector" | bold | nindent 4 }}: {{ . | labelSelector | cyan }}
             {{- end }}
         {{- end }}
         {{- with .namespaceSelector }}
-            {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+            {{- if or (. | hasKey "matchLabels") (. | hasKey "matchExpressions") }}
                 {{- "namespaceSelector" | bold | nindent 4 }}: {{ . | labelSelector | cyan }}
             {{- end }}
         {{- end }}
@@ -90,7 +90,7 @@
             {{- $byTarget := dict }}
             {{- range $violations }}
                 {{- $key := printf "%s/%s/%s" .kind (.namespace | default "") .name }}
-                {{- if not (hasKey $byTarget $key) }}
+                {{- if not ($byTarget | hasKey $key) }}
                     {{- $order = append $order $key }}
                     {{- $_ := $byTarget | set $key (dict "kind" .kind "namespace" .namespace "name" .name "messages" list "actions" list) }}
                 {{- end }}

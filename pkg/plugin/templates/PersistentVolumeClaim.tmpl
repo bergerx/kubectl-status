@@ -14,7 +14,7 @@
     {{- with $storageProvisionerAnnotation }}, provisioned by {{ . | bold }}{{ end }}
     {{- with index .Annotations "volume.kubernetes.io/selected-node" }}, attached on {{ $.Include "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}
     {{- if not .Spec.volumeName }}, {{ "Pending" | red | bold }}: no paired PV yet{{ end }}
-    {{- with .Spec.storageClassName }}{{ $.Include "storageclass_summary" (dict "ctx" $ "name" . "provisionerShown" (hasKey $.Annotations "volume.beta.kubernetes.io/storage-provisioner") "warnMissing" (not $.Spec.volumeName)) }}{{ end }}
+    {{- with .Spec.storageClassName }}{{ $.Include "storageclass_summary" (dict "ctx" $ "name" . "provisionerShown" ($.Annotations | hasKey "volume.beta.kubernetes.io/storage-provisioner") "warnMissing" (not $.Spec.volumeName)) }}{{ end }}
     {{- /* Disk usage: find running pods that have this PVC mounted, collect usage stats from the first one */ -}}
     {{- $pvcName := $.Name }}
     {{- $volStats := dict }}
@@ -23,12 +23,12 @@
         {{- $pod := . }}
         {{- $added := false }}
         {{- range $pod.Spec.volumes | default list }}
-            {{- if and (hasKey . "persistentVolumeClaim") (eq .persistentVolumeClaim.claimName $pvcName) }}
+            {{- if and (. | hasKey "persistentVolumeClaim") (eq .persistentVolumeClaim.claimName $pvcName) }}
                 {{- if not $added }}
                     {{- $usingPods = append $usingPods $pod }}
                     {{- $added = true }}
                 {{- end }}
-                {{- if not (hasKey $volStats "usedBytes") }}
+                {{- if not ($volStats | hasKey "usedBytes") }}
                     {{- $volName := .name }}
                     {{- $nodeSummary := $pod.KubeGetNodeStatsSummary ($pod.Spec | get "nodeName") }}
                     {{- $podStat := dict }}
@@ -42,7 +42,7 @@
             {{- end }}
         {{- end }}
     {{- end }}
-    {{- if hasKey $volStats "usedBytes" }}
+    {{- if $volStats | hasKey "usedBytes" }}
         {{- $used := $volStats.usedBytes | float64 }}
         {{- $cap := $volStats.capacityBytes | float64 }}
         {{- if $cap }}

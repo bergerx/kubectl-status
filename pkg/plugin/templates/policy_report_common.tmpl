@@ -11,7 +11,7 @@
     {{- if kindIs "map" $scope }}
         {{- "Scope" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" ($scope.kind | default "") "name" ($scope.name | default "") "namespace" $scope.namespace "callerNamespace" $.Namespace) }}
     {{- else if kindIs "map" $scopeSelector }}
-        {{- if or (hasKey $scopeSelector "matchLabels") (hasKey $scopeSelector "matchExpressions") }}
+        {{- if or ($scopeSelector | hasKey "matchLabels") ($scopeSelector | hasKey "matchExpressions") }}
             {{- "Scope selector" | bold | nindent 2 }}: {{ $scopeSelector | labelSelector | cyan }}
         {{- end }}
     {{- end }}
@@ -94,7 +94,7 @@
             {{- $policy := $r.policy | default "" }}
             {{- $rule := $r.rule | default "" }}
             {{- $key := printf "%s/%s" $policy $rule }}
-            {{- if not (hasKey $byKey $key) }}
+            {{- if not ($byKey | hasKey $key) }}
                 {{- $order = append $order $key }}
                 {{- $_ := $byKey | set $key (dict "policy" $policy "rule" $rule "messages" list "resourceRef" "" "resourceKeys" list "isError" false "severe" false) }}
             {{- end }}

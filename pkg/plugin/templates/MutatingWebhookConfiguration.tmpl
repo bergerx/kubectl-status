@@ -39,7 +39,7 @@
                 {{- $readyCount := 0 }}
                 {{- range $slices }}
                     {{- range (.Object.endpoints | default list) }}
-                        {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{- $readyCount = add1 $readyCount }}{{- end }}
+                        {{- if or (not ((.conditions | default dict) | hasKey "ready")) .conditions.ready }}{{- $readyCount = add1 $readyCount }}{{- end }}
                     {{- end }}
                 {{- end }}
                 {{- if gt $readyCount 0 }}
@@ -62,7 +62,7 @@
         {{- with .scope }}{{ if not (eq . "*") }} scope:{{ . }}{{ end }}{{ end }}
     {{- end }}
     {{- with $wh.namespaceSelector }}
-        {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+        {{- if or (. | hasKey "matchLabels") (. | hasKey "matchExpressions") }}
             {{- "namespaceSelector" | nindent 4 }}:
             {{- range .matchExpressions }}
                 {{- "" | nindent 6 }}{{ .key }} {{ .operator }} [{{ .values | join ", " }}]

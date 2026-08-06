@@ -11,7 +11,7 @@
     {{- $spec := .Spec }}
     {{- $status := .Status | default dict }}
     {{- "VolumeSnapshotContent" | bold | nindent 2 }}:
-    {{- if not (hasKey $status "readyToUse") }} {{ "Provisioning" | yellow }}
+    {{- if not ($status | hasKey "readyToUse") }} {{ "Provisioning" | yellow }}
     {{- else if $status.readyToUse }} {{ "ReadyToUse" | green }}
     {{- else }} {{ "NotReadyToUse" | red | bold }}{{ end }}
     {{- with $spec.driver }}, driver {{ . | cyan }}{{ end }}

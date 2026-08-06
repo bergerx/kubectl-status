@@ -29,7 +29,7 @@
         {{- with $rolloutStatus.message }}: {{ . | yellow }}{{ end }}
         {{- with $rolloutStatus.error }}: Error: {{ . | red }}{{ end }}
     {{- end }}
-    {{- $replicas := 1 }}{{ if hasKey .Spec "replicas" }}{{ $replicas = .Spec.replicas | int }}{{ end }}
+    {{- $replicas := 1 }}{{ if .Spec | hasKey "replicas" }}{{ $replicas = .Spec.replicas | int }}{{ end }}
     {{- if $replicas }}
         {{- if not .Status.readyReplicas }}
             {{- "Outage" | red | bold | nindent 2 }}: Deployment has no Ready replicas.

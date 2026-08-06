@@ -6,7 +6,7 @@
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
     {{- $budgetViolated := lt (.Status.currentHealthy | int) (.Status.desiredHealthy | int) }}
-    {{- $noDisruptions := and (hasKey .Status "disruptionsAllowed") (eq (.Status.disruptionsAllowed | int) 0) }}
+    {{- $noDisruptions := and (.Status | hasKey "disruptionsAllowed") (eq (.Status.disruptionsAllowed | int) 0) }}
     {{- $budgetStatus := "Allowed" | green }}
     {{- if $budgetViolated }}{{- $budgetStatus = "Violated" | red | bold }}
     {{- else if $noDisruptions }}{{- $budgetStatus = "Constrained" | yellow }}
@@ -17,7 +17,7 @@
     {{- with .Spec.maxUnavailable }}
         {{- "Budget" | bold | nindent 2 }}: max unavailable={{ . | toString | cyan }}, {{ $budgetStatus }}
     {{- end }}
-    {{- if hasKey .Spec "selector" }}
+    {{- if .Spec | hasKey "selector" }}
         {{- $selector := .Spec.selector }}
         {{- "Selector" | bold | nindent 2 }}: {{ $selector | labelSelector | cyan }}
         {{- $matchLabels := $selector.matchLabels }}
@@ -59,9 +59,9 @@
             {{- end }}
         {{- end }}
     {{- end }}
-    {{- if hasKey .Status "currentHealthy" }}
+    {{- if .Status | hasKey "currentHealthy" }}
         {{- printf "healthy:%d/expected:%d" (.Status.currentHealthy | int) (.Status.expectedPods | int) | redBoldIf $budgetViolated | nindent 2 }}
-        {{- if hasKey .Status "disruptionsAllowed" }}
+        {{- if .Status | hasKey "disruptionsAllowed" }}
             {{- printf ", disruptions allowed:%d" (.Status.disruptionsAllowed | int) | redBoldIf $noDisruptions }}
         {{- end }}
         {{- if $budgetViolated }}

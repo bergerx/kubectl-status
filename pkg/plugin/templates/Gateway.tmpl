@@ -28,7 +28,7 @@
             {{- with .hostname }}, host={{ . | cyan }}{{ end }}
             {{- with .allowedRoutes.namespaces.from }}, namespaces={{ . | cyan }}{{ end }}
             {{- with $statusListener.supportedKinds }}, accepts={{ range $i, $k := . }}{{ if $i }}/{{ end }}{{ $k.kind | cyan }}{{ end }}{{ end }}
-            {{- if hasKey $statusListener "attachedRoutes" }}, routes={{ $statusListener.attachedRoutes | toString | cyan }}{{ end }}
+            {{- if $statusListener | hasKey "attachedRoutes" }}, routes={{ $statusListener.attachedRoutes | toString | cyan }}{{ end }}
             {{- with .tls }}
                 {{- printf "TLS mode:%s" (.mode | default "Terminate") | nindent 6 }}
                 {{- with .certificateRefs }}

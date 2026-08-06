@@ -6,7 +6,7 @@
     {{- template "finalizer_details_on_termination" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
-    {{- if hasKey .Spec "selfSigned" }}
+    {{- if .Spec | hasKey "selfSigned" }}
         {{- "Backend" | bold | nindent 2 }}: {{ "Self-Signed" | cyan }}
         {{- with .Spec.selfSigned.crlDistributionPoints }}
             {{- "CRL" | bold | nindent 4 }}: {{ join ", " . | cyan }}

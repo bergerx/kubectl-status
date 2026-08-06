@@ -19,7 +19,7 @@
 
 {{- define "suspended" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if hasKey .Spec "replicas" }}{{ if not .Spec.replicas }}
+    {{- if .Spec | hasKey "replicas" }}{{ if not .Spec.replicas }}
         {{- "Suspended" | red | bold | nindent 2 }}: Scaled down to 0.
     {{- end }}{{ end }}
 {{- end }}
@@ -40,15 +40,15 @@
 
 {{- define "replicas_status" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- if hasKey .Status "replicas" }}
+    {{- if .Status | hasKey "replicas" }}
         {{- $spec_replicas := .Spec.replicas }}
         {{- printf "desired:%d" $spec_replicas | bold | nindent 2 }}
         {{- with .Status.replicas }}, {{ printf "existing:%d" . | redBoldIf (not (eq $spec_replicas .)) }}{{ end }}
-        {{- if hasKey .Status "readyReplicas" }}, {{ printf "ready:%d" .Status.readyReplicas | redBoldIf (not (eq $spec_replicas .Status.readyReplicas)) }}{{ end }}
-        {{- if hasKey .Status "currentReplicas" }}, {{ printf "current:%d" .Status.currentReplicas | redBoldIf (not (eq $spec_replicas .Status.currentReplicas)) }}{{ end }}
-        {{- if hasKey .Status "updatedReplicas" }}, {{ printf "updated:%d" .Status.updatedReplicas | redBoldIf (not (eq $spec_replicas .Status.updatedReplicas)) }}{{ end }}
-        {{- if hasKey .Status "availableReplicas" }}, {{ printf "available:%d" .Status.availableReplicas | redBoldIf (not (eq $spec_replicas .Status.availableReplicas)) }}{{ end }}
-        {{- if hasKey .Status "fullyLabeledReplicas" }}, {{ printf "fullyLabeled:%d" .Status.fullyLabeledReplicas | redBoldIf (not (eq $spec_replicas .Status.fullyLabeledReplicas)) }}{{ end }}
+        {{- if .Status | hasKey "readyReplicas" }}, {{ printf "ready:%d" .Status.readyReplicas | redBoldIf (not (eq $spec_replicas .Status.readyReplicas)) }}{{ end }}
+        {{- if .Status | hasKey "currentReplicas" }}, {{ printf "current:%d" .Status.currentReplicas | redBoldIf (not (eq $spec_replicas .Status.currentReplicas)) }}{{ end }}
+        {{- if .Status | hasKey "updatedReplicas" }}, {{ printf "updated:%d" .Status.updatedReplicas | redBoldIf (not (eq $spec_replicas .Status.updatedReplicas)) }}{{ end }}
+        {{- if .Status | hasKey "availableReplicas" }}, {{ printf "available:%d" .Status.availableReplicas | redBoldIf (not (eq $spec_replicas .Status.availableReplicas)) }}{{ end }}
+        {{- if .Status | hasKey "fullyLabeledReplicas" }}, {{ printf "fullyLabeled:%d" .Status.fullyLabeledReplicas | redBoldIf (not (eq $spec_replicas .Status.fullyLabeledReplicas)) }}{{ end }}
         {{- with .Status.unavailableReplicas }}, {{ printf "unavailable:%d" . | red | bold }}{{ end }}
         {{- with .Status.collisionCount }}, {{ printf "collisions:%d" . | red | bold }}{{ end }}
     {{- end }}
@@ -340,7 +340,7 @@
         {{- else }}
             {{- /* "| default true" would be wrong here: sprig's default treats false as an empty
                    value, so it would silently turn an explicit "false" back into "true". */ -}}
-            {{- $automountFalse := and (hasKey $sa.Object "automountServiceAccountToken") (not $sa.Object.automountServiceAccountToken) }}
+            {{- $automountFalse := and ($sa.Object | hasKey "automountServiceAccountToken") (not $sa.Object.automountServiceAccountToken) }}
             {{- $pullSecrets := $sa.Object.imagePullSecrets }}
             {{- if or (ne $name "default") $automountFalse $pullSecrets }}
                 {{- $ctx.Include "resource_ref" (dict "kind" "ServiceAccount" "name" $name) | nindent 2 }}
@@ -889,7 +889,7 @@
     {{- $ready := 0 }}{{ $notReady := 0 }}
     {{- range $slices }}
         {{- range (.Object.endpoints | default list) }}
-            {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{ $ready = add1 $ready }}{{ else }}{{ $notReady = add1 $notReady }}{{ end }}
+            {{- if or (not ((.conditions | default dict) | hasKey "ready")) .conditions.ready }}{{ $ready = add1 $ready }}{{ else }}{{ $notReady = add1 $notReady }}{{ end }}
         {{- end }}
     {{- end }}
     {{- if not $slices }}
@@ -952,11 +952,11 @@
     {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- $budgetViolated := lt (.Status.currentHealthy | int) (.Status.desiredHealthy | int) }}
-    {{- $noDisruptions := and (hasKey .Status "disruptionsAllowed") (eq (.Status.disruptionsAllowed | int) 0) }}
-    {{- $noOp := and (hasKey .Status "expectedPods") (eq (.Status.expectedPods | int) 0) }}
+    {{- $noDisruptions := and (.Status | hasKey "disruptionsAllowed") (eq (.Status.disruptionsAllowed | int) 0) }}
+    {{- $noOp := and (.Status | hasKey "expectedPods") (eq (.Status.expectedPods | int) 0) }}
     {{- with .Spec.minAvailable }}, min available={{ . | toString | cyan }}{{ end }}
     {{- with .Spec.maxUnavailable }}, max unavailable={{ . | toString | cyan }}{{ end }}
-    {{- if hasKey .Status "currentHealthy" }}
+    {{- if .Status | hasKey "currentHealthy" }}
         {{- if $noOp }}
             {{- ", selector matches no pods (no-op)" | yellow }}
         {{- else if $budgetViolated }}
@@ -1144,7 +1144,7 @@
 {{- define "hpa_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
-    {{- $minReplicas := 1 }}{{- if hasKey .Spec "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | int }}{{- end }}
+    {{- $minReplicas := 1 }}{{- if .Spec | hasKey "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | int }}{{- end }}
     {{- $current := .Status.currentReplicas | default 0 | int }}
     {{- $desired := .Status.desiredReplicas | default 0 | int }}
     {{- printf ", %d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas (.Spec.maxReplicas | int) }}
@@ -1305,12 +1305,12 @@
         {{- with .resourceNames }} names:{{ . | join "," }}{{ end }}
     {{- end }}
     {{- with .namespaceSelector }}
-        {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+        {{- if or (. | hasKey "matchLabels") (. | hasKey "matchExpressions") }}
             {{- "namespaceSelector" | nindent 4 }}: {{ . | labelSelector | cyan }}
         {{- end }}
     {{- end }}
     {{- with .objectSelector }}
-        {{- if or (hasKey . "matchLabels") (hasKey . "matchExpressions") }}
+        {{- if or (. | hasKey "matchLabels") (. | hasKey "matchExpressions") }}
             {{- "objectSelector" | nindent 4 }}: {{ . | labelSelector | cyan }}
         {{- end }}
     {{- end }}
@@ -1325,7 +1325,7 @@
         {{- $ready := .Status.numberReady | default 0 | int }}
         {{- if lt $ready $desired }}{{ printf ", %d/%d" $ready $desired | red | bold }}{{ else }}{{ printf ", %d/%d" $ready $desired | green }}{{ end }} scheduled
     {{- else }}
-        {{- $desired := 1 }}{{ if hasKey .Spec "replicas" }}{{ $desired = .Spec.replicas | int }}{{ end }}
+        {{- $desired := 1 }}{{ if .Spec | hasKey "replicas" }}{{ $desired = .Spec.replicas | int }}{{ end }}
         {{- $ready := .Status.readyReplicas | default 0 | int }}
         {{- if lt $ready $desired }}{{ printf ", %d/%d" $ready $desired | red | bold }}{{ else }}{{ printf ", %d/%d" $ready $desired | green }}{{ end }} ready
         {{- with .RolloutStatus . }}{{ if not .done }}, {{ "rolling out" | yellow }}{{ end }}{{ end }}
@@ -1348,7 +1348,7 @@
     {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
     {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with $obj.KStatus }}, {{ .Status.String | colorKeyword }}{{ with .Message }}: {{ . }}{{ end }}{{ end }}
-    {{- if hasKey $obj.Status "ready" }}
+    {{- if $obj.Status | hasKey "ready" }}
         {{- $ready := $obj.Status.ready }}
         {{- if kindIs "bool" $ready }}
             {{- ", ready:" }}{{ if $ready }}{{ "true" | green }}{{ else }}{{ "false" | red | bold }}{{ end }}
@@ -1356,9 +1356,9 @@
     {{- end }}
     {{- $readyCond := getMatchingItemInMapList (dict "type" "Ready") $obj.StatusConditions }}
     {{- $observedGen := 0 }}{{ $haveObservedGen := false }}
-    {{- if hasKey $obj.Status "observedGeneration" }}
+    {{- if $obj.Status | hasKey "observedGeneration" }}
         {{- $observedGen = $obj.Status.observedGeneration }}{{ $haveObservedGen = true }}
-    {{- else if and $readyCond (hasKey $readyCond "observedGeneration") }}
+    {{- else if and $readyCond ($readyCond | hasKey "observedGeneration") }}
         {{- $observedGen = $readyCond.observedGeneration }}{{ $haveObservedGen = true }}
     {{- end }}
     {{- if and $haveObservedGen $obj.Metadata.generation (ne $observedGen $obj.Metadata.generation) }}

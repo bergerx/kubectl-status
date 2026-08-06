@@ -161,8 +161,8 @@
             {{- with .consecutiveErrors }}{{ if $needsComma }},{{ end }} eject on {{ . | toString | cyan }} consecutive errors{{ $needsComma = true }}{{ end }}
             {{- with .interval }}{{ if $needsComma }},{{ end }} checked every {{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
             {{- with .baseEjectionTime }}{{ if $needsComma }},{{ end }} for {{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}
-            {{- if hasKey . "maxEjectionPercent" }}{{ if $needsComma }},{{ end }} up to {{ .maxEjectionPercent | toString | cyan }}% of the pool{{ $needsComma = true }}{{ end }}
-            {{- if hasKey . "minHealthPercent" }}{{ if $needsComma }},{{ end }} while {{ .minHealthPercent | toString | cyan }}% stays healthy{{ $needsComma = true }}{{ end }}
+            {{- if . | hasKey "maxEjectionPercent" }}{{ if $needsComma }},{{ end }} up to {{ .maxEjectionPercent | toString | cyan }}% of the pool{{ $needsComma = true }}{{ end }}
+            {{- if . | hasKey "minHealthPercent" }}{{ if $needsComma }},{{ end }} while {{ .minHealthPercent | toString | cyan }}% stays healthy{{ $needsComma = true }}{{ end }}
             {{- if not $needsComma }} {{ "enabled with defaults" }}{{ end }}
         {{- end }}
         {{- /* Recurses: a port's settings are a whole traffic policy of their own, and they

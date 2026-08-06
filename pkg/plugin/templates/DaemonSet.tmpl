@@ -28,10 +28,10 @@
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- if .Status.desiredNumberScheduled }}
         {{- printf "desired:%d" .Status.desiredNumberScheduled | bold | nindent 2 }}
-        {{- if hasKey .Status "currentNumberScheduled" }}, {{ printf "current:%d" .Status.currentNumberScheduled | redBoldIf (not ( eq .Status.desiredNumberScheduled .Status.currentNumberScheduled)) }}{{ end }}
-        {{- if hasKey .Status "numberAvailable" }}, {{ printf "available:%d" .Status.numberAvailable | redBoldIf (not ( eq .Status.desiredNumberScheduled .Status.numberAvailable)) }}{{ end }}
-        {{- if hasKey .Status "numberReady" }}, {{ printf "ready:%d" .Status.numberReady | redBoldIf (not (eq .Status.desiredNumberScheduled .Status.numberReady)) }}{{ end }}
-        {{- if hasKey .Status "updatedNumberScheduled" }}, {{ printf "updated:%d" .Status.updatedNumberScheduled | redBoldIf (not (eq .Status.desiredNumberScheduled .Status.updatedNumberScheduled)) }}{{ end }}
+        {{- if .Status | hasKey "currentNumberScheduled" }}, {{ printf "current:%d" .Status.currentNumberScheduled | redBoldIf (not ( eq .Status.desiredNumberScheduled .Status.currentNumberScheduled)) }}{{ end }}
+        {{- if .Status | hasKey "numberAvailable" }}, {{ printf "available:%d" .Status.numberAvailable | redBoldIf (not ( eq .Status.desiredNumberScheduled .Status.numberAvailable)) }}{{ end }}
+        {{- if .Status | hasKey "numberReady" }}, {{ printf "ready:%d" .Status.numberReady | redBoldIf (not (eq .Status.desiredNumberScheduled .Status.numberReady)) }}{{ end }}
+        {{- if .Status | hasKey "updatedNumberScheduled" }}, {{ printf "updated:%d" .Status.updatedNumberScheduled | redBoldIf (not (eq .Status.desiredNumberScheduled .Status.updatedNumberScheduled)) }}{{ end }}
         {{- with .Status.numberMisscheduled }}{{ "numberMisscheduled" | red | bold }}:{{ . }}{{- end }}
     {{- else }}
         {{- "Fault!" | red | bold | nindent 2 }}:  The total number of nodes that should be running the daemon pod is not yet set (".status.desiredNumberScheduled").

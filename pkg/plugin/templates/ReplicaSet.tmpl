@@ -12,10 +12,10 @@
     {{- /* Where there is no readyReplicas, STS doesn't have that fields at all,
            and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
     {{- $injectedStatus := .Status }}
-    {{- if not (hasKey .Status "readyReplicas") }}
+    {{- if not (.Status | hasKey "readyReplicas") }}
         {{- $injectedStatus := set $injectedStatus "readyReplicas" 0.0 }}
     {{- end }}
-    {{- if not (hasKey .Status "availableReplicas") }}
+    {{- if not (.Status | hasKey "availableReplicas") }}
         {{- $injectedStatus := set $injectedStatus "availableReplicas" 0.0 }}
     {{- end }}
     {{- $injectedManifest := set .Object "status" $injectedStatus }}
@@ -24,7 +24,7 @@
     {{- if and .Spec.replicas (or (not .Status.replicas) (not .Status.readyReplicas)) }}
         {{- "Outage" | red | bold | nindent 2 }}: ReplicaSet has no Ready replicas.
     {{- end }}
-    {{- if hasKey .Annotations "deployment.kubernetes.io/desired-replicas" }}
+    {{- if .Annotations | hasKey "deployment.kubernetes.io/desired-replicas" }}
         {{- $deploymentDesiredReplicas := index .Annotations "deployment.kubernetes.io/desired-replicas" | float64 }}
         {{- if $deploymentDesiredReplicas }}
             {{- if .Spec.replicas }}
