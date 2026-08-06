@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -110,6 +111,44 @@ func runMiscFixtureSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig),
 		cmdTest{
 			args:            []string{"sts/sts-without-service", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
 			stdoutRegexPath: "e2e-artifacts/sts-without-service.regex",
+		}.assert(t, nil, opts...)
+	})
+	t.Run("namespace-gatekeeper-constraint-match", func(t *testing.T) {
+		t.Parallel()
+		// Real Gatekeeper, not CRDs-only: the ConstraintTemplate's status.created has to come
+		// from a real reconciler before the generated K8sRequiredLabels Kind even exists for the
+		// Constraint below to be created against -- see ensureGatekeeper for why (and why its
+		// webhooks are stripped).
+		ensureGatekeeper(t)
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-gatekeeper-hint"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
+		require.NoError(t, err)
+		// ConstraintTemplate can't use generateName (see the comment on the fixture's own
+		// metadata.name for why -- Gatekeeper's real controller rejects it outright), so this
+		// goes through applyManifest rather than createFromManifestCapturingName.
+		applyManifest(t, "e2e-artifacts/gatekeeper-constrainttemplate.yaml")
+		// ConstraintTemplate is cluster-scoped, so this can't go through waitForInNamespace.
+		// status.created is set once gatekeeper-controller-manager has generated and established
+		// the K8sRequiredLabels CRD from this template.
+		output, err := exec.Command("kubectl", "wait", "--for=jsonpath={.status.created}=true",
+			"constrainttemplate/k8srequiredlabels", "--timeout=120s").CombinedOutput()
+		t.Logf("wait result for constrainttemplate/k8srequiredlabels: %s", output)
+		require.NoError(t, err)
+		// gatekeeper-constraint.yaml's spec.match.namespaces names this namespace directly --
+		// the actual signal KubeGetGatekeeperConstraintsMatchingNamespace verifies, rather than
+		// merely a ConstraintTemplate (or Gatekeeper) existing somewhere on the cluster. Its
+		// generated name is what the regex fixtures below match with a tolerant [a-z0-9]+.
+		createFromManifestCapturingName(t, "e2e-artifacts/gatekeeper-constraint.yaml", "k8srequiredlabels")
+		cmdTest{
+			args:            []string{"namespace/" + ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/namespace-gatekeeper-constraint-match.regex",
+		}.assert(t, nil, opts...)
+		cmdTest{
+			args:            []string{"namespace/" + ns, "--include-events=false", "--include-managed-fields=false", "--deep", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/namespace-gatekeeper-constraint-match-deep.regex",
 		}.assert(t, nil, opts...)
 	})
 }

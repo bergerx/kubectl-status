@@ -1,0 +1,28 @@
+# A real K8sRequiredLabels Constraint instance (see gatekeeper-constrainttemplate.yaml for the
+# ConstraintTemplate it's generated from), scoped via spec.match.namespaces to this test's own
+# namespace so gatekeeperConstraintMatchesNamespace has real match-spec data to verify against --
+# not merely a ConstraintTemplate's existence, which says nothing about whether anything is
+# actually enforced anywhere (see the "Defer, like Kyverno" discussion this hint replaced). This
+# Constraint is cluster-scoped like every Gatekeeper Constraint kind; generateName rather than a
+# fixed name per CONTRIBUTING.md's "Parallel-Safe e2e Subtests" guidance (captured via `kubectl
+# create -f -o jsonpath` in the subtest, same as the ConstraintTemplate above). The generated
+# suffix shows up in the rendered Namespace output, so the regex fixtures it's asserted against
+# use a tolerant `[a-z0-9]+` for it. enforcementAction: dryrun is cosmetic here -- ensureGatekeeper
+# (cmd/e2e_helpers_test.go) deliberately doesn't register Gatekeeper's admission webhooks, so
+# nothing actually enforces this Constraint either way; dryrun just keeps the fixture's intent
+# honest about what it would do if the webhook were wired up.
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  generateName: e2e-gatekeeper-hint-constraint-
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - e2e-gatekeeper-hint
+  parameters:
+    labels:
+      - team
