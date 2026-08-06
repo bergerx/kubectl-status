@@ -1155,6 +1155,103 @@ func TestNetworkPolicySelectsPod(t *testing.T) {
 	}
 }
 
+func TestGatekeeperConstraintMatchesNamespace(t *testing.T) {
+	tests := []struct {
+		name      string
+		matchSpec map[string]interface{}
+		nsName    string
+		nsLabels  map[string]string
+		want      bool
+	}{
+		{
+			name:      "no match fields at all -- applies to every namespace",
+			matchSpec: map[string]interface{}{},
+			nsName:    "team-a",
+			want:      true,
+		},
+		{
+			name:      "scope: Cluster never applies to a namespace's own objects",
+			matchSpec: map[string]interface{}{"scope": "Cluster"},
+			nsName:    "team-a",
+			want:      false,
+		},
+		{
+			name:      "scope: Namespaced is unrestricted, same as unset",
+			matchSpec: map[string]interface{}{"scope": "Namespaced"},
+			nsName:    "team-a",
+			want:      true,
+		},
+		{
+			name:      "namespaces allowlist includes this namespace",
+			matchSpec: map[string]interface{}{"namespaces": []interface{}{"team-a", "team-b"}},
+			nsName:    "team-a",
+			want:      true,
+		},
+		{
+			name:      "namespaces allowlist excludes this namespace",
+			matchSpec: map[string]interface{}{"namespaces": []interface{}{"team-b"}},
+			nsName:    "team-a",
+			want:      false,
+		},
+		{
+			name:      "excludedNamespaces excludes this namespace",
+			matchSpec: map[string]interface{}{"excludedNamespaces": []interface{}{"team-a"}},
+			nsName:    "team-a",
+			want:      false,
+		},
+		{
+			name:      "excludedNamespaces does not name this namespace",
+			matchSpec: map[string]interface{}{"excludedNamespaces": []interface{}{"team-b"}},
+			nsName:    "team-a",
+			want:      true,
+		},
+		{
+			name: "namespaceSelector matches this namespace's labels",
+			matchSpec: map[string]interface{}{"namespaceSelector": map[string]interface{}{
+				"matchLabels": map[string]interface{}{"env": "prod"},
+			}},
+			nsName:   "team-a",
+			nsLabels: map[string]string{"env": "prod"},
+			want:     true,
+		},
+		{
+			name: "namespaceSelector does not match this namespace's labels",
+			matchSpec: map[string]interface{}{"namespaceSelector": map[string]interface{}{
+				"matchLabels": map[string]interface{}{"env": "prod"},
+			}},
+			nsName:   "team-a",
+			nsLabels: map[string]string{"env": "staging"},
+			want:     false,
+		},
+		{
+			name:      "empty namespaceSelector matches every namespace",
+			matchSpec: map[string]interface{}{"namespaceSelector": map[string]interface{}{}},
+			nsName:    "team-a",
+			nsLabels:  map[string]string{"env": "staging"},
+			want:      true,
+		},
+		{
+			name: "namespaces allowlist and namespaceSelector both have to pass",
+			matchSpec: map[string]interface{}{
+				"namespaces": []interface{}{"team-a"},
+				"namespaceSelector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{"env": "prod"},
+				},
+			},
+			nsName:   "team-a",
+			nsLabels: map[string]string{"env": "staging"},
+			want:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := gatekeeperConstraintMatchesNamespace(tt.matchSpec, tt.nsName, tt.nsLabels); got != tt.want {
+				t.Errorf("gatekeeperConstraintMatchesNamespace() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNetworkPolicyPolicyTypes(t *testing.T) {
 	tests := []struct {
 		name string

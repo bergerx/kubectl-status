@@ -1663,6 +1663,58 @@ func networkPolicySelectsPod(policySpec map[string]interface{}, podLabels map[st
 	return sel.Matches(labels.Set(podLabels))
 }
 
+// gatekeeperConstraintMatchesNamespace reports whether a Gatekeeper Constraint's spec.match would
+// admit objects created in the given namespace -- i.e. whether the namespace itself is in scope,
+// not whether any particular object in it would be. It only evaluates the namespace-scoping
+// fields (scope/namespaces/excludedNamespaces/namespaceSelector); spec.match.kinds/labelSelector/
+// name constrain which objects within an admitted namespace the constraint actually governs, and
+// the constraint's rego body decides pass/fail -- neither is answerable without a specific
+// candidate object, so this stays at "may govern this namespace" rather than "will deny this
+// object". scope: Cluster is excluded outright: such a constraint only ever evaluates
+// cluster-scoped objects (Nodes, PersistentVolumes, ...), never anything created inside a
+// namespace. An absent namespaces/excludedNamespaces/namespaceSelector each impose no restriction
+// of their own, matching Gatekeeper's actual match semantics (see
+// gatekeeper_constraint_match_and_enforcement.tmpl, which renders the same fields from the
+// opposite direction -- a Constraint's own perspective on what it matches).
+func gatekeeperConstraintMatchesNamespace(matchSpec map[string]interface{}, namespaceName string, namespaceLabels map[string]string) bool {
+	if scope, _ := matchSpec["scope"].(string); scope == "Cluster" {
+		return false
+	}
+	if namespaces, ok := matchSpec["namespaces"].([]interface{}); ok && len(namespaces) > 0 {
+		found := false
+		for _, n := range namespaces {
+			if s, _ := n.(string); s == namespaceName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if excluded, ok := matchSpec["excludedNamespaces"].([]interface{}); ok {
+		for _, n := range excluded {
+			if s, _ := n.(string); s == namespaceName {
+				return false
+			}
+		}
+	}
+	if selMap, ok := matchSpec["namespaceSelector"].(map[string]interface{}); ok {
+		ls := &metav1.LabelSelector{}
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(selMap, ls); err != nil {
+			return false
+		}
+		sel, err := metav1.LabelSelectorAsSelector(ls)
+		if err != nil {
+			return false
+		}
+		if !sel.Matches(labels.Set(namespaceLabels)) {
+			return false
+		}
+	}
+	return true
+}
+
 // networkPolicyPolicyTypes normalizes NetworkPolicy spec.policyTypes, applying the documented
 // default used when the field is omitted: Ingress always applies, and Egress applies only when
 // the policy also defines an egress rule set. See
