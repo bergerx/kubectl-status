@@ -55,7 +55,7 @@
             {{- "" | nindent 4 }}Inspect the Pod first to confirm the original rollout failure.
             {{- "" | nindent 4 }}Long standing upstream issue, closed as intended behavior: https://github.com/kubernetes/kubernetes/issues/67250
         {{- end }}
-        {{- if and (hasKey $status "currentRevision") (hasKey $status "updateRevision") }}
+        {{- if and ($status | hasKey "currentRevision") ($status | hasKey "updateRevision") }}
             {{- with .KubeGetUnifiedDiffString "ControllerRevision" .Namespace $status.currentRevision $status.updateRevision }}
                 {{- "Active Rollout Diff:" | nindent 2 }}
                 {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 4 }}

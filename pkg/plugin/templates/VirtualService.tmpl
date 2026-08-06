@@ -176,7 +176,7 @@
         {{- $sum := 0 }}
         {{- range . }}
             {{- "→" | nindent 6 }} {{ $ctx.Include "istio_destination" (dict "ctx" $ctx "dest" .destination) }}
-            {{- if or $multi (hasKey . "weight") }} {{ .weight | default 0 | toString | cyan }}%{{ end }}
+            {{- if or $multi (. | hasKey "weight") }} {{ .weight | default 0 | toString | cyan }}%{{ end }}
             {{- $sum = add $sum (.weight | default 0 | int) }}
             {{- $ctx.Include "istio_destination_problems" (dict "ctx" $ctx "dest" .destination) }}
         {{- end }}
@@ -263,7 +263,7 @@
     {{- /* Expects a spec.http[].retries block. attempts:0 is not an omitted field but an
            explicit opt-out of the retry policy Istio would otherwise apply by default, so it
            reads as "retries disabled" rather than as a count. */ -}}
-    {{- if and (hasKey . "attempts") (eq (.attempts | default 0 | int) 0) }}
+    {{- if and (. | hasKey "attempts") (eq (.attempts | default 0 | int) 0) }}
         {{- "retries disabled" }}
     {{- else }}
         {{- "retries" }} {{ .attempts | default 0 | toString | cyan }} attempts

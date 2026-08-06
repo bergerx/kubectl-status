@@ -13,7 +13,7 @@
             {{- "Scales" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Deployment") "name" .name) }}
         {{- end }}
     {{- end }}
-    {{- $minReplicas := 1 }}{{- if hasKey .Spec "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | int }}{{- end }}
+    {{- $minReplicas := 1 }}{{- if .Spec | hasKey "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | int }}{{- end }}
     {{- $current := .Status.currentReplicas | default 0 | int }}
     {{- $desired := .Status.desiredReplicas | default 0 | int }}
     {{- "Replicas" | bold | nindent 2 }}: {{ printf "%d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas (.Spec.maxReplicas | int) }}
@@ -37,7 +37,7 @@
                 {{- .resource.name | nindent 4 }}:
                 {{- if eq $target.type "Utilization" }}
                     {{- $targetUtil := $target.averageUtilization | int }}
-                    {{- if hasKey ($cur.resource.current | default dict) "averageUtilization" }}
+                    {{- if ($cur.resource.current | default dict) | hasKey "averageUtilization" }}
                         {{- $curUtil := $cur.resource.current.averageUtilization | int }}
                         {{- $curUtil | toString | redIf (ge $curUtil $targetUtil) }}%/
                     {{- end }}{{ $targetUtil | toString }}%
@@ -51,7 +51,7 @@
                 {{- printf "%s[%s]" .containerResource.name .containerResource.container | nindent 4 }}:
                 {{- if eq $target.type "Utilization" }}
                     {{- $targetUtil := $target.averageUtilization | int }}
-                    {{- if hasKey ($cur.containerResource.current | default dict) "averageUtilization" }}
+                    {{- if ($cur.containerResource.current | default dict) | hasKey "averageUtilization" }}
                         {{- $curUtil := $cur.containerResource.current.averageUtilization | int }}
                         {{- $curUtil | toString | redIf (ge $curUtil $targetUtil) }}%/
                     {{- end }}{{ $targetUtil | toString }}%

@@ -16,7 +16,7 @@
     {{- if ne .Spec.type "ExternalName" }}
         {{- $slices = .KubeGetEndpointSlicesForService .Namespace .Name }}
         {{- if $slices }}
-            {{- if hasKey (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" -}}
+            {{- if (index $slices 0).Annotations | hasKey "endpoints.kubernetes.io/last-change-trigger-time" -}}
                 , last endpoint change was {{ index (index $slices 0).Annotations "endpoints.kubernetes.io/last-change-trigger-time" | colorAgo }}{{ agoSuffix }}
             {{- end}}
         {{- end}}
@@ -32,7 +32,7 @@
         {{- range $slices }}
             {{- range (.Object.endpoints | default list) }}
                 {{- $hasAnyEndpoints = true }}
-                {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}{{- $hasReadyEndpoints = true }}{{- end }}
+                {{- if or (not ((.conditions | default dict) | hasKey "ready")) .conditions.ready }}{{- $hasReadyEndpoints = true }}{{- end }}
             {{- end }}
         {{- end }}
         {{- if not $slices }}
@@ -43,7 +43,7 @@
             {{- range $slices }}
                 {{- $ports := .Object.ports }}
                 {{- range (.Object.endpoints | default list) }}
-                    {{- if or (not (hasKey (.conditions | default dict) "ready")) .conditions.ready }}
+                    {{- if or (not ((.conditions | default dict) | hasKey "ready")) .conditions.ready }}
   Ready: {{ template "endpoint_slice_endpoint" (dict "endpoint" . "ports" $ports) }}
                     {{- end }}
                 {{- end }}
@@ -54,7 +54,7 @@
             {{- range $slices }}
                 {{- $ports := .Object.ports }}
                 {{- range (.Object.endpoints | default list) }}
-                    {{- if and (hasKey (.conditions | default dict) "ready") (not .conditions.ready) }}
+                    {{- if and ((.conditions | default dict) | hasKey "ready") (not .conditions.ready) }}
   {{ "NotReady" | red | bold }}: {{ template "endpoint_slice_endpoint" (dict "endpoint" . "ports" $ports) }}
                     {{- end }}
                 {{- end }}

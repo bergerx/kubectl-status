@@ -34,9 +34,9 @@
         {{- end }}
     {{- end }}
     {{- $spec := .Spec | default dict }}
-    {{- if hasKey $spec "replicas" }}
+    {{- if $spec | hasKey "replicas" }}
         {{- "Replicas" | bold | nindent 2 }}: {{ $spec.replicas | toString | cyan }}
-    {{- else if hasKey (.Status | default dict) "nodes" }}
+    {{- else if (.Status | default dict) | hasKey "nodes" }}
         {{- "Nodes" | bold | nindent 2 }}: {{ .Status.nodes | toString | cyan }}
     {{- end }}
     {{- $limits := $spec.limits }}

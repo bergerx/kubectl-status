@@ -414,18 +414,18 @@
     {{- .vol.name | bold }}
     {{- $inner := "" }}
     {{- $isPVC := false }}
-    {{- if hasKey .vol "emptyDir" }}
+    {{- if .vol | hasKey "emptyDir" }}
         {{- $inner = "EmptyDir" }}
         {{- with .vol.emptyDir.medium }}{{- $inner = printf "%s, medium: %s" $inner . }}{{- end }}
         {{- with .vol.emptyDir.sizeLimit }}{{- $inner = printf "%s, limit: %s" $inner . }}{{- end }}
-    {{- else if hasKey .vol "hostPath" }}
+    {{- else if .vol | hasKey "hostPath" }}
         {{- $inner = printf "HostPath: %s" .vol.hostPath.path }}
         {{- with .vol.hostPath.type }}{{- $inner = printf "%s, type: %s" $inner . }}{{- end }}
-    {{- else if hasKey .vol "configMap" }}
+    {{- else if .vol | hasKey "configMap" }}
         {{- $inner = .ctx.Include "resource_ref" (dict "kind" "ConfigMap" "name" .vol.configMap.name) }}
-    {{- else if hasKey .vol "secret" }}
+    {{- else if .vol | hasKey "secret" }}
         {{- $inner = .ctx.Include "resource_ref" (dict "kind" "Secret" "name" .vol.secret.secretName) }}
-    {{- else if hasKey .vol "persistentVolumeClaim" }}
+    {{- else if .vol | hasKey "persistentVolumeClaim" }}
         {{- $isPVC = true }}
         {{- $inner = .ctx.Include "resource_ref" (dict "kind" "PersistentVolumeClaim" "name" .vol.persistentVolumeClaim.claimName) }}
         {{- if .vol.persistentVolumeClaim.readOnly }}{{- $inner = printf "%s, readOnly" $inner }}{{- end }}
@@ -434,10 +434,10 @@
             {{- $pvcRequests := (($pvc.Spec | default dict).resources | default dict).requests | default dict }}
             {{- with index $pvcRequests "storage" }}{{- $inner = printf "%s, asked %s" $inner . }}{{- end }}
         {{- end }}
-    {{- else if hasKey .vol "downwardAPI" }}{{- $inner = "DownwardAPI" }}
-    {{- else if hasKey .vol "projected" }}{{- $inner = "Projected" }}
-    {{- else if hasKey .vol "csi" }}{{- $inner = printf "CSI: %s" .vol.csi.driver }}
-    {{- else if hasKey .vol "nfs" }}{{- $inner = printf "NFS: %s:%s" .vol.nfs.server .vol.nfs.path }}
+    {{- else if .vol | hasKey "downwardAPI" }}{{- $inner = "DownwardAPI" }}
+    {{- else if .vol | hasKey "projected" }}{{- $inner = "Projected" }}
+    {{- else if .vol | hasKey "csi" }}{{- $inner = printf "CSI: %s" .vol.csi.driver }}
+    {{- else if .vol | hasKey "nfs" }}{{- $inner = printf "NFS: %s:%s" .vol.nfs.server .vol.nfs.path }}
     {{- end }}
     {{- with $stats }}
         {{- if and .usedBytes .capacityBytes }}
@@ -506,11 +506,11 @@
     {{- $volProblems := dict }}
     {{- if not ($.LiveQueriesDisabled) }}
         {{- range $.Spec.volumes }}
-            {{- if hasKey . "configMap" }}
+            {{- if . | hasKey "configMap" }}
                 {{- $cm := .configMap }}
                 {{- $problem := $.Include "pod_volume_configmap_secret_problem" (dict "kind" "ConfigMap" "ctx" $ "name" $cm.name "optional" ($cm.optional | default false) "items" ($cm.items | default list)) }}
                 {{- if $problem }}{{ $volProblems = set $volProblems .name $problem }}{{ end }}
-            {{- else if hasKey . "secret" }}
+            {{- else if . | hasKey "secret" }}
                 {{- $sec := .secret }}
                 {{- $problem := $.Include "pod_volume_configmap_secret_problem" (dict "kind" "Secret" "ctx" $ "name" $sec.secretName "optional" ($sec.optional | default false) "items" ($sec.items | default list)) }}
                 {{- if $problem }}{{ $volProblems = set $volProblems .name $problem }}{{ end }}
@@ -521,14 +521,14 @@
     {{- $displayVols := list }}
     {{- range $.Spec.volumes }}
         {{- $vol := . }}
-        {{- if or (hasKey . "persistentVolumeClaim") (hasKey . "hostPath") (hasKey . "nfs") (hasKey . "csi") }}
+        {{- if or (. | hasKey "persistentVolumeClaim") (. | hasKey "hostPath") (. | hasKey "nfs") (. | hasKey "csi") }}
             {{- $displayVols = append $displayVols . }}
-        {{- else if hasKey . "emptyDir" }}
+        {{- else if . | hasKey "emptyDir" }}
             {{- /* show emptyDir only if kubelet has stats for it */ -}}
             {{- with $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $vol.name) }}
                 {{- $displayVols = append $displayVols $vol }}
             {{- end }}
-        {{- else if hasKey $volProblems $vol.name }}
+        {{- else if $volProblems | hasKey $vol.name }}
             {{- /* a broken configMap/secret volume must surface even without --include-all-volumes */ -}}
             {{- $displayVols = append $displayVols . }}
         {{- else if $.Config.GetBool "include-all-volumes" }}
@@ -548,7 +548,7 @@
     {{- end }}
     {{- range $displayVols }}
         {{- $entry := $.Include "pod_volume_line" (dict "ctx" $ "vol" . "podStatsSummary" $podStatsSummary "problem" (index $volProblems .name)) }}
-        {{- if and $deep (hasKey . "persistentVolumeClaim") }}
+        {{- if and $deep (. | hasKey "persistentVolumeClaim") }}
             {{- $pvc := $.KubeGetFirst $.Namespace "PersistentVolumeClaim" .persistentVolumeClaim.claimName }}
             {{- if $pvc.Metadata }}
                 {{- $entry = printf "%s%s" $entry ($.Include "PersistentVolumeClaim" $pvc | nindent 2) }}
@@ -586,7 +586,7 @@
     {{- $podScheduledCondition := .StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
     {{- if not (isStatusConditionHealthy $podScheduledCondition) }}
         {{- range $.Spec.volumes }}
-            {{- if hasKey . "persistentVolumeClaim" }}
+            {{- if . | hasKey "persistentVolumeClaim" }}
                 {{- $claimName := .persistentVolumeClaim.claimName }}
                 {{- $pvc := $.KubeGetFirst $.Namespace "PersistentVolumeClaim" $claimName }}
                 {{- if $pvc.Object }}
