@@ -73,7 +73,7 @@ Apply `| cyan` to plain values so they are visually distinct from bold labels. N
 `{{- with .field }}` skips when the value is `false`, `0`, or `""`. This hides operationally meaningful zeroes — `routes=0` means nothing is attached and is worth showing. Use `if hasKey` when zero is significant:
 
 ```
-{{- if hasKey $status "attachedRoutes" }}, routes={{ $status.attachedRoutes | toString | cyan }}{{ end }}
+{{- if $status | hasKey "attachedRoutes" }}, routes={{ $status.attachedRoutes | toString | cyan }}{{ end }}
 ```
 
 Use `with` only when the zero/empty case genuinely means "omit this field entirely".

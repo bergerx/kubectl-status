@@ -33,7 +33,7 @@
                 {{- $valStr = printf "%s/%s" ($usedVal | printf "%g") ($hardVal | printf "%g") }}
             {{- end }}
             {{- if gt $hardVal 0.0 }}{{- $valStr = printf "%s[%s]" $valStr (percent $usedVal $hardVal | colorPercent "%.0f%%") }}{{- end }}
-            {{- $lines = append $lines (printf "%s: %s" $key $valStr) }}
+            {{- $lines = $lines | append (printf "%s: %s" $key $valStr) }}
         {{- end }}
         {{- if eq (len $lines) 1 }}
             {{- "Quota" | bold | nindent 2 }}: {{ index $lines 0 }}

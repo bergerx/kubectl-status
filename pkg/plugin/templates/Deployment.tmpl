@@ -61,7 +61,7 @@
     {{- range .KubeGet .Namespace "ReplicaSets" }}
         {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
         {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
-            {{- $replicaSets = append $replicaSets . }}
+            {{- $replicaSets = $replicaSets | append . }}
         {{- end }}
     {{- end }}
     {{- /* creationTimestamp only has second resolution, so ReplicaSets created within the same

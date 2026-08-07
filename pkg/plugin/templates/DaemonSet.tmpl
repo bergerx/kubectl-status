@@ -44,7 +44,7 @@
     {{- range .KubeGetByLabelsMap .Namespace "controllerrevisions" .Labels }}
         {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
         {{- if eq (index .Metadata.ownerReferences 0).name $.Name }}
-            {{- $revisions = append $revisions . }}
+            {{- $revisions = $revisions | append . }}
         {{- end }}
     {{- end }}
     {{- /* creationTimestamp only has second resolution, so ControllerRevisions created within the

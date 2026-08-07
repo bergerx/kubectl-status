@@ -20,7 +20,7 @@
                 {{- if not $svc }}
                     {{- if not ($missingSvcs | has $ingSvcName) }}
                         {{- "Service" | bold | nindent 2 }}/{{ $ingSvcName }} {{ "doesn't exist" | red | bold }}, but it's referenced in Ingress.
-                        {{- $missingSvcs = append $missingSvcs $ingSvcName }}
+                        {{- $missingSvcs = $missingSvcs | append $ingSvcName }}
                     {{- end }}
                 {{- else }}
                     {{- $portDefinedInSvc := false }}
@@ -33,7 +33,7 @@
                         {{- "Service port doesnt exist" | red | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" "Service" "name" $ingSvcName) }}:{{ $ingSvcPort }} referenced in ingress, but Service doesn't have that port defined.
                     {{- else if not ($shownSvcs | has $ingSvcName) }}
                         {{- $.Include "service_health_summary" $svc | nindent 2 }}
-                        {{- $shownSvcs = append $shownSvcs $ingSvcName }}
+                        {{- $shownSvcs = $shownSvcs | append $ingSvcName }}
                     {{- end }}
                 {{- end }}
             {{- end }}
@@ -51,7 +51,7 @@
             {{- if not $secret.Object }}
                 {{- if not ($missingSecrets | has $secretName) }}
                     {{- "Secret" | bold | nindent 2 }}/{{ $secretName }} {{ "doesn't exist" | red | bold }}, but it's referenced in Ingress TLS for host(s) [{{ $hosts | join ", " }}].
-                    {{- $missingSecrets = append $missingSecrets $secretName }}
+                    {{- $missingSecrets = $missingSecrets | append $secretName }}
                 {{- end }}
             {{- else }}
                 {{- $certBase := parseTLSSecretCertificate $secret "" }}
@@ -76,7 +76,7 @@
                 {{- if $.Config.GetBool "deep" }}
                     {{- if not ($shownSecrets | has $secretName) }}
                         {{- $.IncludeRenderableObject $secret | nindent 4 }}
-                        {{- $shownSecrets = append $shownSecrets $secretName }}
+                        {{- $shownSecrets = $shownSecrets | append $secretName }}
                     {{- end }}
                 {{- end }}
             {{- end }}

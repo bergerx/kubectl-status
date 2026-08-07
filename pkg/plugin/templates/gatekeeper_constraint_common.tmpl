@@ -86,7 +86,7 @@
         {{- range . }}
             {{- $action := .action | default "deny" }}
             {{- $points := list }}
-            {{- range .enforcementPoints }}{{ $points = append $points .name }}{{ end }}
+            {{- range .enforcementPoints }}{{ $points = $points | append .name }}{{ end }}
             {{- "" | nindent 4 }}{{ $action | redBoldIf (ne $action "deny") }} at {{ $points | join "," | cyan }}
         {{- end }}
     {{- end }}
@@ -122,12 +122,12 @@
             {{- range $violations }}
                 {{- $key := printf "%s/%s/%s" .kind (.namespace | default "") .name }}
                 {{- if not ($byTarget | hasKey $key) }}
-                    {{- $order = append $order $key }}
+                    {{- $order = $order | append $key }}
                     {{- $_ := $byTarget | set $key (dict "kind" .kind "namespace" .namespace "name" .name "messages" list "actions" list) }}
                 {{- end }}
                 {{- $entry := index $byTarget $key }}
-                {{- $_ := $entry | set "messages" (append $entry.messages .message) }}
-                {{- with .enforcementAction }}{{ $_ := $entry | set "actions" (append $entry.actions .) }}{{ end }}
+                {{- $_ := $entry | set "messages" ($entry.messages | append .message) }}
+                {{- with .enforcementAction }}{{ $_ := $entry | set "actions" ($entry.actions | append .) }}{{ end }}
             {{- end }}
             {{- $shownRaw := 0 }}
             {{- range $i, $key := $order }}

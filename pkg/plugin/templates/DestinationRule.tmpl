@@ -48,7 +48,7 @@
             {{- with .labels }}
                 {{- $labels := . }}
                 {{- $pairs := list }}
-                {{- range $key := keys . | sortAlpha }}{{ $pairs = append $pairs (printf "%s=%v" $key (index $labels $key)) }}{{ end }}
+                {{- range $key := keys . | sortAlpha }}{{ $pairs = $pairs | append (printf "%s=%v" $key (index $labels $key)) }}{{ end }}
                 {{- " " }}{{ join "," $pairs | cyan }}
             {{- end }}
             {{- /* A subset is the Service's endpoints narrowed by these labels, so it goes empty

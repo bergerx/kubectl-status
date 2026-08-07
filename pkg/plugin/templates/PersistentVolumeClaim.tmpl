@@ -25,7 +25,7 @@
         {{- range $pod.Spec.volumes | default list }}
             {{- if and (. | hasKey "persistentVolumeClaim") (eq .persistentVolumeClaim.claimName $pvcName) }}
                 {{- if not $added }}
-                    {{- $usingPods = append $usingPods $pod }}
+                    {{- $usingPods = $usingPods | append $pod }}
                     {{- $added = true }}
                 {{- end }}
                 {{- if not ($volStats | hasKey "usedBytes") }}

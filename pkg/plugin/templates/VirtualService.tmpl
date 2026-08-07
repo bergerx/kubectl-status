@@ -235,7 +235,7 @@
             {{- $subset := $dest.subset | toString }}
             {{- $namespaces := list $ctx.Namespace }}
             {{- if and $ref.InCluster (ne $ref.Namespace $ctx.Namespace) }}
-                {{- $namespaces = append $namespaces $ref.Namespace }}
+                {{- $namespaces = $namespaces | append $ref.Namespace }}
             {{- end }}
             {{- $pairedName := "" }}
             {{- $pairedNamespace := "" }}
@@ -318,7 +318,7 @@
     {{- with $sourceLabels }}
         {{- if $needsComma }}, {{ end }}{{ "from " }}
         {{- $pairs := list }}
-        {{- range $name := keys . | sortAlpha }}{{ $pairs = append $pairs (printf "%s=%v" $name (index $sourceLabels $name)) }}{{ end }}
+        {{- range $name := keys . | sortAlpha }}{{ $pairs = $pairs | append (printf "%s=%v" $name (index $sourceLabels $name)) }}{{ end }}
         {{- join "," $pairs | cyan }}{{ $needsComma = true }}
     {{- end }}
     {{- with .sourceNamespace }}{{ if $needsComma }}, {{ end }}from namespace {{ . | toString | cyan }}{{ $needsComma = true }}{{ end }}

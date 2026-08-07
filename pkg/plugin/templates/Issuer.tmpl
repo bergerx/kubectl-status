@@ -42,8 +42,8 @@
         {{- end }}
         {{- $solverTypes := list }}
         {{- range .Spec.acme.solvers | default list }}
-            {{- if .http01 }}{{ $solverTypes = append $solverTypes "HTTP-01" }}{{ end }}
-            {{- if .dns01 }}{{ $solverTypes = append $solverTypes "DNS-01" }}{{ end }}
+            {{- if .http01 }}{{ $solverTypes = $solverTypes | append "HTTP-01" }}{{ end }}
+            {{- if .dns01 }}{{ $solverTypes = $solverTypes | append "DNS-01" }}{{ end }}
         {{- end }}
         {{- with $solverTypes | uniq }}
             {{- "Solvers" | bold | nindent 4 }}: {{ join ", " . | cyan }}

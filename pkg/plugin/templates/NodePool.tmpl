@@ -16,7 +16,7 @@
     {{- $relevantKeys := list "node.kubernetes.io/instance-type" "karpenter.k8s.aws/instance-category" "karpenter.k8s.aws/instance-family" "topology.kubernetes.io/zone" "kubernetes.io/arch" "kubernetes.io/os" "karpenter.sh/capacity-type" }}
     {{- $requirements := list }}
     {{- range .Spec.template.spec.requirements }}
-        {{- if has .key $relevantKeys }}{{ $requirements = append $requirements . }}{{ end }}
+        {{- if has .key $relevantKeys }}{{ $requirements = $requirements | append . }}{{ end }}
     {{- end }}
     {{- with $requirements }}
         {{- "Requirements" | bold | nindent 2 }}:
@@ -43,8 +43,8 @@
     {{- $resources := (.Status | default dict).resources }}
     {{- if or (and (kindIs "map" $limits) $limits) (and (kindIs "map" $resources) $resources) }}
         {{- $keys := list }}
-        {{- range keys ($limits | default dict) }}{{ if not (has . $keys) }}{{ $keys = append $keys . }}{{ end }}{{ end }}
-        {{- range keys ($resources | default dict) }}{{ if not (has . $keys) }}{{ $keys = append $keys . }}{{ end }}{{ end }}
+        {{- range keys ($limits | default dict) }}{{ if not (has . $keys) }}{{ $keys = $keys | append . }}{{ end }}{{ end }}
+        {{- range keys ($resources | default dict) }}{{ if not (has . $keys) }}{{ $keys = $keys | append . }}{{ end }}{{ end }}
         {{- "Resources" | bold | nindent 2 }}: (current/limit)
         {{- range ($keys | sortAlpha) }}
             {{- $key := . }}
