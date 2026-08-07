@@ -31,7 +31,7 @@
     {{- range $.KubeGet $.Namespace "persistentvolumeclaims" }}
         {{- $ref := .Spec.dataSourceRef | default .Spec.dataSource }}
         {{- if and (kindIs "map" $ref) (eq $ref.kind "VolumeSnapshot") (eq $ref.name $.Name) }}
-            {{- $restoringPVCs = append $restoringPVCs . }}
+            {{- $restoringPVCs = $restoringPVCs | append . }}
         {{- end }}
     {{- end }}
     {{- if $restoringPVCs }}

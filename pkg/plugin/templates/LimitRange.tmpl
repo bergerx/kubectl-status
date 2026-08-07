@@ -30,18 +30,18 @@
     {{- $resourceNames := list }}
     {{- range $m := list $default $defaultRequest $max $min $ratio }}
         {{- range $name, $_ := $m }}
-            {{- if not (has $name $resourceNames) }}{{ $resourceNames = append $resourceNames $name }}{{ end }}
+            {{- if not (has $name $resourceNames) }}{{ $resourceNames = $resourceNames | append $name }}{{ end }}
         {{- end }}
     {{- end }}
     {{- .type | bold | nindent 4 }}:
     {{- range $resourceNames | sortAlpha }}
         {{- $name := . }}
         {{- $facts := list }}
-        {{- with index $min $name }}{{ $facts = append $facts (printf "min %s" (. | toString | cyan)) }}{{ end }}
-        {{- with index $defaultRequest $name }}{{ $facts = append $facts (printf "default request %s" (. | toString | cyan)) }}{{ end }}
-        {{- with index $default $name }}{{ $facts = append $facts (printf "default limit %s" (. | toString | cyan)) }}{{ end }}
-        {{- with index $max $name }}{{ $facts = append $facts (printf "max %s" (. | toString | cyan)) }}{{ end }}
-        {{- with index $ratio $name }}{{ $facts = append $facts (printf "max limit/request ratio %s" (. | toString | cyan)) }}{{ end }}
+        {{- with index $min $name }}{{ $facts = $facts | append (printf "min %s" (. | toString | cyan)) }}{{ end }}
+        {{- with index $defaultRequest $name }}{{ $facts = $facts | append (printf "default request %s" (. | toString | cyan)) }}{{ end }}
+        {{- with index $default $name }}{{ $facts = $facts | append (printf "default limit %s" (. | toString | cyan)) }}{{ end }}
+        {{- with index $max $name }}{{ $facts = $facts | append (printf "max %s" (. | toString | cyan)) }}{{ end }}
+        {{- with index $ratio $name }}{{ $facts = $facts | append (printf "max limit/request ratio %s" (. | toString | cyan)) }}{{ end }}
         {{- printf "%s: %s" $name (join ", " $facts) | nindent 6 }}
     {{- end }}
 {{- end -}}

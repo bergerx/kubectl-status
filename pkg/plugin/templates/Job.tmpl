@@ -27,7 +27,7 @@
         {{- $failedPods := list }}
         {{- range $.KubeGetByLabelsMap $.Namespace "pods" (dict "job-name" .Name) }}
             {{- if eq .Status.phase "Failed" }}
-                {{- $failedPods = append $failedPods . }}
+                {{- $failedPods = $failedPods | append . }}
             {{- end }}
         {{- end }}
         {{- with $failedPods }}
@@ -48,7 +48,7 @@
         {{- $pendingPods := list }}
         {{- range $.KubeGetByLabelsMap $.Namespace "pods" (dict "job-name" .Name) }}
             {{- if eq .Status.phase "Pending" }}
-                {{- $pendingPods = append $pendingPods . }}
+                {{- $pendingPods = $pendingPods | append . }}
             {{- end }}
         {{- end }}
         {{- with $pendingPods }}

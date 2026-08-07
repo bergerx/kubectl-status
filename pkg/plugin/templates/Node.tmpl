@@ -95,21 +95,21 @@
            the cpu:/mem:/ephemeral-storage: lines whose numbers they explain. */ -}}
     {{- $kc := .kubeletconfig | default dict }}
     {{- $parts := list }}
-    {{- with .health }}{{ $parts = append $parts (ternary . (. | red | bold) (eq . "ok")) }}{{ end }}
-    {{- with $kc.podPidsLimit }}{{ if ge (. | float64) 0.0 }}{{ $parts = append $parts (printf "podPidsLimit:%s" (. | toString)) }}{{ end }}{{ end }}
-    {{- with $kc.cpuManagerPolicy }}{{ if ne . "none" }}{{ $parts = append $parts (printf "cpuManager:%s" .) }}{{ end }}{{ end }}
-    {{- with $kc.memoryManagerPolicy }}{{ if ne . "None" }}{{ $parts = append $parts (printf "memoryManager:%s" .) }}{{ end }}{{ end }}
-    {{- with $kc.topologyManagerPolicy }}{{ if ne . "none" }}{{ $parts = append $parts (printf "topologyManager:%s" .) }}{{ end }}{{ end }}
+    {{- with .health }}{{ $parts = $parts | append (ternary . (. | red | bold) (eq . "ok")) }}{{ end }}
+    {{- with $kc.podPidsLimit }}{{ if ge (. | float64) 0.0 }}{{ $parts = $parts | append (printf "podPidsLimit:%s" (. | toString)) }}{{ end }}{{ end }}
+    {{- with $kc.cpuManagerPolicy }}{{ if ne . "none" }}{{ $parts = $parts | append (printf "cpuManager:%s" .) }}{{ end }}{{ end }}
+    {{- with $kc.memoryManagerPolicy }}{{ if ne . "None" }}{{ $parts = $parts | append (printf "memoryManager:%s" .) }}{{ end }}{{ end }}
+    {{- with $kc.topologyManagerPolicy }}{{ if ne . "none" }}{{ $parts = $parts | append (printf "topologyManager:%s" .) }}{{ end }}{{ end }}
     {{- with $kc.shutdownGracePeriod }}
         {{- if ne . "0s" }}
             {{- $grace := printf "shutdownGracePeriod:%s" . }}
             {{- with $kc.shutdownGracePeriodCriticalPods }}{{ $grace = printf "%s/%s(critical)" $grace . }}{{ end }}
-            {{- $parts = append $parts $grace }}
+            {{- $parts = $parts | append $grace }}
         {{- end }}
     {{- end }}
     {{- with $kc.containerLogMaxSize }}
         {{- $retained := mulf (. | quantityToFloat64) $kc.containerLogMaxFiles }}
-        {{- $parts = append $parts (printf "container logs: retains up to %s per container (%s x %s files)" ($retained | humanizeSI "B") . ($kc.containerLogMaxFiles | toString)) }}
+        {{- $parts = $parts | append (printf "container logs: retains up to %s per container (%s x %s files)" ($retained | humanizeSI "B") . ($kc.containerLogMaxFiles | toString)) }}
     {{- end }}
     {{- with $parts }}{{ "kubelet" | nindent 2 }} {{ join ", " . }}{{ end }}
 {{- end -}}
@@ -222,7 +222,7 @@
                 {{- end }}
             {{- end }}
             {{- if $podHasMetrics }}
-                {{- $podUsageRows = append $podUsageRows (dict "ref" ($r.Include "resource_ref" (dict "kind" $pod.Kind "name" $pod.Name "namespace" $pod.Namespace))
+                {{- $podUsageRows = $podUsageRows | append (dict "ref" ($r.Include "resource_ref" (dict "kind" $pod.Kind "name" $pod.Name "namespace" $pod.Namespace))
                     "cpuUsage" $podCpuUsage "cpuReq" $podCpuReq "cpuLim" $podCpuLim
                     "memUsage" $podMemUsage "memReq" $podMemReq "memLim" $podMemLim) }}
             {{- end }}
@@ -234,7 +234,7 @@
                 {{- $restarts = $restarts | add ($cs.restartCount | int) }}
             {{- end }}
             {{- if or (ne $pod.Status.phase "Running") (lt $readyContainers $totalContainers) (gt $restarts 0) }}
-                {{- $podsNeedingAttention = append $podsNeedingAttention (dict "key" (printf "%s/%s" $pod.Namespace $pod.Name) "pod" $pod) }}
+                {{- $podsNeedingAttention = $podsNeedingAttention | append (dict "key" (printf "%s/%s" $pod.Namespace $pod.Name) "pod" $pod) }}
             {{- end }}
         {{- end }}
     {{- end }}

@@ -31,7 +31,7 @@
     {{- $storageVersion := "" }}
     {{- range .Spec.versions }}{{ if .storage }}{{ $storageVersion = .name }}{{ end }}{{ end }}
     {{- $stale := list }}
-    {{- range .Status.storedVersions }}{{ if ne . $storageVersion }}{{ $stale = append $stale . }}{{ end }}{{ end }}
+    {{- range .Status.storedVersions }}{{ if ne . $storageVersion }}{{ $stale = $stale | append . }}{{ end }}{{ end }}
     {{- with $stale }}
         {{- "Stored" | red | bold | nindent 2 }}: {{ join ", " . | red }} (migration pending)
     {{- end }}

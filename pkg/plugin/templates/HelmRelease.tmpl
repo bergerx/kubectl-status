@@ -148,9 +148,9 @@
     {{- if or .Status.installFailures .Status.upgradeFailures .Status.failures }}
         {{- "Failures" | red | bold | nindent 2 }}:
         {{- $failureParts := list }}
-        {{- with .Status.installFailures }}{{ $failureParts = append $failureParts (printf "install:%d" (int .)) }}{{ end }}
-        {{- with .Status.upgradeFailures }}{{ $failureParts = append $failureParts (printf "upgrade:%d" (int .)) }}{{ end }}
-        {{- with .Status.failures }}{{ $failureParts = append $failureParts (printf "total:%d" (int .)) }}{{ end }}
+        {{- with .Status.installFailures }}{{ $failureParts = $failureParts | append (printf "install:%d" (int .)) }}{{ end }}
+        {{- with .Status.upgradeFailures }}{{ $failureParts = $failureParts | append (printf "upgrade:%d" (int .)) }}{{ end }}
+        {{- with .Status.failures }}{{ $failureParts = $failureParts | append (printf "total:%d" (int .)) }}{{ end }}
         {{- " " }}{{ join ", " $failureParts | red | bold }}
     {{- end }}
     {{- /* Remediation only matters once it deviates from the default of not retrying at all;
@@ -162,9 +162,9 @@
     {{- if or $installRetries $upgradeRetries $upgradeStrategy }}
         {{- "Remediation" | bold | nindent 2 }}:
         {{- $remediationParts := list }}
-        {{- with $installRetries }}{{ $remediationParts = append $remediationParts (printf "install retries %d" (int .)) }}{{ end }}
-        {{- with $upgradeRetries }}{{ $remediationParts = append $remediationParts (printf "upgrade retries %d" (int .)) }}{{ end }}
-        {{- with $upgradeStrategy }}{{ $remediationParts = append $remediationParts (printf "on failed upgrade: %s" .) }}{{ end }}
+        {{- with $installRetries }}{{ $remediationParts = $remediationParts | append (printf "install retries %d" (int .)) }}{{ end }}
+        {{- with $upgradeRetries }}{{ $remediationParts = $remediationParts | append (printf "upgrade retries %d" (int .)) }}{{ end }}
+        {{- with $upgradeStrategy }}{{ $remediationParts = $remediationParts | append (printf "on failed upgrade: %s" .) }}{{ end }}
         {{- " " }}{{ join ", " $remediationParts | cyan }}
     {{- end }}
     {{- /* Helm never touches CRDs on its own, so these two decide whether a chart's crds/ directory
@@ -182,12 +182,12 @@
                its default is still named, because "created on install" only means something once
                you can see what happens on upgrade next to it. */ -}}
         {{- $crdParts := list }}
-        {{- if eq $installCRDs "Skip" }}{{ $crdParts = append $crdParts "never installed" }}
-        {{- else if eq $installCRDs "CreateReplace" }}{{ $crdParts = append $crdParts "created and replaced on install" }}
-        {{- else }}{{ $crdParts = append $crdParts "created on install" }}{{ end }}
-        {{- if eq $upgradeCRDs "CreateReplace" }}{{ $crdParts = append $crdParts "replaced on upgrade" }}
-        {{- else if eq $upgradeCRDs "Create" }}{{ $crdParts = append $crdParts "created on upgrade" }}
-        {{- else if ne $installCRDs "Skip" }}{{ $crdParts = append $crdParts "left alone on upgrade" }}{{ end }}
+        {{- if eq $installCRDs "Skip" }}{{ $crdParts = $crdParts | append "never installed" }}
+        {{- else if eq $installCRDs "CreateReplace" }}{{ $crdParts = $crdParts | append "created and replaced on install" }}
+        {{- else }}{{ $crdParts = $crdParts | append "created on install" }}{{ end }}
+        {{- if eq $upgradeCRDs "CreateReplace" }}{{ $crdParts = $crdParts | append "replaced on upgrade" }}
+        {{- else if eq $upgradeCRDs "Create" }}{{ $crdParts = $crdParts | append "created on upgrade" }}
+        {{- else if ne $installCRDs "Skip" }}{{ $crdParts = $crdParts | append "left alone on upgrade" }}{{ end }}
         {{- "Chart CRDs" | bold | nindent 2 }} {{ join ", " $crdParts | cyan }}
     {{- end }}
     {{- /* Off by default: with it on, helm-controller diffs the cluster against the last release

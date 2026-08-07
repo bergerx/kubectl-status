@@ -95,12 +95,12 @@
             {{- $rule := $r.rule | default "" }}
             {{- $key := printf "%s/%s" $policy $rule }}
             {{- if not ($byKey | hasKey $key) }}
-                {{- $order = append $order $key }}
+                {{- $order = $order | append $key }}
                 {{- $_ := $byKey | set $key (dict "policy" $policy "rule" $rule "messages" list "resourceRef" "" "resourceKeys" list "isError" false "severe" false) }}
             {{- end }}
             {{- $entry := index $byKey $key }}
             {{- with $r.message }}
-                {{- if not (has . $entry.messages) }}{{ $_ := $entry | set "messages" (append $entry.messages .) }}{{ end }}
+                {{- if not (has . $entry.messages) }}{{ $_ := $entry | set "messages" ($entry.messages | append .) }}{{ end }}
             {{- end }}
             {{- if eq ($r.result | default "") "error" }}{{ $_ := $entry | set "isError" true }}{{ end }}
             {{- if has ($r.severity | default "") (list "critical" "high") }}{{ $_ := $entry | set "severe" true }}{{ end }}
@@ -108,7 +108,7 @@
                 {{- $resKey := printf "%s/%s/%s" (.kind | default "") (.namespace | default "") (.name | default "") }}
                 {{- if or (not $scopeKey) (ne $resKey $scopeKey) }}
                     {{- if not (has $resKey $entry.resourceKeys) }}
-                        {{- $_ := $entry | set "resourceKeys" (append $entry.resourceKeys $resKey) }}
+                        {{- $_ := $entry | set "resourceKeys" ($entry.resourceKeys | append $resKey) }}
                         {{- if not $entry.resourceRef }}
                             {{- $_ := $entry | set "resourceRef" ($ctx.Include "resource_ref" (dict "kind" (.kind | default "") "name" (.name | default "") "namespace" .namespace "callerNamespace" $ctx.Namespace)) }}
                         {{- end }}

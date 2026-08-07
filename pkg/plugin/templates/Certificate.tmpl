@@ -64,14 +64,14 @@
     {{- /* Keystores */ -}}
     {{- with .Spec.keystores }}
         {{- $stores := list }}
-        {{- if .jks }}{{ if .jks.create }}{{ $stores = append $stores "JKS" }}{{ end }}{{ end }}
-        {{- if .pkcs12 }}{{ if .pkcs12.create }}{{ $stores = append $stores (printf "PKCS12/%s" (.pkcs12.profile | default "LegacyRC2")) }}{{ end }}{{ end }}
+        {{- if .jks }}{{ if .jks.create }}{{ $stores = $stores | append "JKS" }}{{ end }}{{ end }}
+        {{- if .pkcs12 }}{{ if .pkcs12.create }}{{ $stores = $stores | append (printf "PKCS12/%s" (.pkcs12.profile | default "LegacyRC2")) }}{{ end }}{{ end }}
         {{- with $stores }}
             {{- "Keystores" | bold | nindent 2 }}: {{ join ", " . | cyan }}
         {{- end }}
     {{- end }}
     {{- with .Spec.additionalOutputFormats }}
-        {{- $fmts := list }}{{ range . }}{{ $fmts = append $fmts .type }}{{ end }}
+        {{- $fmts := list }}{{ range . }}{{ $fmts = $fmts | append .type }}{{ end }}
         {{- "Extra output formats" | bold | nindent 2 }}: {{ join ", " $fmts | cyan }}
     {{- end }}
     {{- /* Issued validity window — strip time component for readability */ -}}

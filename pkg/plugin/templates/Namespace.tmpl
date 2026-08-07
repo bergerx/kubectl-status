@@ -19,21 +19,21 @@
             {{- if and $psaEnforceVer (ne $psaEnforceVer "latest") }}
                 {{- $part = printf "%s (%s)" $part ($psaEnforceVer | cyan) }}
             {{- end }}
-            {{- $parts = append $parts $part }}
+            {{- $parts = $parts | append $part }}
         {{- end }}
         {{- if $psaWarn }}
             {{- $part := printf "warns on %s" ($.Include "namespace_psa_level" $psaWarn) }}
             {{- if and $psaWarnVer (ne $psaWarnVer "latest") }}
                 {{- $part = printf "%s (%s)" $part ($psaWarnVer | cyan) }}
             {{- end }}
-            {{- $parts = append $parts $part }}
+            {{- $parts = $parts | append $part }}
         {{- end }}
         {{- if $psaAudit }}
             {{- $part := printf "audits at %s" ($.Include "namespace_psa_level" $psaAudit) }}
             {{- if and $psaAuditVer (ne $psaAuditVer "latest") }}
                 {{- $part = printf "%s (%s)" $part ($psaAuditVer | cyan) }}
             {{- end }}
-            {{- $parts = append $parts $part }}
+            {{- $parts = $parts | append $part }}
         {{- end }}
         {{- "PSA:" | bold | nindent 2 }} {{ join ", " $parts }}
     {{- else }}

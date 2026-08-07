@@ -43,7 +43,7 @@
                     {{- $podPullSecretsBroken = true }}
                     {{- if not ($missingPullSecrets | has $secretName) }}
                         {{- "Secret" | bold | nindent 2 }}/{{ $secretName }} {{ "doesn't exist" | red | bold }}, but it's referenced in Pod's imagePullSecrets.
-                        {{- $missingPullSecrets = append $missingPullSecrets $secretName }}
+                        {{- $missingPullSecrets = $missingPullSecrets | append $secretName }}
                     {{- end }}
                 {{- else if not (has $secret.Object.type (list "kubernetes.io/dockerconfigjson" "kubernetes.io/dockercfg")) }}
                     {{- $podPullSecretsBroken = true }}
@@ -116,7 +116,7 @@
             {{- if $nodePools }}
                 {{- $nodePoolReqSets := list }}
                 {{- range $nodePools }}
-                    {{- $nodePoolReqSets = append $nodePoolReqSets (dict "name" .Name "requirements" (.Spec.template.spec.requirements | default list)) }}
+                    {{- $nodePoolReqSets = $nodePoolReqSets | append (dict "name" .Name "requirements" (.Spec.template.spec.requirements | default list)) }}
                 {{- end }}
                 {{- $unsatisfiableKeys := karpenterUnsatisfiableKeys $podRequirements $nodePoolReqSets }}
                 {{- if $unsatisfiableKeys }}
@@ -187,7 +187,7 @@
                            same as conditions_summary in common.tmpl -- flagging the Node as
                            problematic over one would be a false alarm. */ -}}
                     {{- if and (or .type .reason .message) (not (isStatusConditionHealthy .)) }}
-                        {{- $unhealthy = append $unhealthy . }}
+                        {{- $unhealthy = $unhealthy | append . }}
                         {{- if and (eq .type "MemoryPressure") (eq .status "True") }}
                             {{- $memoryPressure = true }}
                         {{- end }}
@@ -346,10 +346,10 @@
         {{- if $pc.Object }}
             {{- $parts := list (printf "value: %s" ($pc.Object.value | toString | cyan)) }}
             {{- if $pc.Object.globalDefault }}
-                {{- $parts = append $parts "global default" }}
+                {{- $parts = $parts | append "global default" }}
             {{- end }}
             {{- if ne ($pc.Object.preemptionPolicy | default "PreemptLowerPriority") "PreemptLowerPriority" }}
-                {{- $parts = append $parts (printf "preemptionPolicy: %s" ($pc.Object.preemptionPolicy | colorKeyword)) }}
+                {{- $parts = $parts | append (printf "preemptionPolicy: %s" ($pc.Object.preemptionPolicy | colorKeyword)) }}
             {{- end }}
             {{- "Priority:" | bold | nindent 2 }} {{ template "resource_ref" (dict "kind" "PriorityClass" "name" .) }} ({{ join ", " $parts }})
         {{- end }}
@@ -372,11 +372,11 @@
                 {{- range $name := keys $podFixed | sortAlpha }}
                     {{- $qty := index $podFixed $name }}
                     {{- if eq $name "cpu" }}
-                        {{- $parts = append $parts (printf "cpu: %s" ($qty | quantityToFloat64 | printf "%.1g" | cyan)) }}
+                        {{- $parts = $parts | append (printf "cpu: %s" ($qty | quantityToFloat64 | printf "%.1g" | cyan)) }}
                     {{- else if eq $name "memory" }}
-                        {{- $parts = append $parts (printf "memory: %s" ($qty | quantityToFloat64 | humanizeSI "B" | cyan)) }}
+                        {{- $parts = $parts | append (printf "memory: %s" ($qty | quantityToFloat64 | humanizeSI "B" | cyan)) }}
                     {{- else }}
-                        {{- $parts = append $parts (printf "%s: %s" $name ($qty | toString | cyan)) }}
+                        {{- $parts = $parts | append (printf "%s: %s" $name ($qty | toString | cyan)) }}
                     {{- end }}
                 {{- end }}
                 {{- "Overhead:" | bold | nindent 2 }} {{ template "resource_ref" (dict "kind" "RuntimeClass" "name" .) }} ({{ join ", " $parts }})
@@ -482,7 +482,7 @@
         {{- $missingKeys := list }}
         {{- range $.items }}
             {{- if not ($keys | has .key) }}
-                {{- $missingKeys = append $missingKeys (.key | quote) }}
+                {{- $missingKeys = $missingKeys | append (.key | quote) }}
             {{- end }}
         {{- end }}
         {{- with $missingKeys }}
@@ -522,17 +522,17 @@
     {{- range $.Spec.volumes }}
         {{- $vol := . }}
         {{- if or (. | hasKey "persistentVolumeClaim") (. | hasKey "hostPath") (. | hasKey "nfs") (. | hasKey "csi") }}
-            {{- $displayVols = append $displayVols . }}
+            {{- $displayVols = $displayVols | append . }}
         {{- else if . | hasKey "emptyDir" }}
             {{- /* show emptyDir only if kubelet has stats for it */ -}}
             {{- with $podStatsSummary.volume | default list | getMatchingItemInMapList (dict "name" $vol.name) }}
-                {{- $displayVols = append $displayVols $vol }}
+                {{- $displayVols = $displayVols | append $vol }}
             {{- end }}
         {{- else if $volProblems | hasKey $vol.name }}
             {{- /* a broken configMap/secret volume must surface even without --include-all-volumes */ -}}
-            {{- $displayVols = append $displayVols . }}
+            {{- $displayVols = $displayVols | append . }}
         {{- else if $.Config.GetBool "include-all-volumes" }}
-            {{- $displayVols = append $displayVols . }}
+            {{- $displayVols = $displayVols | append . }}
         {{- end }}
     {{- end }}
     {{- $deep := $.Config.GetBool "deep" }}
@@ -544,7 +544,7 @@
     {{- $entries := list }}
     {{- if $showEphemeral }}
         {{- $pct := percent (index $ephemeralStorage "usedBytes" | float64) (index $ephemeralStorage "capacityBytes" | float64) }}
-        {{- $entries = append $entries (printf "%s (%s/%s[%s])" ("ephemeral-storage" | bold) (index $ephemeralStorage "usedBytes" | float64 | humanizeSI "B") (index $ephemeralStorage "capacityBytes" | float64 | humanizeSI "B") ($pct | colorPercent "%.0f%%")) }}
+        {{- $entries = $entries | append (printf "%s (%s/%s[%s])" ("ephemeral-storage" | bold) (index $ephemeralStorage "usedBytes" | float64 | humanizeSI "B") (index $ephemeralStorage "capacityBytes" | float64 | humanizeSI "B") ($pct | colorPercent "%.0f%%")) }}
     {{- end }}
     {{- range $displayVols }}
         {{- $entry := $.Include "pod_volume_line" (dict "ctx" $ "vol" . "podStatsSummary" $podStatsSummary "problem" (index $volProblems .name)) }}
@@ -554,7 +554,7 @@
                 {{- $entry = printf "%s%s" $entry ($.Include "PersistentVolumeClaim" $pvc | nindent 2) }}
             {{- end }}
         {{- end }}
-        {{- $entries = append $entries $entry }}
+        {{- $entries = $entries | append $entry }}
     {{- end }}
     {{- if $entries }}
         {{- if eq (len $entries) 1 }}
@@ -943,10 +943,10 @@
     {{- with .tcpSocket }}{{ "tcpSocket" | bold }} {{ printf "%s:%v" (.host | default "localhost") .port | cyan }}{{ end -}}
     {{- with .grpc }}{{ "grpc" | bold }} {{ printf ":%v" .port | cyan }}{{ with .service }} {{ . | cyan }}{{ end }}{{ end -}}
     {{- $parts := list -}}
-    {{- with .initialDelaySeconds }}{{ $parts = append $parts (printf "delay %ds" (. | int)) }}{{ end -}}
-    {{- with .periodSeconds }}{{ $parts = append $parts (printf "every %ds" (. | int)) }}{{ end -}}
-    {{- with .timeoutSeconds }}{{ $parts = append $parts (printf "timeout %ds" (. | int)) }}{{ end -}}
-    {{- with .failureThreshold }}{{ $parts = append $parts (printf "fail after %dx" (. | int)) }}{{ end -}}
+    {{- with .initialDelaySeconds }}{{ $parts = $parts | append (printf "delay %ds" (. | int)) }}{{ end -}}
+    {{- with .periodSeconds }}{{ $parts = $parts | append (printf "every %ds" (. | int)) }}{{ end -}}
+    {{- with .timeoutSeconds }}{{ $parts = $parts | append (printf "timeout %ds" (. | int)) }}{{ end -}}
+    {{- with .failureThreshold }}{{ $parts = $parts | append (printf "fail after %dx" (. | int)) }}{{ end -}}
     {{- if $parts }} ({{ join ", " $parts }}){{ end -}}
 {{- end -}}
 

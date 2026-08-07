@@ -24,7 +24,7 @@
         {{- $job := . }}
         {{- range .Metadata.ownerReferences }}
             {{- if and .controller (eq .kind "CronJob") (eq .name $.Name) }}
-                {{- $cronJobJobs = append $cronJobJobs $job }}
+                {{- $cronJobJobs = $cronJobJobs | append $job }}
             {{- end }}
         {{- end }}
     {{- end }}

@@ -27,10 +27,10 @@
             {{- if eq $mode "Off" }} {{ "Off" | yellow | bold }}
             {{- else }}
                 {{- $parts := list }}
-                {{- with (.minAllowed | default dict).cpu }}{{ $parts = append $parts (printf "min cpu=%s" .) }}{{ end }}
-                {{- with (.minAllowed | default dict).memory }}{{ $parts = append $parts (printf "min mem=%s" .) }}{{ end }}
-                {{- with (.maxAllowed | default dict).cpu }}{{ $parts = append $parts (printf "max cpu=%s" .) }}{{ end }}
-                {{- with (.maxAllowed | default dict).memory }}{{ $parts = append $parts (printf "max mem=%s" .) }}{{ end }}
+                {{- with (.minAllowed | default dict).cpu }}{{ $parts = $parts | append (printf "min cpu=%s" .) }}{{ end }}
+                {{- with (.minAllowed | default dict).memory }}{{ $parts = $parts | append (printf "min mem=%s" .) }}{{ end }}
+                {{- with (.maxAllowed | default dict).cpu }}{{ $parts = $parts | append (printf "max cpu=%s" .) }}{{ end }}
+                {{- with (.maxAllowed | default dict).memory }}{{ $parts = $parts | append (printf "max mem=%s" .) }}{{ end }}
                 {{- " " }}{{ $parts | join ", " | cyan }}
             {{- end }}
         {{- end }}

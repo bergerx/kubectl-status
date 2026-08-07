@@ -30,11 +30,11 @@
                 {{- $subjects := list }}
                 {{- range .subjects }}
                     {{- if eq .kind "Group" }}
-                        {{- $subjects = append $subjects (printf "group:%s" .group.name) }}
+                        {{- $subjects = $subjects | append (printf "group:%s" .group.name) }}
                     {{- else if eq .kind "User" }}
-                        {{- $subjects = append $subjects (printf "user:%s" .user.name) }}
+                        {{- $subjects = $subjects | append (printf "user:%s" .user.name) }}
                     {{- else if eq .kind "ServiceAccount" }}
-                        {{- $subjects = append $subjects (printf "sa:%s/%s" .serviceAccount.namespace .serviceAccount.name) }}
+                        {{- $subjects = $subjects | append (printf "sa:%s/%s" .serviceAccount.namespace .serviceAccount.name) }}
                     {{- end }}
                 {{- end }}
                 {{- join ", " $subjects | cyan | nindent 4 }}

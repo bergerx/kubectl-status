@@ -67,7 +67,7 @@
            quota is the workload's own, or that free quota means the Pods will schedule. */ -}}
     {{- $quotaObjects := list }}
     {{- range .KubeGet .Namespace "resourcequotas" }}
-        {{- $quotaObjects = append $quotaObjects .Object }}
+        {{- $quotaObjects = $quotaObjects | append .Object }}
     {{- end }}
     {{- with $quotaObjects }}
         {{- $headroom := quotaRolloutHeadroom . $.Object }}
@@ -223,7 +223,7 @@
         {{- $matching := list }}
         {{- range $ctx.KubeGet "" "VolumeAttachment" }}
             {{- if eq (.Spec.source.persistentVolumeName | default "") $pvName }}
-                {{- $matching = append $matching . }}
+                {{- $matching = $matching | append . }}
             {{- end }}
         {{- end }}
         {{- $attachedCount := 0 }}
@@ -277,9 +277,9 @@
         {{- range .pods }}
             {{- if not (has .Status.phase (list "Succeeded" "Failed")) }}
                 {{- if .Spec.nodeName }}
-                    {{- $scheduled = append $scheduled . }}
+                    {{- $scheduled = $scheduled | append . }}
                 {{- else }}
-                    {{- $pending = append $pending . }}
+                    {{- $pending = $pending | append . }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -518,7 +518,7 @@
     {{- if kindIs "slice" $refs }}
         {{- range $refs }}
             {{- if and (kindIs "map" .) (kindIs "string" .kind) (kindIs "string" .name) }}
-                {{- $validRefs = append $validRefs . }}
+                {{- $validRefs = $validRefs | append . }}
             {{- end }}
         {{- end }}
     {{- end }}
@@ -697,7 +697,7 @@
         {{- if .ready }}{{ $ready = add1 $ready }}{{ end }}
         {{- $restarts = $restarts | add (.restartCount | int) }}
         {{- with .state.waiting.reason }}
-            {{- if not ($waitingReasons | has .) }}{{ $waitingReasons = append $waitingReasons . }}{{ end }}
+            {{- if not ($waitingReasons | has .) }}{{ $waitingReasons = $waitingReasons | append . }}{{ end }}
         {{- end }}
     {{- end }}
     {{- if $total }}, {{ if lt $ready $total }}{{ printf "%d/%d" $ready $total | red | bold }}{{ else }}{{ printf "%d/%d" $ready $total | green }}{{ end }} ready{{ end }}
@@ -727,7 +727,7 @@
         {{- $node := .KubeGetFirst "" "Node" $nodeName }}
         {{- if $node.Object }}
             {{- $nodeFlags := list }}
-            {{- if $node.Spec.unschedulable }}{{ $nodeFlags = append $nodeFlags ("cordoned" | red | bold) }}{{ end }}
+            {{- if $node.Spec.unschedulable }}{{ $nodeFlags = $nodeFlags | append ("cordoned" | red | bold) }}{{ end }}
             {{- range $node.StatusConditions }}
                 {{- /* Typeless placeholder entries carry no information to report and would
                        render as a meaningless ":False" flag, so they're skipped here; this whole
@@ -740,18 +740,18 @@
                            "confirmed bad" label, see #173. */ -}}
                     {{- $entry := printf "%s:%s" .type (.status | toString) }}
                     {{- if eq .status "Unknown" }}
-                        {{- $nodeFlags = append $nodeFlags ($entry | yellow | bold) }}
+                        {{- $nodeFlags = $nodeFlags | append ($entry | yellow | bold) }}
                     {{- else }}
-                        {{- $nodeFlags = append $nodeFlags ($entry | red | bold) }}
+                        {{- $nodeFlags = $nodeFlags | append ($entry | red | bold) }}
                     {{- end }}
                 {{- end }}
             {{- end }}
             {{- $flags := list }}
             {{- with $nodeFlags }}
-                {{- $flags = append $flags (printf "node %s" (join " & " .)) }}
+                {{- $flags = $flags | append (printf "node %s" (join " & " .)) }}
             {{- end }}
             {{- if taintsNotToleratedByPod ($node.Spec.taints | default list) (.Spec.tolerations | default list) }}
-                {{- $flags = append $flags ("untolerated node taint" | red | bold) }}
+                {{- $flags = $flags | append ("untolerated node taint" | red | bold) }}
             {{- end }}
             {{- join ", " $flags }}
         {{- end }}
@@ -767,14 +767,14 @@
     {{- $names := list }}
     {{- $ingress := false }}{{- $egress := false }}
     {{- range . }}
-        {{- $names = append $names .Name }}
+        {{- $names = $names | append .Name }}
         {{- $types := networkPolicyPolicyTypes .Spec }}
         {{- if has "Ingress" $types }}{{ $ingress = true }}{{ end }}
         {{- if has "Egress" $types }}{{ $egress = true }}{{ end }}
     {{- end }}
     {{- $directions := list }}
-    {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
-    {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
+    {{- if $ingress }}{{ $directions = $directions | append "ingress" }}{{ end }}
+    {{- if $egress }}{{ $directions = $directions | append "egress" }}{{ end }}
     {{- $label := "NetworkPolicy" }}{{ if gt (len .) 1 }}{{ $label = "NetworkPolicies" }}{{ end }}
     {{- printf "selected by %s %s (%s restricted)" $label (join ", " $names | cyan) (join ", " $directions) }}
 {{- end }}
@@ -798,9 +798,9 @@
                 {{- if has "Egress" $types }}{{ $egress = true }}{{ end }}
             {{- end }}
             {{- $directions := list }}
-            {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
-            {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
-            {{- $flags = append $flags (printf "netpol: %s restricted" (join "+" $directions)) }}
+            {{- if $ingress }}{{ $directions = $directions | append "ingress" }}{{ end }}
+            {{- if $egress }}{{ $directions = $directions | append "egress" }}{{ end }}
+            {{- $flags = $flags | append (printf "netpol: %s restricted" (join "+" $directions)) }}
         {{- end }}
         {{- $ciliumPolicies := concat (.KubeGetCiliumNetworkPoliciesMatchingPod .Namespace .Labels) (.KubeGetCiliumClusterwideNetworkPoliciesMatchingPod .Labels) }}
         {{- if $ciliumPolicies }}
@@ -811,9 +811,9 @@
                 {{- if has "egress" $directions }}{{ $egress = true }}{{ end }}
             {{- end }}
             {{- $directions := list }}
-            {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
-            {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
-            {{- if $directions }}{{ $flags = append $flags (printf "cnp: %s restricted" (join "+" $directions)) }}{{ end }}
+            {{- if $ingress }}{{ $directions = $directions | append "ingress" }}{{ end }}
+            {{- if $egress }}{{ $directions = $directions | append "egress" }}{{ end }}
+            {{- if $directions }}{{ $flags = $flags | append (printf "cnp: %s restricted" (join "+" $directions)) }}{{ end }}
         {{- end }}
         {{- $calicoPolicies := concat (.KubeGetCalicoNetworkPoliciesMatchingPod .Namespace .Labels) (.KubeGetCalicoGlobalNetworkPoliciesMatchingPod .Namespace .Labels) }}
         {{- if $calicoPolicies }}
@@ -824,9 +824,9 @@
                 {{- if has "Egress" $types }}{{ $egress = true }}{{ end }}
             {{- end }}
             {{- $directions := list }}
-            {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
-            {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
-            {{- $flags = append $flags (printf "calico: %s restricted" (join "+" $directions)) }}
+            {{- if $ingress }}{{ $directions = $directions | append "ingress" }}{{ end }}
+            {{- if $egress }}{{ $directions = $directions | append "egress" }}{{ end }}
+            {{- $flags = $flags | append (printf "calico: %s restricted" (join "+" $directions)) }}
         {{- end }}
         {{- join ", " $flags }}
     {{- end }}
@@ -841,14 +841,14 @@
     {{- $names := list }}
     {{- $ingress := false }}{{- $egress := false }}
     {{- range .policies }}
-        {{- $names = append $names .Name }}
+        {{- $names = $names | append .Name }}
         {{- $directions := ciliumPolicyDirections .Object $.labels }}
         {{- if has "ingress" $directions }}{{ $ingress = true }}{{ end }}
         {{- if has "egress" $directions }}{{ $egress = true }}{{ end }}
     {{- end }}
     {{- $directions := list }}
-    {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
-    {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
+    {{- if $ingress }}{{ $directions = $directions | append "ingress" }}{{ end }}
+    {{- if $egress }}{{ $directions = $directions | append "egress" }}{{ end }}
     {{- $label := .kindSingular }}{{ if gt (len .policies) 1 }}{{ $label = .kindPlural }}{{ end }}
     {{- if $directions }}
         {{- printf "selected by %s %s (%s restricted)" $label (join ", " $names | cyan) (join ", " $directions) }}
@@ -868,14 +868,14 @@
     {{- $names := list }}
     {{- $ingress := false }}{{- $egress := false }}
     {{- range .policies }}
-        {{- $names = append $names .Name }}
+        {{- $names = $names | append .Name }}
         {{- $types := calicoPolicyTypes .Spec }}
         {{- if has "Ingress" $types }}{{ $ingress = true }}{{ end }}
         {{- if has "Egress" $types }}{{ $egress = true }}{{ end }}
     {{- end }}
     {{- $directions := list }}
-    {{- if $ingress }}{{ $directions = append $directions "ingress" }}{{ end }}
-    {{- if $egress }}{{ $directions = append $directions "egress" }}{{ end }}
+    {{- if $ingress }}{{ $directions = $directions | append "ingress" }}{{ end }}
+    {{- if $egress }}{{ $directions = $directions | append "egress" }}{{ end }}
     {{- $label := .kindSingular }}{{ if gt (len .policies) 1 }}{{ $label = .kindPlural }}{{ end }}
     {{- printf "selected by %s %s (%s restricted)" $label (join ", " $names | cyan) (join ", " $directions) }}
 {{- end }}
@@ -1169,7 +1169,7 @@
         {{- range $ctx.KubeGet $namespace "HorizontalPodAutoscalers" }}
             {{- $ref := .Spec.scaleTargetRef | default dict }}
             {{- if and (eq (index $ref "kind" | default "") $kind) (eq (index $ref "name" | default "") $name) }}
-                {{- $hpas = append $hpas . }}
+                {{- $hpas = $hpas | append . }}
             {{- end }}
         {{- end }}
         {{- if $hpas }}
@@ -1219,7 +1219,7 @@
         {{- range $ctx.KubeGet $namespace "VerticalPodAutoscalers" }}
             {{- $ref := .Spec.targetRef | default dict }}
             {{- if and (eq (index $ref "kind" | default "") $kind) (eq (index $ref "name" | default "") $name) }}
-                {{- $vpas = append $vpas . }}
+                {{- $vpas = $vpas | append . }}
             {{- end }}
         {{- end }}
         {{- if $vpas }}
