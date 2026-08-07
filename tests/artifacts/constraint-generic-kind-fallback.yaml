@@ -1,19 +1,14 @@
-# A Constraint of a Kind other than K8sRequiredLabels -- no dedicated <Kind>.tmpl exists for
-# K8sAllowedRepos (or any other ConstraintTemplate-generated Kind besides K8sRequiredLabels), so
-# findTemplateName routes it to DefaultResource, which must reach the same shared
-# gatekeeper_constraint_match_and_enforcement/gatekeeper_constraint_audit_status rendering via
-# gatekeeper_constraint_fallback. This is the case the K8sRequiredLabels-only fixtures don't cover.
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sAllowedRepos
 metadata:
   annotations:
     kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"constraints.gatekeeper.sh/v1beta1","kind":"K8sAllowedRepos","metadata":{"annotations":{},"name":"repo-must-be-internal"},"spec":{"match":{"kinds":[{"apiGroups":[""],"kinds":["Pod"]}]},"parameters":{"repos":["internal.registry.example.com/"]}}}
-  creationTimestamp: "2026-07-27T10:22:03Z"
+      {"apiVersion":"constraints.gatekeeper.sh/v1beta1","kind":"K8sAllowedRepos","metadata":{"annotations":{},"name":"repo-must-be-internal"},"spec":{"enforcementAction":"deny","match":{"kinds":[{"apiGroups":[""],"kinds":["Pod"]}],"namespaces":["gk-fixture-capture"]},"parameters":{"repos":["internal.registry.example.com/"]}}}
+  creationTimestamp: "2026-08-06T22:56:04Z"
   generation: 1
   name: repo-must-be-internal
-  resourceVersion: "24020"
-  uid: 7c866d2e-289f-46e0-a61a-96487fd03399
+  resourceVersion: "3798302"
+  uid: 58d436f2-a791-402b-90ae-1da446e11dc8
 spec:
   enforcementAction: deny
   match:
@@ -22,24 +17,31 @@ spec:
       - ""
       kinds:
       - Pod
+    namespaces:
+    - gk-fixture-capture
   parameters:
     repos:
     - internal.registry.example.com/
 status:
-  auditTimestamp: "2026-07-28T13:33:23Z"
+  auditTimestamp: "2026-08-07T06:14:23Z"
   byPod:
-  - constraintUID: 7c866d2e-289f-46e0-a61a-96487fd03399
+  - constraintUID: 58d436f2-a791-402b-90ae-1da446e11dc8
     enforced: true
-    id: gatekeeper-audit-5cc96fbf64-8rlsb
+    enforcementPointsStatus:
+    - enforcementPoint: vap.k8s.io
+      message: K8sNativeValidation engine is missing
+      observedGeneration: 1
+      state: error
+    id: gatekeeper-audit-7dd45df4bb-cv99t
     observedGeneration: 1
     operations:
     - audit
     - generate
     - mutation-status
     - status
-  - constraintUID: 7c866d2e-289f-46e0-a61a-96487fd03399
+  - constraintUID: 58d436f2-a791-402b-90ae-1da446e11dc8
     enforced: true
-    id: gatekeeper-controller-manager-77cccb6c69-9vpj8
+    id: gatekeeper-controller-manager-5869889959-bssp2
     observedGeneration: 1
     operations:
     - mutation-webhook
@@ -49,7 +51,8 @@ status:
   - enforcementAction: deny
     group: ""
     kind: Pod
-    message: 'container <app> has an invalid image repo <docker.io/library/nginx>, allowed repos are ["internal.registry.example.com/"]'
-    name: checkout-7d9f8c6b5-abcde
-    namespace: default
+    message: container <checkout> has an invalid image repo <nginx>, allowed repos
+      are ["internal.registry.example.com/"]
+    name: checkout
+    namespace: gk-fixture-capture
     version: v1
