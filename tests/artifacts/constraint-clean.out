@@ -1,5 +1,6 @@
 
 K8sRequiredLabels/always-satisfied, created 1m ago, gen:1
+  ConstraintTemplate/k8srequiredlabels
   Match: core/Namespace
   enforcementAction: deny
   Required labels: kubernetes.io/metadata.name

@@ -11,6 +11,7 @@
     {{- template "crossplane_composed_resources" . }}
     {{- template "crossplane_managed_resource_drift" . }}
     {{- template "crossplane_managed_resource_details" . }}
+    {{- template "gatekeeper_constraint_fallback" . }}
     {{- template "conditions_summary" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}

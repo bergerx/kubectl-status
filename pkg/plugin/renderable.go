@@ -63,6 +63,13 @@ func (r RenderableObject) Kind() (kind string) {
 	return
 }
 
+func (r RenderableObject) APIVersion() (apiVersion string) {
+	if x := r.Object["apiVersion"]; x != nil {
+		apiVersion = x.(string)
+	}
+	return
+}
+
 func (r RenderableObject) Spec() (spec map[string]interface{}) {
 	if x := r.Object["spec"]; x != nil {
 		spec = x.(map[string]interface{})

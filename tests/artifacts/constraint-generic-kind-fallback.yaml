@@ -1,0 +1,58 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAllowedRepos
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"constraints.gatekeeper.sh/v1beta1","kind":"K8sAllowedRepos","metadata":{"annotations":{},"name":"repo-must-be-internal"},"spec":{"enforcementAction":"deny","match":{"kinds":[{"apiGroups":[""],"kinds":["Pod"]}],"namespaces":["gk-fixture-capture"]},"parameters":{"repos":["internal.registry.example.com/"]}}}
+  creationTimestamp: "2026-08-06T22:56:04Z"
+  generation: 1
+  name: repo-must-be-internal
+  resourceVersion: "3798302"
+  uid: 58d436f2-a791-402b-90ae-1da446e11dc8
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+    - apiGroups:
+      - ""
+      kinds:
+      - Pod
+    namespaces:
+    - gk-fixture-capture
+  parameters:
+    repos:
+    - internal.registry.example.com/
+status:
+  auditTimestamp: "2026-08-07T06:14:23Z"
+  byPod:
+  - constraintUID: 58d436f2-a791-402b-90ae-1da446e11dc8
+    enforced: true
+    enforcementPointsStatus:
+    - enforcementPoint: vap.k8s.io
+      message: K8sNativeValidation engine is missing
+      observedGeneration: 1
+      state: error
+    id: gatekeeper-audit-7dd45df4bb-cv99t
+    observedGeneration: 1
+    operations:
+    - audit
+    - generate
+    - mutation-status
+    - status
+  - constraintUID: 58d436f2-a791-402b-90ae-1da446e11dc8
+    enforced: true
+    id: gatekeeper-controller-manager-5869889959-bssp2
+    observedGeneration: 1
+    operations:
+    - mutation-webhook
+    - webhook
+  totalViolations: 1
+  violations:
+  - enforcementAction: deny
+    group: ""
+    kind: Pod
+    message: container <checkout> has an invalid image repo <nginx>, allowed repos
+      are ["internal.registry.example.com/"]
+    name: checkout
+    namespace: gk-fixture-capture
+    version: v1

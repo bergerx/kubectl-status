@@ -1372,6 +1372,65 @@ func TestManagedResourceDetailsTemplate_NotAManagedResource(t *testing.T) {
 	}
 }
 
+// TestGatekeeperConstraintFallback_RendersForArbitraryKind proves DefaultResource's
+// gatekeeper_constraint_fallback reaches the shared match/enforcement/audit rendering for a
+// Gatekeeper Constraint Kind that has no dedicated <Kind>.tmpl (K8sRequiredLabels is the only
+// Kind with one; everything else -- K8sAllowedRepos, any custom ConstraintTemplate's Kind --
+// falls through to DefaultResource, which must still reach this rendering generically).
+func TestGatekeeperConstraintFallback_RendersForArbitraryKind(t *testing.T) {
+	obj := map[string]interface{}{
+		"apiVersion": "constraints.gatekeeper.sh/v1beta1",
+		"kind":       "K8sAllowedRepos",
+		"metadata":   map[string]interface{}{"name": "repo-must-be-internal"},
+		"spec": map[string]interface{}{
+			"enforcementAction": "deny",
+			"match": map[string]interface{}{
+				"kinds": []interface{}{
+					map[string]interface{}{"apiGroups": []interface{}{""}, "kinds": []interface{}{"Pod"}},
+				},
+			},
+		},
+		"status": map[string]interface{}{},
+	}
+	got, err := renderCrossplaneTemplate(t, "gatekeeper_constraint_fallback", obj)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, "Match: core/Pod") {
+		t.Errorf("got = %q, want the shared match summary", got)
+	}
+	if !strings.Contains(got, "enforcementAction") {
+		t.Errorf("got = %q, want the shared enforcementAction line", got)
+	}
+}
+
+// TestGatekeeperConstraintFallback_IneligibleForNonGatekeeperGroup proves eligibility is an exact
+// apiVersion-group check, not a spec.match/spec.enforcementAction shape heuristic: an unrelated
+// CRD that happens to reuse those field names under a different group must render nothing here.
+func TestGatekeeperConstraintFallback_IneligibleForNonGatekeeperGroup(t *testing.T) {
+	obj := map[string]interface{}{
+		"apiVersion": "example.com/v1",
+		"kind":       "NotAConstraint",
+		"metadata":   map[string]interface{}{"name": "coincidental-shape"},
+		"spec": map[string]interface{}{
+			"enforcementAction": "deny",
+			"match": map[string]interface{}{
+				"kinds": []interface{}{
+					map[string]interface{}{"apiGroups": []interface{}{""}, "kinds": []interface{}{"Pod"}},
+				},
+			},
+		},
+		"status": map[string]interface{}{},
+	}
+	got, err := renderCrossplaneTemplate(t, "gatekeeper_constraint_fallback", obj)
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if got != "" {
+		t.Errorf("expected no output for a non-Gatekeeper object with a coincidentally similar shape, got = %q", got)
+	}
+}
+
 // renderObjHealthSummary renders "generic_health_summary" or "resource_health_summary" -- both
 // expect dict "obj" (RenderableObject) "callerNamespace" (optional) rather than the bare object
 // renderCrossplaneTemplate's callers pass.
