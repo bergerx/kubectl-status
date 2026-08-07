@@ -1,6 +1,7 @@
 
 K8sAllowedRepos/repo-must-be-internal, created 1m ago, gen:1
   Current: Resource is current
+  Template: ConstraintTemplate/k8sallowedrepos
   Match: core/Pod, namespaces:gk-fixture-capture
   enforcementAction: deny
   Last audited: 1m ago

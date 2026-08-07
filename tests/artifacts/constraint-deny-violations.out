@@ -1,5 +1,6 @@
 
 K8sRequiredLabels/all-must-have-owner, created 1m ago, gen:5
+  Template: ConstraintTemplate/k8srequiredlabels
   Match: core/Namespace
   enforcementAction: deny
   Required labels: owner matching ^[a-zA-Z]+.agilebank.demo$

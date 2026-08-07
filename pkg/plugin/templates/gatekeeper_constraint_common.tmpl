@@ -24,6 +24,17 @@
            per installed ConstraintTemplate -- K8sRequiredLabels, K8sAllowedRepos, etc. -- all with
            an identical spec.match/spec.enforcementAction and status.violations/byPod shape).
            Renders spec.match (which objects this constraint evaluates) and the enforcement mode. */ -}}
+    {{- with .Kind }}
+        {{- /* A Constraint carries no field of its own naming the ConstraintTemplate that
+               generated its Kind -- no ownerReference, no annotation. But Gatekeeper's own
+               controller hard-rejects any ConstraintTemplate whose name isn't the lowercase of
+               its spec.crd.spec.names.kind (confirmed live: status.byPod[].errors rejects a
+               mismatched name), so the association is fully determined by the Kind string alone
+               -- no lookup needed to know the name, only to fetch the object itself in --deep. */ -}}
+        {{- $ctName := . | lower }}
+        {{- "Template" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" "ConstraintTemplate" "name" $ctName) }}
+        {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" "ConstraintTemplate" "name" $ctName) }}
+    {{- end }}
     {{- with .Spec.match }}
         {{- /* .kinds is optional -- matching by namespaces/namespaceSelector alone is valid, and
                len on a genuinely absent (nil) value errors out rather than returning 0, so check
