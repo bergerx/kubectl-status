@@ -355,6 +355,33 @@ func (r RenderableObject) KubeGetEndpointSlicesForService(namespace, serviceName
 	return r.objectsToRenderableObjects(objects)
 }
 
+// kubeListPolicies lists resourceType objects in namespace (or cluster-wide when namespace is
+// ""), logging and swallowing any listing error -- including "CRD not registered" for the
+// optional CNI/Calico resource types used by the KubeGet*MatchingPod family below -- so callers
+// degrade to "no policies found" rather than failing the render.
+func (r RenderableObject) kubeListPolicies(namespace, resourceType string) input.Objects {
+	policies, err := r.repo.Objects(namespace, []string{resourceType}, "")
+	if err != nil {
+		klog.V(3).ErrorS(err, "error listing "+resourceType, "r", r, "namespace", namespace)
+		return nil
+	}
+	return policies
+}
+
+// kubeGetPoliciesMatching is the shared list+filter+append skeleton behind the
+// KubeGet*MatchingPod family below: list resourceType objects via kubeListPolicies and keep only
+// those for which match returns true. Each caller differs only in which resource type to list and
+// how to decide whether a given object matches its Pod, supplied here as match.
+func (r RenderableObject) kubeGetPoliciesMatching(namespace, resourceType string, match func(obj map[string]interface{}) bool) (out []RenderableObject) {
+	out = make([]RenderableObject, 0)
+	for _, obj := range r.kubeListPolicies(namespace, resourceType) {
+		if match(obj) {
+			out = append(out, r.newRenderableObject(obj))
+		}
+	}
+	return out
+}
+
 // KubeGetNetworkPoliciesMatchingPod returns all NetworkPolicies in namespace whose
 // spec.podSelector matches podLabels -- the mirror direction of KubeGetServicesMatchingPod: a
 // Service's selector is matched against a Pod's labels via endpoints, but a NetworkPolicy has no
@@ -368,21 +395,13 @@ func (r RenderableObject) KubeGetNetworkPoliciesMatchingPod(namespace string, po
 	}
 	klog.V(5).InfoS("called KubeGetNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
 	castedLabels := stringifyLabels(podLabels)
-	policies, err := r.repo.Objects(namespace, []string{"networkpolicies"}, "")
-	if err != nil {
-		klog.V(3).ErrorS(err, "error listing networkpolicies", "r", r, "namespace", namespace)
-		return
-	}
-	for _, obj := range policies {
+	return r.kubeGetPoliciesMatching(namespace, "networkpolicies", func(obj map[string]interface{}) bool {
 		spec, found, err := unstructured.NestedMap(obj, "spec")
 		if err != nil || !found {
-			continue
+			return false
 		}
-		if networkPolicySelectsPod(spec, castedLabels) {
-			out = append(out, r.newRenderableObject(obj))
-		}
-	}
-	return out
+		return networkPolicySelectsPod(spec, castedLabels)
+	})
 }
 
 // KubeGetGatekeeperConstraintsMatchingNamespace returns every live Gatekeeper Constraint (of any
@@ -433,17 +452,10 @@ func (r RenderableObject) KubeGetCiliumNetworkPoliciesMatchingPod(namespace stri
 	}
 	klog.V(5).InfoS("called KubeGetCiliumNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
 	castedLabels := stringifyLabels(podLabels)
-	policies, err := r.repo.Objects(namespace, []string{"ciliumnetworkpolicies.cilium.io"}, "")
-	if err != nil {
-		klog.V(3).ErrorS(err, "error listing ciliumnetworkpolicies", "r", r, "namespace", namespace)
-		return
-	}
-	for _, obj := range policies {
-		if matches, _ := ciliumPolicySelectsPod(obj, castedLabels); matches {
-			out = append(out, r.newRenderableObject(obj))
-		}
-	}
-	return out
+	return r.kubeGetPoliciesMatching(namespace, "ciliumnetworkpolicies.cilium.io", func(obj map[string]interface{}) bool {
+		matches, _ := ciliumPolicySelectsPod(obj, castedLabels)
+		return matches
+	})
 }
 
 // KubeGetCiliumClusterwideNetworkPoliciesMatchingPod returns all CiliumClusterwideNetworkPolicies
@@ -458,17 +470,10 @@ func (r RenderableObject) KubeGetCiliumClusterwideNetworkPoliciesMatchingPod(pod
 	}
 	klog.V(5).InfoS("called KubeGetCiliumClusterwideNetworkPoliciesMatchingPod", "r", r, "podLabels", podLabels)
 	castedLabels := stringifyLabels(podLabels)
-	policies, err := r.repo.Objects("", []string{"ciliumclusterwidenetworkpolicies.cilium.io"}, "")
-	if err != nil {
-		klog.V(3).ErrorS(err, "error listing ciliumclusterwidenetworkpolicies", "r", r)
-		return
-	}
-	for _, obj := range policies {
-		if matches, _ := ciliumPolicySelectsPod(obj, castedLabels); matches {
-			out = append(out, r.newRenderableObject(obj))
-		}
-	}
-	return out
+	return r.kubeGetPoliciesMatching("", "ciliumclusterwidenetworkpolicies.cilium.io", func(obj map[string]interface{}) bool {
+		matches, _ := ciliumPolicySelectsPod(obj, castedLabels)
+		return matches
+	})
 }
 
 // KubeGetCalicoNetworkPoliciesMatchingPod returns all Calico NetworkPolicies in namespace whose
@@ -489,21 +494,13 @@ func (r RenderableObject) KubeGetCalicoNetworkPoliciesMatchingPod(namespace stri
 	}
 	klog.V(5).InfoS("called KubeGetCalicoNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
 	castedLabels := stringifyLabels(podLabels)
-	policies, err := r.repo.Objects(namespace, []string{"networkpolicies.crd.projectcalico.org"}, "")
-	if err != nil {
-		klog.V(3).ErrorS(err, "error listing calico networkpolicies", "r", r, "namespace", namespace)
-		return
-	}
-	for _, obj := range policies {
+	return r.kubeGetPoliciesMatching(namespace, "networkpolicies.crd.projectcalico.org", func(obj map[string]interface{}) bool {
 		spec, found, err := unstructured.NestedMap(obj, "spec")
 		if err != nil || !found {
-			continue
+			return false
 		}
-		if calicoPolicySelectsPod(spec, castedLabels, namespace) {
-			out = append(out, r.newRenderableObject(obj))
-		}
-	}
-	return out
+		return calicoPolicySelectsPod(spec, castedLabels, namespace)
+	})
 }
 
 // KubeGetCalicoGlobalNetworkPoliciesMatchingPod returns all Calico GlobalNetworkPolicies whose
@@ -519,11 +516,11 @@ func (r RenderableObject) KubeGetCalicoGlobalNetworkPoliciesMatchingPod(namespac
 	}
 	klog.V(5).InfoS("called KubeGetCalicoGlobalNetworkPoliciesMatchingPod", "r", r, "namespace", namespace, "podLabels", podLabels)
 	castedLabels := stringifyLabels(podLabels)
-	policies, err := r.repo.Objects("", []string{"globalnetworkpolicies.crd.projectcalico.org"}, "")
-	if err != nil {
-		klog.V(3).ErrorS(err, "error listing calico globalnetworkpolicies", "r", r)
-		return
-	}
+	// Reuses the shared kubeListPolicies list call (rather than the full kubeGetPoliciesMatching
+	// skeleton) because, unlike the other KubeGet*MatchingPod helpers, matching here needs an
+	// extra Namespace fetch below that should only happen when there's at least one policy to
+	// check against it.
+	policies := r.kubeListPolicies("", "globalnetworkpolicies.crd.projectcalico.org")
 	if len(policies) == 0 {
 		return
 	}
