@@ -16,7 +16,7 @@ import (
 func renderContainerStatusSummary(t *testing.T, containerStatus map[string]interface{}) string {
 	t.Helper()
 	cfg := NewRenderConfig(viper.New())
-	tmpl, err := getTemplate(cfg)
+	ts, err := getTemplate(cfg)
 	if err != nil {
 		t.Fatalf("getTemplate() error = %v", err)
 	}
@@ -32,7 +32,7 @@ func renderContainerStatusSummary(t *testing.T, containerStatus map[string]inter
 	if err != nil {
 		t.Fatalf("newRenderEngine() error = %v", err)
 	}
-	e.Template = *tmpl
+	e.templateSet = ts
 	pod := newRenderableObject(map[string]interface{}{
 		"apiVersion": "v1",
 		"kind":       "Pod",
