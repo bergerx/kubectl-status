@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"text/template"
 
 	"github.com/fatih/color"
 	"github.com/spf13/viper"
@@ -33,6 +34,14 @@ type RenderableObject struct {
 	engine *renderEngine
 	repo   *input.ResourceRepo
 	Config *viper.Viper
+	// currentTree is the *template.Template this object's own top-level render() dispatched
+	// to (embedded or the user overlay tree -- see templateSet). It starts nil (set only once
+	// render() runs) and is what executeTemplate/resolveIncludeTree consult so that an
+	// `.Include`/`$.Include` call for an internal helper name made while rendering this object
+	// resolves within that same tree, rather than being able to cross into the other one. See
+	// templateSet.resolveIncludeTree's doc comment for the full policy and #809 for why this
+	// matters.
+	currentTree *template.Template
 }
 
 // KStatus return a Result object of kstatus for the object.
@@ -138,7 +147,8 @@ func (r RenderableObject) StatusConditions() (conditions []interface{}) {
 
 func (r RenderableObject) render(wr io.Writer) error {
 	klog.V(5).InfoS("called render, calling findTemplateName", "r", r)
-	templateName := findTemplateName(r.engine.Template, r.Kind(), r.GroupVersionKind().Group)
+	tree, templateName := r.engine.templateSet.findTemplateName(r.Kind(), r.GroupVersionKind().Group)
+	r.currentTree = tree
 	klog.V(5).InfoS("calling executeTemplate on renderable", "r", r, "templateName", templateName)
 	err := r.executeTemplate(wr, templateName, r)
 	if err != nil {
@@ -174,7 +184,8 @@ func (r RenderableObject) executeTemplate(wr io.Writer, name string, data any) e
 		_, _ = color.New(color.FgWhite).Fprintf(wr, "%s is already printed", target.String())
 		return nil
 	}
-	return r.engine.ExecuteTemplate(wr, name, data)
+	tree := r.engine.templateSet.resolveIncludeTree(name, r.currentTree)
+	return tree.ExecuteTemplate(wr, name, data)
 }
 
 type uidSet map[types.UID]struct{}
