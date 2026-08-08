@@ -212,7 +212,11 @@ func getTemplate(cfg *RenderConfig) (*templateSet, error) {
 // templateSet doc comment for why they're no longer merged into one shared namespace.
 func buildTemplateSet(funcs template.FuncMap) (*templateSet, error) {
 	klog.V(5).InfoS("parsing templates from the embedded template fs ...")
-	embedded, err := template.New("templates").Funcs(funcs).ParseFS(templatesFS, "templates/*.tmpl")
+	// Two patterns: root-level shared files (templates/common.tmpl) plus one level of
+	// per-ecosystem subdirectories (templates/<group>/<Kind>.tmpl, templates/<group>/<group>_common.tmpl
+	// -- see #807). ParseFS accepts multiple glob patterns; this does not touch the separate
+	// user-override glob in parseUserOverlay below, which stays a flat ~/.kubectl-status/templates/*.tmpl.
+	embedded, err := template.New("templates").Funcs(funcs).ParseFS(templatesFS, "templates/*.tmpl", "templates/*/*.tmpl")
 	if err != nil {
 		klog.V(3).ErrorS(err, "Error parsing some templates")
 		return nil, err
@@ -291,21 +295,27 @@ func parseUserOverlay(funcs template.FuncMap, user *template.Template) map[strin
 }
 
 // kindTemplateNames returns the set of top-level Kind-dispatch names -- every embedded
-// pkg/plugin/templates/<Kind>.tmpl file whose basename is itself a defined template name (the
-// convention every shipped Kind template follows, see TEMPLATE-API.md's "Kind templates"
-// section), plus "DefaultResource" (defined inside common.tmpl, so it has no same-named file of
-// its own). Shared-helper files like common.tmpl/policy_report_common.tmpl don't define a
-// template matching their own basename, so they're naturally excluded.
+// pkg/plugin/templates/<Kind>.tmpl or pkg/plugin/templates/<group>/<Kind>.tmpl file whose
+// basename is itself a defined template name (the convention every shipped Kind template
+// follows, see TEMPLATE-API.md's "Kind templates" section), plus "DefaultResource" (defined
+// inside common.tmpl, so it has no same-named file of its own). Shared-helper files like
+// common.tmpl/policy/policy_report_common.tmpl don't define a template matching their own
+// basename, so they're naturally excluded.
 func kindTemplateNames(embedded *template.Template) (map[string]bool, error) {
 	names := map[string]bool{"DefaultResource": true}
-	entries, err := fs.Glob(templatesFS, "templates/*.tmpl")
-	if err != nil {
-		return nil, err
-	}
-	for _, entry := range entries {
-		base := strings.TrimSuffix(filepath.Base(entry), ".tmpl")
-		if embedded.Lookup(base) != nil {
-			names[base] = true
+	// Two patterns, matching the two ParseFS patterns in buildTemplateSet: root-level files
+	// plus one level of per-ecosystem subdirectories (see #807). fs.Glob only accepts a single
+	// pattern per call, unlike ParseFS, hence the two separate calls merged below.
+	for _, pattern := range []string{"templates/*.tmpl", "templates/*/*.tmpl"} {
+		entries, err := fs.Glob(templatesFS, pattern)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			base := strings.TrimSuffix(filepath.Base(entry), ".tmpl")
+			if embedded.Lookup(base) != nil {
+				names[base] = true
+			}
 		}
 	}
 	return names, nil
