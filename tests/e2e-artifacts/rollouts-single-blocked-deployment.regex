@@ -8,7 +8,7 @@ Deployment/e2e-rollouts-blocked-deployment -n e2e-rollouts-blocked-deployment, c
   Not matched by any Service
   Available:False MinimumReplicasUnavailable, Deployment does not have minimum availability\. for 1m
   Progressing:True ReplicaSetUpdated, ReplicaSet "e2e-rollouts-blocked-deployment-[a-z0-9]+" is progressing\. for 1m
-  Ongoing Rollout: Waiting for deployment "e2e-rollouts-blocked-deployment" rollout to finish: 0 of 1 updated replicas are available\.\.\.
+  Ongoing rollout: Waiting for deployment "e2e-rollouts-blocked-deployment" rollout to finish: 0 of 1 updated replicas are available\.\.\.
   Outage: Deployment has no Ready replicas\.
   Rollouts: Use the `--include-rollout-diffs` flag to see the diff between each rollout!
     1m ago, managed by ReplicaSet/e2e-rollouts-blocked-deployment-[a-z0-9]+, has 1 replicas

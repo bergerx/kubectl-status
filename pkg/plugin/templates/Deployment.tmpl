@@ -25,9 +25,7 @@
     {{- template "suspended" . }}
     {{- $rolloutStatus := .RolloutStatus . }}
     {{- if not $rolloutStatus.done }}
-        {{- "Ongoing Rollout" | yellow | bold | redBoldIf $rolloutStatus.error | nindent 2 }}
-        {{- with $rolloutStatus.message }}: {{ . | yellow }}{{ end }}
-        {{- with $rolloutStatus.error }}: Error: {{ . | red }}{{ end }}
+        {{- template "rollout_ongoing_summary" (dict "rolloutStatus" $rolloutStatus) }}
     {{- end }}
     {{- $replicas := 1 }}{{ if .Spec | hasKey "replicas" }}{{ $replicas = .Spec.replicas | int }}{{ end }}
     {{- if $replicas }}

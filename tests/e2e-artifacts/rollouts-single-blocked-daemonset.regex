@@ -6,7 +6,7 @@ DaemonSet/e2e-rollouts-blocked-daemonset -n e2e-rollouts-blocked-daemonset, crea
     Pod/e2e-rollouts-blocked-daemonset-[a-z0-9]+, created 1m ago Pending, 0/1 ready ImagePullBackOff
   Not matched by any Service
   desired:1, current:1, ready:0, updated:1
-  Ongoing Rollout: Waiting for daemon set "e2e-rollouts-blocked-daemonset" rollout to finish: 0 of 1 updated pods are available\.\.\.
+  Ongoing rollout: Waiting for daemon set "e2e-rollouts-blocked-daemonset" rollout to finish: 0 of 1 updated pods are available\.\.\.
   Rollouts: Use the `--include-rollout-diffs` flag to see the diff between each rollout!
     1m ago used ControllerRevision/e2e-rollouts-blocked-daemonset-[a-z0-9]+\.
 \z
