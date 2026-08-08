@@ -438,7 +438,7 @@ reference (not a call contract — names here can be renamed, split, or merged f
   `network_policy_selection_summary`, `cilium_policy_selection_summary`, `calico_policy_selection_summary`,
   `pod_node_problem_flags`, `pod_network_policy_flags`, `hpa_health_summary`'s sibling `matching_hpas`,
   `vpa_health_summary`'s sibling `matching_vpas`, `pdb_health_summary`'s sibling `pdb_conflict_warning`,
-  `generic_health_summary`, `resource_health_summary`, `volumeattachment_diagnosis`, `rwop_holder_diagnosis`.
+  `volumeattachment_diagnosis`, `rwop_holder_diagnosis`.
 - **`policy_report_common.tmpl`**: `policy_report_findings`, `policy_report_finding_line`.
 - **`Pod.tmpl`** (26): `pod_status_summary_line`, `pod_placement_constraints`,
   `pod_karpenter_compatibility`, `pod_topology_constraints`, `pod_node_problems`,
