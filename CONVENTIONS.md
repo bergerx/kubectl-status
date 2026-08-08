@@ -50,6 +50,14 @@ Every template follows this fixed structure. Do not add content that duplicates 
 
 The bookend sections (`kstatus_summary`, `conditions_summary`, `recent_updates`, `events`, `owners`) stay in this order. Resource-specific body sections go where they make most sense contextually — typically immediately after the content they annotate. Omit a bookend section when it adds no signal for the resource type (e.g. `kstatus_summary` always reports "Resource is always ready" for CronJob — omit it).
 
+### Go function vs. `{{define}}` partial
+
+A shared snippet with a small, fixed set of parameters and no control flow of its own — pure formatting, like `resource_ref` (`dict "kind" "name" "namespace"(opt) "callerNamespace"(opt) "nameSuffix"(opt)` → a colored `Kind/name -n ns` string) — belongs in a Go function registered in the funcMap (grouped into the topic file its neighbors already live in, e.g. `color.go`, `format.go`), not a `{{define}}` block taking an untyped `dict`. A Go signature is compiler-checked (wrong argument count/order is a build failure, not a blank field at render time) and gets ordinary unit test coverage in that file's `_test.go`, the same way `colorPercent` already does.
+
+A snippet stays a `{{define}}` partial when the template's own control flow (`range`/`with`/`if`) is doing real work — composing sections, iterating a list, deciding what to render at all — rather than just formatting fixed inputs into a string. `managed_resource_line` and `deep_render_ref` are this kind: they dispatch and compose, they don't just format.
+
+When a partial name is part of the documented stable surface (see TEMPLATE-API.md) and gets converted to a Go function, keep a thin `{{define}}` wrapper under the original name that delegates to the new function — external user templates calling `{{template "name" (dict ...)}}` directly must keep working unchanged.
+
 ### Prose over key:value
 
 When multiple related fields form a natural sentence, write prose rather than stacking `Label: value` pairs:
