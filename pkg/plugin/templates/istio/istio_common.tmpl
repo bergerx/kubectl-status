@@ -1,0 +1,55 @@
+{{- define "istio_validation_messages" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* istiod's own analysis of the object, written to status.validationMessages when
+           analysis is enabled on the control plane. It is the mesh saying what it made of this
+           configuration -- a referenced host that doesn't resolve, a rule matching no workload
+           -- so it outranks anything a template infers from the spec alone and is rendered
+           wherever it appears. Shaped like condition_summary's "Type:Status Reason" because it
+           is read for the same reason, and the level is spelled out rather than left to colour
+           alone.
+
+           There is no message field to render: an AnalysisMessageBase carries only the level,
+           the message type (a name plus an ISTxxxx code) and a documentation URL -- the prose
+           sentence people recognise from `istioctl analyze` is composed by that command, not
+           stored on the object. The code is what identifies the finding in the docs, so it
+           stands in for the URL rather than spending a line on it. */ -}}
+    {{- with .Status.validationMessages }}
+        {{- "Validation" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- /* Levels are UNKNOWN/ERROR/WARNING/INFO; only INFO is not worth acting on, and
+                   an absent level is left un-alarming rather than guessed at. */ -}}
+            {{- $level := .level | default "" | toString }}
+            {{- $faulty := and $level (ne $level "INFO") }}
+            {{- $name := "" }}{{ $code := "" }}
+            {{- with .type }}
+                {{- with .name }}{{ $name = . | toString }}{{ end }}
+                {{- with .code }}{{ $code = . | toString }}{{ end }}
+            {{- end }}
+            {{- $label := $name | default "UnknownMessage" }}
+            {{- with $level }}{{ $label = printf "%s:%s" . $label }}{{ end }}
+            {{- $label | redIf $faulty | bold | nindent 4 }}
+            {{- with $code }} ({{ . | cyan }}){{ end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "istio_export_to" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* spec.exportTo limits which namespaces a VirtualService or DestinationRule is visible
+           in. It defaults to every namespace, so it only gets a line when it has been narrowed
+           -- and a narrowed one is worth the line: it is the reason a rule that reads correctly,
+           and that `kubectl get` shows sitting right there, is not applied to the caller anyone
+           is testing from. "." is Istio's shorthand for the object's own namespace. */ -}}
+    {{- with .Spec.exportTo }}
+        {{- if not (and (eq (len .) 1) (eq (index . 0 | toString) "*")) }}
+            {{- "Exported to" | bold | nindent 2 }}:
+            {{- range $i, $ns := . }}
+                {{- if $i }},{{ end }}
+                {{- if eq ($ns | toString) "." }} {{ "this namespace only" | yellow }}
+                {{- else if eq ($ns | toString) "*" }} {{ "all namespaces" | cyan }}
+                {{- else }} {{ $ns | toString | cyan }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
