@@ -52,7 +52,7 @@
             {{- /* An id that doesn't split into four is bucketed rather than counted under its own
                    text, which would otherwise put the whole malformed id in the kind summary. */ -}}
             {{- $kind := ternary (last $parts) "unparsable" (eq (len $parts) 4) }}
-            {{- $_ := set $countsByKind $kind (add1 (int ($countsByKind | get $kind))) }}
+            {{- $_ := $countsByKind | set $kind (add1 (int ($countsByKind | get $kind))) }}
             {{- $ids = $ids | append (.id | default "" | toString) }}
         {{- end }}
         {{- $kindSummaries := list }}
