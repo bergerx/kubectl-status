@@ -509,11 +509,11 @@
             {{- if . | hasKey "configMap" }}
                 {{- $cm := .configMap }}
                 {{- $problem := $.Include "pod_volume_configmap_secret_problem" (dict "kind" "ConfigMap" "ctx" $ "name" $cm.name "optional" ($cm.optional | default false) "items" ($cm.items | default list)) }}
-                {{- if $problem }}{{ $volProblems = set $volProblems .name $problem }}{{ end }}
+                {{- if $problem }}{{ $volProblems = $volProblems | set .name $problem }}{{ end }}
             {{- else if . | hasKey "secret" }}
                 {{- $sec := .secret }}
                 {{- $problem := $.Include "pod_volume_configmap_secret_problem" (dict "kind" "Secret" "ctx" $ "name" $sec.secretName "optional" ($sec.optional | default false) "items" ($sec.items | default list)) }}
-                {{- if $problem }}{{ $volProblems = set $volProblems .name $problem }}{{ end }}
+                {{- if $problem }}{{ $volProblems = $volProblems | set .name $problem }}{{ end }}
             {{- end }}
         {{- end }}
     {{- end }}

@@ -1,0 +1,171 @@
+package plugin
+
+import (
+	"reflect"
+	"testing"
+)
+
+var (
+	emptyMap     = map[string]interface{}{}
+	searchForMap = map[string]interface{}{
+		"searchKey1": "searchVal1",
+		"searchKey2": "searchVal2",
+	}
+	nonMatchingValueMap = map[string]interface{}{
+		"searchKey": "searchValDoesntMatch",
+	}
+	nonMatchingKeyMap = map[string]interface{}{
+		"searchKeyDoesntMatch": "searchVal",
+	}
+	matchingSuperSetMap1 = map[string]interface{}{
+		"searchKey1": "searchVal1",
+		"searchKey2": "searchVal2",
+		"otherKey1":  "doestMatter1",
+	}
+	matchingSuperSetMap2 = map[string]interface{}{
+		"searchKey1": "searchVal1",
+		"searchKey2": "searchVal2",
+		"otherKey2":  "doestMatter2",
+	}
+	nestedSearchForMap = map[string]interface{}{
+		"outerKey.innerKey.searchKey1": "searchVal1",
+		"outerKey.innerKey.searchKey2": "searchVal2",
+	}
+	matchingNestedMap = map[string]interface{}{
+		"outerKey": map[string]interface{}{
+			"innerKey": matchingSuperSetMap1,
+			"otherKey": "doesntMatter",
+		},
+	}
+	nonMatchingMiddleKeyNestedMap = map[string]interface{}{
+		"outerKey": matchingSuperSetMap1,
+	}
+)
+
+func TestGetMatchingItemInMapList(t *testing.T) {
+	type args struct {
+		searchFor map[string]interface{}
+		mapList   []interface{}
+	}
+	tests := []struct {
+		name     string
+		args     args
+		wantItem map[string]interface{}
+	}{
+		{
+			name: "one-to-one maps",
+			args: args{
+				searchFor: searchForMap,
+				mapList:   []interface{}{searchForMap},
+			},
+			wantItem: searchForMap,
+		}, {
+			name: "key exists but value doesn't match",
+			args: args{
+				searchFor: searchForMap,
+				mapList:   []interface{}{nonMatchingValueMap},
+			},
+			wantItem: nil,
+		}, {
+			name: "search key doesnt exist in mapList",
+			args: args{
+				searchFor: searchForMap,
+				mapList:   []interface{}{nonMatchingKeyMap},
+			},
+			wantItem: nil,
+		}, {
+			name: "empty mapList",
+			args: args{
+				searchFor: searchForMap,
+				mapList:   []interface{}{emptyMap},
+			},
+			wantItem: nil,
+		}, {
+			name: "empty searchFor",
+			args: args{
+				searchFor: emptyMap,
+				mapList:   []interface{}{searchForMap},
+			},
+			wantItem: nil,
+		}, {
+			name: "searchFor is subset",
+			args: args{
+				searchFor: searchForMap,
+				mapList:   []interface{}{nonMatchingKeyMap, nonMatchingValueMap, matchingSuperSetMap1},
+			},
+			wantItem: matchingSuperSetMap1,
+		}, {
+			name: "multiple matches should return first match",
+			args: args{
+				searchFor: searchForMap,
+				mapList:   []interface{}{nonMatchingKeyMap, nonMatchingValueMap, matchingSuperSetMap2, matchingSuperSetMap1},
+			},
+			wantItem: matchingSuperSetMap2,
+		}, {
+			name: "nested map is subset",
+			args: args{
+				searchFor: nestedSearchForMap,
+				mapList:   []interface{}{nonMatchingKeyMap, nonMatchingValueMap, matchingSuperSetMap1, matchingNestedMap},
+			},
+			wantItem: matchingNestedMap,
+		}, {
+			name: "nested map missing key",
+			args: args{
+				searchFor: nestedSearchForMap,
+				mapList:   []interface{}{nonMatchingKeyMap},
+			},
+			wantItem: nil,
+		}, {
+			name: "nested map missing middle key",
+			args: args{
+				searchFor: nestedSearchForMap,
+				mapList:   []interface{}{nonMatchingMiddleKeyNestedMap},
+			},
+			wantItem: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if gotItem := getMatchingItemInMapList(tt.args.searchFor, tt.args.mapList); !reflect.DeepEqual(gotItem, tt.wantItem) {
+				t.Errorf("getMatchingItemInMapList() = %v, want %v", gotItem, tt.wantItem)
+			}
+		})
+	}
+}
+
+func TestSortMapListByKeysValueIsStableOnTies(t *testing.T) {
+	// When multiple items share the same key value, the sort must preserve
+	// their original relative order (as returned by the k8s API) instead of
+	// reordering them arbitrarily, otherwise output like "Known/recorded
+	// manage events" becomes flaky between otherwise identical runs.
+	mapList := []interface{}{
+		map[string]interface{}{"manager": "kubectl-client-side-apply", "time": "2024-01-01T00:00:00Z"},
+		map[string]interface{}{"manager": "kube-controller-manager", "time": "2024-01-01T00:00:00Z"},
+		map[string]interface{}{"manager": "another-manager", "time": "2023-12-31T00:00:00Z"},
+	}
+	for i := 0; i < 10; i++ {
+		got := sortMapListByKeysValue("time", mapList)
+		want := []interface{}{mapList[2], mapList[0], mapList[1]}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("sortMapListByKeysValue() = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestSortMapListByFloatKeysValueDescIsStableOnTies(t *testing.T) {
+	// Mirrors TestSortMapListByKeysValueIsStableOnTies: ties (e.g. two pods reporting the same
+	// usage) must preserve original relative order rather than reordering arbitrarily, otherwise
+	// a Node's "pods by usage" ranking becomes flaky between otherwise identical runs.
+	mapList := []interface{}{
+		map[string]interface{}{"ref": "ns/a", "memUsage": 5.0},
+		map[string]interface{}{"ref": "ns/b", "memUsage": 10.0},
+		map[string]interface{}{"ref": "ns/c", "memUsage": 10.0},
+	}
+	for i := 0; i < 10; i++ {
+		got := sortMapListByFloatKeysValueDesc("memUsage", mapList)
+		want := []interface{}{mapList[1], mapList[2], mapList[0]}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("sortMapListByFloatKeysValueDesc() = %v, want %v", got, want)
+		}
+	}
+}
