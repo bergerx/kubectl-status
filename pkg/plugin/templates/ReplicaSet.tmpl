@@ -29,6 +29,14 @@
         {{- if $deploymentDesiredReplicas }}
             {{- if .Spec.replicas }}
                 {{- if ne $deploymentDesiredReplicas (.Spec.replicas | float64) }}
+                    {{- /* Deliberately not the shared "rollout_ongoing_summary" partial (see
+                           common.tmpl, #805): that's parameterized on the map .RolloutStatus
+                           returns, and RolloutStatus's polymorphichelpers.StatusViewerFor doesn't
+                           support ReplicaSet (only Deployment/DaemonSet/StatefulSet, same as
+                           `kubectl rollout status`), so there's no $rolloutStatus to pass in here
+                           -- this is inferred purely from the owning Deployment's desired-replicas
+                           annotation instead. Casing kept aligned with the shared partial's
+                           "Ongoing rollout" wording. */ -}}
                     {{- "Ongoing rollout" | yellow | bold | nindent 2 }}, check Owner Reference resources.
                 {{- end }}
             {{- else }}{{/* means .Spec.replicass: 0 */}}
