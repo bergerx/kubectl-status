@@ -13,12 +13,12 @@
            and apparantly the numbers are parsed as float 64, so used 0.0 rather then 0 */ -}}
     {{- $injectedStatus := .Status }}
     {{- if not (.Status | hasKey "readyReplicas") }}
-        {{- $injectedStatus := set $injectedStatus "readyReplicas" 0.0 }}
+        {{- $injectedStatus := $injectedStatus | set "readyReplicas" 0.0 }}
     {{- end }}
     {{- if not (.Status | hasKey "availableReplicas") }}
-        {{- $injectedStatus := set $injectedStatus "availableReplicas" 0.0 }}
+        {{- $injectedStatus := $injectedStatus | set "availableReplicas" 0.0 }}
     {{- end }}
-    {{- $injectedManifest := set .Object "status" $injectedStatus }}
+    {{- $injectedManifest := .Object | set "status" $injectedStatus }}
     {{- template "replicas_status" $injectedManifest }}
     {{- template "conditions_summary" . }}
     {{- if and .Spec.replicas (or (not .Status.replicas) (not .Status.readyReplicas)) }}

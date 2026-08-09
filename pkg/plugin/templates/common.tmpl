@@ -7,11 +7,17 @@
     {{- template "application_details" . }}
     {{- template "replicas_status" . }}
     {{- template "suspended" . }}
-    {{- template "crossplane_composition_ref" . }}
-    {{- template "crossplane_composed_resources" . }}
-    {{- template "crossplane_managed_resource_drift" . }}
-    {{- template "crossplane_managed_resource_details" . }}
-    {{- template "gatekeeper_constraint_fallback" . }}
+    {{- /* Ecosystem-specific fallback rendering (Crossplane, Gatekeeper, ...) is dispatched
+           through a Go-side detector registry (pkg/plugin/default_resource_detectors.go) rather
+           than a fixed list of template calls here, so a future ecosystem's fallback detection
+           can be added by registering a new detector instead of editing this body. */ -}}
+    {{- range .DefaultResourceTemplates }}
+        {{- /* "template" only accepts a string-literal name, not a variable -- $.Include is the
+               project's own dynamic-dispatch primitive for exactly this case (see e.g. how
+               managed_resource_line/resource_health_summary call a Kind-derived template name
+               below), and it returns any per-object rendering error instead of panicking. */ -}}
+        {{- $.Include . $ }}
+    {{- end }}
     {{- template "conditions_summary" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
@@ -472,12 +478,28 @@
     {{- end }}
 {{- end -}}
 
+{{- define "crossplane_default_resource" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* The rendering half of the Crossplane entry in defaultResourceDetectors
+           (pkg/plugin/default_resource_detectors.go): DefaultResource dispatches here once the
+           Go-side detector has decided the object shows at least one Crossplane signal
+           (compositionRef, composed resourceRefs, or a non-empty forProvider). Those signals
+           aren't mutually exclusive with each other, so every sub-template below still re-checks
+           its own narrower condition and no-ops when it doesn't apply -- exactly as it did back
+           when DefaultResource called all four of these unconditionally. */ -}}
+    {{- template "crossplane_composition_ref" . }}
+    {{- template "crossplane_composed_resources" . }}
+    {{- template "crossplane_managed_resource_drift" . }}
+    {{- template "crossplane_managed_resource_details" . }}
+{{- end }}
+
 {{- define "crossplane_composition_ref" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* A Crossplane composite resource (XR) or claim records which Composition it's bound to
            in spec.compositionRef (v1, cluster-scoped XRs and their claims) or
            spec.crossplane.compositionRef (v2, namespaced XRs). Neither path is set by any other
-           kind of object, so this is safe to invoke unconditionally from DefaultResource. */ -}}
+           kind of object, so this is safe to invoke unconditionally from
+           crossplane_default_resource. */ -}}
     {{- $ref := .Spec.compositionRef }}
     {{- $revisionRef := .Spec.compositionRevisionRef }}
     {{- $updatePolicy := .Spec.compositionUpdatePolicy }}
@@ -506,7 +528,7 @@
            spec.crossplane.resourceRefs (v2, namespaced XRs) or spec.resourceRefs (v1, cluster-
            scoped XRs). Presence of either is itself the marker that this object is an XR -- no
            other Kubernetes object sets these paths -- so this is safe to invoke unconditionally
-           from DefaultResource. Since this now runs for every CRD kind that has no dedicated
+           from crossplane_default_resource. Since this now runs for every CRD kind that has no dedicated
            template, a coincidentally-named but differently-shaped spec.resourceRefs/spec.crossplane
            field (e.g. not a list of {kind,name} objects) must be ignored rather than treated as a
            template error that would blank out that resource's whole render. */ -}}

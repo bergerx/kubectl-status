@@ -158,6 +158,14 @@ Enhancement suggestions are tracked as [GitHub issues](https://github.com/berger
 
 Before writing or reviewing any template output, read [**CONVENTIONS.md**](CONVENTIONS.md). It covers output philosophy, color coding, template section order, prose style, value highlighting, and the shallow/default/deep rendering pattern.
 
+### Template API
+
+[**TEMPLATE-API.md**](TEMPLATE-API.md) enumerates every `{{define}}` name and FuncMap function a
+`~/.kubectl-status/templates/<Kind>.tmpl` override may depend on, with its parameter contract and
+behavior — anything not listed there is internal and may be renamed or removed without notice. If your
+change removes or changes the signature/behavior of anything documented there, update TEMPLATE-API.md
+in the same PR and add a changelog entry per [CHANGELOG.md](CHANGELOG.md).
+
 ### Your First Code Contribution
 
 Then use `make` to get the compiled binary:

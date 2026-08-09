@@ -12,9 +12,9 @@
     {{- template "service_account_summary" (dict "ctx" . "namespace" .Namespace "serviceAccountName" ($podTemplate.spec | default dict).serviceAccountName) }}
     {{- /* When there is no readyReplicas, STS may not have related fields at all */ -}}
     {{- $status := .Status }}
-    {{- $_ := set $status "readyReplicas" ($status.readyReplicas | default 0) }}
-    {{- $_ := set $status "currentReplicas" ($status.replicas | default 0) }}
-    {{- $_ := set .Object "status" $status }}
+    {{- $_ := $status | set "readyReplicas" ($status.readyReplicas | default 0) }}
+    {{- $_ := $status | set "currentReplicas" ($status.replicas | default 0) }}
+    {{- $_ := .Object | set "status" $status }}
     {{- template "replicas_status" . }}
     {{- template "suspended" . }}
     {{- template "conditions_summary" . }}
