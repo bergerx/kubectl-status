@@ -9,6 +9,7 @@
     {{- with .Spec.hostnames }}
         {{- "Hostnames" | bold | nindent 2 }}: {{ join ", " . | cyan }}
     {{- end }}
+    {{- $routeHostnames := .Spec.hostnames | default (list) }}
     {{- with .Spec.parentRefs }}
         {{- "Parents" | bold | nindent 2 }}:
         {{- range . }}
@@ -19,54 +20,7 @@
             {{- else }}
                 {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
-                {{- if not ($.LiveQueriesDisabled) }}
-                    {{- if eq (.kind | default "Gateway") "Gateway" }}
-                        {{- $parentRef := . }}
-                        {{- $gwNs := coalesce .namespace $.Namespace }}
-                        {{- $gw := $.KubeGetFirst $gwNs (qualifyKind "Gateway" (.group | default "gateway.networking.k8s.io")) .name }}
-                        {{- if $gw.Object }}
-                            {{- $routeHostnames := $.Spec.hostnames | default (list) }}
-                            {{- range $gw.Spec.listeners }}
-                                {{- /* See the HTTPRoute template for what this intersection means. */ -}}
-                                {{- $certHostnames := hostnameIntersections (.hostname | default "") $routeHostnames }}
-                                {{- $isMatch := false }}
-                                {{- if $parentRef.sectionName }}
-                                    {{- if eq .name $parentRef.sectionName }}{{ $isMatch = true }}{{ end }}
-                                    {{- if not $certHostnames }}{{ $certHostnames = $routeHostnames }}{{ end }}
-                                {{- else if eq .protocol "HTTPS" }}
-                                    {{- if or (not $routeHostnames) (not .hostname) $certHostnames }}{{ $isMatch = true }}{{ end }}
-                                {{- end }}
-                                {{- if $isMatch }}
-                                    {{- with .tls }}
-                                        {{- range .certificateRefs }}
-                                            {{- $refKind := .kind | default "Secret" }}
-                                            {{- if eq $refKind "Secret" }}
-                                                {{- $refNs := coalesce .namespace $gwNs }}
-                                                {{- $secret := $.KubeGetFirst $refNs "Secret" .name }}
-                                                {{- "cert:" | nindent 6 }}{{ $.Include "resource_ref" (dict "kind" $refKind "name" .name "namespace" $refNs "callerNamespace" $.Namespace) }}
-                                                {{- if not $secret.Object }}
-                                                    {{- " doesn't exist" | red | bold }}
-                                                {{- else }}
-                                                    {{- $cert := parseTLSSecretCertificate $secret $certHostnames }}
-                                                    {{- if $cert.WrongType }}
-                                                        {{- printf ", wrong type:%s" $cert.ActualType | red | bold }}
-                                                    {{- else if $cert.MissingKeys }}
-                                                        {{- printf ", missing keys:%s" (join "," $cert.MissingKeys) | red | bold }}
-                                                    {{- else if $cert.ParseError }}
-                                                        {{- printf ", parse error:%s" $cert.ParseError | red | bold }}
-                                                    {{- else }}
-                                                        {{- if $cert.SelfSigned }}{{ ", self-signed" | yellow }}{{ end }}
-                                                        {{- if not $cert.MatchesHostname }}{{ ", hostname mismatch" | red | bold }}{{ end }}
-                                                    {{- end }}
-                                                {{- end }}
-                                            {{- end }}
-                                        {{- end }}
-                                    {{- end }}
-                                {{- end }}
-                            {{- end }}
-                        {{- end }}
-                    {{- end }}
-                {{- end }}
+                {{- template "gwapi_listener_tls_cert_check" (dict "ctx" $ "parentRef" . "routeHostnames" $routeHostnames "protocol" "HTTPS") }}
             {{- end }}
         {{- end }}
     {{- end }}
@@ -86,24 +40,12 @@
             {{- end }}
             {{- with .backendRefs }}
                 {{- range . }}
-                    {{- "→ " | nindent 4 }}{{ $.Include "resource_ref" (dict "kind" (.kind | default "Service") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) }}
-                    {{- with .port }}:{{ . }}{{ end }}
-                    {{- if and (. | hasKey "weight") (ne (.weight | int) 1) }}, weight:{{ .weight }}{{ end }}
+                    {{- template "gwapi_backend_ref" (dict "ctx" $ "ref" .) }}
                 {{- end }}
             {{- end }}
         {{- end }}
     {{- end }}
-    {{- with .Status.parents }}
-        {{- "Status" | bold | nindent 2 }}:
-        {{- range . }}
-            {{- $.Include "resource_ref" (dict "kind" (.parentRef.kind | default "Gateway") "name" .parentRef.name "namespace" .parentRef.namespace "callerNamespace" $.Namespace) | nindent 4 }}
-            {{- with .parentRef.sectionName }} [{{ . }}]{{ end }}
-            {{- with .controllerName }} ({{ . }}){{ end }}
-            {{- range .conditions | sortMapListByKeysValue "type" }}
-                {{- $.Include "condition_summary" . | nindent 6 }}
-            {{- end }}
-        {{- end }}
-    {{- end }}
+    {{- template "gwapi_status_parents" (dict "ctx" $ "parents" .Status.parents) }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}

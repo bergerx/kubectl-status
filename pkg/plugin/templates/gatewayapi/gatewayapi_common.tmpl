@@ -1,0 +1,112 @@
+{{- define "gwapi_backend_ref" }}
+    {{- /* dict "ctx" (RenderableObject, used for Include/Namespace) "ref" (one
+           spec.rules[].backendRefs[] entry) "colorize" (optional bool -- HTTPRoute renders the
+           port/weight in cyan since it already colors its Rules section heavily; the other route
+           kinds render them plain, so this defaults to false to keep their output unchanged).
+           Renders the "-> resource_ref[:port][, weight:N]" line shared by every Gateway API route
+           kind's Rules section. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $ref := .ref }}
+    {{- "→ " | nindent 4 }}{{ $ctx.Include "resource_ref" (dict "kind" ($ref.kind | default "Service") "name" $ref.name "namespace" $ref.namespace "callerNamespace" $ctx.Namespace) }}
+    {{- if .colorize }}
+        {{- with $ref.port }}:{{ . | toString | cyan }}{{ end }}
+        {{- if and ($ref | hasKey "weight") (ne ($ref.weight | int) 1) }}, weight:{{ $ref.weight | toString | cyan }}{{ end }}
+    {{- else }}
+        {{- with $ref.port }}:{{ . }}{{ end }}
+        {{- if and ($ref | hasKey "weight") (ne ($ref.weight | int) 1) }}, weight:{{ $ref.weight }}{{ end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "gwapi_listener_tls_cert_check" }}
+    {{- /* dict "ctx" (RenderableObject) "parentRef" (one spec.parentRefs[] entry) "routeHostnames"
+           (this route's spec.hostnames, defaulted to an empty list) "protocol" (the Gateway
+           listener protocol this route kind attaches through -- "HTTPS" for GRPCRoute/HTTPRoute,
+           "TLS" for TLSRoute) "checkTerminateMode" (optional bool -- TLSRoute sets this since a
+           Passthrough-mode TLS listener has no certificateRefs to check; GRPCRoute/HTTPRoute leave
+           it unset since an HTTPS listener always terminates).
+
+           Only meaningful for a Gateway parent and only when live queries are allowed (the deep
+           render already inlines the whole Gateway, certificateRefs included, so this is skipped
+           in that branch by the caller). Fetches the parent Gateway, finds the listener(s) this
+           route actually attaches to -- matched by sectionName when set, otherwise by protocol and
+           a hostname intersection -- and for each of that listener's TLS certificateRefs reports
+           whether the referenced Secret exists, is the right type, and matches the intersected
+           hostnames. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $parentRef := .parentRef }}
+    {{- $routeHostnames := .routeHostnames }}
+    {{- $protocol := .protocol }}
+    {{- if and (not ($ctx.LiveQueriesDisabled)) (eq ($parentRef.kind | default "Gateway") "Gateway") }}
+        {{- $gwNs := coalesce $parentRef.namespace $ctx.Namespace }}
+        {{- $gw := $ctx.KubeGetFirst $gwNs (qualifyKind "Gateway" ($parentRef.group | default "gateway.networking.k8s.io")) $parentRef.name }}
+        {{- if $gw.Object }}
+            {{- range $gw.Spec.listeners }}
+                {{- /* The hostnames this listener and this route serve together, which are the
+                       ones the listener's certificate has to cover -- either side may be a
+                       wildcard, so this is an intersection rather than an equality test. Empty
+                       means the route pins no hostname (or, for a listener that isn't pinned by
+                       sectionName below, that the two are disjoint and the route doesn't attach
+                       here). */ -}}
+                {{- $certHostnames := hostnameIntersections (.hostname | default "") $routeHostnames }}
+                {{- $isMatch := false }}
+                {{- if $parentRef.sectionName }}
+                    {{- if eq .name $parentRef.sectionName }}{{ $isMatch = true }}{{ end }}
+                    {{- /* sectionName attaches the route to this listener whatever its hostname,
+                           so a disjoint pair is a real problem: fall back to the route's hostnames
+                           to report it rather than staying silent. */ -}}
+                    {{- if not $certHostnames }}{{ $certHostnames = $routeHostnames }}{{ end }}
+                {{- else if eq .protocol $protocol }}
+                    {{- if or (not $routeHostnames) (not .hostname) $certHostnames }}{{ $isMatch = true }}{{ end }}
+                {{- end }}
+                {{- if $isMatch }}
+                    {{- with .tls }}
+                        {{- if or (not $.checkTerminateMode) (eq (.mode | default "Terminate") "Terminate") }}
+                            {{- range .certificateRefs }}
+                                {{- $refKind := .kind | default "Secret" }}
+                                {{- if eq $refKind "Secret" }}
+                                    {{- $refNs := coalesce .namespace $gwNs }}
+                                    {{- $secret := $ctx.KubeGetFirst $refNs "Secret" .name }}
+                                    {{- "cert:" | nindent 6 }}{{ $ctx.Include "resource_ref" (dict "kind" $refKind "name" .name "namespace" $refNs "callerNamespace" $ctx.Namespace) }}
+                                    {{- if not $secret.Object }}
+                                        {{- " doesn't exist" | red | bold }}
+                                    {{- else }}
+                                        {{- $cert := parseTLSSecretCertificate $secret $certHostnames }}
+                                        {{- if $cert.WrongType }}
+                                            {{- printf ", wrong type:%s" $cert.ActualType | red | bold }}
+                                        {{- else if $cert.MissingKeys }}
+                                            {{- printf ", missing keys:%s" (join "," $cert.MissingKeys) | red | bold }}
+                                        {{- else if $cert.ParseError }}
+                                            {{- printf ", parse error:%s" $cert.ParseError | red | bold }}
+                                        {{- else }}
+                                            {{- if $cert.SelfSigned }}{{ ", self-signed" | yellow }}{{ end }}
+                                            {{- if not $cert.MatchesHostname }}{{ ", hostname mismatch" | red | bold }}{{ end }}
+                                        {{- end }}
+                                    {{- end }}
+                                {{- end }}
+                            {{- end }}
+                        {{- end }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "gwapi_status_parents" }}
+    {{- /* dict "ctx" (RenderableObject) "parents" (status.parents from a TCPRoute/UDPRoute/
+           GRPCRoute/TLSRoute -- not used by HTTPRoute, which correlates each status.parents entry
+           with its matching spec.parentRefs entry inline instead of listing them separately).
+           Renders the "Status:" section: one resource_ref per parent plus its conditions. */ -}}
+    {{- $ctx := .ctx }}
+    {{- with .parents }}
+        {{- "Status" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- $ctx.Include "resource_ref" (dict "kind" (.parentRef.kind | default "Gateway") "name" .parentRef.name "namespace" .parentRef.namespace "callerNamespace" $ctx.Namespace) | nindent 4 }}
+            {{- with .parentRef.sectionName }} [{{ . }}]{{ end }}
+            {{- with .controllerName }} ({{ . }}){{ end }}
+            {{- range .conditions | sortMapListByKeysValue "type" }}
+                {{- $ctx.Include "condition_summary" . | nindent 6 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
