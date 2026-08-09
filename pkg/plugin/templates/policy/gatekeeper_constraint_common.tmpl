@@ -1,17 +1,21 @@
 {{- define "gatekeeper_constraint_fallback" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- /* Called unconditionally from DefaultResource, same as the crossplane_* snippets above it
-           -- Gatekeeper generates one CRD Kind per installed ConstraintTemplate (K8sAllowedRepos,
-           a custom one, ...), so findTemplateName can never route most of them to a dedicated
-           <Kind>.tmpl the way K8sRequiredLabels.tmpl is routed to today; they all land here
-           instead. Unlike Crossplane, which has no fixed apiVersion group to key off (every
-           provider owns its own), every Constraint CRD Gatekeeper generates -- regardless of Kind
-           -- shares one fixed group, confirmed against a live-cluster-generated CRD: only the
-           Kind varies, never constraints.gatekeeper.sh. That makes apiVersion an exact eligibility
-           check here, not a shape heuristic that could coincidentally match an unrelated CRD with
-           a similarly named spec.match/spec.enforcementAction field. K8sRequiredLabels itself
-           never reaches this: findTemplateName already routes it to its own template, which calls
-           the same two shared defines below directly. */ -}}
+    {{- /* Dispatched from DefaultResource via the Go-side detectGatekeeperConstraint entry in
+           defaultResourceDetectors (pkg/plugin/default_resource_detectors.go), which already
+           performs the apiVersion-prefix eligibility check below in Go so it's independently unit
+           tested -- the check is repeated here too so this template stays self-contained (and
+           correct) for any other caller. Gatekeeper generates one CRD Kind per installed
+           ConstraintTemplate (K8sAllowedRepos, a custom one, ...), so findTemplateName can never
+           route most of them to a dedicated <Kind>.tmpl the way K8sRequiredLabels.tmpl is routed
+           to today; they all land here instead. Unlike Crossplane, which has no fixed apiVersion
+           group to key off (every provider owns its own), every Constraint CRD Gatekeeper
+           generates -- regardless of Kind -- shares one fixed group, confirmed against a
+           live-cluster-generated CRD: only the Kind varies, never constraints.gatekeeper.sh. That
+           makes apiVersion an exact eligibility check here, not a shape heuristic that could
+           coincidentally match an unrelated CRD with a similarly named spec.match/
+           spec.enforcementAction field. K8sRequiredLabels itself never reaches this:
+           findTemplateName already routes it to its own template, which calls the same two shared
+           defines below directly. */ -}}
     {{- if hasPrefix "constraints.gatekeeper.sh/" .APIVersion }}
         {{- template "gatekeeper_constraint_match_and_enforcement" . }}
         {{- template "gatekeeper_constraint_audit_status" . }}

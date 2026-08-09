@@ -12,9 +12,9 @@
     {{- template "service_account_summary" (dict "ctx" . "namespace" .Namespace "serviceAccountName" ($podTemplate.spec | default dict).serviceAccountName) }}
     {{- /* When there is no readyReplicas, STS may not have related fields at all */ -}}
     {{- $status := .Status }}
-    {{- $_ := set $status "readyReplicas" ($status.readyReplicas | default 0) }}
-    {{- $_ := set $status "currentReplicas" ($status.replicas | default 0) }}
-    {{- $_ := set .Object "status" $status }}
+    {{- $_ := $status | set "readyReplicas" ($status.readyReplicas | default 0) }}
+    {{- $_ := $status | set "currentReplicas" ($status.replicas | default 0) }}
+    {{- $_ := .Object | set "status" $status }}
     {{- template "replicas_status" . }}
     {{- template "suspended" . }}
     {{- template "conditions_summary" . }}
@@ -30,12 +30,11 @@
         {{- end }}
     {{- end }}
     {{- if not $rolloutStatus.done }}
-        {{- "Ongoing rollout" | yellow | bold | redBoldIf $rolloutStatus.error | nindent 2 }}
-        {{- with $rolloutStatus.message }}: {{ . | yellow }}{{ end }}
-        {{- with $rolloutStatus.error }}: Error: {{ . | red }}{{ end }}
+        {{- $stuckMessage := "" }}
         {{- if eq ($status.updatedCount | default 0) 0 }}
-            {{- "Stuck Rollout?" | yellow | bold | nindent 2 }}: Still replacing the first Pod, may indicate a stuck rollout.
+            {{- $stuckMessage = "Still replacing the first Pod, may indicate a stuck rollout." }}
         {{- end }}
+        {{- template "rollout_ongoing_summary" (dict "rolloutStatus" $rolloutStatus "stuckMessage" $stuckMessage) }}
         {{- /* kubernetes/kubernetes#67250, upstream's "Forced rollback": with the default
                OrderedReady Pod management the controller stops its sync at the first Pod that
                isn't Running and Ready, so it never reaches the phase that would delete Pods left

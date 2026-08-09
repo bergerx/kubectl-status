@@ -7,11 +7,17 @@
     {{- template "application_details" . }}
     {{- template "replicas_status" . }}
     {{- template "suspended" . }}
-    {{- template "crossplane_composition_ref" . }}
-    {{- template "crossplane_composed_resources" . }}
-    {{- template "crossplane_managed_resource_drift" . }}
-    {{- template "crossplane_managed_resource_details" . }}
-    {{- template "gatekeeper_constraint_fallback" . }}
+    {{- /* Ecosystem-specific fallback rendering (Crossplane, Gatekeeper, ...) is dispatched
+           through a Go-side detector registry (pkg/plugin/default_resource_detectors.go) rather
+           than a fixed list of template calls here, so a future ecosystem's fallback detection
+           can be added by registering a new detector instead of editing this body. */ -}}
+    {{- range .DefaultResourceTemplates }}
+        {{- /* "template" only accepts a string-literal name, not a variable -- $.Include is the
+               project's own dynamic-dispatch primitive for exactly this case (see e.g. how
+               managed_resource_line/resource_health_summary call a Kind-derived template name
+               below), and it returns any per-object rendering error instead of panicking. */ -}}
+        {{- $.Include . $ }}
+    {{- end }}
     {{- template "conditions_summary" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
@@ -19,21 +25,17 @@
 {{- end }}
 
 {{- define "resource_ref" }}
-    {{- /* Expects dict "kind" "name" "namespace" (optional) "callerNamespace" (optional -- the
-           namespace of the object doing the referencing; when it matches "namespace" the
-           namespace is redundant on screen and is dropped) "nameSuffix" (optional -- a
-           qualifier of the name itself, such as a port, placed against the name so it can't be
-           misread as qualifying the trailing " -n namespace" instead).
-           kind/name go through "default" rather than straight into cyan: a ref field a CRD marks
-           required can still arrive nil from a hand-written manifest rendered with -f, and cyan
-           errors on a nil, which aborts the render of the entire object instead of degrading
-           just this one reference. */ -}}
-    {{- .kind | default "" | cyan | bold }}/{{ .name | default "" | cyan }}{{ with .nameSuffix }}{{ . }}{{ end }}
-    {{- with .namespace }}
-        {{- if or (not $.callerNamespace) (ne . $.callerNamespace) }}
-            {{- " -n " }}{{ if eq . "default" }}{{ . | red }}{{ else }}{{ . | cyan }}{{ end }}
-        {{- end }}
-    {{- end }}
+    {{- /* Thin compatibility wrapper: this name is on TEMPLATE-API.md's stable list (dict "kind"
+           "name" "namespace" (optional) "callerNamespace" (optional -- the namespace of the
+           object doing the referencing; when it matches "namespace" the namespace is redundant on
+           screen and is dropped) "nameSuffix" (optional -- a qualifier of the name itself, such
+           as a port, placed against the name so it can't be misread as qualifying the trailing
+           " -n namespace" instead)), so every existing/external user template calling
+           template "resource_ref" (dict ...) directly keeps working unchanged. The actual
+           formatting logic lives in the resourceRef Go function (color.go), which gets a
+           compiler-checked parameter list and unit test coverage instead of an unchecked dict;
+           see issue #810. */ -}}
+    {{- resourceRef .kind .name .namespace .callerNamespace .nameSuffix -}}
 {{- end -}}
 
 {{- define "deep_render_ref" }}

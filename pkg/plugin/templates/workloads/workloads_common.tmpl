@@ -92,6 +92,34 @@
     {{- end }}
 {{- end }}
 
+{{- define "rollout_ongoing_summary" }}
+    {{- /* Expects dict "rolloutStatus" (the map .RolloutStatus returns: "done"/"message"/"error")
+           "stuckMessage" (optional string -- an extra "Stuck Rollout?" line for a caller-specific
+           heuristic that .RolloutStatus itself doesn't cover, e.g. StatefulSet's "still replacing
+           the first Pod" check).
+
+           Shared by Deployment/DaemonSet/StatefulSet.tmpl, which all gate this on
+           "{{ if not $rolloutStatus.done }}" before calling it -- kept as the caller's
+           responsibility rather than folded in here, since each of them also branches on that
+           same "not done" condition for other, unrelated lines (e.g. Deployment/StatefulSet's
+           "Not Ready Replicas" only firing once the rollout above is done). ReplicaSet has its
+           own differently-shaped "Ongoing rollout" note instead of calling this: RolloutStatus's
+           polymorphichelpers.StatusViewerFor only supports Deployment/DaemonSet/StatefulSet (the
+           same set `kubectl rollout status` does), so a ReplicaSet has no $rolloutStatus map to
+           pass in.
+
+           Previously copy-pasted into each of the three callers, which had already drifted:
+           "Ongoing Rollout" vs "Ongoing rollout" capitalization, and StatefulSet's stuck-rollout
+           check was never back-ported to Deployment/DaemonSet. See #805. */ -}}
+    {{- $rolloutStatus := .rolloutStatus }}
+    {{- "Ongoing rollout" | yellow | bold | redBoldIf $rolloutStatus.error | nindent 2 }}
+    {{- with $rolloutStatus.message }}: {{ . | yellow }}{{ end }}
+    {{- with $rolloutStatus.error }}: Error: {{ . | red }}{{ end }}
+    {{- with .stuckMessage }}
+        {{- "Stuck Rollout?" | yellow | bold | nindent 2 }}: {{ . }}
+    {{- end }}
+{{- end }}
+
 {{- define "pod_node_problem_flags" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* Expects the Pod RenderableObject. Returns a compact, comma-joined inline fragment (no
