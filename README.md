@@ -124,7 +124,9 @@ generic view.
 
 For your own CRDs, drop a template into `~/.kubectl-status/templates/<Kind>.tmpl`, or let the paired
 [Claude Code](https://claude.ai/code) skill (`/generate-template`) generate one from your CRD schema in seconds — see
-[Claude Code Integration](./CONTRIBUTING.md#claude-code-integration) in CONTRIBUTING.md.
+[Claude Code Integration](./CONTRIBUTING.md#claude-code-integration) in CONTRIBUTING.md. See
+[TEMPLATE-API.md](./TEMPLATE-API.md) for the full list of shared template helpers and functions your
+own template can safely depend on.
 
 The [Kubernetes API conventions](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties)
 recommend condition `type`s use the "abnormal-true" polarity (e.g. `status: "True"` means something's wrong), but
@@ -137,7 +139,9 @@ condition `type`, a suffix pattern like `*Problematic`, or a prefix pattern like
 ## Development
 
 - [CONVENTIONS.md](./CONVENTIONS.md) — output philosophy, color rules, and template patterns
+- [TEMPLATE-API.md](./TEMPLATE-API.md) — the stable template/funcMap surface a custom `<Kind>.tmpl` can depend on
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — how to build, test, and submit changes
+- [CHANGELOG.md](./CHANGELOG.md) — breaking changes to the template API
 
 ## License
 

@@ -2,7 +2,7 @@
 
 Design rules that apply to all kubectl-status output and templates. Read this before writing or reviewing a template.
 
-For the step-by-step template authoring workflow (reading CRD schemas, sampling live instances, verifying output) see [`CONTRIBUTING.md`](CONTRIBUTING.md#your-first-code-contribution).
+For the step-by-step template authoring workflow (reading CRD schemas, sampling live instances, verifying output) see [`CONTRIBUTING.md`](CONTRIBUTING.md#your-first-code-contribution). For the full list of `{{define}}` names and functions a `~/.kubectl-status/templates/<Kind>.tmpl` override can safely call — as opposed to internal helpers that may change without notice — see [`TEMPLATE-API.md`](TEMPLATE-API.md).
 
 ## Output philosophy
 
