@@ -11,6 +11,40 @@ import (
 	"github.com/spf13/cast"
 )
 
+// resourceRef renders a "Kind/name" reference, appending " -n namespace" unless namespace equals
+// callerNamespace, and gluing an optional nameSuffix (e.g. a port) onto name so it can't be
+// misread as qualifying the trailing " -n namespace" instead. Backs the `{{define "resource_ref"}}`
+// partial in templates/common.tmpl, which is on TEMPLATE-API.md's stable-name list -- every
+// existing/external user template calling `{{template "resource_ref" (dict ...)}}` keeps working
+// unchanged against that thin wrapper.
+//
+// kind/name/namespace/callerNamespace/nameSuffix are interface{} rather than string: a ref field a
+// CRD marks required can still arrive nil from a hand-written manifest rendered with -f (a missing
+// dict key resolves to an untyped nil the same way), and cast.ToString degrades that to "" instead
+// of erroring the call and aborting the whole object's render.
+func resourceRef(kind, name, namespace, callerNamespace, nameSuffix interface{}) string {
+	kindStr := cast.ToString(kind)
+	nameStr := cast.ToString(name)
+	namespaceStr := cast.ToString(namespace)
+	callerNamespaceStr := cast.ToString(callerNamespace)
+	nameSuffixStr := cast.ToString(nameSuffix)
+
+	var b strings.Builder
+	b.WriteString(color.New(color.Bold).Sprintf("%s", color.CyanString(kindStr)))
+	b.WriteString("/")
+	b.WriteString(color.CyanString(nameStr))
+	b.WriteString(nameSuffixStr)
+	if namespaceStr != "" && (callerNamespaceStr == "" || namespaceStr != callerNamespaceStr) {
+		b.WriteString(" -n ")
+		if namespaceStr == "default" {
+			b.WriteString(color.RedString(namespaceStr))
+		} else {
+			b.WriteString(color.CyanString(namespaceStr))
+		}
+	}
+	return b.String()
+}
+
 func colorPercent(format string, percent float64) string {
 	str := fmt.Sprintf(format, percent)
 	switch {
