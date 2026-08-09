@@ -37,14 +37,14 @@ func checkTemplateWithViper(t *testing.T, templateName string, obj map[string]in
 func renderTemplateWithViper(t *testing.T, templateName string, obj map[string]interface{}, useRenderable bool, v *viper.Viper) string {
 	t.Helper()
 	cfg := NewRenderConfig(v)
-	tmpl, _ := getTemplate(cfg)
+	ts, _ := getTemplate(cfg)
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
 	f.Client = &fake.RESTClient{}
 	f.UnstructuredClient = f.Client
 	t.Cleanup(func() { f.Cleanup() })
 	repo, _ := input.NewResourceRepo(f, cfg.Viper)
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
+	e.templateSet = ts
 	r := newRenderableObject(obj, e, repo)
 	var objToPassTemplate interface{}
 	if useRenderable {
@@ -214,13 +214,13 @@ func TestPodNodeProblemFlags(t *testing.T) {
 			f.Client = f.UnstructuredClient
 			t.Cleanup(func() { f.Cleanup() })
 			cfg := NewRenderConfig(viper.New())
-			tmpl, _ := getTemplate(cfg)
+			ts, _ := getTemplate(cfg)
 			repo, err := input.NewResourceRepo(f, cfg.Viper)
 			if err != nil {
 				t.Fatal(err)
 			}
 			e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-			e.Template = *tmpl
+			e.templateSet = ts
 			pod := newRenderableObject(map[string]interface{}{
 				"apiVersion": "v1",
 				"kind":       "Pod",
@@ -595,14 +595,14 @@ func renderPodTemplate(t *testing.T, f *cmdtesting.TestFactory, obj map[string]i
 func renderPodTemplateWithViper(t *testing.T, f *cmdtesting.TestFactory, obj map[string]interface{}, v *viper.Viper) string {
 	t.Helper()
 	cfg := NewRenderConfig(v)
-	tmpl, _ := getTemplate(cfg)
+	ts, _ := getTemplate(cfg)
 	t.Cleanup(func() { f.Cleanup() })
 	repo, err := input.NewResourceRepo(f, cfg.Viper)
 	if err != nil {
 		t.Fatal(err)
 	}
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
+	e.templateSet = ts
 	r := newRenderableObject(obj, e, repo)
 	got, err := r.renderTemplate("Pod", r)
 	if err != nil {
@@ -696,14 +696,14 @@ func nodeUsageObj() map[string]interface{} {
 func newNodeRenderable(t *testing.T, v *viper.Viper, obj map[string]interface{}) RenderableObject {
 	t.Helper()
 	cfg := NewRenderConfig(v)
-	tmpl, _ := getTemplate(cfg)
+	ts, _ := getTemplate(cfg)
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
 	f.Client = &fake.RESTClient{}
 	f.UnstructuredClient = f.Client
 	t.Cleanup(func() { f.Cleanup() })
 	repo, _ := input.NewResourceRepo(f, cfg.Viper)
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
+	e.templateSet = ts
 	return newRenderableObject(obj, e, repo)
 }
 
@@ -1191,14 +1191,14 @@ func TestManagedResourceDriftTemplate_DeepAddsObservedOnlyCount(t *testing.T) {
 func renderManagedResourceDrift(t *testing.T, obj map[string]interface{}, v *viper.Viper) (string, error) {
 	t.Helper()
 	cfg := NewRenderConfig(v)
-	tmpl, _ := getTemplate(cfg)
+	ts, _ := getTemplate(cfg)
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
 	f.Client = &fake.RESTClient{}
 	f.UnstructuredClient = f.Client
 	t.Cleanup(func() { f.Cleanup() })
 	repo, _ := input.NewResourceRepo(f, cfg.Viper)
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
+	e.templateSet = ts
 	r := newRenderableObject(obj, e, repo)
 	return r.renderTemplate("crossplane_managed_resource_drift", r)
 }
@@ -1207,14 +1207,14 @@ func renderCrossplaneTemplate(t *testing.T, templateName string, obj map[string]
 	t.Helper()
 	v := viper.New()
 	cfg := NewRenderConfig(v)
-	tmpl, _ := getTemplate(cfg)
+	ts, _ := getTemplate(cfg)
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
 	f.Client = &fake.RESTClient{}
 	f.UnstructuredClient = f.Client
 	t.Cleanup(func() { f.Cleanup() })
 	repo, _ := input.NewResourceRepo(f, cfg.Viper)
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
+	e.templateSet = ts
 	r := newRenderableObject(obj, e, repo)
 	return r.renderTemplate(templateName, r)
 }
@@ -1438,14 +1438,14 @@ func renderObjHealthSummary(t *testing.T, templateName string, obj map[string]in
 	t.Helper()
 	v := viper.New()
 	cfg := NewRenderConfig(v)
-	tmpl, _ := getTemplate(cfg)
+	ts, _ := getTemplate(cfg)
 	f := cmdtesting.NewTestFactory().WithNamespace("test")
 	f.Client = &fake.RESTClient{}
 	f.UnstructuredClient = f.Client
 	t.Cleanup(func() { f.Cleanup() })
 	repo, _ := input.NewResourceRepo(f, cfg.Viper)
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
+	e.templateSet = ts
 	r := newRenderableObject(obj, e, repo)
 	return r.renderTemplate(templateName, map[string]interface{}{"obj": r, "callerNamespace": callerNamespace})
 }
@@ -1603,13 +1603,13 @@ func TestQuotaHeadroomTemplate(t *testing.T) {
 	f.Client = f.UnstructuredClient
 	t.Cleanup(func() { f.Cleanup() })
 	cfg := NewRenderConfig(viper.New())
-	tmpl, _ := getTemplate(cfg)
+	ts, _ := getTemplate(cfg)
 	repo, err := input.NewResourceRepo(f, cfg.Viper)
 	if err != nil {
 		t.Fatal(err)
 	}
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
+	e.templateSet = ts
 	// 4 replicas at 256Mi each, all 4 running: the 25% surge Pod of the next rollout step needs
 	// 256Mi and the quota has 128Mi left.
 	deployment := newRenderableObject(unstructuredFromJSON(t, deploymentJSON(4, 4, "")), e, repo)
@@ -1652,13 +1652,13 @@ func TestQuotaHeadroomTemplateSilentWhenQuotaHasRoom(t *testing.T) {
 	f.Client = f.UnstructuredClient
 	t.Cleanup(func() { f.Cleanup() })
 	cfg := NewRenderConfig(viper.New())
-	tmpl, _ := getTemplate(cfg)
+	ts, _ := getTemplate(cfg)
 	repo, err := input.NewResourceRepo(f, cfg.Viper)
 	if err != nil {
 		t.Fatal(err)
 	}
 	e, _ := newRenderEngine(genericiooptions.NewTestIOStreamsDiscard(), cfg)
-	e.Template = *tmpl
+	e.templateSet = ts
 	deployment := newRenderableObject(unstructuredFromJSON(t, deploymentJSON(4, 4, "")), e, repo)
 	got, err := deployment.renderTemplate("quota_headroom", deployment)
 	if err != nil {
