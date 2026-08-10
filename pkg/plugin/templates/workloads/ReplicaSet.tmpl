@@ -25,10 +25,10 @@
         {{- "Outage" | red | bold | nindent 2 }}: ReplicaSet has no Ready replicas.
     {{- end }}
     {{- if .Annotations | hasKey "deployment.kubernetes.io/desired-replicas" }}
-        {{- $deploymentDesiredReplicas := index .Annotations "deployment.kubernetes.io/desired-replicas" | float64 }}
+        {{- $deploymentDesiredReplicas := index .Annotations "deployment.kubernetes.io/desired-replicas" | toFloat64 }}
         {{- if $deploymentDesiredReplicas }}
             {{- if .Spec.replicas }}
-                {{- if ne $deploymentDesiredReplicas (.Spec.replicas | float64) }}
+                {{- if ne $deploymentDesiredReplicas (.Spec.replicas | toFloat64) }}
                     {{- /* Deliberately not the shared "rollout_ongoing_summary" partial (see
                            common.tmpl, #805): that's parameterized on the map .RolloutStatus
                            returns, and RolloutStatus's polymorphichelpers.StatusViewerFor doesn't

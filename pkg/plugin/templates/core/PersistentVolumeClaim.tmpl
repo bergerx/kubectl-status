@@ -43,8 +43,8 @@
         {{- end }}
     {{- end }}
     {{- if $volStats | hasKey "usedBytes" }}
-        {{- $used := $volStats.usedBytes | float64 }}
-        {{- $cap := $volStats.capacityBytes | float64 }}
+        {{- $used := $volStats.usedBytes | toFloat64 }}
+        {{- $cap := $volStats.capacityBytes | toFloat64 }}
         {{- if $cap }}
             {{- $pct := percent $used $cap }}
             {{- printf ", usage: %s/%s[%s]" ($used | humanizeSI "B") ($cap | humanizeSI "B") ($pct | colorPercent "%.0f%%") }}

@@ -22,7 +22,7 @@
     {{- with $spec.source.volumeHandle }}, volumeHandle {{ . | cyan }}{{ end }}
     {{- with $spec.source.snapshotHandle }}, pre-provisioned snapshotHandle {{ . | cyan }}{{ end }}
     {{- with $status.creationTime }}, snapshot taken {{ . | colorAgoUnixNano }}{{ agoSuffix }}{{ end }}
-    {{- with $status.restoreSize }}, restoreSize {{ . | float64 | humanizeSI "B" }}{{ end }}
+    {{- with $status.restoreSize }}, restoreSize {{ . | toFloat64 | humanizeSI "B" }}{{ end }}
     {{- with $status.error }}
         {{- "Error" | red | bold | nindent 2 }}: {{ .message }}
         {{- with .time }} ({{ . | colorAgo }}{{ agoSuffix }}){{ end }}
