@@ -1530,7 +1530,11 @@ func TestGenericHealthSummaryTemplate(t *testing.T) {
 		{
 			// Covers #826-adjacent: Ready alone can look fine while a sibling condition
 			// (Crossplane's Synced, an operator's own Degraded/*Error type, ...) is unhealthy --
-			// see other_unhealthy_conditions, appended after everything above.
+			// see other_unhealthy_conditions, appended after everything above. The raw Ready
+			// condition is repeated here (green, alongside KStatus's own translated "Current"
+			// above) rather than deduplicated away -- other_unhealthy_conditions always leads
+			// with the raw Ready condition when one exists, regardless of what a caller's own
+			// primary-status line already says about it.
 			name: "unhealthy sibling condition surfaces its reason even when Ready is True",
 			obj: map[string]interface{}{
 				"kind":     "Widget",
@@ -1542,7 +1546,7 @@ func TestGenericHealthSummaryTemplate(t *testing.T) {
 					},
 				},
 			},
-			want: "Current: Resource is Ready, ReconcileError",
+			want: "Current: Resource is Ready, Ready:True, ReconcileError",
 		},
 	}
 	for _, tt := range tests {
@@ -1576,16 +1580,34 @@ func TestOtherUnhealthyConditionsTemplate(t *testing.T) {
 		notWant    string
 	}{
 		{
-			name:       "all-healthy conditions produce nothing",
+			name:       "a healthy non-Ready condition alone produces nothing",
 			conditions: []interface{}{map[string]interface{}{"type": "Synced", "status": "True"}},
 			notWant:    "Synced",
 		},
 		{
-			name: "Ready itself is never repeated here, however unhealthy",
+			name: "unhealthy Ready is shown first, by reason, however the caller already reported it",
 			conditions: []interface{}{
 				map[string]interface{}{"type": "Ready", "status": "False", "reason": "Blocked"},
 			},
-			notWant: "Blocked",
+			want: "Ready:False Blocked",
+		},
+		{
+			name: "healthy Ready is shown too, not just unhealthy",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "Ready", "status": "True"},
+			},
+			want: "Ready:True",
+		},
+		{
+			// "Available" sorts alphabetically before "Ready" (StatusConditions is sorted by
+			// type) -- this confirms Ready is placed first by construction, not by coincidence
+			// of alphabetical order.
+			name: "Ready is placed first even when another condition would sort first alphabetically",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "Available", "status": "False", "reason": "MinimumReplicasUnavailable"},
+				map[string]interface{}{"type": "Ready", "status": "False", "reason": "Blocked"},
+			},
+			want: "Ready:False Blocked, MinimumReplicasUnavailable",
 		},
 		{
 			name: "reason is preferred over message",
@@ -1629,6 +1651,71 @@ func TestOtherUnhealthyConditionsTemplate(t *testing.T) {
 			}
 			if tt.notWant != "" && strings.Contains(got, tt.notWant) {
 				t.Errorf("other_unhealthy_conditions got = %q, should not contain %q", got, tt.notWant)
+			}
+		})
+	}
+}
+
+// TestKstatusIfAbnormalTemplate covers kstatus_if_abnormal directly: unlike
+// generic_health_summary/Ingress.summary/route_health_summary, which already show KStatus
+// unconditionally, the 9 "<Kind>.summary" templates without their own KStatus call use this to add
+// one -- but only when it disagrees with Current, since kstatus.Compute doesn't know every
+// built-in kind (HorizontalPodAutoscaler/VerticalPodAutoscaler aren't in its list and carry no
+// Ready condition) and would otherwise always claim Current regardless of the object's real state.
+func TestKstatusIfAbnormalTemplate(t *testing.T) {
+	tests := []struct {
+		name string
+		obj  map[string]interface{}
+		want string
+	}{
+		{
+			name: "Current status renders nothing",
+			obj: map[string]interface{}{
+				"kind":     "Pod",
+				"metadata": map[string]interface{}{"name": "my-pod"},
+				"status":   map[string]interface{}{"phase": "Succeeded"},
+			},
+			want: "",
+		},
+		{
+			name: "a status kstatus can compute for this kind, other than Current, is shown",
+			obj: map[string]interface{}{
+				"apiVersion": "batch/v1",
+				"kind":       "Job",
+				"metadata":   map[string]interface{}{"name": "my-job"},
+				"status": map[string]interface{}{
+					"conditions": []interface{}{
+						map[string]interface{}{"type": "Failed", "status": "True", "reason": "BackoffLimitExceeded", "message": "Job has reached the specified backoff limit"},
+					},
+				},
+			},
+			want: "Failed",
+		},
+		{
+			name: "HorizontalPodAutoscaler is unknown to kstatus and carries no Ready condition -- always silent, never a false Current",
+			obj: map[string]interface{}{
+				"kind":     "HorizontalPodAutoscaler",
+				"metadata": map[string]interface{}{"name": "my-hpa"},
+				"status": map[string]interface{}{
+					"conditions": []interface{}{
+						map[string]interface{}{"type": "AbleToScale", "status": "False", "reason": "FailedGetScale"},
+					},
+				},
+			},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := renderTemplateWithViper(t, "kstatus_if_abnormal", tt.obj, true, viper.New())
+			if tt.want == "" {
+				if got != "" {
+					t.Errorf("kstatus_if_abnormal got = %q, want empty", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("kstatus_if_abnormal got = %q, want it to contain %q", got, tt.want)
 			}
 		})
 	}

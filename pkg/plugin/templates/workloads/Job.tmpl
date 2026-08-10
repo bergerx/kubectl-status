@@ -92,6 +92,7 @@
         {{- $completed := $obj.Status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
         {{- ", ran for " }}{{ $completed.Sub $started | colorDuration }}
     {{- end }}
+    {{- template "kstatus_if_abnormal" $obj }}
     {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}
 

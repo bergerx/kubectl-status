@@ -99,6 +99,7 @@
     {{- with $nodeProblems }}, {{ . }}{{ end }}
     {{- $netpolFlag := $pod.Include "pod_network_policy_flags" $pod }}
     {{- with $netpolFlag }}, {{ . }}{{ end }}
+    {{- template "kstatus_if_abnormal" $pod }}
     {{- template "other_unhealthy_conditions" $pod }}
 {{- end }}
 

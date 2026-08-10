@@ -109,5 +109,6 @@
             {{- ", " }}{{ "disruptions allowed" | green }}
         {{- end }}
     {{- end }}
+    {{- template "kstatus_if_abnormal" $obj }}
     {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}
