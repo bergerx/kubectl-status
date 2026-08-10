@@ -388,11 +388,11 @@
 {{- define "pod_volume_inline_stats" }}
     {{- /* pod_volume_inline_stats returns inline usage for a volume stats entry from kubelet */ -}}
     {{- if .capacityBytes }}
-        {{- $pct := percent (.usedBytes | float64) (.capacityBytes | float64) -}}
-        {{- " " -}}usage: {{ .usedBytes | float64 | humanizeSI "B" }}/{{ .capacityBytes | float64 | humanizeSI "B" }} ({{- $pct | colorPercent "%.0f%%" -}})
+        {{- $pct := percent (.usedBytes | toFloat64) (.capacityBytes | toFloat64) -}}
+        {{- " " -}}usage: {{ .usedBytes | toFloat64 | humanizeSI "B" }}/{{ .capacityBytes | toFloat64 | humanizeSI "B" }} ({{- $pct | colorPercent "%.0f%%" -}})
         {{- if .inodes }}
-            {{- $inodePct := percent (.inodesUsed | float64) (.inodes | float64) }}
-            {{- if gt $inodePct 75.0 }}, inodes: {{ .inodesUsed | float64 | humanizeSI "" }}/{{ .inodes | float64 | humanizeSI "" }} ({{- $inodePct | colorPercent "%.0f%%" -}}){{ end }}
+            {{- $inodePct := percent (.inodesUsed | toFloat64) (.inodes | toFloat64) }}
+            {{- if gt $inodePct 75.0 }}, inodes: {{ .inodesUsed | toFloat64 | humanizeSI "" }}/{{ .inodes | toFloat64 | humanizeSI "" }} ({{- $inodePct | colorPercent "%.0f%%" -}}){{ end }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -441,11 +441,11 @@
     {{- end }}
     {{- with $stats }}
         {{- if and .usedBytes .capacityBytes }}
-            {{- $pct := percent (.usedBytes | float64) (.capacityBytes | float64) }}
-            {{- $statsStr := printf "%s/%s[%s]" (.usedBytes | float64 | humanizeSI "B") (.capacityBytes | float64 | humanizeSI "B") ($pct | colorPercent "%.0f%%") }}
+            {{- $pct := percent (.usedBytes | toFloat64) (.capacityBytes | toFloat64) }}
+            {{- $statsStr := printf "%s/%s[%s]" (.usedBytes | toFloat64 | humanizeSI "B") (.capacityBytes | toFloat64 | humanizeSI "B") ($pct | colorPercent "%.0f%%") }}
             {{- if .inodes }}
-                {{- $inodePct := percent (.inodesUsed | float64) (.inodes | float64) }}
-                {{- if gt $inodePct 75.0 }}{{- $statsStr = printf "%s, inodes: %s/%s[%s]" $statsStr (.inodesUsed | float64 | humanizeSI "") (.inodes | float64 | humanizeSI "") ($inodePct | colorPercent "%.0f%%") }}{{- end }}
+                {{- $inodePct := percent (.inodesUsed | toFloat64) (.inodes | toFloat64) }}
+                {{- if gt $inodePct 75.0 }}{{- $statsStr = printf "%s, inodes: %s/%s[%s]" $statsStr (.inodesUsed | toFloat64 | humanizeSI "") (.inodes | toFloat64 | humanizeSI "") ($inodePct | colorPercent "%.0f%%") }}{{- end }}
             {{- end }}
             {{- if $inner }}
                 {{- if $isPVC }}{{- $inner = printf "%s using %s" $inner $statsStr }}
@@ -543,8 +543,8 @@
            place rather than duplicated across the two layouts. */ -}}
     {{- $entries := list }}
     {{- if $showEphemeral }}
-        {{- $pct := percent (index $ephemeralStorage "usedBytes" | float64) (index $ephemeralStorage "capacityBytes" | float64) }}
-        {{- $entries = $entries | append (printf "%s (%s/%s[%s])" ("ephemeral-storage" | bold) (index $ephemeralStorage "usedBytes" | float64 | humanizeSI "B") (index $ephemeralStorage "capacityBytes" | float64 | humanizeSI "B") ($pct | colorPercent "%.0f%%")) }}
+        {{- $pct := percent (index $ephemeralStorage "usedBytes" | toFloat64) (index $ephemeralStorage "capacityBytes" | toFloat64) }}
+        {{- $entries = $entries | append (printf "%s (%s/%s[%s])" ("ephemeral-storage" | bold) (index $ephemeralStorage "usedBytes" | toFloat64 | humanizeSI "B") (index $ephemeralStorage "capacityBytes" | toFloat64 | humanizeSI "B") ($pct | colorPercent "%.0f%%")) }}
     {{- end }}
     {{- range $displayVols }}
         {{- $entry := $.Include "pod_volume_line" (dict "ctx" $ "vol" . "podStatsSummary" $podStatsSummary "problem" (index $volProblems .name)) }}
@@ -810,10 +810,10 @@
         {{- with .logs }}
             {{- if .usedBytes }}
                 {{- if .capacityBytes }}
-                    {{- $pct := percent (.usedBytes | float64) (.capacityBytes | float64) }}
-                    {{- printf " (logs: %s/%s[%s])" (.usedBytes | float64 | humanizeSI "B") (.capacityBytes | float64 | humanizeSI "B") ($pct | colorPercent "%.0f%%") }}
+                    {{- $pct := percent (.usedBytes | toFloat64) (.capacityBytes | toFloat64) }}
+                    {{- printf " (logs: %s/%s[%s])" (.usedBytes | toFloat64 | humanizeSI "B") (.capacityBytes | toFloat64 | humanizeSI "B") ($pct | colorPercent "%.0f%%") }}
                 {{- else }}
-                    {{- printf " (logs: %s)" (.usedBytes | float64 | humanizeSI "B") }}
+                    {{- printf " (logs: %s)" (.usedBytes | toFloat64 | humanizeSI "B") }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -894,7 +894,7 @@
                 {{- if .capacityBytes }}
                     {{- "rootfs" | nindent 2 }}{{ template "pod_volume_inline_stats" . }}
                 {{- else }}
-                    {{- "rootfs:" | nindent 2 }} {{ .usedBytes | float64 | humanizeSI "B" }}{{ with .inodesUsed }}, inodes: {{ . | float64 | humanizeSI "" }}{{ end }}
+                    {{- "rootfs:" | nindent 2 }} {{ .usedBytes | toFloat64 | humanizeSI "B" }}{{ with .inodesUsed }}, inodes: {{ . | toFloat64 | humanizeSI "" }}{{ end }}
                 {{- end }}
             {{- end }}
         {{- end }}

@@ -74,7 +74,7 @@
     {{- with .r.Status.addresses }}
         {{- "addresses" | nindent 2 }}:{{ range . }}{{ if .address }} {{ .type }}={{ .address }}{{ end }}{{ end }}
         {{- with $.network }}
-            {{- "network" | nindent 4 }}: rx/tx {{ .rxBytes | float64 | humanizeSI "B" }}/{{ .txBytes | float64 | humanizeSI "B" }}, rx/tx errors {{ .rxErrors | float64 | humanizeSI "" | redIf (gt (.rxErrors | float64) 0.0) }}/{{ .txErrors | float64 | humanizeSI "" | redIf (gt (.txErrors | float64) 0.0) }}
+            {{- "network" | nindent 4 }}: rx/tx {{ .rxBytes | toFloat64 | humanizeSI "B" }}/{{ .txBytes | toFloat64 | humanizeSI "B" }}, rx/tx errors {{ .rxErrors | toFloat64 | humanizeSI "" | redIf (gt (.rxErrors | toFloat64) 0.0) }}/{{ .txErrors | toFloat64 | humanizeSI "" | redIf (gt (.txErrors | toFloat64) 0.0) }}
         {{- end }}
     {{- end }}
 {{- end -}}
@@ -96,7 +96,7 @@
     {{- $kc := .kubeletconfig | default dict }}
     {{- $parts := list }}
     {{- with .health }}{{ $parts = $parts | append (ternary . (. | red | bold) (eq . "ok")) }}{{ end }}
-    {{- with $kc.podPidsLimit }}{{ if ge (. | float64) 0.0 }}{{ $parts = $parts | append (printf "podPidsLimit:%s" (. | toString)) }}{{ end }}{{ end }}
+    {{- with $kc.podPidsLimit }}{{ if ge (. | toFloat64) 0.0 }}{{ $parts = $parts | append (printf "podPidsLimit:%s" (. | toString)) }}{{ end }}{{ end }}
     {{- with $kc.cpuManagerPolicy }}{{ if ne . "none" }}{{ $parts = $parts | append (printf "cpuManager:%s" .) }}{{ end }}{{ end }}
     {{- with $kc.memoryManagerPolicy }}{{ if ne . "None" }}{{ $parts = $parts | append (printf "memoryManager:%s" .) }}{{ end }}{{ end }}
     {{- with $kc.topologyManagerPolicy }}{{ if ne . "none" }}{{ $parts = $parts | append (printf "topologyManager:%s" .) }}{{ end }}{{ end }}
@@ -316,12 +316,12 @@
            separate stats block. */ -}}
     {{- if or $detailed $stats.rlimit }}
         {{- "pods" | bold | nindent 2 }}:
-        {{- if $detailed }} usage/allocatable:{{ $podCount }}/{{ $allocPods | printf "%g" }}({{ percent ($podCount | float64) $allocPods | colorPercent "%.0f%%" }}){{ end }}
+        {{- if $detailed }} usage/allocatable:{{ $podCount }}/{{ $allocPods | printf "%g" }}({{ percent ($podCount | toFloat64) $allocPods | colorPercent "%.0f%%" }}){{ end }}
         {{- with $stats.rlimit }}
-            {{- if $detailed }},{{ end }} processes {{ .curproc | float64 | humanizeSI "" }}/{{ .maxpid | float64 | humanizeSI "" }} ({{ percent (.curproc | float64) (.maxpid | float64) | colorPercent "%.0f%%" }}, rlimit)
-            {{- template "node_eviction_annotation" (dict "threshold" (index $evictionHard "pid.available") "current" (subFloat64 (.curproc | float64) (.maxpid | float64)) "total" (.maxpid | float64) "unit" "") }}
+            {{- if $detailed }},{{ end }} processes {{ .curproc | toFloat64 | humanizeSI "" }}/{{ .maxpid | toFloat64 | humanizeSI "" }} ({{ percent (.curproc | toFloat64) (.maxpid | toFloat64) | colorPercent "%.0f%%" }}, rlimit)
+            {{- template "node_eviction_annotation" (dict "threshold" (index $evictionHard "pid.available") "current" (subFloat64 (.curproc | toFloat64) (.maxpid | toFloat64)) "total" (.maxpid | toFloat64) "unit" "") }}
         {{- end }}
-        {{- if and $detailed (eq ($podCount | float64) $allocPods) }}
+        {{- if and $detailed (eq ($podCount | toFloat64) $allocPods) }}
             {{- "Reached Max Pods Limit" | red | bold | nindent 4 }}: Number of Pods that can run on this Kubelet (`--max-pods`) limit is reached. No more pods will be scheduled to this Node even if there is free resource (E.g. cpu/mem).
         {{- end }}
     {{- end }}
@@ -392,11 +392,11 @@
            "inodesThreshold" (raw eviction-hard threshold strings for this exact fs, "" when
            eviction-hard isn't configured for it) -- see node_eviction_annotation. */ -}}
     {{- $fs := .fs }}
-    {{- $fs.usedBytes | float64 | humanizeSI "B" }}/{{ $fs.capacityBytes | float64 | humanizeSI "B" -}}, {{ $fs.availableBytes | float64 | humanizeSI "B" }} still free
-    {{- template "node_eviction_annotation" (dict "threshold" .availableThreshold "current" ($fs.availableBytes | float64) "total" ($fs.capacityBytes | float64) "unit" "B") -}}
+    {{- $fs.usedBytes | toFloat64 | humanizeSI "B" }}/{{ $fs.capacityBytes | toFloat64 | humanizeSI "B" -}}, {{ $fs.availableBytes | toFloat64 | humanizeSI "B" }} still free
+    {{- template "node_eviction_annotation" (dict "threshold" .availableThreshold "current" ($fs.availableBytes | toFloat64) "total" ($fs.capacityBytes | toFloat64) "unit" "B") -}}
     ; {{ "" }}
-    {{- $fs.inodesUsed | float64 | humanizeSI "" }}/{{ $fs.inodes | float64 | humanizeSI "" }} inode, {{ $fs.inodesFree | float64 | humanizeSI "" }} inode still free
-    {{- template "node_eviction_annotation" (dict "threshold" .inodesThreshold "current" ($fs.inodesFree | float64) "total" ($fs.inodes | float64) "unit" "") }}
+    {{- $fs.inodesUsed | toFloat64 | humanizeSI "" }}/{{ $fs.inodes | toFloat64 | humanizeSI "" }} inode, {{ $fs.inodesFree | toFloat64 | humanizeSI "" }} inode still free
+    {{- template "node_eviction_annotation" (dict "threshold" .inodesThreshold "current" ($fs.inodesFree | toFloat64) "total" ($fs.inodes | toFloat64) "unit" "") }}
 {{- end -}}
 
 {{- define "node_stats_resources" }}
@@ -417,19 +417,19 @@
              (float64), only needed to normalize a percent-form threshold. */ -}}
     {{- $data := .data }}
     {{- if .full }}
-        {{- with $data.cpu }}{{ with .usageNanoCores }}{{ $cores := . | float64 | divFloat64 1000000000 }}cpu {{ $cores | printf "%.2g" }}core/sec{{ with $.allocCpu }} ({{ percent $cores . | colorPercent "%.0f%%" }} of node){{ end }}, {{ end }}{{ end }}
+        {{- with $data.cpu }}{{ with .usageNanoCores }}{{ $cores := . | toFloat64 | divFloat64 1000000000 }}cpu {{ $cores | printf "%.2g" }}core/sec{{ with $.allocCpu }} ({{ percent $cores . | colorPercent "%.0f%%" }} of node){{ end }}, {{ end }}{{ end }}
     {{- end }}
     {{- with $data.memory -}}
-        {{- if $.full }}{{ $used := .usageBytes | float64 -}}
+        {{- if $.full }}{{ $used := .usageBytes | toFloat64 -}}
         mem {{ $used | humanizeSI "B" -}}
         {{- with $.allocMem }} ({{ percent $used . | colorPercent "%.0f%%" }} of node){{ end -}}
-        , workingSet {{ .workingSetBytes | float64 | humanizeSI "B" -}}
-        , {{ end }}rss {{ .rssBytes | float64 | humanizeSI "B" -}}
+        , workingSet {{ .workingSetBytes | toFloat64 | humanizeSI "B" -}}
+        , {{ end }}rss {{ .rssBytes | toFloat64 | humanizeSI "B" -}}
         {{- if .availableBytes -}}
-        , available {{ .availableBytes | float64 | humanizeSI "B" -}}
-        {{- template "node_eviction_annotation" (dict "threshold" $.memAvailThreshold "current" (.availableBytes | float64) "total" ($.memAvailTotal | default 0.0) "unit" "B") -}}
+        , available {{ .availableBytes | toFloat64 | humanizeSI "B" -}}
+        {{- template "node_eviction_annotation" (dict "threshold" $.memAvailThreshold "current" (.availableBytes | toFloat64) "total" ($.memAvailTotal | default 0.0) "unit" "B") -}}
         {{- end -}}
-        , pageFaults/major {{ .pageFaults | float64 | humanizeSI "" }}/{{ .majorPageFaults | float64 | humanizeSI "" }}
+        , pageFaults/major {{ .pageFaults | toFloat64 | humanizeSI "" }}/{{ .majorPageFaults | toFloat64 | humanizeSI "" }}
     {{- end }}
 {{- end -}}
 
@@ -448,29 +448,29 @@
     {{- $imagefsInodes := index $eh "imagefs.inodesFree" | default "" }}
     {{- $shared := false }}
     {{- if $imageFs }}
-        {{- if and (eq ($fs.capacityBytes | float64) ($imageFs.capacityBytes | float64))
-                   (eq ($fs.availableBytes | float64) ($imageFs.availableBytes | float64))
-                   (eq ($fs.inodes | float64) ($imageFs.inodes | float64))
-                   (eq ($fs.inodesFree | float64) ($imageFs.inodesFree | float64)) }}
+        {{- if and (eq ($fs.capacityBytes | toFloat64) ($imageFs.capacityBytes | toFloat64))
+                   (eq ($fs.availableBytes | toFloat64) ($imageFs.availableBytes | toFloat64))
+                   (eq ($fs.inodes | toFloat64) ($imageFs.inodes | toFloat64))
+                   (eq ($fs.inodesFree | toFloat64) ($imageFs.inodesFree | toFloat64)) }}
             {{- $shared = true }}
         {{- end }}
     {{- end }}
     {{- if $shared }}
-        {{- "rootfs/imagefs" | bold | nindent 4 }}: {{ $fs.usedBytes | float64 | humanizeSI "B" }}/
-        {{- $imageFs.usedBytes | float64 | humanizeSI "B" }} used of {{ $fs.capacityBytes | float64 | humanizeSI "B" -}}
-        , {{ $fs.availableBytes | float64 | humanizeSI "B" }} still free
-        {{- template "node_eviction_annotation" (dict "threshold" $nodefsAvail "current" ($fs.availableBytes | float64) "total" ($fs.capacityBytes | float64) "unit" "B") }}
+        {{- "rootfs/imagefs" | bold | nindent 4 }}: {{ $fs.usedBytes | toFloat64 | humanizeSI "B" }}/
+        {{- $imageFs.usedBytes | toFloat64 | humanizeSI "B" }} used of {{ $fs.capacityBytes | toFloat64 | humanizeSI "B" -}}
+        , {{ $fs.availableBytes | toFloat64 | humanizeSI "B" }} still free
+        {{- template "node_eviction_annotation" (dict "threshold" $nodefsAvail "current" ($fs.availableBytes | toFloat64) "total" ($fs.capacityBytes | toFloat64) "unit" "B") }}
         {{- /* One shared filesystem can still be under two different thresholds; only the second
                one is worth printing, and only when it isn't the same threshold restated. */ -}}
         {{- if ne $imagefsAvail $nodefsAvail }}
-            {{- template "node_eviction_annotation" (dict "threshold" $imagefsAvail "current" ($fs.availableBytes | float64) "total" ($fs.capacityBytes | float64) "unit" "B") }}
+            {{- template "node_eviction_annotation" (dict "threshold" $imagefsAvail "current" ($fs.availableBytes | toFloat64) "total" ($fs.capacityBytes | toFloat64) "unit" "B") }}
         {{- end }}
-        {{- "" }}; {{ $fs.inodesUsed | float64 | humanizeSI "" }}/
-        {{- $imageFs.inodesUsed | float64 | humanizeSI "" }} of {{ $fs.inodes | float64 | humanizeSI "" }} inode
-        {{- ", " }}{{ $fs.inodesFree | float64 | humanizeSI "" }} inode still free
-        {{- template "node_eviction_annotation" (dict "threshold" $nodefsInodes "current" ($fs.inodesFree | float64) "total" ($fs.inodes | float64) "unit" "") }}
+        {{- "" }}; {{ $fs.inodesUsed | toFloat64 | humanizeSI "" }}/
+        {{- $imageFs.inodesUsed | toFloat64 | humanizeSI "" }} of {{ $fs.inodes | toFloat64 | humanizeSI "" }} inode
+        {{- ", " }}{{ $fs.inodesFree | toFloat64 | humanizeSI "" }} inode still free
+        {{- template "node_eviction_annotation" (dict "threshold" $nodefsInodes "current" ($fs.inodesFree | toFloat64) "total" ($fs.inodes | toFloat64) "unit" "") }}
         {{- if ne $imagefsInodes $nodefsInodes }}
-            {{- template "node_eviction_annotation" (dict "threshold" $imagefsInodes "current" ($fs.inodesFree | float64) "total" ($fs.inodes | float64) "unit" "") }}
+            {{- template "node_eviction_annotation" (dict "threshold" $imagefsInodes "current" ($fs.inodesFree | toFloat64) "total" ($fs.inodes | toFloat64) "unit" "") }}
         {{- end }}
     {{- else }}
         {{- "rootfs" | bold | nindent 4 }}: {{ template "node_stats_summary_fs" (dict "fs" $fs "availableThreshold" $nodefsAvail "inodesThreshold" $nodefsInodes) }}
