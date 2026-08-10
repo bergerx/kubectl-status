@@ -39,7 +39,7 @@
                 {{- $daemonsets := $.KubeGetByLabelsMap $.Namespace "daemonsets" $matchLabels }}
                 {{- $statefulsets := $.KubeGetByLabelsMap $.Namespace "statefulsets" $matchLabels }}
                 {{- range $svcs }}
-                    {{- $.Include "service_health_summary" . | nindent 4 }}
+                    {{- $.Include "Service.summary" (dict "obj" .) | nindent 4 }}
                 {{- end }}
                 {{- if or $deploys $daemonsets $statefulsets }}
                     {{- range $deploys }}
@@ -53,7 +53,7 @@
                     {{- end }}
                 {{- else }}
                     {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
-                        {{- $.Include "pod_health_summary" (dict "pod" . "callerNamespace" $.Namespace) | nindent 4 }}
+                        {{- $.Include "Pod.summary" (dict "obj" . "callerNamespace" $.Namespace) | nindent 4 }}
                     {{- end }}
                 {{- end }}
             {{- end }}
@@ -84,3 +84,29 @@
     {{- template "events" . }}
     {{- template "owners" . }}
 {{- end }}
+
+{{- define "PodDisruptionBudget.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects dict "obj" (PodDisruptionBudget RenderableObject) "callerNamespace" (unused,
+           kept for the uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary"
+           template shares -- see resource_health_summary). */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name) }}
+    {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- $budgetViolated := lt ($obj.Status.currentHealthy | int) ($obj.Status.desiredHealthy | int) }}
+    {{- $noDisruptions := and ($obj.Status | hasKey "disruptionsAllowed") (eq ($obj.Status.disruptionsAllowed | int) 0) }}
+    {{- $noOp := and ($obj.Status | hasKey "expectedPods") (eq ($obj.Status.expectedPods | int) 0) }}
+    {{- with $obj.Spec.minAvailable }}, min available={{ . | toString | cyan }}{{ end }}
+    {{- with $obj.Spec.maxUnavailable }}, max unavailable={{ . | toString | cyan }}{{ end }}
+    {{- if $obj.Status | hasKey "currentHealthy" }}
+        {{- if $noOp }}
+            {{- ", selector matches no pods (no-op)" | yellow }}
+        {{- else if $budgetViolated }}
+            {{- printf ", budget violated (%d/%d healthy, %d required)" ($obj.Status.currentHealthy | int) ($obj.Status.expectedPods | int) ($obj.Status.desiredHealthy | int) | red | bold }}
+        {{- else if $noDisruptions }}
+            {{- ", evictions/drains currently blocked" | yellow }}
+        {{- else }}
+            {{- ", " }}{{ "disruptions allowed" | green }}
+        {{- end }}
+    {{- end }}
+{{- end -}}

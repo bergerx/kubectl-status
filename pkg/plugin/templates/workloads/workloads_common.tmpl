@@ -288,43 +288,6 @@
     {{- printf "selected by %s %s (%s restricted)" $label (join ", " $names | cyan) (join ", " $directions) }}
 {{- end }}
 
-{{- define "job_health_summary" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
-    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- if .Status.active }}, {{ "Active" | yellow | bold }}{{ end }}
-    {{- if .Status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
-    {{- if .Status.failed }}, {{ printf "Failed: %d" (.Status.failed | int) | red | bold }}{{ end }}
-    {{- if .Status.startTime }}, started {{ .Status.startTime | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- if and .Status.startTime .Status.completionTime }}
-        {{- $started := .Status.startTime | toDate "2006-01-02T15:04:05Z" -}}
-        {{- $completed := .Status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
-        {{- ", ran for " }}{{ $completed.Sub $started | colorDuration }}
-    {{- end }}
-{{- end -}}
-
-{{- define "pdb_health_summary" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
-    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- $budgetViolated := lt (.Status.currentHealthy | int) (.Status.desiredHealthy | int) }}
-    {{- $noDisruptions := and (.Status | hasKey "disruptionsAllowed") (eq (.Status.disruptionsAllowed | int) 0) }}
-    {{- $noOp := and (.Status | hasKey "expectedPods") (eq (.Status.expectedPods | int) 0) }}
-    {{- with .Spec.minAvailable }}, min available={{ . | toString | cyan }}{{ end }}
-    {{- with .Spec.maxUnavailable }}, max unavailable={{ . | toString | cyan }}{{ end }}
-    {{- if .Status | hasKey "currentHealthy" }}
-        {{- if $noOp }}
-            {{- ", selector matches no pods (no-op)" | yellow }}
-        {{- else if $budgetViolated }}
-            {{- printf ", budget violated (%d/%d healthy, %d required)" (.Status.currentHealthy | int) (.Status.expectedPods | int) (.Status.desiredHealthy | int) | red | bold }}
-        {{- else if $noDisruptions }}
-            {{- ", evictions/drains currently blocked" | yellow }}
-        {{- else }}
-            {{- ", " }}{{ "disruptions allowed" | green }}
-        {{- end }}
-    {{- end }}
-{{- end -}}
-
 {{- define "pdb_conflict_warning" }}
     {{- /* Expects a slice of matched PodDisruptionBudget RenderableObjects. Kubernetes doesn't
            support a pod being covered by more than one PDB -- eviction requests for such pods
@@ -356,7 +319,7 @@
                 {{- end }}
             {{- else }}
                 {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
-                    {{- $.Include "pod_health_summary" (dict "pod" . "callerNamespace" $.Namespace) | nindent 4 }}
+                    {{- $.Include "Pod.summary" (dict "obj" . "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -377,11 +340,11 @@
                 {{- $ctx.Include "Service" . | nindent 4 }}
             {{- end }}
         {{- else if eq (len .) 1 }}
-            {{- "Services:" | bold | nindent 2 }} {{ $ctx.Include "service_health_summary" (index . 0) }}
+            {{- "Services:" | bold | nindent 2 }} {{ $ctx.Include "Service.summary" (dict "obj" (index . 0)) }}
         {{- else }}
             {{- "Services:" | bold | nindent 2 }}
             {{- range . }}
-                {{- $ctx.Include "service_health_summary" . | nindent 4 }}
+                {{- $ctx.Include "Service.summary" (dict "obj" .) | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}
@@ -401,11 +364,11 @@
                     {{- $ctx.Include "PodDisruptionBudget" . | nindent 4 }}
                 {{- end }}
             {{- else if eq (len $pdbs) 1 }}
-                {{- "PodDisruptionBudgets:" | bold | nindent 2 }} {{ $ctx.Include "pdb_health_summary" (index $pdbs 0) }}
+                {{- "PodDisruptionBudgets:" | bold | nindent 2 }} {{ $ctx.Include "PodDisruptionBudget.summary" (dict "obj" (index $pdbs 0)) }}
             {{- else }}
                 {{- "PodDisruptionBudgets:" | bold | nindent 2 }}
                 {{- range $pdbs }}
-                    {{- $ctx.Include "pdb_health_summary" . | nindent 4 }}
+                    {{- $ctx.Include "PodDisruptionBudget.summary" (dict "obj" .) | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -497,16 +460,6 @@
     {{- end }}
 {{- end }}
 
-{{- define "hpa_health_summary" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
-    {{- $minReplicas := 1 }}{{- if .Spec | hasKey "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | int }}{{- end }}
-    {{- $current := .Status.currentReplicas | default 0 | int }}
-    {{- $desired := .Status.desiredReplicas | default 0 | int }}
-    {{- printf ", %d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas (.Spec.maxReplicas | int) }}
-    {{- if ne $current $desired }}, {{ "desired" | yellow | bold }}: {{ printf "%d" $desired | yellow }}{{ end }}
-{{- end -}}
-
 {{- define "matching_hpas" }}
     {{- /* Expects dict "ctx" (RenderableObject) "namespace" "kind" "name" (this workload's own
            identity). HorizontalPodAutoscaler doesn't get discovered via labels -- it names its
@@ -535,29 +488,16 @@
                     {{- $ctx.Include "HorizontalPodAutoscaler" . | nindent 4 }}
                 {{- end }}
             {{- else if eq (len $hpas) 1 }}
-                {{- "HorizontalPodAutoscaler:" | bold | nindent 2 }} {{ $ctx.Include "hpa_health_summary" (index $hpas 0) }}
+                {{- "HorizontalPodAutoscaler:" | bold | nindent 2 }} {{ $ctx.Include "HorizontalPodAutoscaler.summary" (dict "obj" (index $hpas 0)) }}
             {{- else }}
                 {{- "HorizontalPodAutoscalers:" | bold | nindent 2 }}
                 {{- range $hpas }}
-                    {{- $ctx.Include "hpa_health_summary" . | nindent 4 }}
+                    {{- $ctx.Include "HorizontalPodAutoscaler.summary" (dict "obj" .) | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}
     {{- end }}
 {{- end }}
-
-{{- define "vpa_health_summary" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
-    {{- $updateMode := (.Spec.updatePolicy | default dict).updateMode | default "Auto" }}
-    {{- if ne $updateMode "Auto" }}, {{ $updateMode | cyan }}{{ end }}
-    {{- range (.Status.recommendation | default dict).containerRecommendations }}
-        {{- $t := .target | default dict }}
-        {{- printf ", %s:" .containerName }}
-        {{- with $t.cpu }} cpu={{ . | cyan }}{{ end }}
-        {{- with $t.memory }} mem={{ . | cyan }}{{ end }}
-    {{- end }}
-{{- end -}}
 
 {{- define "matching_vpas" }}
     {{- /* Expects dict "ctx" (RenderableObject) "namespace" "kind" "name" (this workload's own
@@ -585,11 +525,11 @@
                     {{- $ctx.Include "VerticalPodAutoscaler" . | nindent 4 }}
                 {{- end }}
             {{- else if eq (len $vpas) 1 }}
-                {{- "VerticalPodAutoscaler:" | bold | nindent 2 }} {{ $ctx.Include "vpa_health_summary" (index $vpas 0) }}
+                {{- "VerticalPodAutoscaler:" | bold | nindent 2 }} {{ $ctx.Include "VerticalPodAutoscaler.summary" (dict "obj" (index $vpas 0)) }}
             {{- else }}
                 {{- "VerticalPodAutoscalers:" | bold | nindent 2 }}
                 {{- range $vpas }}
-                    {{- $ctx.Include "vpa_health_summary" . | nindent 4 }}
+                    {{- $ctx.Include "VerticalPodAutoscaler.summary" (dict "obj" .) | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}

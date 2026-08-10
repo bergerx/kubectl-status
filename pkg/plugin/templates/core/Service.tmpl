@@ -69,6 +69,39 @@
     {{- template "owners" . }}
 {{- end -}}
 
+{{- define "Service.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects dict "obj" (Service RenderableObject) "callerNamespace" (unused, kept for the
+           uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary" template shares --
+           see resource_health_summary). */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name) }}
+    {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with $obj.Spec }}{{ with .type }}, {{ if eq . "NodePort" }}{{ . | yellow | bold }}{{ else }}{{ . | colorKeyword }}{{ end }}{{ end }}{{ end }}
+    {{- $slices := $obj.KubeGetEndpointSlicesForService $obj.Namespace $obj.Name }}
+    {{- $ready := 0 }}{{ $notReady := 0 }}
+    {{- range $slices }}
+        {{- range (.Object.endpoints | default list) }}
+            {{- if or (not ((.conditions | default dict) | hasKey "ready")) .conditions.ready }}{{ $ready = add1 $ready }}{{ else }}{{ $notReady = add1 $notReady }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- if not $slices }}
+        {{- ", " }}{{ "no endpoints" | red | bold }}
+    {{- else if or $ready $notReady }}
+        {{- if $ready }}, {{ $ready | toString | green }} ready{{ end }}
+        {{- if $notReady }}, {{ $notReady | toString | red | bold }} not ready{{ end }}
+    {{- else }}
+        {{- ", " }}{{ "no matching pods" | red | bold }}
+    {{- end }}
+    {{- with $obj.Spec }}{{ with .ports }}
+        {{- range . }}
+            {{- ", " }}
+            {{- if .name }}{{ printf "%s(%d/%s)" .name (.port | int) (.protocol | default "TCP") | cyan }}{{ else }}{{ printf "%d/%s" (.port | int) (.protocol | default "TCP") | cyan }}{{ end }}
+            {{- with .nodePort }}{{ printf "→%d" (. | int) | yellow | bold }}{{ end }}
+        {{- end }}
+    {{- end }}{{ end }}
+{{- end }}
+
 {{- define "service_traffic_config" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- $etp := .Spec.externalTrafficPolicy | default "Cluster" }}
@@ -116,7 +149,7 @@
             {{- if $.Config.GetBool "deep" }}
                 {{- $.IncludeRenderableObject $ing | nindent 4 }}
             {{- else }}
-                {{- $.Include "ingress_health_summary" $ing | nindent 4 }}
+                {{- $.Include "Ingress.summary" (dict "obj" $ing) | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}

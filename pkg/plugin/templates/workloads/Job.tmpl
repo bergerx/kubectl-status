@@ -43,7 +43,7 @@
     {{- end }}
     {{- if and .Status.active (not ($.LiveQueriesDisabled)) }}
         {{- /* A Job's own status has no signal for "why hasn't this started" -- only its Pods do.
-               pod_health_summary carries the Node-side hint (cordoned/tainted/unhealthy node),
+               Pod.summary carries the Node-side hint (cordoned/tainted/unhealthy node),
                which is usually the answer for a Pod stuck Pending. */ -}}
         {{- $pendingPods := list }}
         {{- range $.KubeGetByLabelsMap $.Namespace "pods" (dict "job-name" .Name) }}
@@ -57,7 +57,7 @@
                 {{- if $.Config.GetBool "deep" }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}
                 {{- else }}
-                    {{- $.Include "pod_health_summary" (dict "pod" . "callerNamespace" $.Namespace) | nindent 4 }}
+                    {{- $.Include "Pod.summary" (dict "obj" . "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -73,6 +73,25 @@
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
+{{- end -}}
+
+{{- define "Job.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects dict "obj" (Job RenderableObject) "callerNamespace" (unused, kept for the
+           uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary" template shares --
+           see resource_health_summary). */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name) }}
+    {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- if $obj.Status.active }}, {{ "Active" | yellow | bold }}{{ end }}
+    {{- if $obj.Status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
+    {{- if $obj.Status.failed }}, {{ printf "Failed: %d" ($obj.Status.failed | int) | red | bold }}{{ end }}
+    {{- if $obj.Status.startTime }}, started {{ $obj.Status.startTime | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- if and $obj.Status.startTime $obj.Status.completionTime }}
+        {{- $started := $obj.Status.startTime | toDate "2006-01-02T15:04:05Z" -}}
+        {{- $completed := $obj.Status.completionTime | toDate "2006-01-02T15:04:05Z" -}}
+        {{- ", ran for " }}{{ $completed.Sub $started | colorDuration }}
+    {{- end }}
 {{- end -}}
 
 {{- define "job_failed_pod_summary" }}

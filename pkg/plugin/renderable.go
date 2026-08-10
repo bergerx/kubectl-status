@@ -164,6 +164,21 @@ func (r RenderableObject) renderString() (string, error) {
 	return buffer.String(), err
 }
 
+// HealthSummary renders this object's compact one-line summary: its own paired
+// "<Kind>.summary"/"<Kind>.<group>.summary" template if one is defined -- built-in (living
+// alongside that Kind's own <Kind>.tmpl) or a user override/CRD-author-provided one, discovered
+// the same way a "<Kind>.tmpl" full view already is -- falling back to generic_health_summary
+// otherwise. This is what resource_health_summary calls; see
+// https://github.com/bergerx/kubectl-status/issues/826 for why it's a lookup rather than a
+// hand-maintained per-Kind chain.
+func (r RenderableObject) HealthSummary(callerNamespace string) (string, error) {
+	data := map[string]interface{}{"obj": r, "callerNamespace": callerNamespace}
+	if name, ok := r.engine.templateSet.findSummaryTemplateName(r.Kind(), r.GroupVersionKind().Group); ok {
+		return r.renderTemplate(name, data)
+	}
+	return r.renderTemplate("generic_health_summary", data)
+}
+
 func (r RenderableObject) renderTemplate(templateName string, data interface{}) (string, error) {
 	var buffer bytes.Buffer
 	klog.V(5).InfoS("called renderTemplate, calling ExecuteTemplate",

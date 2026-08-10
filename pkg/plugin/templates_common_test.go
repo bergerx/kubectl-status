@@ -234,18 +234,18 @@ func TestPodNodeProblemFlags(t *testing.T) {
 			if strings.TrimSpace(got) != tt.want {
 				t.Errorf("pod_node_problem_flags got = %q, want %q", got, tt.want)
 			}
-			// pod_health_summary is where those flags actually reach a reader (it renders one
+			// Pod.summary is where those flags actually reach a reader (it renders one
 			// line per Pod under a Job/ReplicaSet/PDB/...), so it's asserted on directly rather
 			// than trusted to pass the fragment through unchanged.
-			summary, err := pod.renderTemplate("pod_health_summary", map[string]interface{}{"pod": pod})
+			summary, err := pod.renderTemplate("Pod.summary", map[string]interface{}{"obj": pod})
 			if err != nil {
 				t.Fatalf("renderTemplate() error = %v", err)
 			}
 			if tt.want == "" && strings.Contains(summary, "node ") {
-				t.Errorf("pod_health_summary got = %q, want no node problems reported", summary)
+				t.Errorf("Pod.summary got = %q, want no node problems reported", summary)
 			}
 			if tt.want != "" && !strings.Contains(summary, tt.want) {
-				t.Errorf("pod_health_summary got = %q, should contain %q", summary, tt.want)
+				t.Errorf("Pod.summary got = %q, should contain %q", summary, tt.want)
 			}
 		})
 	}
@@ -1578,6 +1578,111 @@ func TestResourceHealthSummaryTemplate_FallsBackToGenericForUnknownKind(t *testi
 	}
 	if !strings.Contains(got, "Current: Resource is Ready") {
 		t.Errorf("got = %q, want the generic_health_summary fallback", got)
+	}
+}
+
+// summaryTemplateFixture is a minimal object for a Kind that defines "<Kind>.summary", just
+// enough for the summary template's own field reads to not hit a template execution error (a
+// missing map key is safe in text/template, but e.g. an `| int` conversion on a wrong-shaped
+// value is not). Anything not listed here renders against an empty object, which every
+// "<Kind>.summary" template must also already tolerate -- it's exactly what a freshly-created
+// object of that Kind (no status yet) looks like.
+var summaryTemplateFixtures = map[string]map[string]interface{}{
+	"Pod": {
+		"status": map[string]interface{}{
+			"phase": "Running",
+			"containerStatuses": []interface{}{
+				map[string]interface{}{"ready": true, "restartCount": int64(0)},
+			},
+		},
+	},
+	"Service": {
+		"spec": map[string]interface{}{"type": "ClusterIP"},
+	},
+	"Ingress": {
+		"spec":   map[string]interface{}{"rules": []interface{}{map[string]interface{}{"host": "example.com"}}},
+		"status": map[string]interface{}{"loadBalancer": map[string]interface{}{"ingress": []interface{}{map[string]interface{}{"ip": "1.2.3.4"}}}},
+	},
+	"HTTPRoute": {"spec": map[string]interface{}{"hostnames": []interface{}{"example.com"}}},
+	"GRPCRoute": {"spec": map[string]interface{}{"hostnames": []interface{}{"example.com"}}},
+	"TCPRoute":  {"spec": map[string]interface{}{"hostnames": []interface{}{"example.com"}}},
+	"UDPRoute":  {"spec": map[string]interface{}{"hostnames": []interface{}{"example.com"}}},
+	"TLSRoute":  {"spec": map[string]interface{}{"hostnames": []interface{}{"example.com"}}},
+	"Job": {
+		"status": map[string]interface{}{
+			"active": int64(1), "succeeded": int64(0), "failed": int64(0),
+			"startTime": "2026-06-01T00:00:00Z", "completionTime": "2026-06-01T00:05:00Z",
+		},
+	},
+	"PodDisruptionBudget": {
+		"spec": map[string]interface{}{"minAvailable": "1"},
+		"status": map[string]interface{}{
+			"currentHealthy": int64(1), "desiredHealthy": int64(1),
+			"expectedPods": int64(1), "disruptionsAllowed": int64(1),
+		},
+	},
+	"Deployment":  {"spec": map[string]interface{}{"replicas": int64(2)}, "status": map[string]interface{}{"readyReplicas": int64(2)}},
+	"StatefulSet": {"spec": map[string]interface{}{"replicas": int64(2)}, "status": map[string]interface{}{"readyReplicas": int64(2)}},
+	"DaemonSet":   {"status": map[string]interface{}{"desiredNumberScheduled": int64(2), "numberReady": int64(2)}},
+	"ReplicaSet":  {"spec": map[string]interface{}{"replicas": int64(2)}, "status": map[string]interface{}{"readyReplicas": int64(2)}},
+	"HorizontalPodAutoscaler": {
+		"spec":   map[string]interface{}{"minReplicas": int64(1), "maxReplicas": int64(5)},
+		"status": map[string]interface{}{"currentReplicas": int64(2), "desiredReplicas": int64(2)},
+	},
+	"VerticalPodAutoscaler": {
+		"spec": map[string]interface{}{"updatePolicy": map[string]interface{}{"updateMode": "Auto"}},
+		"status": map[string]interface{}{"recommendation": map[string]interface{}{"containerRecommendations": []interface{}{
+			map[string]interface{}{"containerName": "app", "target": map[string]interface{}{"cpu": "100m", "memory": "128Mi"}},
+		}}},
+	},
+}
+
+// TestSummaryTemplatesRenderOneLine is the static check #826 asks for: every embedded
+// "<Kind>.summary"/"<Kind>.<group>.summary" template (the convention resource_health_summary
+// dispatches to via RenderableObject.HealthSummary, see findSummaryTemplateName) is documented
+// as a *compact one-line* summary -- used anywhere a list renders one entry per row
+// (managed_resource_line, matching_services, crossplane_composed_resources, ...). A future
+// "<Kind>.summary" (built-in or a user override) that picks up a stray newline would silently
+// break every list that renders it, one row at a time, with nothing today to catch it. This
+// enumerates every such define the same way kindTemplateNames enumerates "<Kind>.tmpl" files, so
+// a newly added "<Kind>.summary" is covered automatically, without a test author needing to
+// remember to add a case.
+func TestSummaryTemplatesRenderOneLine(t *testing.T) {
+	v := viper.New()
+	cfg := NewRenderConfig(v)
+	ts, err := getTemplate(cfg)
+	if err != nil {
+		t.Fatalf("getTemplate() error = %v", err)
+	}
+	var names []string
+	for _, tmpl := range ts.embedded.Templates() {
+		if strings.HasSuffix(tmpl.Name(), ".summary") {
+			names = append(names, tmpl.Name())
+		}
+	}
+	if len(names) == 0 {
+		t.Fatal("no \"<Kind>.summary\" templates found -- did the naming convention change?")
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			kind := strings.SplitN(name, ".", 2)[0]
+			extra := summaryTemplateFixtures[kind]
+			obj := map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       kind,
+				"metadata":   map[string]interface{}{"name": "fixture", "namespace": "test"},
+			}
+			for k, v := range extra {
+				obj[k] = v
+			}
+			got, err := renderObjHealthSummary(t, name, obj, "test")
+			if err != nil {
+				t.Fatalf("renderTemplate(%q) error = %v", name, err)
+			}
+			if strings.Contains(got, "\n") {
+				t.Errorf("%s rendered %d lines, want exactly one: %q", name, strings.Count(got, "\n")+1, got)
+			}
+		})
 	}
 }
 

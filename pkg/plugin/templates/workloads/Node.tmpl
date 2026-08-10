@@ -332,7 +332,7 @@
                Pending/NotReady. */ -}}
         {{- "pods needing attention" | bold | nindent 2 }}:
         {{- range . | sortMapListByKeysValue "key" }}
-            {{- "" | nindent 4 }}{{ template "pod_health_summary" (dict "pod" .pod) }}
+            {{- "" | nindent 4 }}{{ template "Pod.summary" (dict "obj" .pod) }}
         {{- end }}
     {{- end }}
     {{- /* Only ever non-empty when the pod loop above ran and found per-pod metrics, so this needs

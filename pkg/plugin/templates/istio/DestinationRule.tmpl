@@ -70,7 +70,7 @@
                     {{- ", " }}{{ "no pods" | red | bold }}
                 {{- else if $.Config.GetBool "deep" }}
                     {{- range $pods }}
-                        {{- $.Include "pod_health_summary" (dict "pod" . "callerNamespace" $.Namespace) | nindent 6 }}
+                        {{- $.Include "Pod.summary" (dict "obj" . "callerNamespace" $.Namespace) | nindent 6 }}
                     {{- end }}
                 {{- else }}
                     {{- ", " }}{{ len $pods | toString | cyan }} pod{{ if ne (len $pods) 1 }}s{{ end }}

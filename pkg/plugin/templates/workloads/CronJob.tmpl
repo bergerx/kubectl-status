@@ -34,7 +34,7 @@
             {{- if $.Config.GetBool "deep" }}
                 {{- $.IncludeRenderableObject . | nindent 4 }}
             {{- else }}
-                {{- $.Include "job_health_summary" . | nindent 4 }}
+                {{- $.Include "Job.summary" (dict "obj" .) | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}

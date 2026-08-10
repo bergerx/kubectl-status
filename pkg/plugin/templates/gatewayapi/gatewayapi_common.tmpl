@@ -1,3 +1,16 @@
+{{- define "route_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Shared compact summary for HTTPRoute, GRPCRoute, TCPRoute, UDPRoute and TLSRoute --
+           takes the route RenderableObject directly (not the dict "obj"/"callerNamespace" shape
+           the "<Kind>.summary" entry points use) since matching_routes in core/Service.tmpl calls
+           it directly today; each route kind's own "<Kind>.summary" (in its own <Kind>.tmpl) is a
+           thin wrapper around this. */ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
+    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with .Spec.hostnames }}, {{ join ", " . | cyan }}{{ end }}
+    {{- with $.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
+{{- end -}}
+
 {{- define "gwapi_backend_ref" }}
     {{- /* dict "ctx" (RenderableObject, used for Include/Namespace) "ref" (one
            spec.rules[].backendRefs[] entry) "colorize" (optional bool -- HTTPRoute renders the
