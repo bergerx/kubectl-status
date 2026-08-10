@@ -120,14 +120,17 @@ Any template section that fetches related resources must respect the three rende
 
 Note: `--local` runs without a live cluster, so `KubeGetFirst` calls fail to find anything there too — templates don't need to check for `--local` explicitly, they just need to handle the "not found" case (typically falling back to `resource_ref`), which the `--shallow` handling above already requires.
 
-**default** — compact single-line summaries using shared sub-templates from `common.tmpl`:
+**default** — compact single-line summaries, one `"<Kind>.summary"` template per Kind (defined
+alongside that Kind's own `<Kind>.tmpl`), reached via `resource_health_summary`/`generic_health_summary`
+in `common.tmpl` — see [TEMPLATE-API.md's Health-summary family](TEMPLATE-API.md#health-summary-family)
+for the full list and the discovery mechanism:
 
-| Sub-template | Example output |
+| `<Kind>.summary` | Example output |
 |---|---|
-| `pod_health_summary` | `Pod/name -n ns, 2/2 ready` |
-| `service_health_summary` | `Service/name -n ns, 3 ready, 1 not ready` |
-| `workload_health_summary` | `Deployment/name -n ns, 2/2 ready` |
-| `job_health_summary` | `Job/name -n ns, Active, started 5m ago` |
+| `Pod.summary` | `Pod/name -n ns, 2/2 ready` |
+| `Service.summary` | `Service/name -n ns, 3 ready, 1 not ready` |
+| `Deployment.summary` (also Stateful/DaemonSet/ReplicaSet) | `Deployment/name -n ns, 2/2 ready` |
+| `Job.summary` | `Job/name -n ns, Active, started 5m ago` |
 
 **`--deep`** — full inline render with `$.IncludeRenderableObject . | nindent 4`.
 

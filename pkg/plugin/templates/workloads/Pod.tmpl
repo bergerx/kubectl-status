@@ -70,6 +70,37 @@
     {{- template "owners" . }}
 {{- end }}
 
+{{- define "Pod.summary" }}
+    {{- /* Expects dict "obj" (Pod RenderableObject) "callerNamespace" (optional -- the namespace
+           of the object this summary is rendered under, e.g. a Job/PVC/PodDisruptionBudget;
+           passed through to resource_ref so the pod's own namespace is dropped from the summary
+           when it's redundant). Same dict "obj"/"callerNamespace" contract every "<Kind>.summary"
+           template uses -- see resource_health_summary. */ -}}
+    {{- $pod := .obj }}
+    {{- template "resource_ref" (dict "kind" $pod.Kind "name" $pod.Name "namespace" $pod.Namespace "callerNamespace" .callerNamespace) }}
+    {{- with $pod.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with $pod.Status.phase }} {{ . | colorKeyword }}{{ end }}
+    {{- $total := 0 }}{{ $ready := 0 }}{{ $restarts := 0 }}{{ $waitingReasons := list }}
+    {{- range $pod.Status.containerStatuses }}
+        {{- $total = add1 $total }}
+        {{- if .ready }}{{ $ready = add1 $ready }}{{ end }}
+        {{- $restarts = $restarts | add (.restartCount | int) }}
+        {{- with .state.waiting.reason }}
+            {{- if not ($waitingReasons | has .) }}{{ $waitingReasons = $waitingReasons | append . }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- if $total }}, {{ if lt $ready $total }}{{ printf "%d/%d" $ready $total | red | bold }}{{ else }}{{ printf "%d/%d" $ready $total | green }}{{ end }} ready{{ end }}
+    {{- /* A Running/Ready pod with a past restart is still worth flagging here -- restart count
+           is a signal worth an operator's attention even once the pod has recovered, just a
+           milder one than being stuck waiting (see #178). */ -}}
+    {{- with $waitingReasons }} {{ . | join "," | red | bold }}{{ end }}
+    {{- if gt $restarts 0 }} restarts:{{ $restarts | toString | yellow | bold }}{{ end }}
+    {{- $nodeProblems := $pod.Include "pod_node_problem_flags" $pod }}
+    {{- with $nodeProblems }}, {{ . }}{{ end }}
+    {{- $netpolFlag := $pod.Include "pod_network_policy_flags" $pod }}
+    {{- with $netpolFlag }}, {{ . }}{{ end }}
+{{- end }}
+
 {{- define "pod_status_summary_line" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- template "status_summary_line" . }}

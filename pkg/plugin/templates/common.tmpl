@@ -287,65 +287,6 @@
     {{- /* Can be overridden through ~/.kubectl-status/templates/*.tmpl files to inject user-specific data */ -}}
 {{- end -}}
 
-{{- define "pod_health_summary" }}
-    {{- /* Expects dict "pod" (Pod RenderableObject) "callerNamespace" (optional -- the namespace
-           of the object this summary is rendered under, e.g. a Job/PVC/PodDisruptionBudget;
-           passed through to resource_ref so the pod's own namespace is dropped from the summary
-           when it's redundant). */ -}}
-    {{- $pod := .pod }}
-    {{- template "resource_ref" (dict "kind" $pod.Kind "name" $pod.Name "namespace" $pod.Namespace "callerNamespace" .callerNamespace) }}
-    {{- with $pod.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- with $pod.Status.phase }} {{ . | colorKeyword }}{{ end }}
-    {{- $total := 0 }}{{ $ready := 0 }}{{ $restarts := 0 }}{{ $waitingReasons := list }}
-    {{- range $pod.Status.containerStatuses }}
-        {{- $total = add1 $total }}
-        {{- if .ready }}{{ $ready = add1 $ready }}{{ end }}
-        {{- $restarts = $restarts | add (.restartCount | int) }}
-        {{- with .state.waiting.reason }}
-            {{- if not ($waitingReasons | has .) }}{{ $waitingReasons = $waitingReasons | append . }}{{ end }}
-        {{- end }}
-    {{- end }}
-    {{- if $total }}, {{ if lt $ready $total }}{{ printf "%d/%d" $ready $total | red | bold }}{{ else }}{{ printf "%d/%d" $ready $total | green }}{{ end }} ready{{ end }}
-    {{- /* A Running/Ready pod with a past restart is still worth flagging here -- restart count
-           is a signal worth an operator's attention even once the pod has recovered, just a
-           milder one than being stuck waiting (see #178). */ -}}
-    {{- with $waitingReasons }} {{ . | join "," | red | bold }}{{ end }}
-    {{- if gt $restarts 0 }} restarts:{{ $restarts | toString | yellow | bold }}{{ end }}
-    {{- $nodeProblems := $pod.Include "pod_node_problem_flags" $pod }}
-    {{- with $nodeProblems }}, {{ . }}{{ end }}
-    {{- $netpolFlag := $pod.Include "pod_network_policy_flags" $pod }}
-    {{- with $netpolFlag }}, {{ . }}{{ end }}
-{{- end }}
-
-{{- define "service_health_summary" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
-    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- with .Spec }}{{ with .type }}, {{ if eq . "NodePort" }}{{ . | yellow | bold }}{{ else }}{{ . | colorKeyword }}{{ end }}{{ end }}{{ end }}
-    {{- $slices := .KubeGetEndpointSlicesForService .Namespace .Name }}
-    {{- $ready := 0 }}{{ $notReady := 0 }}
-    {{- range $slices }}
-        {{- range (.Object.endpoints | default list) }}
-            {{- if or (not ((.conditions | default dict) | hasKey "ready")) .conditions.ready }}{{ $ready = add1 $ready }}{{ else }}{{ $notReady = add1 $notReady }}{{ end }}
-        {{- end }}
-    {{- end }}
-    {{- if not $slices }}
-        {{- ", " }}{{ "no endpoints" | red | bold }}
-    {{- else if or $ready $notReady }}
-        {{- if $ready }}, {{ $ready | toString | green }} ready{{ end }}
-        {{- if $notReady }}, {{ $notReady | toString | red | bold }} not ready{{ end }}
-    {{- else }}
-        {{- ", " }}{{ "no matching pods" | red | bold }}
-    {{- end }}
-    {{- with .Spec }}{{ with .ports }}
-        {{- range . }}
-            {{- ", " }}
-            {{- if .name }}{{ printf "%s(%d/%s)" .name (.port | int) (.protocol | default "TCP") | cyan }}{{ else }}{{ printf "%d/%s" (.port | int) (.protocol | default "TCP") | cyan }}{{ end }}
-            {{- with .nodePort }}{{ printf "→%d" (. | int) | yellow | bold }}{{ end }}
-        {{- end }}
-    {{- end }}{{ end }}
-{{- end }}
-
 {{- define "generic_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* Expects dict "obj" (RenderableObject of any kind) "callerNamespace" (optional, forwarded
@@ -383,33 +324,14 @@
 {{- define "resource_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* Expects dict "obj" (RenderableObject of any kind) "callerNamespace" (optional, forwarded
-           through to pod_health_summary/generic_health_summary). Dispatches to the same compact
-           one-line summary the caller would reach for if it knew obj's kind ahead of time, falling
-           back to generic_health_summary for anything else. For use where a list mixes resources
-           of a kind that isn't known ahead of time, e.g. crossplane_composed_resources. */ -}}
-    {{- $obj := .obj }}
-    {{- $callerNamespace := .callerNamespace }}
-    {{- if eq $obj.Kind "Pod" }}
-        {{- template "pod_health_summary" (dict "pod" $obj "callerNamespace" $callerNamespace) }}
-    {{- else if eq $obj.Kind "Service" }}
-        {{- template "service_health_summary" $obj }}
-    {{- else if eq $obj.Kind "Ingress" }}
-        {{- template "ingress_health_summary" $obj }}
-    {{- else if has $obj.Kind (list "HTTPRoute" "GRPCRoute" "TCPRoute" "UDPRoute" "TLSRoute") }}
-        {{- template "route_health_summary" $obj }}
-    {{- else if eq $obj.Kind "Job" }}
-        {{- template "job_health_summary" $obj }}
-    {{- else if eq $obj.Kind "PodDisruptionBudget" }}
-        {{- template "pdb_health_summary" $obj }}
-    {{- else if has $obj.Kind (list "Deployment" "StatefulSet" "DaemonSet" "ReplicaSet") }}
-        {{- template "workload_health_summary" $obj }}
-    {{- else if eq $obj.Kind "HorizontalPodAutoscaler" }}
-        {{- template "hpa_health_summary" $obj }}
-    {{- else if eq $obj.Kind "VerticalPodAutoscaler" }}
-        {{- template "vpa_health_summary" $obj }}
-    {{- else }}
-        {{- template "generic_health_summary" (dict "obj" $obj "callerNamespace" $callerNamespace) }}
-    {{- end }}
+           through to obj's own summary template / generic_health_summary). Dispatches to obj's own
+           "<Kind>.summary" (or "<Kind>.<group>.summary" for a Kind name that collides across API
+           groups) template if one is defined -- built-in, alongside that Kind's own <Kind>.tmpl, or
+           a user override/CRD-author-provided one -- falling back to generic_health_summary
+           otherwise. See TEMPLATE-API.md's Health-summary family section and #826. For use where a
+           list mixes resources of a kind that isn't known ahead of time, e.g.
+           crossplane_composed_resources. */ -}}
+    {{- .obj.HealthSummary .callerNamespace }}
 {{- end }}
 
 {{- define "flux_object_management" }}

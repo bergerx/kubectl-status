@@ -352,6 +352,28 @@ func (ts *templateSet) findTemplateName(kind, group string) (tree *template.Temp
 	return ts.treeFor("DefaultResource"), "DefaultResource"
 }
 
+// findSummaryTemplateName picks the compact one-line summary template for a Kind, following the
+// same "<Kind>.<group>" (for a Kind name that collides across API groups) then bare "<Kind>"
+// preference findTemplateName uses for the full view -- just with a ".summary" suffix, e.g.
+// "Job.summary" or, for a colliding Kind, "Gateway.networking.istio.io.summary". Checked against
+// both embedded and the user overlay (ts.userDefinedNames), so a user override or a template
+// shipped only for a custom CRD kind is discovered exactly like a "<Kind>.tmpl" override is.
+//
+// Unlike findTemplateName, there is no generic fallback name here -- ok is false when neither
+// form is defined, and the caller (RenderableObject.HealthSummary) falls back to
+// generic_health_summary itself. See https://github.com/bergerx/kubectl-status/issues/826.
+func (ts *templateSet) findSummaryTemplateName(kind, group string) (name string, ok bool) {
+	if group != "" {
+		if qualified := kind + "." + group + ".summary"; ts.embedded.Lookup(qualified) != nil || ts.userDefinedNames[qualified] {
+			return qualified, true
+		}
+	}
+	if plain := kind + ".summary"; ts.embedded.Lookup(plain) != nil || ts.userDefinedNames[plain] {
+		return plain, true
+	}
+	return "", false
+}
+
 // resolveIncludeTree decides which tree an explicit `.Include name data` call (or the
 // IncludeRenderableObject primitive, via its own fresh render()) should execute name against,
 // given current -- the tree the calling template's own top-level render already dispatched to
@@ -361,7 +383,11 @@ func (ts *templateSet) findTemplateName(kind, group string) (tree *template.Temp
 // they're referenced, matching findTemplateName and the handful of built-in
 // `{{ $.Include "<Kind>" $obj }}` calls documented in TEMPLATE-API.md (e.g. matching_services'
 // `Include "Service"`) -- a user's Service.tmpl override is expected to apply even when invoked
-// from an unrelated built-in template.
+// from an unrelated built-in template. A "<Kind>.summary"/"<Kind>.<group>.summary" name (see
+// findSummaryTemplateName, #826) gets the same treatment for the same reason:
+// resource_health_summary is itself a built-in template executing in embedded, and needs to
+// reach a user-provided summary for a Kind it has never heard of (e.g. a custom CRD listed by
+// crossplane_composed_resources) exactly as readily as a built-in one.
 //
 // Every other name (the internal shared-partial names, plus anything a user's own override
 // defines purely for its own use) resolves strictly within current. This is what keeps a user
@@ -371,7 +397,7 @@ func (ts *templateSet) findTemplateName(kind, group string) (tree *template.Temp
 // tree (i.e. the user's own Kind override, or something it itself Includes) can ever observe
 // the user's own redefinition.
 func (ts *templateSet) resolveIncludeTree(name string, current *template.Template) *template.Template {
-	if ts.kindNames[name] {
+	if ts.kindNames[name] || strings.HasSuffix(name, ".summary") {
 		return ts.treeFor(name)
 	}
 	if current != nil {

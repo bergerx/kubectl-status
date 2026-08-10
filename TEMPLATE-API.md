@@ -84,6 +84,13 @@ template to inline-render a nested object under `--deep` (e.g. `matching_service
 still safe for a user override to replace, since `Include`/`$.Include` always resolves the name
 currently registered in the template set, override or not.
 
+Sixteen of these also pair their `<Kind>.tmpl` with a `"<Kind>.summary"` define (or
+`"<Kind>.<group>.summary"` for a Kind name that collides across API groups) — the compact
+one-line view `resource_health_summary` dispatches to for that Kind, found by the identical
+lookup used above rather than a hand-maintained list. See the
+[Health-summary family](#health-summary-family) section below for the full set and the
+discovery mechanism; the same "override applies wherever it's referenced" guarantee holds.
+
 ## Shared render helpers (stable)
 
 These are `{{define}}` blocks — almost all in `pkg/plugin/templates/common.tmpl`, three in
@@ -145,30 +152,44 @@ implementing the `--shallow`/default/`--deep` pattern.
 
 ### Health-summary family
 
-One-line, kind-specific compact summaries, documented as a table in
-[CONVENTIONS.md § Rendering depth](CONVENTIONS.md#rendering-depth) (`pod_health_summary`,
-`service_health_summary`, `workload_health_summary`, `job_health_summary`) and extended here with the
-others that follow the identical pattern. Each is `.` = the object itself unless noted, and each
-starts with `resource_ref` then appends kind-specific health signals.
+One-line, kind-specific compact summaries. Each Kind that wants one defines a
+`"<Kind>.summary"` template alongside its own `<Kind>.tmpl` — the same file, same discovery
+mechanism as the Kind templates above, just with a `.summary` suffix instead of a bare Kind
+name (and, for a Kind name that collides across API groups, `"<Kind>.<group>.summary"` mirrors
+`"<Kind>.<group>"`). Because it's a lookup rather than a hand-maintained dispatch table, a
+custom template for a CRD kind — or a user override of a built-in one — picks up its own
+`"<Kind>.summary"` automatically; see `RenderableObject.HealthSummary`
+(`pkg/plugin/renderable.go`) and `templateSet.findSummaryTemplateName`
+(`pkg/plugin/render_engine.go`). Every `"<Kind>.summary"` template takes the same
+`dict "obj" "callerNamespace"(opt)` shape and starts with `resource_ref` then appends
+kind-specific health signals.
 
 | Name | Covers |
 |---|---|
-| `pod_health_summary` | `dict "pod" "callerNamespace"(opt)`. `ready` count, restart count, waiting reasons, plus compact Node-problem and NetworkPolicy-restriction flags (`pod_node_problem_flags`/`pod_network_policy_flags`, internal). |
-| `service_health_summary` | A Service: type, endpoint ready/not-ready counts, ports. |
-| `workload_health_summary` | A Deployment/StatefulSet/DaemonSet/ReplicaSet: ready/desired count plus rollout-in-progress flag. |
-| `job_health_summary` | A Job: active/succeeded/failed counts, run duration. |
-| `ingress_health_summary` | An Ingress: rule hosts, LoadBalancer address, kstatus. |
-| `route_health_summary` | Any of HTTPRoute/GRPCRoute/TCPRoute/UDPRoute/TLSRoute: hostnames, kstatus. |
-| `pdb_health_summary` | A PodDisruptionBudget: min/max available, current budget state. |
-| `hpa_health_summary` | A HorizontalPodAutoscaler: current/desired vs. min-max range. |
-| `vpa_health_summary` | A VerticalPodAutoscaler: update mode, per-container target recommendation. |
-| `generic_health_summary` | `dict "obj" "callerNamespace"(opt)`. Fallback for any kind without a dedicated summary above — kstatus, a bare `status.ready` bool, observedGeneration mismatch. Reasonable to call directly for a mixed list of your own CRD kinds. |
-| `resource_health_summary` | `dict "obj" "callerNamespace"(opt)`. Dispatches to whichever of the above matches `obj.Kind`, falling back to `generic_health_summary`. This is what `managed_resource_line` calls internally; call it directly when you have a mixed-kind list and don't want to dispatch yourself. |
+| `Pod.summary` (`Pod.tmpl`) | `ready` count, restart count, waiting reasons, plus compact Node-problem and NetworkPolicy-restriction flags (`pod_node_problem_flags`/`pod_network_policy_flags`, internal). |
+| `Service.summary` (`Service.tmpl`) | A Service: type, endpoint ready/not-ready counts, ports. |
+| `Deployment.summary`/`StatefulSet.summary`/`DaemonSet.summary`/`ReplicaSet.summary` (each Kind's own `.tmpl`, all four thin wrappers around the shared `workload_health_summary` in `workloads_common.tmpl`) | ready/desired count plus rollout-in-progress flag. |
+| `Job.summary` (`Job.tmpl`) | A Job: active/succeeded/failed counts, run duration. |
+| `Ingress.summary` (`Ingress.tmpl`) | An Ingress: rule hosts, LoadBalancer address, kstatus. |
+| `HTTPRoute.summary`/`GRPCRoute.summary`/`TCPRoute.summary`/`UDPRoute.summary`/`TLSRoute.summary` (each Kind's own `.tmpl`, all five thin wrappers around the shared `route_health_summary` in `gatewayapi_common.tmpl`) | hostnames, kstatus. |
+| `PodDisruptionBudget.summary` (`PodDisruptionBudget.tmpl`) | A PodDisruptionBudget: min/max available, current budget state. |
+| `HorizontalPodAutoscaler.summary` (`HorizontalPodAutoscaler.tmpl`) | A HorizontalPodAutoscaler: current/desired vs. min-max range. |
+| `VerticalPodAutoscaler.summary` (`VerticalPodAutoscaler.tmpl`) | A VerticalPodAutoscaler: update mode, per-container target recommendation. |
+| `generic_health_summary` | `dict "obj" "callerNamespace"(opt)`. Fallback for any kind without its own `"<Kind>.summary"` — kstatus, a bare `status.ready` bool, observedGeneration mismatch. Reasonable to call directly for a mixed list of your own CRD kinds. |
+| `resource_health_summary` | `dict "obj" "callerNamespace"(opt)`. Dispatches to `obj`'s own `"<Kind>.summary"`/`"<Kind>.<group>.summary"` if one is defined (via `RenderableObject.HealthSummary`), falling back to `generic_health_summary`. This is what `managed_resource_line` calls internally; call it directly when you have a mixed-kind list and don't want to dispatch yourself. |
 
 `selector_with_health_summary` (`.` = the object with `.Spec.selector`) renders the `Selector: ...`
-line plus each matching Pod via `pod_health_summary` (or full inline under `--deep`) — the pattern
+line plus each matching Pod via `Pod.summary` (or full inline under `--deep`) — the pattern
 [CONVENTIONS.md](CONVENTIONS.md#label-selectors) calls out by name for any `LabelSelector` field
 targeting Pods.
+
+Every `"<Kind>.summary"` template is covered by a static check
+(`TestSummaryTemplatesRenderOneLine` in `templates_common_test.go`) that renders it and fails if
+the output contains a newline — the family's whole point is a summary that stays on one line
+wherever a list renders one entry per row (`managed_resource_line`, `matching_services`,
+`crossplane_composed_resources`, ...). A new `"<Kind>.summary"` is picked up automatically; add
+a `summaryTemplateFixtures` entry only if the default empty-object fixture isn't enough for it
+to render without error.
 
 ### Workload-family bundle
 
@@ -436,9 +457,10 @@ reference (not a call contract — names here can be renamed, split, or merged f
   `gatekeeper_constraint_fallback`, `flux_object_management`, `flux_revision`,
   `custom_application_details` (special — see [above](#the-user-override-point-custom_application_details)),
   `network_policy_selection_summary`, `cilium_policy_selection_summary`, `calico_policy_selection_summary`,
-  `pod_node_problem_flags`, `pod_network_policy_flags`, `hpa_health_summary`'s sibling `matching_hpas`,
-  `vpa_health_summary`'s sibling `matching_vpas`, `pdb_health_summary`'s sibling `pdb_conflict_warning`,
-  `volumeattachment_diagnosis`, `rwop_holder_diagnosis`.
+  `pod_node_problem_flags`, `pod_network_policy_flags`, `HorizontalPodAutoscaler.summary`'s sibling
+  `matching_hpas`, `VerticalPodAutoscaler.summary`'s sibling `matching_vpas`,
+  `PodDisruptionBudget.summary`'s sibling `pdb_conflict_warning`, `volumeattachment_diagnosis`,
+  `rwop_holder_diagnosis`.
 - **`policy_report_common.tmpl`**: `policy_report_findings`, `policy_report_finding_line`.
 - **`Pod.tmpl`** (26): `pod_status_summary_line`, `pod_placement_constraints`,
   `pod_karpenter_compatibility`, `pod_topology_constraints`, `pod_node_problems`,
@@ -485,11 +507,12 @@ enforcement/tree-separation work (tracked separately from this document) doesn't
 2. **`gatekeeper_constraint_fallback`** — one caller (`DefaultResource`, a different file), but it's
    the sole routing point for every dynamically-generated Gatekeeper Constraint Kind that has no
    dedicated `<Kind>.tmpl`. Treat as load-bearing infrastructure even though it's marked internal.
-3. **`hpa_health_summary`/`matching_hpas`, `vpa_health_summary`/`matching_vpas`,
-   `pdb_health_summary`/`pdb_conflict_warning`, `network_policy_selection_summary`/
+3. **`matching_hpas`, `matching_vpas`, `pdb_conflict_warning`, `network_policy_selection_summary`/
    `cilium_policy_selection_summary`/`calico_policy_selection_summary`,
    `pod_node_problem_flags`/`pod_network_policy_flags`** — each is one hop from a stable Category B
-   helper (called only by it). Free to rename in isolation, but check the caller when doing so.
+   helper (`HorizontalPodAutoscaler.summary`, `VerticalPodAutoscaler.summary`,
+   `PodDisruptionBudget.summary`, `Pod.summary`, called only by it). Free to rename in isolation,
+   but check the caller when doing so.
 4. **`resource_health_summary`/`generic_health_summary`** — technically one-hop-from-B by caller
    count, but their own doc comments describe them as meant for general reuse in mixed-kind lists;
    promoted to Category B above rather than left internal.

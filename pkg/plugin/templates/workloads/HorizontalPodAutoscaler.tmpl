@@ -86,3 +86,17 @@
     {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
+
+{{- define "HorizontalPodAutoscaler.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects dict "obj" (HorizontalPodAutoscaler RenderableObject) "callerNamespace" (unused,
+           kept for the uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary"
+           template shares -- see resource_health_summary). */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name) }}
+    {{- $minReplicas := 1 }}{{- if $obj.Spec | hasKey "minReplicas" }}{{- $minReplicas = $obj.Spec.minReplicas | int }}{{- end }}
+    {{- $current := $obj.Status.currentReplicas | default 0 | int }}
+    {{- $desired := $obj.Status.desiredReplicas | default 0 | int }}
+    {{- printf ", %d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas ($obj.Spec.maxReplicas | int) }}
+    {{- if ne $current $desired }}, {{ "desired" | yellow | bold }}: {{ printf "%d" $desired | yellow }}{{ end }}
+{{- end -}}

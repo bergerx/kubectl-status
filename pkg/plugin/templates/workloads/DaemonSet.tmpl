@@ -92,3 +92,12 @@
         {{- end }}
     {{- end }}
 {{- end }}
+
+{{- define "DaemonSet.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects dict "obj" (DaemonSet RenderableObject) "callerNamespace" (unused, kept for the
+           uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary" template shares --
+           see resource_health_summary). workload_health_summary (workloads_common.tmpl) is
+           shared by Deployment/StatefulSet/DaemonSet/ReplicaSet. */ -}}
+    {{- template "workload_health_summary" .obj }}
+{{- end -}}

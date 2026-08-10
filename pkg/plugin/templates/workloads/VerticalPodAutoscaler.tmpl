@@ -52,3 +52,20 @@
     {{- template "events" . }}
     {{- template "owners" . }}
 {{- end -}}
+
+{{- define "VerticalPodAutoscaler.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects dict "obj" (VerticalPodAutoscaler RenderableObject) "callerNamespace" (unused,
+           kept for the uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary"
+           template shares -- see resource_health_summary). */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name) }}
+    {{- $updateMode := ($obj.Spec.updatePolicy | default dict).updateMode | default "Auto" }}
+    {{- if ne $updateMode "Auto" }}, {{ $updateMode | cyan }}{{ end }}
+    {{- range ($obj.Status.recommendation | default dict).containerRecommendations }}
+        {{- $t := .target | default dict }}
+        {{- printf ", %s:" .containerName }}
+        {{- with $t.cpu }} cpu={{ . | cyan }}{{ end }}
+        {{- with $t.memory }} mem={{ . | cyan }}{{ end }}
+    {{- end }}
+{{- end -}}
