@@ -109,4 +109,5 @@
             {{- ", " }}{{ "disruptions allowed" | green }}
         {{- end }}
     {{- end }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}

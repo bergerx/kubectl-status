@@ -68,4 +68,5 @@
         {{- with $t.cpu }} cpu={{ . | cyan }}{{ end }}
         {{- with $t.memory }} mem={{ . | cyan }}{{ end }}
     {{- end }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}

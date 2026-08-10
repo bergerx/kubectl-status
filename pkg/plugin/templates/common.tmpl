@@ -319,6 +319,28 @@
     {{- if and $haveObservedGen $obj.Metadata.generation (ne $observedGen $obj.Metadata.generation) }}
         {{- ", observed gen " }}{{ $observedGen | toString | red | bold }}{{ " != gen " }}{{ $obj.Metadata.generation | toString | red | bold }}
     {{- end }}
+    {{- template "other_unhealthy_conditions" $obj }}
+{{- end }}
+
+{{- define "other_unhealthy_conditions" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Takes the object itself (RenderableObject), not a dict -- called from the tail of every
+           "<Kind>.summary" template (and generic_health_summary) after that template's own
+           Ready/primary-status reporting, so a Degraded/Synced-style condition isn't invisible
+           just because the kind's headline state looks fine. Never Ready itself, which every
+           caller already surfaces first through its own kind-specific logic (kstatus, a ready
+           count, rollout status, ...) -- this only adds what that logic doesn't already cover.
+           Reports just the reason (falling back to the message, then to "Type:Status" when a
+           condition carries neither, e.g. a bare Node Pressure condition) -- never the full
+           message, which tends to just restate the reason at prose length. */ -}}
+    {{- $otherReasons := list }}
+    {{- range .StatusConditions }}
+        {{- if and (ne .type "Ready") .type (not (isStatusConditionHealthy .)) }}
+            {{- $r := coalesce .reason .message (printf "%s:%s" .type (.status | default "Unknown" | toString)) }}
+            {{- $otherReasons = $otherReasons | append ($r | red | bold) }}
+        {{- end }}
+    {{- end }}
+    {{- with $otherReasons }}, {{ . | join ", " }}{{ end }}
 {{- end }}
 
 {{- define "resource_health_summary" }}

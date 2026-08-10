@@ -9,6 +9,7 @@
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with .Spec.hostnames }}, {{ join ", " . | cyan }}{{ end }}
     {{- with $.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
+    {{- template "other_unhealthy_conditions" . }}
 {{- end -}}
 
 {{- define "gwapi_backend_ref" }}

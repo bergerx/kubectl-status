@@ -99,4 +99,5 @@
     {{- $desired := $obj.Status.desiredReplicas | default 0 | int }}
     {{- printf ", %d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas ($obj.Spec.maxReplicas | int) }}
     {{- if ne $current $desired }}, {{ "desired" | yellow | bold }}: {{ printf "%d" $desired | yellow }}{{ end }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}

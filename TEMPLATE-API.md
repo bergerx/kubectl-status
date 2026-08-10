@@ -162,7 +162,11 @@ custom template for a CRD kind — or a user override of a built-in one — pick
 (`pkg/plugin/renderable.go`) and `templateSet.findSummaryTemplateName`
 (`pkg/plugin/render_engine.go`). Every `"<Kind>.summary"` template takes the same
 `dict "obj" "callerNamespace"(opt)` shape and starts with `resource_ref` then appends
-kind-specific health signals.
+kind-specific health signals, finishing with `other_unhealthy_conditions` (`common.tmpl`) — any
+`status.conditions` entry other than `Ready` that `isStatusConditionHealthy` calls unhealthy,
+appended by reason (falling back to message, then `Type:Status`) so a sibling condition like
+Crossplane's `Synced` or an operator's own `Degraded`/`*Error` type isn't invisible just because
+the kind's own headline status above it looks fine.
 
 | Name | Covers |
 |---|---|

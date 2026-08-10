@@ -100,6 +100,7 @@
             {{- with .nodePort }}{{ printf "→%d" (. | int) | yellow | bold }}{{ end }}
         {{- end }}
     {{- end }}{{ end }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end }}
 
 {{- define "service_traffic_config" }}

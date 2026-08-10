@@ -588,4 +588,5 @@
         {{- if lt $ready $desired }}{{ printf ", %d/%d" $ready $desired | red | bold }}{{ else }}{{ printf ", %d/%d" $ready $desired | green }}{{ end }} ready
         {{- with .RolloutStatus . }}{{ if not .done }}, {{ "rolling out" | yellow }}{{ end }}{{ end }}
     {{- end }}
+    {{- template "other_unhealthy_conditions" . }}
 {{- end }}
