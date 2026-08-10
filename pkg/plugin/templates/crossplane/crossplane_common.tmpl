@@ -1,0 +1,159 @@
+{{- define "crossplane_default_resource" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* The rendering half of the Crossplane entry in defaultResourceDetectors
+           (pkg/plugin/default_resource_detectors.go): DefaultResource dispatches here once the
+           Go-side detector has decided the object shows at least one Crossplane signal
+           (compositionRef, composed resourceRefs, or a non-empty forProvider). Those signals
+           aren't mutually exclusive with each other, so every sub-template below still re-checks
+           its own narrower condition and no-ops when it doesn't apply -- exactly as it did back
+           when DefaultResource called all four of these unconditionally. */ -}}
+    {{- template "crossplane_composition_ref" . }}
+    {{- template "crossplane_composed_resources" . }}
+    {{- template "crossplane_managed_resource_drift" . }}
+    {{- template "crossplane_managed_resource_details" . }}
+{{- end }}
+
+{{- define "crossplane_composition_ref" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* A Crossplane composite resource (XR) or claim records which Composition it's bound to
+           in spec.compositionRef (v1, cluster-scoped XRs and their claims) or
+           spec.crossplane.compositionRef (v2, namespaced XRs). Neither path is set by any other
+           kind of object, so this is safe to invoke unconditionally from
+           crossplane_default_resource. */ -}}
+    {{- $ref := .Spec.compositionRef }}
+    {{- $revisionRef := .Spec.compositionRevisionRef }}
+    {{- $updatePolicy := .Spec.compositionUpdatePolicy }}
+    {{- $crossplane := .Spec.crossplane }}
+    {{- if kindIs "map" $crossplane }}
+        {{- with $crossplane.compositionRef }}{{ $ref = . }}{{ end }}
+        {{- with $crossplane.compositionRevisionRef }}{{ $revisionRef = . }}{{ end }}
+        {{- with $crossplane.compositionUpdatePolicy }}{{ $updatePolicy = . }}{{ end }}
+    {{- end }}
+    {{- $refIsValid := and (kindIs "map" $ref) (kindIs "string" $ref.name) }}
+    {{- $revisionRefIsValid := and (kindIs "map" $revisionRef) (kindIs "string" $revisionRef.name) }}
+    {{- if or $refIsValid $revisionRefIsValid $updatePolicy }}
+        {{- if $refIsValid }}
+            {{- $.Include "resource_ref" (dict "kind" "Composition" "name" $ref.name) | nindent 2 }}
+        {{- end }}
+        {{- if $revisionRefIsValid }}, revision {{ $.Include "resource_ref" (dict "kind" "CompositionRevision" "name" $revisionRef.name) }}{{ end }}
+        {{- with $updatePolicy }}, update policy {{ . | redBoldIf (eq . "Manual") }}
+            {{- if eq . "Manual" }} (pinned; won't move to newer Composition revisions automatically){{ end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "crossplane_composed_resources" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* A Crossplane composite resource (XR) lists the resources it composes in
+           spec.crossplane.resourceRefs (v2, namespaced XRs) or spec.resourceRefs (v1, cluster-
+           scoped XRs). Presence of either is itself the marker that this object is an XR -- no
+           other Kubernetes object sets these paths -- so this is safe to invoke unconditionally
+           from crossplane_default_resource. Since this now runs for every CRD kind that has no dedicated
+           template, a coincidentally-named but differently-shaped spec.resourceRefs/spec.crossplane
+           field (e.g. not a list of {kind,name} objects) must be ignored rather than treated as a
+           template error that would blank out that resource's whole render. */ -}}
+    {{- $refs := .Spec.resourceRefs }}
+    {{- $crossplane := .Spec.crossplane }}
+    {{- if kindIs "map" $crossplane }}
+        {{- with $crossplane.resourceRefs }}{{ $refs = . }}{{ end }}
+    {{- end }}
+    {{- $validRefs := list }}
+    {{- if kindIs "slice" $refs }}
+        {{- range $refs }}
+            {{- if and (kindIs "map" .) (kindIs "string" .kind) (kindIs "string" .name) }}
+                {{- $validRefs = $validRefs | append . }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with $validRefs }}
+        {{- "Composed resources" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- $ns := $.Namespace }}
+            {{- with .namespace }}{{ $ns = . }}{{ end }}
+            {{- $.Include "managed_resource_line" (dict "ctx" $ "kind" .kind "name" .name "namespace" $ns) | nindent 4 }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "crossplane_managed_resource_drift" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Eligibility: a non-empty spec.forProvider is the signal that this is a Crossplane
+           managed resource (no other Kubernetes object populates that path). A missing/empty
+           status.atProvider then means the resource hasn't been observed yet, rather than that
+           it's ineligible. See pkg/plugin/crossplanedrift for the comparison semantics. */ -}}
+    {{- $forProvider := .Spec.forProvider }}
+    {{- if and (kindIs "map" $forProvider) $forProvider }}
+        {{- $atProvider := .Status.atProvider }}
+        {{- if not (and (kindIs "map" $atProvider) $atProvider) }}
+            {{- "Drift" | bold | nindent 2 }}: unavailable; {{ "status.atProvider" | cyan }} has not been observed yet
+        {{- else }}
+            {{- $result := crossplaneManagedResourceDrift $forProvider $atProvider }}
+            {{- $syncedStatus := "" }}
+            {{- with getMatchingItemInMapList (dict "type" "Synced") .StatusConditions }}{{ $syncedStatus = .status }}{{ end }}
+            {{- $labeled := crossplaneDriftLabel $syncedStatus .Spec.managementPolicies }}
+            {{- if eq (len $result.DriftEntries) 0 }}
+                {{- "Drift" | bold | nindent 2 }}: none across {{ $result.TotalConfigured }} configured fields
+            {{- else }}
+                {{- $labeled.Label | bold | nindent 2 }} (`spec.forProvider` -> `status.atProvider`){{ with $labeled.Annotation }}, {{ . | yellow }}{{ end }}:
+                {{- with $result.UnifiedDiff }}
+                    {{- . | markRed "^-.*" | markGreen "^\\+.*" | nindent 4 }}
+                {{- end }}
+                {{- with $result.RedactedPaths }}
+                    {{- printf "Redacted fields differ: %s" (join ", " .) | nindent 4 }}
+                {{- end }}
+                {{- with $result.MoreCount }}
+                    {{- printf "… %d more" . | nindent 4 }}
+                {{- end }}
+                {{- if $.Config.GetBool "deep" }}
+                    {{- with $result.ObservedOnlyCount }}
+                        {{- printf "Observed-only fields: %d (hidden; provider defaults/computed state)" . | nindent 4 }}
+                    {{- end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "crossplane_managed_resource_details" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Eligibility mirrors crossplane_managed_resource_drift: a non-empty spec.forProvider is
+           the signal that this is a Crossplane managed resource. Surfaces the operationally
+           high-signal external-name/composition-resource-name/external-create annotations and the
+           providerConfigRef/managementPolicies/initProvider spec fields, all only when present so
+           non-Crossplane resources and vanilla managed resources without these fields set stay
+           quiet. */ -}}
+    {{- $forProvider := .Spec.forProvider }}
+    {{- if and (kindIs "map" $forProvider) $forProvider }}
+        {{- $annotations := .Annotations }}
+        {{- with $annotations | get "crossplane.io/external-name" }}
+            {{- "External name" | bold | nindent 2 }}: {{ . | cyan }}
+        {{- end }}
+        {{- with $annotations | get "crossplane.io/composition-resource-name" }}
+            {{- "Composition resource name" | bold | nindent 2 }}: {{ . | cyan }}
+        {{- end }}
+        {{- $pending := $annotations | get "crossplane.io/external-create-pending" }}
+        {{- $succeeded := $annotations | get "crossplane.io/external-create-succeeded" }}
+        {{- if $pending }}
+            {{- if not $succeeded }}
+                {{- "External create" | red | bold | nindent 2 }}: pending since {{ $pending | colorAgo }}{{ agoSuffix }}, {{ "external-create-succeeded not set yet" | yellow }}
+            {{- else }}
+                {{- $pendingAt := $pending | toDate "2006-01-02T15:04:05Z" }}
+                {{- $succeededAt := $succeeded | toDate "2006-01-02T15:04:05Z" }}
+                {{- "External create" | bold | nindent 2 }}: succeeded, took {{ ($succeededAt.Sub $pendingAt) | colorDuration }}
+            {{- end }}
+        {{- end }}
+        {{- with .Spec.providerConfigRef }}
+            {{- $.Include "resource_ref" (dict "kind" (.kind | default "ProviderConfig") "name" .name) | nindent 2 }}
+        {{- end }}
+        {{- $policies := .Spec.managementPolicies }}
+        {{- if kindIs "slice" $policies }}
+            {{- $isFullControl := and (eq (len $policies) 1) (eq (index $policies 0) "*") }}
+            {{- "Management policies" | bold | nindent 2 }}: {{ if $isFullControl }}{{ "* (full control)" | cyan }}{{ else }}{{ $policies | join ", " | yellow }}{{ end }}
+        {{- end }}
+        {{- with .Spec.initProvider }}
+            {{- if kindIs "map" . }}
+                {{- "initProvider" | bold | nindent 2 }}: {{ keys . | sortAlpha | join ", " | cyan }} (applied only at creation time)
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}

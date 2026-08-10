@@ -1,0 +1,168 @@
+{{- define "storageclass_summary" }}
+    {{- /* Expects dict "ctx" (RenderableObject, used for KubeGetFirst/Include/Config) "name"
+           (the storageClassName from a PV or PVC spec) "provisionerShown" (optional bool -- true
+           when the caller already printed the provisioner from an annotation, so this doesn't
+           repeat it) "warnMissing" (optional bool -- true when the caller's state indicates
+           provisioning/binding actually depends on this class, e.g. a still-Pending PVC, so a
+           missing class is worth flagging rather than silently ignored; PV.tmpl leaves this
+           unset since a legacy PV can be valid without one). Fetches the StorageClass object to
+           surface the provisioner (when not already on screen), volumeBindingMode/
+           allowVolumeExpansion, which explain stuck/delayed binding and scheduling-before-
+           binding behavior, and allowedTopologies, which explains where WaitForFirstConsumer
+           dynamic provisioning is permitted to place the volume. Silent when unfetchable
+           (--shallow/--local) or when everything it would show is either unremarkable (Immediate
+           binding, no expansion, no allowedTopologies) or already on screen. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $sc := $ctx.KubeGetFirst "" "StorageClass" .name }}
+    {{- if $sc.Object }}
+        {{- $bindingMode := $sc.Object.volumeBindingMode | default "Immediate" }}
+        {{- $expandable := $sc.Object.allowVolumeExpansion }}
+        {{- $topologies := $sc.Object.allowedTopologies }}
+        {{- $showProvisioner := not .provisionerShown }}
+        {{- if or $showProvisioner (ne $bindingMode "Immediate") $expandable $topologies }}
+            {{- "StorageClass" | bold | nindent 2 }}:
+            {{- $needsComma := false }}
+            {{- if $showProvisioner }} {{ $sc.Object.provisioner | cyan }}{{ $needsComma = true }}{{ end }}
+            {{- if ne $bindingMode "Immediate" }}{{ if $needsComma }},{{ end }} volumeBindingMode: {{ $bindingMode | colorKeyword }}{{ $needsComma = true }}{{ end }}
+            {{- if $expandable }}{{ if $needsComma }},{{ end }} allows volume expansion{{ end }}
+        {{- end }}
+        {{- with $topologies }}
+            {{- "Allowed topologies" | bold | nindent 4 }}
+            {{- range . }}
+                {{- range .matchLabelExpressions }}
+                    {{- "" | nindent 6 }}{{ .key }} in [{{ .values | join ", " }}]
+                {{- end }}
+            {{- end }}
+        {{- end }}
+        {{- if $ctx.Config.GetBool "deep" }}
+            {{- $ctx.Include "StorageClass" $sc | nindent 4 }}
+        {{- end }}
+    {{- else if and .warnMissing (not $ctx.LiveQueriesDisabled) }}
+        {{- "" | nindent 2 }}{{ $ctx.Include "resource_ref" (dict "kind" "StorageClass" "name" .name) }} {{ "not found" | red | bold }}: binding/provisioning cannot proceed without it
+    {{- end }}
+{{- end -}}
+
+{{- define "volumeattachment_diagnosis" }}
+    {{- /* Expects dict "ctx" (RenderableObject, used for KubeGet/Include/Config/
+           LiveQueriesDisabled) "pvName" (the PersistentVolume's own name -- VolumeAttachment is
+           cluster-scoped and keyed by spec.source.persistentVolumeName, not by claim, so this is
+           only callable with a PV name in hand; PersistentVolumeClaim.tmpl resolves its bound PV
+           first rather than duplicating this lookup). VolumeAttachment has zero references
+           anywhere else in the templates -- without this, a PVC/PV pair can show fully Bound
+           while the actual CSI attach/detach is stuck, erroring, or left over on a stale node,
+           and nothing on the Pod or PVC/PV views surfaces that. Silent when unfetchable
+           (--shallow/--local) or when every matching attachment looks healthy: a nominal
+           "attached: true" record is not worth a line by default. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $pvName := .pvName }}
+    {{- if not $ctx.LiveQueriesDisabled }}
+        {{- $matching := list }}
+        {{- range $ctx.KubeGet "" "VolumeAttachment" }}
+            {{- if eq (.Spec.source.persistentVolumeName | default "") $pvName }}
+                {{- $matching = $matching | append . }}
+            {{- end }}
+        {{- end }}
+        {{- $attachedCount := 0 }}
+        {{- range $matching }}
+            {{- if and .Status.attached (not .Metadata.deletionTimestamp) }}{{ $attachedCount = add $attachedCount 1 }}{{ end }}
+        {{- end }}
+        {{- range $matching }}
+            {{- $va := . }}
+            {{- $hasProblem := or $va.Metadata.deletionTimestamp (not $va.Status.attached) $va.Status.attachError $va.Status.detachError (gt $attachedCount 1) }}
+            {{- if $hasProblem }}
+                {{- "VolumeAttachment" | bold | nindent 2 }}: {{ $ctx.Include "resource_ref" (dict "kind" "VolumeAttachment" "name" $va.Name) }}, node {{ $ctx.Include "resource_ref" (dict "kind" "Node" "name" $va.Spec.nodeName) }}
+                {{- if $va.Metadata.deletionTimestamp }}
+                    {{- ", " }}{{ "detaching" | yellow | bold }} (deletion in progress)
+                {{- else if $va.Status.attached }}
+                    {{- ", " }}{{ "attached" | green }}
+                {{- else }}
+                    {{- ", " }}{{ "not attached" | red | bold }}
+                {{- end }}
+                {{- if gt $attachedCount 1 }}
+                    {{- ", " }}{{ "conflict" | red | bold }}: volume is attached on more than one node at once
+                {{- end }}
+                {{- with $va.Status.attachError }}
+                    {{- "Attach error" | red | bold | nindent 4 }}: {{ .message }}
+                {{- end }}
+                {{- with $va.Status.detachError }}
+                    {{- "Detach error" | red | bold | nindent 4 }}: {{ .message }}
+                {{- end }}
+                {{- if $ctx.Config.GetBool "deep" }}
+                    {{- $ctx.Include "VolumeAttachment" $va | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "rwop_holder_diagnosis" }}
+    {{- /* Expects dict "ctx" (RenderableObject, used for Include) "pods" ([]RenderableObject --
+           the Pods in the claim's namespace that mount it, already resolved by the caller since
+           PersistentVolumeClaim.tmpl needs that same Pod scan for its disk-usage stats and this
+           reuses it rather than running a second KubeGet pass) "accessModes" (the PVC's
+           spec.accessModes list). A no-op unless the claim uses the ReadWriteOncePod access
+           mode, which the apiserver/scheduler enforce as at most one non-terminal Pod using the
+           claim at a time. Silent when there's no non-terminal Pod yet (nothing to report) or
+           when a lone Pending Pod's own PodScheduled condition doesn't establish that RWOP is
+           what's blocking it -- guessing here would blame the wrong cause for an unscheduled
+           Pod. */ -}}
+    {{- $ctx := .ctx }}
+    {{- if has "ReadWriteOncePod" .accessModes }}
+        {{- $scheduled := list }}
+        {{- $pending := list }}
+        {{- range .pods }}
+            {{- if not (has .Status.phase (list "Succeeded" "Failed")) }}
+                {{- if .Spec.nodeName }}
+                    {{- $scheduled = $scheduled | append . }}
+                {{- else }}
+                    {{- $pending = $pending | append . }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+        {{- if gt (len $scheduled) 1 }}
+            {{- "RWOP" | bold | nindent 2 }}: {{ "conflict" | red | bold }}: more than one non-terminal Pod is scheduled against this ReadWriteOncePod claim:
+            {{- range $scheduled }}
+                {{- $ctx.Include "pod_health_summary" (dict "pod" . "callerNamespace" $ctx.Namespace) | nindent 4 }}
+                {{- with .Spec.nodeName }}, node {{ $ctx.Include "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}
+            {{- end }}
+        {{- else if eq (len $scheduled) 1 }}
+            {{- $holder := index $scheduled 0 }}
+            {{- "RWOP holder" | bold | nindent 2 }}: {{ $ctx.Include "pod_health_summary" (dict "pod" $holder "callerNamespace" $ctx.Namespace) }}
+            {{- with $holder.Spec.nodeName }}, node {{ $ctx.Include "resource_ref" (dict "kind" "Node" "name" .) }}{{ end }}
+        {{- end }}
+        {{- /* Checked independently of the holder/conflict branches above: a Pod can be Pending
+               behind an already-scheduled holder, and that's the common real-world shape of this
+               (one Pod running, a second stuck waiting for it), not an either/or with it. */ -}}
+        {{- range $pending }}
+            {{- $pod := . }}
+            {{- with $pod.StatusConditions | getMatchingItemInMapList (dict "type" "PodScheduled") }}
+                {{- if and (eq .status "False") (contains "ReadWriteOncePod" (.message | default "")) }}
+                    {{- "RWOP" | bold | nindent 2 }}: {{ $ctx.Include "pod_health_summary" (dict "pod" $pod "callerNamespace" $ctx.Namespace) }}, {{ "blocked" | red | bold }}: {{ .message }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "ingress_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
+    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with .Spec.rules }}, {{ range $index, $rule := . }}{{ if $index }}, {{ end }}{{ $rule.host | cyan }}{{ end }}{{ end }}
+    {{- with .Status.loadBalancer.ingress }}
+        {{- with (index . 0).hostname }}, {{ "LoadBalancer" | green }}:{{ . | cyan }}{{ end }}
+        {{- with (index . 0).ip }}, {{ "LoadBalancer" | green }}:{{ . | cyan }}{{ end }}
+    {{- else }}
+        {{- ", " }}{{ "Pending LoadBalancer" | red | bold }}
+    {{- end }}
+    {{- with $.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
+{{- end -}}
+
+{{- define "route_health_summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Shared compact summary for HTTPRoute, GRPCRoute, TCPRoute, UDPRoute and TLSRoute. */ -}}
+    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
+    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with .Spec.hostnames }}, {{ join ", " . | cyan }}{{ end }}
+    {{- with $.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
+{{- end -}}

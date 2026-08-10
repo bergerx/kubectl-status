@@ -5,7 +5,7 @@
 # scope/results/summary at all (a report --local/-f renders before any controller has written to
 # it), a scopeSelector-only report with no per-result severity/category, and a result missing rule
 # (only "policy" is in the CRD's required: list at the item level -- see
-# pkg/plugin/templates/policy_report_common.tmpl).
+# pkg/plugin/templates/policy/policy_report_common.tmpl).
 apiVersion: wgpolicyk8s.io/v1alpha2
 kind: PolicyReport
 metadata:
