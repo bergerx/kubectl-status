@@ -34,60 +34,7 @@
             {{- else }}
                 {{- $.Include "resource_ref" (dict "kind" (.kind | default "Gateway") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
-                {{- if and (eq (.kind | default "Gateway") "Gateway") (not ($.LiveQueriesDisabled)) }}
-                    {{- $ns := coalesce .namespace $.Namespace }}
-                    {{- $gw := $.KubeGetFirst $ns (qualifyKind "Gateway" (.group | default "gateway.networking.k8s.io")) .name }}
-                    {{- if $gw.Object }}
-                        {{- $sectionName := .sectionName }}
-                        {{- range $gw.Spec.listeners }}
-                            {{- /* The hostnames this listener and this route serve together, which
-                                   are the ones the listener's certificate has to cover -- either
-                                   side may be a wildcard, so this is an intersection rather than
-                                   an equality test. Empty means the route pins no hostname (or,
-                                   for a listener that isn't pinned by sectionName below, that the
-                                   two are disjoint and the route doesn't attach here). */ -}}
-                            {{- $certHostnames := hostnameIntersections (.hostname | default "") $routeHostnames }}
-                            {{- $matches := false }}
-                            {{- if $sectionName }}
-                                {{- if eq .name $sectionName }}{{ $matches = true }}{{ end }}
-                                {{- /* sectionName attaches the route to this listener whatever its
-                                       hostname, so a disjoint pair is a real problem: fall back to
-                                       the route's hostnames to report it rather than staying
-                                       silent. */ -}}
-                                {{- if not $certHostnames }}{{ $certHostnames = $routeHostnames }}{{ end }}
-                            {{- else if eq .protocol "HTTPS" }}
-                                {{- if or (not $routeHostnames) (not .hostname) $certHostnames }}{{ $matches = true }}{{ end }}
-                            {{- end }}
-                            {{- if $matches }}
-                                {{- with .tls }}
-                                    {{- range .certificateRefs }}
-                                        {{- $refKind := .kind | default "Secret" }}
-                                        {{- if eq $refKind "Secret" }}
-                                            {{- $refNs := coalesce .namespace $ns }}
-                                            {{- "cert:" | nindent 6 }}{{ $.Include "resource_ref" (dict "kind" $refKind "name" .name "namespace" $refNs "callerNamespace" $.Namespace) }}
-                                            {{- $secret := $.KubeGetFirst $refNs "Secret" .name }}
-                                            {{- if not $secret.Object }}
-                                                {{- " doesn't exist" | red | bold }}
-                                            {{- else }}
-                                                {{- $cert := parseTLSSecretCertificate $secret $certHostnames }}
-                                                {{- if $cert.WrongType }}
-                                                    {{- printf ", wrong type:%s" $cert.ActualType | red | bold }}
-                                                {{- else if $cert.MissingKeys }}
-                                                    {{- printf ", missing keys:%s" (join "," $cert.MissingKeys) | red | bold }}
-                                                {{- else if $cert.ParseError }}
-                                                    {{- printf ", parse error:%s" $cert.ParseError | red | bold }}
-                                                {{- else }}
-                                                    {{- if $cert.SelfSigned }}{{ ", self-signed" | yellow }}{{ end }}
-                                                    {{- if not $cert.MatchesHostname }}{{ ", hostname mismatch" | red | bold }}{{ end }}
-                                                {{- end }}
-                                            {{- end }}
-                                        {{- end }}
-                                    {{- end }}
-                                {{- end }}
-                            {{- end }}
-                        {{- end }}
-                    {{- end }}
-                {{- end }}
+                {{- template "gwapi_listener_tls_cert_check" (dict "ctx" $ "parentRef" . "routeHostnames" $routeHostnames "protocol" "HTTPS") }}
             {{- end }}
             {{- with $statusEntry.controllerName }}
                 {{- "controller" | nindent 6 }}: {{ . | cyan }}
@@ -140,9 +87,7 @@
                     {{- end }}
                 {{- else }}
                     {{- range . }}
-                        {{- "→" | nindent 4 }} {{ $.Include "resource_ref" (dict "kind" (.kind | default "Service") "name" .name "namespace" .namespace "callerNamespace" $.Namespace) }}
-                        {{- with .port }}:{{ . | toString | cyan }}{{ end }}
-                        {{- if and (. | hasKey "weight") (ne (.weight | int) 1) }}, weight:{{ .weight | toString | cyan }}{{ end }}
+                        {{- template "gwapi_backend_ref" (dict "ctx" $ "ref" . "colorize" true) }}
                     {{- end }}
                 {{- end }}
             {{- end }}
