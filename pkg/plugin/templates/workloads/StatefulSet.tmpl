@@ -108,8 +108,8 @@
                             {{- $podStat = $nodeSummary.pods | default list | getMatchingItemInMapList (dict "podRef.uid" $pod.Metadata.uid) }}
                         {{- end }}
                         {{- with $podStat.volume | default list | getMatchingItemInMapList (dict "name" $tmplName) }}
-                            {{- $used := .usedBytes | float64 }}
-                            {{- $cap := .capacityBytes | float64 }}
+                            {{- $used := .usedBytes | toFloat64 }}
+                            {{- $cap := .capacityBytes | toFloat64 }}
                             {{- if $cap }}
                                 {{- $pct := percent $used $cap }}
                                 {{- if not $found }}
