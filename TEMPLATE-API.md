@@ -144,11 +144,14 @@ implementing the `--shallow`/default/`--deep` pattern.
   `resource_ref` marked `missing` when the object can't be found (suppressed under
   `--shallow`/`--local`, where every lookup is empty for an unrelated reason). Emits no indentation of
   its own — callers pipe through `nindent`.
-- **`event`** *(defined in `Event.tmpl`)* — `.` is one `Event` object's fields (a `status.items[]`
-  entry, or the object itself when rendering a standalone Event). Renders the one-line
-  `source, Reason message, involving Kind/name[field] (in ns), <age> (xN over ...)` form `events` uses
-  per item. Callable directly if a template wants exactly one Event line without the surrounding
-  "Events:" block/`--include-events` gate.
+- **`event`** *(defined in `Event.tmpl`)* — `dict "event"` (one `Event` object's fields, a
+  `status.items[]` entry or the object itself when rendering a standalone Event)
+  `"showInvolvedObject"`(opt bool). Renders the one-line `source, Reason message[, involving
+  Kind/name[field]], <age> (xN over ...)` form `events` uses per item, with the involved object (when
+  shown) formatted via `resource_ref`. The `events` block that lists an object's own events omits
+  `showInvolvedObject`, since "involving Kind/name" would just repeat the resource already on screen;
+  a standalone Event render (`k get events`) sets it. Callable directly if a template wants exactly
+  one Event line without the surrounding "Events:" block/`--include-events` gate.
 
 ### Health-summary family
 

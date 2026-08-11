@@ -221,7 +221,7 @@
         {{- with .KubeGetEvents }}{{ if .Object }}{{ if .Object.items }}
             {{- "Events:" | nindent 2 }}
             {{- range .Object.items }}
-                {{- $.Include "event" . | nindent 4 }}
+                {{- $.Include "event" (dict "event" .) | nindent 4 }}
             {{- end }}
         {{- end }}{{ end }}{{ end }}
     {{- end }}
