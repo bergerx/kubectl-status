@@ -55,11 +55,11 @@
 
 {{- define "VerticalPodAutoscaler.summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- /* Expects dict "obj" (VerticalPodAutoscaler RenderableObject) "callerNamespace" (unused,
-           kept for the uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary"
-           template shares -- see resource_health_summary). */ -}}
+    {{- /* Expects dict "obj" (VerticalPodAutoscaler RenderableObject) "callerNamespace" (optional
+           -- forwarded to resource_ref so obj's own namespace is dropped from the summary when
+           it's redundant, same contract every "<Kind>.summary" template uses). */ -}}
     {{- $obj := .obj }}
-    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name) }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
     {{- $updateMode := ($obj.Spec.updatePolicy | default dict).updateMode | default "Auto" }}
     {{- if ne $updateMode "Auto" }}, {{ $updateMode | cyan }}{{ end }}
     {{- range ($obj.Status.recommendation | default dict).containerRecommendations }}

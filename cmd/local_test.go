@@ -178,3 +178,29 @@ func TestAllArtifactsLocalWithAbsoluteTime(t *testing.T) {
 		})
 	}
 }
+
+// TestAllArtifactsLocalShort covers the --short flag (cmd/main.go/pkg/plugin/plugin.go's
+// processObjShort): one "<Kind>.summary" line per matching resource instead of the full view, with
+// no blank-line spacing around/between them. multiple-2-pods-docs.yaml is the case that matters
+// most here -- two resources from one -f render, each on its own line with no separating blank
+// line, which the full (non---short) view always inserts between resources (see processObj).
+func TestAllArtifactsLocalShort(t *testing.T) {
+	t.Setenv("KUBECONFIG", "/dev/null")
+	opts := combineOpts(testHackOpts(t), viperTestHackOpts())
+	artifacts := []string{
+		"../tests/artifacts/deployment-healthy.yaml",
+		"../tests/artifacts/multiple-2-pods-docs.yaml",
+	}
+	for _, artifact := range artifacts {
+		artifact := artifact
+		name := strings.Replace(artifact, "../tests/", "", 1)
+		name = strings.Replace(name, ".yaml", "", 1)
+		t.Run(name, func(t *testing.T) {
+			test := cmdTest{
+				args:            []string{"-f", artifact, "--local", "--short"},
+				stdoutEqualPath: name + ".short.out",
+			}
+			test.assert(t, nil, opts...)
+		})
+	}
+}

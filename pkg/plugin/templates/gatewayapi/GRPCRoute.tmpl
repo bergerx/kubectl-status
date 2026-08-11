@@ -53,9 +53,9 @@
 
 {{- define "GRPCRoute.summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- /* Expects dict "obj" (GRPCRoute RenderableObject) "callerNamespace" (unused, kept for the
-           uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary" template shares --
-           see resource_health_summary). route_health_summary (gatewayapi_common.tmpl) is shared
-           by all five Gateway API route kinds. */ -}}
-    {{- template "route_health_summary" .obj }}
+    {{- /* Expects dict "obj" (GRPCRoute RenderableObject) "callerNamespace" (optional -- forwarded
+           to route_health_summary/resource_ref, same contract every "<Kind>.summary" template
+           shares -- see resource_health_summary). route_health_summary (gatewayapi_common.tmpl)
+           is shared by all five Gateway API route kinds. */ -}}
+    {{- template "route_health_summary" . }}
 {{- end -}}

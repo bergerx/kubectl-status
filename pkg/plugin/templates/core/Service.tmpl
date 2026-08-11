@@ -71,11 +71,11 @@
 
 {{- define "Service.summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- /* Expects dict "obj" (Service RenderableObject) "callerNamespace" (unused, kept for the
-           uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary" template shares --
-           see resource_health_summary). */ -}}
+    {{- /* Expects dict "obj" (Service RenderableObject) "callerNamespace" (optional -- forwarded
+           to resource_ref so obj's own namespace is dropped from the summary when it's redundant,
+           same contract every "<Kind>.summary" template uses). */ -}}
     {{- $obj := .obj }}
-    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name) }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
     {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with $obj.Spec }}{{ with .type }}, {{ if eq . "NodePort" }}{{ . | yellow | bold }}{{ else }}{{ . | colorKeyword }}{{ end }}{{ end }}{{ end }}
     {{- $slices := $obj.KubeGetEndpointSlicesForService $obj.Namespace $obj.Name }}
@@ -149,7 +149,7 @@
             {{- if $.Config.GetBool "deep" }}
                 {{- $.IncludeRenderableObject $ing | nindent 4 }}
             {{- else }}
-                {{- $.Include "Ingress.summary" (dict "obj" $ing) | nindent 4 }}
+                {{- $.Include "Ingress.summary" (dict "obj" $ing "callerNamespace" $.Namespace) | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}
@@ -165,7 +165,7 @@
             {{- if $.Config.GetBool "deep" }}
                 {{- $.IncludeRenderableObject $route | nindent 4 }}
             {{- else }}
-                {{- $.Include "route_health_summary" $route | nindent 4 }}
+                {{- $.Include "route_health_summary" (dict "obj" $route "callerNamespace" $.Namespace) | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}

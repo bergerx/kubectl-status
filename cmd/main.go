@@ -248,6 +248,8 @@ func addRenderFlags(flags *pflag.FlagSet) {
 		"Set all --include-* flags to true and let user selectively disable them.")
 	flags.BoolP("watch", "w", false,
 		"After listing/getting the requested object, watch for changes.")
+	flags.Bool("short", false,
+		"Print only each matching resource's one-line health summary (its \"<Kind>.summary\" template) instead of the full view, one line per resource.")
 	flags.Bool("help-all", false,
 		"Show all available flags.")
 	flags.String("color", "auto",
