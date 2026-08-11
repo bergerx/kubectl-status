@@ -17,4 +17,14 @@ without an entry here.
 
 ### Breaking template API changes
 
-_None yet._
+- `callerNamespace` on `Deployment.summary`, `StatefulSet.summary`, `DaemonSet.summary`,
+  `ReplicaSet.summary`, `Job.summary`, `Ingress.summary`, `Service.summary`,
+  `PodDisruptionBudget.summary`, `HorizontalPodAutoscaler.summary`,
+  `VerticalPodAutoscaler.summary`, and
+  `HTTPRoute.summary`/`GRPCRoute.summary`/`TCPRoute.summary`/`UDPRoute.summary`/`TLSRoute.summary`
+  was previously accepted but silently ignored (documented as "unused, kept for the uniform
+  contract"); it is now honored the same way every other `"<Kind>.summary"` template already
+  honors it — passed through to `resource_ref` so the object's own namespace is dropped from the
+  one-line summary only when it equals `callerNamespace`. A `~/.kubectl-status/templates/*.tmpl`
+  override of any of these `.summary` names that relied on the namespace always being omitted
+  should pass its own namespace as `callerNamespace` explicitly if it wants that behavior back.

@@ -104,7 +104,6 @@ func runWatch(results *resource.Result, engine *renderEngine, repo *input.Resour
 
 func processObj(obj runtime.Object, engine *renderEngine, repo *input.ResourceRepo) {
 	streams := engine.ioStreams
-	_, _ = fmt.Fprintf(streams.Out, "\n")
 	out, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
 		errorPrintf(streams.ErrOut, "Failed to decode obj=%s: %s", obj, err)
@@ -112,6 +111,11 @@ func processObj(obj runtime.Object, engine *renderEngine, repo *input.ResourceRe
 	}
 	engine.renderedUIDs = make(uidSet)
 	r := newRenderableObject(out, engine, repo)
+	if engine.cfg.Viper.GetBool("short") {
+		processObjShort(r, streams)
+		return
+	}
+	_, _ = fmt.Fprintf(streams.Out, "\n")
 	err = r.render(streams.Out)
 	if err != nil {
 		_, _ = fmt.Fprintf(streams.ErrOut, "\n")
@@ -119,4 +123,19 @@ func processObj(obj runtime.Object, engine *renderEngine, repo *input.ResourceRe
 		return
 	}
 	_, _ = fmt.Fprintf(streams.Out, "\n")
+}
+
+// processObjShort prints r's compact one-line health summary (its own "<Kind>.summary" template,
+// see RenderableObject.HealthSummary) rather than the full view -- one line per matching resource,
+// with no blank-line spacing, so --short output stays grep/pipe friendly. callerNamespace is left
+// empty (rather than the current --namespace) so the summary's "-n ns" clause always shows: unlike
+// the full view (one resource at a time, namespace already in the surrounding context), --short's
+// output is a flat list that may span namespaces (e.g. under --all-namespaces).
+func processObjShort(r RenderableObject, streams genericiooptions.IOStreams) {
+	summary, err := r.HealthSummary("")
+	if err != nil {
+		errorPrintf(streams.ErrOut, "Failed to render: %s", err)
+		return
+	}
+	_, _ = fmt.Fprintln(streams.Out, summary)
 }
