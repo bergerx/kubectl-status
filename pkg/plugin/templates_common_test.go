@@ -1892,6 +1892,67 @@ func TestSummaryTemplatesRenderOneLine(t *testing.T) {
 	}
 }
 
+// TestSummaryTemplatesRespectCallerNamespace guards the fix that accompanied the `--short` CLI
+// flag (cmd/main.go's processObjShort renders a "<Kind>.summary" standalone, one per matching
+// resource). Every "<Kind>.summary" template documents a `dict "obj" "callerNamespace"(opt)`
+// contract where the object's namespace is dropped from the one-line summary only when it equals
+// callerNamespace (see resource_ref) -- but the wrappers around workload_health_summary/
+// route_health_summary, plus Job.summary/Ingress.summary/Service.summary, used to accept
+// callerNamespace and silently ignore it, always omitting the namespace regardless of what was
+// passed. That was invisible to every caller before --short: they all render these nested under
+// something already in the same namespace, so the omitted namespace was never wrong -- merely
+// unconditional instead of conditional. --short is the first caller to render "<Kind>.summary"
+// standalone for a flat, possibly multi-namespace list, where an unconditionally omitted
+// namespace becomes ambiguous. This renders every "<Kind>.summary" template twice -- once with
+// callerNamespace equal to the object's own namespace (must omit "-n"), once with a different one
+// (must include "-n <objNamespace>") -- via the same enumeration TestSummaryTemplatesRenderOneLine
+// uses, so a newly added "<Kind>.summary" is covered automatically.
+func TestSummaryTemplatesRespectCallerNamespace(t *testing.T) {
+	v := viper.New()
+	cfg := NewRenderConfig(v)
+	ts, err := getTemplate(cfg)
+	if err != nil {
+		t.Fatalf("getTemplate() error = %v", err)
+	}
+	var names []string
+	for _, tmpl := range ts.embedded.Templates() {
+		if strings.HasSuffix(tmpl.Name(), ".summary") {
+			names = append(names, tmpl.Name())
+		}
+	}
+	if len(names) == 0 {
+		t.Fatal("no \"<Kind>.summary\" templates found -- did the naming convention change?")
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			kind := strings.SplitN(name, ".", 2)[0]
+			extra := summaryTemplateFixtures[kind]
+			obj := map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       kind,
+				"metadata":   map[string]interface{}{"name": "fixture", "namespace": "test"},
+			}
+			for k, v := range extra {
+				obj[k] = v
+			}
+			sameNS, err := renderObjHealthSummary(t, name, obj, "test")
+			if err != nil {
+				t.Fatalf("renderTemplate(%q) error = %v", name, err)
+			}
+			if strings.Contains(sameNS, " -n ") {
+				t.Errorf("%s with callerNamespace == obj namespace: got %q, want no \" -n \" clause", name, sameNS)
+			}
+			otherNS, err := renderObjHealthSummary(t, name, obj, "other")
+			if err != nil {
+				t.Fatalf("renderTemplate(%q) error = %v", name, err)
+			}
+			if !strings.Contains(otherNS, " -n test") {
+				t.Errorf("%s with callerNamespace != obj namespace: got %q, want it to contain \" -n test\"", name, otherNS)
+			}
+		})
+	}
+}
+
 // TestQuotaHeadroomTemplate covers the rendered form of the quota headroom warning (issue #658):
 // the numbers come from quotaRolloutHeadroom's own tests, what's asserted here is that the section
 // reaches the reader with the ResourceQuota named, and with the two caveats the figures need --

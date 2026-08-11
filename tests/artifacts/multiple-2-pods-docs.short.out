@@ -1,0 +1,2 @@
+Pod/etcd-minikube -n kube-system, created 1m ago Running, 1/1 ready restarts:9, Ready:True
+Pod/storage-provisioner -n kube-system, created 1m ago Running, 1/1 ready restarts:16, Ready:True

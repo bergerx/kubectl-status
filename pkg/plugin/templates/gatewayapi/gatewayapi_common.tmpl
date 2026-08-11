@@ -1,15 +1,17 @@
 {{- define "route_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- /* Shared compact summary for HTTPRoute, GRPCRoute, TCPRoute, UDPRoute and TLSRoute --
-           takes the route RenderableObject directly (not the dict "obj"/"callerNamespace" shape
-           the "<Kind>.summary" entry points use) since matching_routes in core/Service.tmpl calls
-           it directly today; each route kind's own "<Kind>.summary" (in its own <Kind>.tmpl) is a
-           thin wrapper around this. */ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
-    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- with .Spec.hostnames }}, {{ join ", " . | cyan }}{{ end }}
-    {{- with $.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
-    {{- template "other_unhealthy_conditions" . }}
+    {{- /* Shared compact summary for HTTPRoute, GRPCRoute, TCPRoute, UDPRoute and TLSRoute.
+           Expects dict "obj" (route RenderableObject) "callerNamespace" (optional -- forwarded to
+           resource_ref so obj's own namespace is dropped from the summary when it's redundant,
+           same contract every "<Kind>.summary" template uses). Each route kind's own
+           "<Kind>.summary" (in its own <Kind>.tmpl) is a thin wrapper around this; matching_routes
+           in core/Service.tmpl also calls it directly. */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
+    {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with $obj.Spec.hostnames }}, {{ join ", " . | cyan }}{{ end }}
+    {{- with $obj.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}
 
 {{- define "gwapi_backend_ref" }}

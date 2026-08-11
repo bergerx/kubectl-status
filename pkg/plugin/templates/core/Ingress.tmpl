@@ -32,7 +32,7 @@
                     {{- if not $portDefinedInSvc }}
                         {{- "Service port doesnt exist" | red | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" "Service" "name" $ingSvcName) }}:{{ $ingSvcPort }} referenced in ingress, but Service doesn't have that port defined.
                     {{- else if not ($shownSvcs | has $ingSvcName) }}
-                        {{- $.Include "Service.summary" (dict "obj" $svc) | nindent 2 }}
+                        {{- $.Include "Service.summary" (dict "obj" $svc "callerNamespace" $.Namespace) | nindent 2 }}
                         {{- $shownSvcs = $shownSvcs | append $ingSvcName }}
                     {{- end }}
                 {{- end }}
@@ -89,11 +89,11 @@
 
 {{- define "Ingress.summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- /* Expects dict "obj" (Ingress RenderableObject) "callerNamespace" (unused, kept for the
-           uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary" template shares --
-           see resource_health_summary). */ -}}
+    {{- /* Expects dict "obj" (Ingress RenderableObject) "callerNamespace" (optional -- forwarded
+           to resource_ref so obj's own namespace is dropped from the summary when it's redundant,
+           same contract every "<Kind>.summary" template uses). */ -}}
     {{- $obj := .obj }}
-    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name) }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
     {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with $obj.Spec.rules }}, {{ range $index, $rule := . }}{{ if $index }}, {{ end }}{{ $rule.host | cyan }}{{ end }}{{ end }}
     {{- with $obj.Status.loadBalancer.ingress }}

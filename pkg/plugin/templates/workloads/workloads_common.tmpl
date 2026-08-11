@@ -340,11 +340,11 @@
                 {{- $ctx.Include "Service" . | nindent 4 }}
             {{- end }}
         {{- else if eq (len .) 1 }}
-            {{- "Services:" | bold | nindent 2 }} {{ $ctx.Include "Service.summary" (dict "obj" (index . 0)) }}
+            {{- "Services:" | bold | nindent 2 }} {{ $ctx.Include "Service.summary" (dict "obj" (index . 0) "callerNamespace" $ctx.Namespace) }}
         {{- else }}
             {{- "Services:" | bold | nindent 2 }}
             {{- range . }}
-                {{- $ctx.Include "Service.summary" (dict "obj" .) | nindent 4 }}
+                {{- $ctx.Include "Service.summary" (dict "obj" . "callerNamespace" $ctx.Namespace) | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}
@@ -364,11 +364,11 @@
                     {{- $ctx.Include "PodDisruptionBudget" . | nindent 4 }}
                 {{- end }}
             {{- else if eq (len $pdbs) 1 }}
-                {{- "PodDisruptionBudgets:" | bold | nindent 2 }} {{ $ctx.Include "PodDisruptionBudget.summary" (dict "obj" (index $pdbs 0)) }}
+                {{- "PodDisruptionBudgets:" | bold | nindent 2 }} {{ $ctx.Include "PodDisruptionBudget.summary" (dict "obj" (index $pdbs 0) "callerNamespace" $ctx.Namespace) }}
             {{- else }}
                 {{- "PodDisruptionBudgets:" | bold | nindent 2 }}
                 {{- range $pdbs }}
-                    {{- $ctx.Include "PodDisruptionBudget.summary" (dict "obj" .) | nindent 4 }}
+                    {{- $ctx.Include "PodDisruptionBudget.summary" (dict "obj" . "callerNamespace" $ctx.Namespace) | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -488,11 +488,11 @@
                     {{- $ctx.Include "HorizontalPodAutoscaler" . | nindent 4 }}
                 {{- end }}
             {{- else if eq (len $hpas) 1 }}
-                {{- "HorizontalPodAutoscaler:" | bold | nindent 2 }} {{ $ctx.Include "HorizontalPodAutoscaler.summary" (dict "obj" (index $hpas 0)) }}
+                {{- "HorizontalPodAutoscaler:" | bold | nindent 2 }} {{ $ctx.Include "HorizontalPodAutoscaler.summary" (dict "obj" (index $hpas 0) "callerNamespace" $ctx.Namespace) }}
             {{- else }}
                 {{- "HorizontalPodAutoscalers:" | bold | nindent 2 }}
                 {{- range $hpas }}
-                    {{- $ctx.Include "HorizontalPodAutoscaler.summary" (dict "obj" .) | nindent 4 }}
+                    {{- $ctx.Include "HorizontalPodAutoscaler.summary" (dict "obj" . "callerNamespace" $ctx.Namespace) | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -525,11 +525,11 @@
                     {{- $ctx.Include "VerticalPodAutoscaler" . | nindent 4 }}
                 {{- end }}
             {{- else if eq (len $vpas) 1 }}
-                {{- "VerticalPodAutoscaler:" | bold | nindent 2 }} {{ $ctx.Include "VerticalPodAutoscaler.summary" (dict "obj" (index $vpas 0)) }}
+                {{- "VerticalPodAutoscaler:" | bold | nindent 2 }} {{ $ctx.Include "VerticalPodAutoscaler.summary" (dict "obj" (index $vpas 0) "callerNamespace" $ctx.Namespace) }}
             {{- else }}
                 {{- "VerticalPodAutoscalers:" | bold | nindent 2 }}
                 {{- range $vpas }}
-                    {{- $ctx.Include "VerticalPodAutoscaler.summary" (dict "obj" .) | nindent 4 }}
+                    {{- $ctx.Include "VerticalPodAutoscaler.summary" (dict "obj" . "callerNamespace" $ctx.Namespace) | nindent 4 }}
                 {{- end }}
             {{- end }}
         {{- end }}
@@ -576,18 +576,24 @@
 
 {{- define "workload_health_summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
-    {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- if eq .Kind "DaemonSet" }}
-        {{- $desired := .Status.desiredNumberScheduled | int }}
-        {{- $ready := .Status.numberReady | default 0 | int }}
+    {{- /* Expects dict "obj" (Deployment/StatefulSet/DaemonSet/ReplicaSet RenderableObject)
+           "callerNamespace" (optional -- forwarded to resource_ref so obj's own namespace is
+           dropped from the summary when it's redundant, same contract every "<Kind>.summary"
+           template uses). Shared by Deployment.summary/StatefulSet.summary/DaemonSet.summary/
+           ReplicaSet.summary and PodDisruptionBudget's matching-workloads listing. */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
+    {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- if eq $obj.Kind "DaemonSet" }}
+        {{- $desired := $obj.Status.desiredNumberScheduled | int }}
+        {{- $ready := $obj.Status.numberReady | default 0 | int }}
         {{- if lt $ready $desired }}{{ printf ", %d/%d" $ready $desired | red | bold }}{{ else }}{{ printf ", %d/%d" $ready $desired | green }}{{ end }} scheduled
     {{- else }}
-        {{- $desired := 1 }}{{ if .Spec | hasKey "replicas" }}{{ $desired = .Spec.replicas | int }}{{ end }}
-        {{- $ready := .Status.readyReplicas | default 0 | int }}
+        {{- $desired := 1 }}{{ if $obj.Spec | hasKey "replicas" }}{{ $desired = $obj.Spec.replicas | int }}{{ end }}
+        {{- $ready := $obj.Status.readyReplicas | default 0 | int }}
         {{- if lt $ready $desired }}{{ printf ", %d/%d" $ready $desired | red | bold }}{{ else }}{{ printf ", %d/%d" $ready $desired | green }}{{ end }} ready
-        {{- with .RolloutStatus . }}{{ if not .done }}, {{ "rolling out" | yellow }}{{ end }}{{ end }}
+        {{- with $obj.RolloutStatus $obj }}{{ if not .done }}, {{ "rolling out" | yellow }}{{ end }}{{ end }}
     {{- end }}
-    {{- template "kstatus_if_abnormal" . }}
-    {{- template "other_unhealthy_conditions" . }}
+    {{- template "kstatus_if_abnormal" $obj }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end }}

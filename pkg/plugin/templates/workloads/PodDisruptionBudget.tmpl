@@ -39,17 +39,17 @@
                 {{- $daemonsets := $.KubeGetByLabelsMap $.Namespace "daemonsets" $matchLabels }}
                 {{- $statefulsets := $.KubeGetByLabelsMap $.Namespace "statefulsets" $matchLabels }}
                 {{- range $svcs }}
-                    {{- $.Include "Service.summary" (dict "obj" .) | nindent 4 }}
+                    {{- $.Include "Service.summary" (dict "obj" . "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- end }}
                 {{- if or $deploys $daemonsets $statefulsets }}
                     {{- range $deploys }}
-                        {{- $.Include "workload_health_summary" . | nindent 4 }}
+                        {{- $.Include "workload_health_summary" (dict "obj" . "callerNamespace" $.Namespace) | nindent 4 }}
                     {{- end }}
                     {{- range $daemonsets }}
-                        {{- $.Include "workload_health_summary" . | nindent 4 }}
+                        {{- $.Include "workload_health_summary" (dict "obj" . "callerNamespace" $.Namespace) | nindent 4 }}
                     {{- end }}
                     {{- range $statefulsets }}
-                        {{- $.Include "workload_health_summary" . | nindent 4 }}
+                        {{- $.Include "workload_health_summary" (dict "obj" . "callerNamespace" $.Namespace) | nindent 4 }}
                     {{- end }}
                 {{- else }}
                     {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
@@ -87,11 +87,11 @@
 
 {{- define "PodDisruptionBudget.summary" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- /* Expects dict "obj" (PodDisruptionBudget RenderableObject) "callerNamespace" (unused,
-           kept for the uniform dict "obj"/"callerNamespace" contract every "<Kind>.summary"
-           template shares -- see resource_health_summary). */ -}}
+    {{- /* Expects dict "obj" (PodDisruptionBudget RenderableObject) "callerNamespace" (optional --
+           forwarded to resource_ref so obj's own namespace is dropped from the summary when it's
+           redundant, same contract every "<Kind>.summary" template uses). */ -}}
     {{- $obj := .obj }}
-    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name) }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
     {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- $budgetViolated := lt ($obj.Status.currentHealthy | int) ($obj.Status.desiredHealthy | int) }}
     {{- $noDisruptions := and ($obj.Status | hasKey "disruptionsAllowed") (eq ($obj.Status.disruptionsAllowed | int) 0) }}
