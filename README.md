@@ -1,6 +1,7 @@
 # kubectl status
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/5317/badge)](https://www.bestpractices.dev/projects/5317)
+[![OpenSSF Baseline](https://www.bestpractices.dev/projects/5317/baseline)](https://www.bestpractices.dev/projects/5317)
 
 Checking whether a Pod or Deployment is actually healthy usually means bouncing between `kubectl get`, `kubectl describe`,
 `kubectl get pods -l ...`, and `kubectl describe pod ...` — then piecing the answer together yourself. `kubectl status`
