@@ -15,6 +15,8 @@ without an entry here.
 
 ## [Unreleased]
 
+## [v0.7.24] - 2026-08-11
+
 ### Breaking template API changes
 
 - `callerNamespace` on `Deployment.summary`, `StatefulSet.summary`, `DaemonSet.summary`,
