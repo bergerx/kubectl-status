@@ -140,6 +140,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 								corev1.ResourceCPU:    resource.MustParse("10m"),
 								corev1.ResourceMemory: resource.MustParse("16Mi"),
 							},
+							// Cap actual usage via CFS quota so "yes > /dev/null" can't peg a
+							// full host core -- comfortably under the VPA's maxAllowed.cpu
+							// (500m) below so it doesn't distort the recommendation, and still
+							// ~30x the request so the recommender has a clear reason to bump it.
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU: resource.MustParse("300m"),
+							},
 						},
 					}}},
 				},
