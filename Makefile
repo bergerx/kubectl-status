@@ -231,6 +231,17 @@ test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
 endif
 
+# Passed through to test-e2e-quick's own invocation below, not test-e2e's: UPDATE_FIXTURES=true
+# (see cmd/e2e_helpers_test.go's assertStdoutMatchesRegexFixture and CONTRIBUTING.md, #833) is a
+# dev-loop tool for regenerating tests/e2e-artifacts/*.regex fixtures from a real render after a
+# template-text change, scoped with the same RUN pattern you're already narrowing test-e2e-quick to
+# -- not something CI's full-suite run ever wants set.
+ifeq ($(UPDATE_FIXTURES),true)
+UPDATE_FIXTURES_ENV := UPDATE_FIXTURES=true
+else
+UPDATE_FIXTURES_ENV :=
+endif
+
 .PHONY: test-e2e-quick
 test-e2e-quick:
 	@if [ -z "$(RUN)" ]; then \
@@ -253,7 +264,7 @@ test-e2e-quick:
 	# sized for the e2e-minikube-up VM (see that target's comment), not worth changing for a
 	# narrower -run since it's still the same cluster taking the load. flock $(E2E_LOCKFILE):
 	# see the comment on the shared-cluster branch of test-e2e above.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=10m -parallel=4 -run '$(RUN)'
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true $(UPDATE_FIXTURES_ENV) flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=10m -parallel=4 -run '$(RUN)'
 
 #--------------------------
 # Test Artifacts
