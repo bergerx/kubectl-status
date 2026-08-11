@@ -68,4 +68,6 @@
         {{- with $t.cpu }} cpu={{ . | cyan }}{{ end }}
         {{- with $t.memory }} mem={{ . | cyan }}{{ end }}
     {{- end }}
+    {{- template "kstatus_if_abnormal" $obj }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}

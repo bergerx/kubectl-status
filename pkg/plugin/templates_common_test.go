@@ -1527,6 +1527,27 @@ func TestGenericHealthSummaryTemplate(t *testing.T) {
 			},
 			want: "",
 		},
+		{
+			// Covers #826-adjacent: Ready alone can look fine while a sibling condition
+			// (Crossplane's Synced, an operator's own Degraded/*Error type, ...) is unhealthy --
+			// see other_unhealthy_conditions, appended after everything above. The raw Ready
+			// condition is repeated here (green, alongside KStatus's own translated "Current"
+			// above) rather than deduplicated away -- other_unhealthy_conditions always leads
+			// with the raw Ready condition when one exists, regardless of what a caller's own
+			// primary-status line already says about it.
+			name: "unhealthy sibling condition surfaces its reason even when Ready is True",
+			obj: map[string]interface{}{
+				"kind":     "Widget",
+				"metadata": map[string]interface{}{"name": "my-widget"},
+				"status": map[string]interface{}{
+					"conditions": []interface{}{
+						map[string]interface{}{"type": "Ready", "status": "True"},
+						map[string]interface{}{"type": "Synced", "status": "False", "reason": "ReconcileError", "message": "cannot apply composed resource"},
+					},
+				},
+			},
+			want: "Current: Resource is Ready, Ready:True, ReconcileError",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1547,6 +1568,159 @@ func TestGenericHealthSummaryTemplate(t *testing.T) {
 	}
 }
 
+// TestOtherUnhealthyConditionsTemplate covers other_unhealthy_conditions directly: the partial
+// every "<Kind>.summary" template (and generic_health_summary) appends after its own
+// Ready/primary-status reporting so a Degraded/Synced-style condition doesn't stay invisible just
+// because the kind's headline state looks fine.
+func TestOtherUnhealthyConditionsTemplate(t *testing.T) {
+	tests := []struct {
+		name       string
+		conditions []interface{}
+		want       string
+		notWant    string
+	}{
+		{
+			name:       "a healthy non-Ready condition alone produces nothing",
+			conditions: []interface{}{map[string]interface{}{"type": "Synced", "status": "True"}},
+			notWant:    "Synced",
+		},
+		{
+			name: "unhealthy Ready is shown first, by reason, however the caller already reported it",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "Ready", "status": "False", "reason": "Blocked"},
+			},
+			want: "Ready:False Blocked",
+		},
+		{
+			name: "healthy Ready is shown too, not just unhealthy",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "Ready", "status": "True"},
+			},
+			want: "Ready:True",
+		},
+		{
+			// "Available" sorts alphabetically before "Ready" (StatusConditions is sorted by
+			// type) -- this confirms Ready is placed first by construction, not by coincidence
+			// of alphabetical order.
+			name: "Ready is placed first even when another condition would sort first alphabetically",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "Available", "status": "False", "reason": "MinimumReplicasUnavailable"},
+				map[string]interface{}{"type": "Ready", "status": "False", "reason": "Blocked"},
+			},
+			want: "Ready:False Blocked, MinimumReplicasUnavailable",
+		},
+		{
+			name: "reason is preferred over message",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "Synced", "status": "False", "reason": "ReconcileError", "message": "cannot apply composed resource"},
+			},
+			want:    "ReconcileError",
+			notWant: "cannot apply composed resource",
+		},
+		{
+			name: "message is used when there is no reason",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "Synced", "status": "False", "message": "cannot apply composed resource"},
+			},
+			want: "cannot apply composed resource",
+		},
+		{
+			name: "Type:Status is the last resort when neither reason nor message is set",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "MemoryPressure", "status": "True"},
+			},
+			want: "MemoryPressure:True",
+		},
+		{
+			name: "multiple unhealthy conditions are comma-joined",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "Available", "status": "False", "reason": "MinimumReplicasUnavailable"},
+				map[string]interface{}{"type": "ReplicaFailure", "status": "True", "reason": "FailedCreate"},
+			},
+			want: "MinimumReplicasUnavailable, FailedCreate",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obj := map[string]interface{}{
+				"status": map[string]interface{}{"conditions": tt.conditions},
+			}
+			got := renderTemplateWithViper(t, "other_unhealthy_conditions", obj, true, viper.New())
+			if tt.want != "" && !strings.Contains(got, tt.want) {
+				t.Errorf("other_unhealthy_conditions got = %q, want it to contain %q", got, tt.want)
+			}
+			if tt.notWant != "" && strings.Contains(got, tt.notWant) {
+				t.Errorf("other_unhealthy_conditions got = %q, should not contain %q", got, tt.notWant)
+			}
+		})
+	}
+}
+
+// TestKstatusIfAbnormalTemplate covers kstatus_if_abnormal directly: unlike
+// generic_health_summary/Ingress.summary/route_health_summary, which already show KStatus
+// unconditionally, the 9 "<Kind>.summary" templates without their own KStatus call use this to add
+// one -- but only when it disagrees with Current, since kstatus.Compute doesn't know every
+// built-in kind (HorizontalPodAutoscaler/VerticalPodAutoscaler aren't in its list and carry no
+// Ready condition) and would otherwise always claim Current regardless of the object's real state.
+func TestKstatusIfAbnormalTemplate(t *testing.T) {
+	tests := []struct {
+		name string
+		obj  map[string]interface{}
+		want string
+	}{
+		{
+			name: "Current status renders nothing",
+			obj: map[string]interface{}{
+				"kind":     "Pod",
+				"metadata": map[string]interface{}{"name": "my-pod"},
+				"status":   map[string]interface{}{"phase": "Succeeded"},
+			},
+			want: "",
+		},
+		{
+			name: "a status kstatus can compute for this kind, other than Current, is shown",
+			obj: map[string]interface{}{
+				"apiVersion": "batch/v1",
+				"kind":       "Job",
+				"metadata":   map[string]interface{}{"name": "my-job"},
+				"status": map[string]interface{}{
+					"conditions": []interface{}{
+						map[string]interface{}{"type": "Failed", "status": "True", "reason": "BackoffLimitExceeded", "message": "Job has reached the specified backoff limit"},
+					},
+				},
+			},
+			want: "Failed",
+		},
+		{
+			name: "HorizontalPodAutoscaler is unknown to kstatus and carries no Ready condition -- always silent, never a false Current",
+			obj: map[string]interface{}{
+				"kind":     "HorizontalPodAutoscaler",
+				"metadata": map[string]interface{}{"name": "my-hpa"},
+				"status": map[string]interface{}{
+					"conditions": []interface{}{
+						map[string]interface{}{"type": "AbleToScale", "status": "False", "reason": "FailedGetScale"},
+					},
+				},
+			},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := renderTemplateWithViper(t, "kstatus_if_abnormal", tt.obj, true, viper.New())
+			if tt.want == "" {
+				if got != "" {
+					t.Errorf("kstatus_if_abnormal got = %q, want empty", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("kstatus_if_abnormal got = %q, want it to contain %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestResourceHealthSummaryTemplate_DispatchesToKnownKind(t *testing.T) {
 	obj := map[string]interface{}{
 		"kind":     "Job",
@@ -1559,6 +1733,38 @@ func TestResourceHealthSummaryTemplate_DispatchesToKnownKind(t *testing.T) {
 	}
 	if !strings.Contains(got, "Succeeded") {
 		t.Errorf("got = %q, want job_health_summary's Succeeded flag, not the generic fallback", got)
+	}
+}
+
+// TestResourceHealthSummaryTemplate_SurfacesOtherUnhealthyConditionsOnKnownKind covers #826-adjacent:
+// other_unhealthy_conditions is wired into workload_health_summary (shared by
+// Deployment/StatefulSet/DaemonSet/ReplicaSet.summary), not just generic_health_summary, so a
+// Deployment's own Available/ReplicaFailure conditions reach the reader through the real dispatch
+// path (resource_health_summary -> Deployment.summary -> workload_health_summary), not just when
+// falling back to the generic template.
+func TestResourceHealthSummaryTemplate_SurfacesOtherUnhealthyConditionsOnKnownKind(t *testing.T) {
+	obj := map[string]interface{}{
+		"kind":     "Deployment",
+		"metadata": map[string]interface{}{"name": "my-deploy", "namespace": "test", "generation": int64(3)},
+		"spec":     map[string]interface{}{"replicas": int64(3)},
+		"status": map[string]interface{}{
+			"observedGeneration": int64(3),
+			"readyReplicas":      int64(1),
+			"conditions": []interface{}{
+				map[string]interface{}{"type": "Available", "status": "False", "reason": "MinimumReplicasUnavailable", "message": "Deployment does not have minimum availability."},
+				map[string]interface{}{"type": "ReplicaFailure", "status": "True", "reason": "FailedCreate", "message": "pods \"my-deploy-\" is forbidden"},
+			},
+		},
+	}
+	got, err := renderObjHealthSummary(t, "resource_health_summary", obj, "test")
+	if err != nil {
+		t.Fatalf("renderTemplate() error = %v", err)
+	}
+	if !strings.Contains(got, "1/3") {
+		t.Errorf("got = %q, want workload_health_summary's own ready count, not just the appended conditions", got)
+	}
+	if !strings.Contains(got, "MinimumReplicasUnavailable, FailedCreate") {
+		t.Errorf("got = %q, want both other-unhealthy-condition reasons appended after the ready count", got)
 	}
 }
 

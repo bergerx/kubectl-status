@@ -162,7 +162,22 @@ custom template for a CRD kind — or a user override of a built-in one — pick
 (`pkg/plugin/renderable.go`) and `templateSet.findSummaryTemplateName`
 (`pkg/plugin/render_engine.go`). Every `"<Kind>.summary"` template takes the same
 `dict "obj" "callerNamespace"(opt)` shape and starts with `resource_ref` then appends
-kind-specific health signals.
+kind-specific health signals, finishing with up to two shared partials (`common.tmpl`), both
+taking the object itself rather than a dict:
+
+- `kstatus_if_abnormal` — kstatus, but only when its `Status` disagrees with `Current`. Only
+  called by the 9 kinds whose own summary doesn't already show kstatus unconditionally
+  (`generic_health_summary`/`Ingress.summary`/`route_health_summary` already do, so they skip
+  this). Gated rather than unconditional because kstatus doesn't know every built-in kind —
+  `HorizontalPodAutoscaler`/`VerticalPodAutoscaler` aren't in its list and carry no `Ready`
+  condition, so it would otherwise always claim `Current` regardless of their real state.
+- `other_unhealthy_conditions` — the object's own `Ready` condition, if it has one, always shown
+  first and color-coded green/red/yellow by its own status rather than gated on health (repeated
+  here even when a caller's own primary-status line or `kstatus_if_abnormal` already reflects it
+  in translated form), followed by every other `status.conditions` entry `isStatusConditionHealthy`
+  calls unhealthy, by reason (falling back to message, then `Type:Status`) — so a sibling
+  condition like Crossplane's `Synced` or an operator's own `Degraded`/`*Error` type isn't
+  invisible just because the kind's own headline status above it looks fine.
 
 | Name | Covers |
 |---|---|
