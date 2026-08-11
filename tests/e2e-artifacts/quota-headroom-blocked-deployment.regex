@@ -4,8 +4,8 @@ Deployment/e2e-quota-headroom -n e2e-quota-headroom, created 1m ago, gen:1 rev:1
     Reconciling: LessReplicas, Replicas: 2/3
   desired:3, existing:2, ready:2, updated:2, available:2, unavailable:1
   Selector: app=e2e-quota-headroom
-    Pod/e2e-quota-headroom-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready
-    Pod/e2e-quota-headroom-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready
+    Pod/e2e-quota-headroom-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready, Ready:True
+    Pod/e2e-quota-headroom-[a-z0-9]+-[a-z0-9]+, created 1m ago Running, 1/1 ready, Ready:True
   Not matched by any Service
   Available:False MinimumReplicasUnavailable, Deployment does not have minimum availability\. for 1m
   Progressing:True ReplicaSetUpdated, ReplicaSet "e2e-quota-headroom-[a-z0-9]+" is progressing\. for 1m

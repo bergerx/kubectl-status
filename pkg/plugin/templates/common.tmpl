@@ -319,6 +319,69 @@
     {{- if and $haveObservedGen $obj.Metadata.generation (ne $observedGen $obj.Metadata.generation) }}
         {{- ", observed gen " }}{{ $observedGen | toString | red | bold }}{{ " != gen " }}{{ $obj.Metadata.generation | toString | red | bold }}
     {{- end }}
+    {{- template "other_unhealthy_conditions" $obj }}
+{{- end }}
+
+{{- define "kstatus_if_abnormal" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Takes the object itself (RenderableObject), not a dict. kstatus.Compute doesn't know
+           every kind -- HorizontalPodAutoscaler and VerticalPodAutoscaler in particular aren't in
+           its built-in list and carry no Ready condition, so it always reports Current for them
+           regardless of their actual state (e.g. HPA's own AbleToScale:False). Showing that
+           unconditionally would read as a real signal it isn't, so this only prints when the
+           status disagrees with Current -- for use by callers that don't already show KStatus
+           unconditionally the way generic_health_summary/Ingress.summary/route_health_summary
+           do. */ -}}
+    {{- with .KStatus }}
+        {{- if ne .Status.String "Current" }}
+            {{- ", " }}{{ .Status.String | colorKeyword }}{{ with .Message }}: {{ . }}{{ end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- define "other_unhealthy_conditions" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Takes the object itself (RenderableObject), not a dict -- called from the tail of every
+           "<Kind>.summary" template (and generic_health_summary) after that template's own
+           Ready/primary-status reporting, so a Degraded/Synced-style condition isn't invisible
+           just because the kind's headline state looks fine. Two parts:
+
+           1. The object's own Ready condition, if it has one, always -- color-coded green/red
+              (yellow for Unknown) rather than gated on health, since a confirmed Ready:True is
+              worth stating just as plainly as a Ready:False is worth flagging. Shown first,
+              ahead of every other condition, even where a caller's own primary-status line (or
+              kstatus_if_abnormal above) already reflects the same Ready condition in translated
+              form -- the raw condition is kept alongside it rather than deduplicated away.
+           2. Every other condition isStatusConditionHealthy calls unhealthy, by reason (falling
+              back to the message, then to "Type:Status" when a condition carries neither, e.g. a
+              bare Node Pressure condition) -- never the full message, which tends to just restate
+              the reason at prose length. */ -}}
+    {{- $obj := . }}
+    {{- $entries := list }}
+    {{- $readyCond := getMatchingItemInMapList (dict "type" "Ready") $obj.StatusConditions }}
+    {{- with $readyCond }}
+        {{- $healthy := isStatusConditionHealthy . }}
+        {{- $unknown := or (eq .status "Unknown") (not .status) }}
+        {{- $line := printf "Ready:%s" (.status | default "Unknown" | toString) }}
+        {{- if $unknown }}
+            {{- $line = $line | yellow | bold }}
+        {{- else if $healthy }}
+            {{- $line = $line | green }}
+        {{- else }}
+            {{- $line = $line | red | bold }}
+        {{- end }}
+        {{- with coalesce .reason .message }}
+            {{- $line = printf "%s %s" $line . }}
+        {{- end }}
+        {{- $entries = $entries | append $line }}
+    {{- end }}
+    {{- range $obj.StatusConditions }}
+        {{- if and (ne .type "Ready") .type (not (isStatusConditionHealthy .)) }}
+            {{- $r := coalesce .reason .message (printf "%s:%s" .type (.status | default "Unknown" | toString)) }}
+            {{- $entries = $entries | append ($r | red | bold) }}
+        {{- end }}
+    {{- end }}
+    {{- with $entries }}, {{ . | join ", " }}{{ end }}
 {{- end }}
 
 {{- define "resource_health_summary" }}

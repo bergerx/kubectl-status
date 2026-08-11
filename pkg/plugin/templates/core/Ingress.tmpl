@@ -103,6 +103,7 @@
         {{- ", " }}{{ "Pending LoadBalancer" | red | bold }}
     {{- end }}
     {{- with $obj.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}
 
 {{- define "load_balancer_ingress" }}
