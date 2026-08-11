@@ -4,7 +4,7 @@ XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
     Reconciling: Creating, Unready resources: blocked-workload, config
   Composition/status-probe, revision CompositionRevision/status-probe-[a-z0-9]+, update policy Automatic
   Composed resources:
-    Deployment/probe-a-blocked, created 1m ago, 0/1 ready, rolling out
+    Deployment/probe-a-blocked, created 1m ago, 0/1 ready, rolling out, InProgress: Available: 0/1, MinimumReplicasUnavailable
     ConfigMap/probe-a-config, created 1m ago, Current: Resource is always ready
   Ready:False Creating, Unready resources: blocked-workload, config for 1m
   Responsive:True WatchCircuitClosed for 1m
