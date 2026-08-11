@@ -1,24 +1,31 @@
 {{- define "Event" }}
   {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
   {{- template "status_summary_line" . }}
-  {{ template "event" .Unstructured.Object }}
+  {{ template "event" (dict "event" .Unstructured.Object "showInvolvedObject" true) }}
 {{- end }}
 
 {{- define "event" }}
-    {{- list .reportingInstance .source.host .reportingComponent .source.component .source.fieldPath | compact | uniq | join "," | bold }}
-    {{- if eq .type "Warning" }} {{ .reason | red | bold }}{{ else }} {{ .reason | bold }}{{ end -}}
-    {{- with .action}} {{ . }}{{end}}
-    {{- with .involvedObject }} involving {{ "" }}
-        {{- with .kind }}{{. | bold }}/{{ end }}
-        {{- with .name }}{{ . }}{{ end }}
-        {{- with .fieldPath }}[{{ . }}]{{ end }}
-        {{- with .namespace }} (in {{ . }}){{ end }}
+    {{- /* Expects dict "event" (one raw Event object's fields) "showInvolvedObject" (optional bool).
+           Set only for a standalone Event resource (`k get events`), where the involved object
+           isn't already implied by the surrounding output; left unset when listing events nested
+           under another resource's own Events: section (`k get pods`, etc), where repeating
+           "involving Kind/name" would just echo the resource already on screen -- see #829. When
+           shown, the involved object is rendered via resource_ref rather than by hand so it gets
+           the same Kind/name/-n namespace formatting as every other cross-reference. */ -}}
+    {{- $e := .event }}
+    {{- list $e.reportingInstance $e.source.host $e.reportingComponent $e.source.component $e.source.fieldPath | compact | uniq | join "," | bold }}
+    {{- if eq $e.type "Warning" }} {{ $e.reason | red | bold }}{{ else }} {{ $e.reason | bold }}{{ end -}}
+    {{- with $e.action}} {{ . }}{{end}}
+    {{- if .showInvolvedObject }}
+        {{- with $e.involvedObject }} involving {{ template "resource_ref" (dict "kind" .kind "name" .name "namespace" .namespace) }}
+            {{- with .fieldPath }}[{{ . }}]{{ end }}
+        {{- end }}
     {{- end }}
-    {{- with .lastTimestamp }} {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- if gt (.count | int) 1 -}}
-        {{- if .firstTimestamp }} (x{{ .count }} over {{ .firstTimestamp | colorAgo }})
-        {{- else }} (x{{ .count }})
+    {{- with $e.lastTimestamp }} {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- if gt ($e.count | int) 1 -}}
+        {{- if $e.firstTimestamp }} (x{{ $e.count }} over {{ $e.firstTimestamp | colorAgo }})
+        {{- else }} (x{{ $e.count }})
         {{- end -}}
     {{- end -}}
-    {{- " " }}{{ .message }}
+    {{- " " }}{{ $e.message }}
 {{- end -}}
