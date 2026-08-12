@@ -9,5 +9,5 @@ VerticalPodAutoscaler/vpa-burner -n e2e-vpa, created 1m ago, gen:1
     burner: cpu=\d+m \(min \d+m, max \d+m\), mem=\d+Mi \(min \d+Mi, max \d+Mi\)
   RecommendationProvided:True for 1m
   Events:
-    vpa-updater EvictedPod involving VerticalPodAutoscaler/vpa-burner \(in e2e-vpa\) 1m ago VPA Updater evicted Pod vpa-burner-[a-z0-9]+-[a-z0-9]+ to apply resource recommendation\.
+    vpa-updater EvictedPod 1m ago VPA Updater evicted Pod vpa-burner-[a-z0-9]+-[a-z0-9]+ to apply resource recommendation\.
 \z

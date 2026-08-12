@@ -11,6 +11,7 @@
     {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with $obj.Spec.hostnames }}, {{ join ", " . | cyan }}{{ end }}
     {{- with $obj.KStatus }}, {{ .Status.String | colorKeyword }}{{ end }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}
 
 {{- define "gwapi_backend_ref" }}
