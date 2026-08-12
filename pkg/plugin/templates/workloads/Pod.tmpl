@@ -60,6 +60,7 @@
     {{- template "pod_ephemeral_containers" (dict "pod" . "podPullSecretsBroken" $podPullSecretsBroken) }}
     {{- template "pod_volumes" . }}
     {{- template "pod_storage_locality" . }}
+    {{- template "pod_device_claims" . }}
     {{- template "matching_services" (dict "ctx" . "namespace" .Namespace "svcs" (.KubeGetServicesMatchingPod .Namespace .Name)) }}
     {{- template "matching_pdbs" (dict "ctx" . "namespace" .Namespace "labels" .Labels) }}
     {{- template "matching_network_policies" (dict "ctx" . "namespace" .Namespace "labels" .Labels) }}
@@ -648,6 +649,48 @@
     {{- end }}
 {{- end }}
 
+{{- define "pod_device_claims" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Dynamic Resource Allocation's counterpart to pod_volumes/pod_storage_locality above,
+           placed right after them for the same reason those two sit together: spec.resourceClaims
+           plays the volumes-with-a-persistentVolumeClaim role, resolving either directly (like a
+           volume naming an existing PVC) or, for a resourceClaimTemplateName entry, to a
+           generated per-Pod ResourceClaim via status.resourceClaimStatuses (the DRA counterpart
+           of volumeClaimTemplates). Reuses managed_resource_line for the per-claim line: a
+           compact ResourceClaim.summary by default, the full object under --deep, and "missing"
+           when a direct reference doesn't resolve -- the same three-mode contract pod_volumes
+           gets from PersistentVolumeClaim via storageclass_summary/deep inline. A
+           resourceClaimTemplateName entry with no generated claim yet is a distinct, non-error
+           state (the claim is simply not created yet), so it's called out separately rather than
+           reported as "missing". */ -}}
+    {{- with .Spec.resourceClaims }}
+        {{- $pod := $ }}
+        {{- $statuses := $pod.Status.resourceClaimStatuses | default list }}
+        {{- $entries := list }}
+        {{- range . }}
+            {{- $podClaim := . }}
+            {{- $claimName := $podClaim.resourceClaimName }}
+            {{- if not $claimName }}
+                {{- $entry := $statuses | getMatchingItemInMapList (dict "name" $podClaim.name) }}
+                {{- $claimName = $entry.resourceClaimName }}
+            {{- end }}
+            {{- $line := "" }}
+            {{- if not $claimName }}
+                {{- $line = printf "%s: %s" ($podClaim.name | bold) ("not yet generated" | yellow) }}
+            {{- else }}
+                {{- $line = printf "%s: %s" ($podClaim.name | bold) ($pod.Include "managed_resource_line" (dict "ctx" $pod "kind" "ResourceClaim" "name" $claimName "namespace" $pod.Namespace)) }}
+            {{- end }}
+            {{- $entries = $entries | append $line }}
+        {{- end }}
+        {{- if eq (len $entries) 1 }}
+            {{- "Device claims:" | bold | nindent 2 }} {{ index $entries 0 }}
+        {{- else }}
+            {{- "Device claims:" | bold | nindent 2 }}
+            {{- range $entries }}{{ . | nindent 4 }}{{ end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
 {{- define "pod_condition_arrow_label" }}
     {{- /* args: dict "condition" <condition map> "label" <e.g. "PodScheduled">
            Always shows the raw "Label:Status" pair (e.g. "PodScheduled:False") rather than a
@@ -839,6 +882,13 @@
     {{- if .containerStatus.state.running }}{{ if .containerStatus.ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
     {{- if gt (.containerStatus.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.containerStatus.restartCount | int) | yellow | bold }}{{ end }}
     {{- if or .defaultContainer .defaultLogsContainer }} (default kubectl container){{ end }}
+    {{- /* Which of the Pod's spec.resourceClaims this container consumes -- inline rather than its
+           own labeled block, since pod_device_claims right below already prints a "Device claims:"
+           section resolving each one; a second identically-labeled block here would just repeat
+           the same claim name for the overwhelmingly common one-container-one-claim case. */ -}}
+    {{- with .containerSpec.resources.claims }}
+        {{- ", claims: " }}{{ range $i, $c := . }}{{ if $i }}, {{ end }}{{ $c.name }}{{ with $c.request }}[{{ . }}]{{ end }}{{ end }}
+    {{- end }}
     {{- with .containerStats }}
         {{- with .logs }}
             {{- if .usedBytes }}
@@ -937,6 +987,24 @@
             {{- "Volume Mounts:" | nindent 2 }}
             {{- range . }}
                 {{- .mountPath | bold | nindent 4 }} from {{ .name }}{{ if .readOnly }} (ro){{ end }}{{ with .subPath }}, subPath: {{ . }}{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- /* kubelet-reported per-device health for whatever this container was actually allocated
+           -- shown only when a device has fallen out of "Healthy", the same "silent unless
+           abnormal" bias pod_conditions_summary already applies to condition rendering. There's
+           no message field on ResourceHealth to show alongside the state. */ -}}
+    {{- range .containerStatus.allocatedResourcesStatus }}
+        {{- $resName := .name }}
+        {{- range .resources | default list }}
+            {{- $health := .health | default "Unknown" }}
+            {{- if ne $health "Healthy" }}
+                {{- $label := printf "device %s (%s): %s" $resName .resourceID $health }}
+                {{- if eq $health "Unknown" }}
+                    {{- $label | yellow | bold | nindent 2 }}
+                {{- else }}
+                    {{- $label | red | bold | nindent 2 }}
+                {{- end }}
             {{- end }}
         {{- end }}
     {{- end }}

@@ -1,0 +1,39 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: resourceclaim-rich-spec
+  namespace: default
+  creationTimestamp: "2026-08-01T09:00:00Z"
+spec:
+  devices:
+    requests:
+      - name: gpu
+        firstAvailable:
+          - name: high-mem
+            deviceClassName: nvidia-gpu
+            count: 2
+            adminAccess: true
+            selectors:
+              - cel:
+                  expression: 'device.attributes["nvidia.com"].memory.compareTo(quantity("80Gi")) >= 0'
+              - cel:
+                  expression: 'device.driver == "gpu.nvidia.com"'
+            tolerations:
+              - key: maintenance
+                operator: Equal
+                value: "true"
+                effect: NoSchedule
+            capacity:
+              requests:
+                memory: 40Gi
+          - name: any-gpu
+            deviceClassName: nvidia-gpu
+      - name: net
+        exactly:
+          deviceClassName: fast-nic
+          allocationMode: All
+    constraints:
+      - matchAttribute: numa.example.com/node
+        requests:
+          - gpu
+      - distinctAttribute: pci.example.com/bus

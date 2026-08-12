@@ -1,0 +1,45 @@
+{{- define "DeviceClass" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: resource.k8s.io/v1, Kind=DeviceClass (cluster-scoped) */ -}}
+    {{- /* The DRA counterpart of a StorageClass: a reusable, admin/driver-owned device category a
+           ResourceClaim request selects by name, the same role StorageClass plays for a PVC's
+           storageClassName. See storage/StorageClass.tmpl for the analogous rendering. CEL
+           selectors are shown verbatim, never evaluated or "explained" -- replicating scheduler
+           CEL semantics here would be a second implementation to keep in sync with the real one
+           and would eventually disagree with it. config (opaque per-driver JSON parameters) is
+           deliberately never rendered for the same reason StorageClass never dumps arbitrary
+           provisioner-specific blobs it can't interpret generically -- only which drivers have
+           config set, not what the config says. kstatus_summary is omitted: DeviceClass has no
+           status subresource at all, so it would always print the same uninformative "Current:
+           Resource is current" (see CONVENTIONS.md's § Section order, CronJob example). */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.selectors }}
+        {{- if eq (len .) 1 }}
+            {{- "Selects:" | bold | nindent 2 }} {{ (index . 0).cel.expression | cyan }}
+        {{- else }}
+            {{- "Selects:" | bold | nindent 2 }}
+            {{- range . }}
+                {{- with .cel }}{{ .expression | cyan | nindent 4 }}{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with .Spec.extendedResourceName }}
+        {{- "Extended resource:" | bold | nindent 2 }} {{ . | cyan }}
+    {{- end }}
+    {{- with .Spec.config }}
+        {{- $drivers := list }}
+        {{- range . }}
+            {{- with .opaque.driver }}
+                {{- if not ($drivers | has .) }}{{ $drivers = $drivers | append . }}{{ end }}
+            {{- end }}
+        {{- end }}
+        {{- with $drivers }}
+            {{- "Driver config set for:" | bold | nindent 2 }} {{ join ", " . | cyan }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

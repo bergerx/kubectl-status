@@ -1,0 +1,10 @@
+
+ResourceSlice/resourceslice-rich-spec, created 1m ago
+  Driver: gpu.nvidia.com, pool rich-pool (gen 3), 2 slices in this pool, per-device node selection
+  Devices: 2
+    gpu-0 (node worker-1)
+    gpu-1 (all nodes)
+  1 of 2 devices tainted
+  1 of 2 devices consume shared counters
+  1 of 2 devices allow multiple allocations
+  Shared counter sets: power-budget

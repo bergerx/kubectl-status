@@ -1,0 +1,15 @@
+
+ResourceClaim/resourceclaim-rich-spec -n default, created 1m ago
+  Requests:
+    gpu:
+        alternative high-mem DeviceClass/nvidia-gpu (count: 2) adminAccess
+          device.attributes["nvidia.com"].memory.compareTo(quantity("80Gi")) >= 0
+          device.driver == "gpu.nvidia.com"
+          capacity[memory:40Gi]
+          tolerates[maintenance=true:NoSchedule]
+        alternative any-gpu DeviceClass/nvidia-gpu
+    net: DeviceClass/fast-nic (all matching devices)
+  Constraints:
+    same numa.example.com/node across gpu
+    distinct pci.example.com/bus across all requests
+  Not allocated: dependent Pods cannot schedule
