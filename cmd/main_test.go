@@ -50,4 +50,7 @@ func TestE2EParallel(t *testing.T) {
 	runFluxSubtests(t, hackOpts, clientset)
 	runIstioSubtests(t, hackOpts, clientset)
 	runKyvernoSubtests(t, hackOpts, clientset)
+	runStorageSubtests(t, hackOpts, clientset, dynamicClient)
+	runCrossplaneSubtests(t, hackOpts, clientset)
+	runHelmReleaseSubtests(t, hackOpts, clientset)
 }

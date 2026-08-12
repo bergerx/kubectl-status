@@ -469,6 +469,42 @@ instead with the relevant `--include-*` flag (`--include-events=false`,
 `--include-managed-fields=false`, etc.), or match it with a tolerant pattern, and keep the fixture
 anchored and whole.
 
+#### Regenerating fixtures with `UPDATE_FIXTURES=true`
+
+A template-text change that touches a shared partial (e.g. `common.tmpl`) can break the same way
+across many live fixtures at once — #829 broke 18 `tests/e2e-artifacts/*.regex` subtests by adding a
+single `Ready:` line to a partial ~15 templates share. Hand-transcribing each failure's `Error:` diff
+from a `make test-e2e` run is exactly the toil that let stale fixtures ship in that PR. `UPDATE_FIXTURES=true`
+regenerates a mismatching fixture from the actual render instead:
+
+```bash
+make test-e2e-quick RUN='TestE2EParallel/podscheduling' UPDATE_FIXTURES=true
+git diff tests/e2e-artifacts/
+```
+
+Narrow `RUN` to the affected subtests the same way you would for a normal `test-e2e-quick` dev-loop
+run (see above) — this isn't a substitute for `make test-e2e`'s full-suite pass/fail check, it's a
+tool for producing the fixture diff you'd otherwise write by hand.
+
+These fixtures are regexes with deliberate wildcards (`\d+`, `\S+`, `[a-z0-9]+`, ...) for values that
+vary between runs — a VPA CPU recommendation, a generated Pod name suffix, a PV name. A plain
+Go `-update`-flag golden-file dump (exact string equality) doesn't apply here: naively re-escaping a
+live render's actual `cpu=127m` back into the fixture would freeze that literal value, breaking (or
+worse, flakily passing) the very next run against a different recommendation. `UPDATE_FIXTURES=true`
+instead reconciles the mismatch segment by segment — every wildcard already in the fixture is kept
+byte-for-byte, and only the literal text around it is updated — so an update touching one template's
+output produces a small, reviewable diff instead of a full-file rewrite that hides which lines
+actually changed (see `spliceRegexFixture`'s doc comment in `cmd/e2e_helpers_test.go` for exactly how
+it decides what changed vs. what's still a wildcard).
+
+**Review the diff before committing.** This is a heuristic, not a guarantee: it's deliberately
+conservative and fails the subtest instead of guessing when a mismatch looks like more than a
+literal-text change (a wildcard's own pattern no longer fits, or too much of the fixture would need
+inferring at once) — but a fixture it *does* regenerate can still occasionally choose a plausible-but-
+wrong split, most likely when a change lands right next to an existing wildcard. Skim every changed
+fixture for a wildcard that got narrowed, widened, or moved somewhere it doesn't belong before
+committing; a wildcard is not something to blindly accept an update to.
+
 Pass `--include-events=false --include-managed-fields=false` on every e2e `cmdTest` unless the
 subtest is specifically exercising events or managed fields. Both sections list real cluster data
 whose relative order isn't guaranteed to be stable across runs — Events by nature, and
