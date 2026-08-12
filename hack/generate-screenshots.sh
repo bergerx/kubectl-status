@@ -253,7 +253,7 @@ runner="${tmp_dir}/run.sh"
 cat > "${runner}" <<EOF
 #!/usr/bin/env bash
 set -e
-echo "\$ kubectl-status \$*"
+echo "\$ kubectl status \$*"
 exec "${bin}" "\$@" --color always
 EOF
 chmod +x "${runner}"
