@@ -5,6 +5,8 @@ release:
     owner: bergerx
     name: kubectl-status
   replace_existing_artifacts: true
+changelog:
+  use: github-native
 before:
   hooks:
     - go generate ./...
