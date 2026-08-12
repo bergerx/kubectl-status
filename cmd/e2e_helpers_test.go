@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -160,12 +161,379 @@ func nodeNameModifier(stdout string) string {
 // anchored with \A...\z (see CONTRIBUTING.md), and are matched in (?ms) mode so `.` spans the
 // newlines between output lines. Subtests that assert on stdout beyond the fixture match (an
 // extra NotContains sweep, say) call this directly; the rest go through cmdTest.stdoutRegexPath.
+//
+// With UPDATE_FIXTURES=true (see CONTRIBUTING.md), a mismatch regenerates the fixture in place
+// instead of failing -- see maybeUpdateRegexFixture.
 func assertStdoutMatchesRegexFixture(t *testing.T, stdout, fixture string) {
 	t.Helper()
 	outFile := path.Join("..", "tests", fixture)
 	regexBytes, err := os.ReadFile(outFile)
 	assert.NoErrorf(t, err, "failed to read test artifact file: %s", outFile)
-	assert.Regexp(t, `(?ms)`+string(regexBytes), stdout)
+	pattern := string(regexBytes)
+	if maybeUpdateRegexFixture(t, outFile, pattern, stdout) {
+		return
+	}
+	assert.Regexp(t, `(?ms)`+pattern, stdout)
+}
+
+// maybeUpdateRegexFixture is the UPDATE_FIXTURES=true half of assertStdoutMatchesRegexFixture: if
+// the env var isn't set, or stdout already matches the fixture, it's a no-op (false, meaning "the
+// caller's normal assertion should still run" -- cheap, and keeps a green run's behavior identical
+// to today whether or not UPDATE_FIXTURES is set). Otherwise it regenerates outFile from stdout via
+// spliceRegexFixture and returns true, having either written the update or, if the mismatch is more
+// than a literal-text change, failed the test with a message explaining that this fixture needs a
+// hand edit instead. See #833.
+func maybeUpdateRegexFixture(t *testing.T, outFile, pattern, stdout string) bool {
+	t.Helper()
+	if os.Getenv("UPDATE_FIXTURES") != "true" {
+		return false
+	}
+	if matched, err := regexp.MatchString(`(?ms)`+pattern, stdout); err == nil && matched {
+		return false
+	}
+	updated, ok := spliceRegexFixture(pattern, stdout)
+	if !ok {
+		t.Fatalf("UPDATE_FIXTURES=true: %s no longer matches the actual render, and the mismatch "+
+			"is more than a literal-text change (a wildcard span itself needs updating, or the "+
+			"output gained/lost a whole matched section) -- update this fixture by hand instead", outFile)
+		return true
+	}
+	require.NoErrorf(t, os.WriteFile(outFile, []byte(updated), 0o644), "failed to write updated fixture: %s", outFile)
+	t.Logf("UPDATE_FIXTURES=true: regenerated %s from the actual render -- review the diff (wildcards "+
+		"should be untouched; only literal spans should change) before committing", outFile)
+	return true
+}
+
+// fixtureSegment is one token of a regex fixture, split by parseFixtureSegments into either a run
+// of literal output text (produced by, and reversed from, regexp.QuoteMeta) or a run of regex
+// syntax -- a wildcard (`\d+`, `[a-z0-9]+`, ...), an anchor (`\A`, `\z`), or anything else the
+// fixture author wrote by hand. text holds the literal characters for a literal segment, or the raw
+// regex source for a non-literal one.
+type fixtureSegment struct {
+	literal bool
+	text    string
+}
+
+// regexSpecialBytes are the characters regexp.QuoteMeta escapes -- see that function's source. A
+// backslash followed by one of these in a fixture is therefore always an escaped literal character
+// QuoteMeta produced (`\.` for a literal dot, etc.), never a regex construct: QuoteMeta never
+// escapes anything else, so `\d`, `\s`, `\A` and friends can't be its output, and unambiguously mark
+// the start of hand-written regex syntax instead.
+const regexSpecialBytes = `\.+*?()|[]{}^$`
+
+// parseFixtureSegments splits a fixture's regex source into alternating literal/wildcard segments
+// (see fixtureSegment), preserving order. It's the inverse of how these fixtures are written by
+// hand: literal output text goes through regexp.QuoteMeta (an escaped special char decodes back to
+// one literal byte here), and everything else -- any special char not immediately preceded by its
+// own escaping backslash -- is regex syntax, copied through verbatim into its own segment.
+//
+// Groups and character classes (`(...)`, `[...]`) nest, e.g.
+// node-metrics-multi-namespace.regex's `(?: \([^)]*(?:nearing|TRIPPED)[^)]*\))?` -- so once one
+// opens, every byte up to its matching close is kept as opaque regex syntax (never reinterpreted as
+// escaped-literal), tracked via a stack rather than a flat depth counter: a `)` or `]` only closes
+// the *kind* of bracket it matches, so a literal `)` inside a `[^)]*` character class (as in that
+// same fixture) doesn't prematurely pop an enclosing `(...)` group.
+func parseFixtureSegments(pattern string) []fixtureSegment {
+	var segments []fixtureSegment
+	var lit, wild strings.Builder
+	flushLit := func() {
+		if lit.Len() > 0 {
+			segments = append(segments, fixtureSegment{literal: true, text: lit.String()})
+			lit.Reset()
+		}
+	}
+	flushWild := func() {
+		if wild.Len() > 0 {
+			segments = append(segments, fixtureSegment{literal: false, text: wild.String()})
+			wild.Reset()
+		}
+	}
+	var stack []byte // open '(' / '[' bytes not yet closed, innermost last
+	for i := 0; i < len(pattern); {
+		c := pattern[i]
+		if n := len(stack); n > 0 {
+			// Inside a group or character class: copy through raw, only watching for the
+			// escapes/nesting/closer relevant to whichever kind of bracket is innermost.
+			if c == '\\' && i+1 < len(pattern) {
+				wild.WriteByte(c)
+				wild.WriteByte(pattern[i+1])
+				i += 2
+				continue
+			}
+			switch {
+			case stack[n-1] == '[' && c == ']':
+				stack = stack[:n-1]
+			case stack[n-1] == '(' && c == '(':
+				stack = append(stack, '(')
+			case stack[n-1] == '(' && c == '[':
+				stack = append(stack, '[')
+			case stack[n-1] == '(' && c == ')':
+				stack = stack[:n-1]
+			}
+			wild.WriteByte(c)
+			i++
+			continue
+		}
+		if c == '\\' && i+1 < len(pattern) {
+			next := pattern[i+1]
+			if strings.IndexByte(regexSpecialBytes, next) >= 0 {
+				// QuoteMeta's escaping of one literal special byte, e.g. `\.` for a literal dot.
+				flushWild()
+				lit.WriteByte(next)
+				i += 2
+				continue
+			}
+			// Backslash followed by a non-special byte is never QuoteMeta's output (it only ever
+			// escapes bytes in regexSpecialBytes) -- so this is a two-byte regex construct written
+			// by hand, e.g. `\A`, `\z`, `\d`, `\S`. Keep both bytes together as one wildcard token.
+			flushLit()
+			wild.WriteByte(c)
+			wild.WriteByte(next)
+			i += 2
+			continue
+		}
+		if c == '(' || c == '[' {
+			flushLit()
+			stack = append(stack, c)
+			wild.WriteByte(c)
+			i++
+			continue
+		}
+		if strings.IndexByte(regexSpecialBytes, c) >= 0 {
+			flushLit()
+			wild.WriteByte(c)
+			i++
+			continue
+		}
+		flushWild()
+		lit.WriteByte(c)
+		i++
+	}
+	flushLit()
+	flushWild()
+	return segments
+}
+
+// spliceRegexFixture reconciles a fixture's regex source against the actual rendered stdout that no
+// longer matches it, returning the new fixture source and true -- or ("", false) if the mismatch
+// can't be explained as pure literal-text changes. Every wildcard segment (see fixtureSegment) is
+// kept byte-for-byte as written; only literal segments are candidates for a new value. This is the
+// design constraint from #833: a fixture like vpa-workload-reverse-match.regex pins `cpu=\d+m`
+// deliberately loosely, and naively re-escaping a live render's actual `cpu=127m` back into the
+// fixture would freeze that value, breaking (or flakily passing) the very next run.
+//
+// A single regex built from the whole segment list (every literal segment turned into one big
+// capture group) was tried first and discarded: with more than one occurrence of a generic wildcard
+// like `[a-z0-9]+` in the same fixture, both greedy and lazy captures let the backtracker find *a*
+// globally valid split rather than the one that visibly corresponds to each position -- e.g. a
+// `[a-z0-9]+` two segments later than intended matching into "Deployment" (a real failure seen while
+// developing this). Instead, resolveFixtureSegments walks the segments in order, anchoring each
+// wildcard match (`\A(?:...)`) to exactly the position the previous segment ended at, and for each
+// literal segment preferring the candidate end position where its *old* text still occurs verbatim
+// immediately followed by the next wildcard match -- that's the common case (a template change
+// touches one or a few segments; every other segment in the fixture is untouched) and has no
+// ambiguity, because the check is local to one segment instead of the whole fixture. Only where the
+// old text is gone does it fall back to wherever the next wildcard's pattern matches at all, which
+// can occasionally undershoot into a coincidental early match (e.g. a stray digit in unrelated text
+// before the number a `\d+` was actually meant to pin) -- so on failure to fully resolve the rest of
+// the fixture from a given candidate, it backtracks and tries the next one, the same way a regex
+// backtracks over an ambiguous quantifier. A segment whose resolved text matches its old text is
+// written back byte-for-byte, so an unrelated fixture (or an unrelated span within one) reruns
+// identical and produces no diff. If no combination of candidates resolves the whole fixture --
+// typically because a wildcard's own pattern no longer fits what's now there -- this returns false
+// rather than guessing, so the caller fails loudly instead of writing something unreviewable.
+func spliceRegexFixture(pattern, stdout string) (string, bool) {
+	segments := parseFixtureSegments(pattern)
+	litCount := 0
+	for _, seg := range segments {
+		if seg.literal {
+			litCount++
+		}
+	}
+	if litCount == 0 {
+		return "", false
+	}
+	wildRe := make([]*regexp.Regexp, len(segments))
+	for i, seg := range segments {
+		if seg.literal {
+			continue
+		}
+		re, err := regexp.Compile(`(?ms)\A(?:` + seg.text + `)`)
+		if err != nil {
+			return "", false
+		}
+		wildRe[i] = re
+	}
+	newText := make([]string, len(segments))
+	if !resolveFixtureSegments(segments, wildRe, 0, stdout, 0, newText, 0) {
+		return "", false
+	}
+	var out strings.Builder
+	for i, seg := range segments {
+		if seg.literal {
+			out.WriteString(regexp.QuoteMeta(newText[i]))
+		} else {
+			out.WriteString(seg.text)
+		}
+	}
+	return out.String(), true
+}
+
+// maxFallbackSegments caps how many literal segments in one fixture may be resolved via
+// literalEndCandidates' ambiguous fallback branch (its old text is gone, so the split is inferred
+// rather than confirmed) before resolveFixtureSegments gives up on the whole fixture. Set to 1: the
+// motivating case (see #833) is one inserted or edited clause -- e.g. #829's single new `Ready:`
+// line -- and once matching depends on guessing a second unrelated span too, the remaining
+// wildcards usually have enough freedom (see the "cpu=unknown" example on literalEndSlack) to chain
+// low-confidence guesses into a technically-resolving but nonsensical result instead of failing.
+// Verified against both directions while developing this: a real single-clause insertion still
+// resolves cleanly under the cap, and an actually-broken wildcard (nothing sensible within
+// literalEndSlack) correctly exhausts every candidate and fails instead of quietly cascading into a
+// full-fixture guess. Failing loudly past this point is the point (see spliceRegexFixture's doc
+// comment).
+const maxFallbackSegments = 1
+
+// resolveFixtureSegments backtracks over segments[i:], matching each against stdout starting at pos
+// and filling newText for every literal segment, returning whether some combination of candidate
+// splits -- using at most maxFallbackSegments ambiguous ones -- resolves the rest of the fixture
+// exactly to the end of stdout. See spliceRegexFixture's doc comment for the strategy and why this
+// needs to backtrack at all.
+func resolveFixtureSegments(segments []fixtureSegment, wildRe []*regexp.Regexp, i int, stdout string, pos int, newText []string, fallbacksUsed int) bool {
+	if i == len(segments) {
+		return pos == len(stdout)
+	}
+	seg := segments[i]
+	if !seg.literal {
+		loc := wildRe[i].FindStringIndex(stdout[pos:])
+		if loc == nil {
+			return false
+		}
+		return resolveFixtureSegments(segments, wildRe, i+1, stdout, pos+loc[1], newText, fallbacksUsed)
+	}
+	if i+1 == len(segments) {
+		// Last segment: where it ends isn't ambiguous (there's nothing after it to search for), but
+		// whether its content actually changed still counts against maxFallbackSegments the same as
+		// any other segment resolved via the fallback branch -- otherwise a fixture broken badly
+		// enough to need every other segment's fallback budget could still "resolve" by dumping
+		// everything unmatched into this one for free.
+		newText[i] = stdout[pos:]
+		used := fallbacksUsed
+		if newText[i] != seg.text {
+			used++
+			if used > maxFallbackSegments {
+				return false
+			}
+		}
+		return resolveFixtureSegments(segments, wildRe, i+1, stdout, len(stdout), newText, used)
+	}
+	for _, c := range literalEndCandidates(stdout, pos, seg.text, wildRe[i+1]) {
+		used := fallbacksUsed
+		if !c.fromOldText {
+			used++
+			if used > maxFallbackSegments {
+				continue
+			}
+		}
+		newText[i] = stdout[pos:c.end]
+		if resolveFixtureSegments(segments, wildRe, i+1, stdout, c.end, newText, used) {
+			return true
+		}
+	}
+	return false
+}
+
+// literalEndSlack bounds how far past a literal segment's old length the fallback branch of
+// literalEndCandidates will search for the next wildcard. Without a bound, a wildcard whose pattern
+// genuinely no longer fits (see spliceRegexFixture's "cpu=unknown" example) can still find some
+// distant, coincidental match of its own pattern later in the fixture -- e.g. a `\d+` two segments
+// away skipping ahead to reuse a digit meant for an entirely different field -- and let the rest of
+// the fixture technically resolve around it. Real template-text edits this mode is meant to handle
+// (see #833) insert or change at most a clause or two, not restructure the whole render, so capping
+// the search keeps a truly-broken wildcard failing loudly (spliceRegexFixture returns false) instead
+// of resolving to a technically-valid but unreviewable guess.
+const literalEndSlack = 500
+
+// literalEndCandidate is one candidate end position for a literal segment (see
+// literalEndCandidates), tagged with whether it came from the segment's old text still being
+// present verbatim (high-confidence -- nothing here actually changed) or from the ambiguous
+// wildcard-only fallback (this segment's text did change, and the split is inferred rather than
+// confirmed). resolveFixtureSegments uses the tag to enforce maxFallbackSegments.
+type literalEndCandidate struct {
+	end         int
+	fromOldText bool
+}
+
+// literalEndCandidates returns candidate end positions for the literal segment starting at pos,
+// most likely first: every occurrence of the segment's own old text that's immediately followed by a
+// match of the next wildcard (the common case -- an unrelated segment changed elsewhere in the
+// fixture), followed by every other position, within literalEndSlack bytes of the old segment's own
+// length, where just the next wildcard matches on its own (this segment's own text changed). The
+// second group is the ambiguous case a plain "leftmost" or "rightmost" search both get wrong on real
+// fixtures: fixed text ahead of a live wildcard value routinely contains incidental digits/letters of
+// its own (e.g. `testHackOpts`' frozen `1m ago` duration ahead of a live `\d+` CPU value two segments
+// later, which a nearest-first search latches onto instead), while rightmost-first over-corrects and
+// lets the *following* wildcard's own candidates degenerate to matching a single trailing character
+// whenever a longer stand-in happens to still let the rest of the fixture resolve (also observed
+// while developing this). So this group is instead ranked by how much of oldText's trailing context
+// (the text immediately before where the wildcard used to start) is still present immediately before
+// each candidate -- e.g. candidates right after "...cpu=" outscore ones after "...mem=51" for an
+// oldText ending in "...cpu=", because "cpu=" itself is still there right before the former and isn't
+// before the latter. Ties fall back to nearest first. resolveFixtureSegments tries the full list in
+// the order returned here, backtracking past a candidate that doesn't pan out instead of committing
+// to it unconditionally.
+func literalEndCandidates(stdout string, pos int, oldText string, nextWild *regexp.Regexp) []literalEndCandidate {
+	seen := map[int]bool{}
+	var candidates []literalEndCandidate
+	add := func(end int, fromOldText bool) {
+		if !seen[end] {
+			seen[end] = true
+			candidates = append(candidates, literalEndCandidate{end: end, fromOldText: fromOldText})
+		}
+	}
+	for search := pos; search <= len(stdout); {
+		rel := strings.Index(stdout[search:], oldText)
+		if rel < 0 {
+			break
+		}
+		end := search + rel + len(oldText)
+		if nextWild.FindStringIndex(stdout[end:]) != nil {
+			add(end, true)
+		}
+		search = search + rel + 1
+	}
+	bound := pos + len(oldText) + literalEndSlack
+	if bound > len(stdout) {
+		bound = len(stdout)
+	}
+	type scored struct {
+		end     int
+		overlap int
+	}
+	var fallback []scored
+	for search := pos; search <= bound; search++ {
+		if nextWild.FindStringIndex(stdout[search:]) != nil {
+			fallback = append(fallback, scored{end: search, overlap: suffixOverlapLen(oldText, stdout[pos:search])})
+		}
+	}
+	sort.SliceStable(fallback, func(a, b int) bool {
+		if fallback[a].overlap != fallback[b].overlap {
+			return fallback[a].overlap > fallback[b].overlap
+		}
+		return fallback[a].end < fallback[b].end
+	})
+	for _, s := range fallback {
+		add(s.end, false)
+	}
+	return candidates
+}
+
+// suffixOverlapLen returns the length of the longest suffix a and b have in common.
+func suffixOverlapLen(a, b string) int {
+	n := 0
+	for n < len(a) && n < len(b) && a[len(a)-1-n] == b[len(b)-1-n] {
+		n++
+	}
+	return n
 }
 
 // execute runs the command once, or -- when retryStdoutRegexFor is set -- until its stdout matches
