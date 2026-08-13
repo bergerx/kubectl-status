@@ -193,6 +193,7 @@ taking the object itself rather than a dict:
 | `PodDisruptionBudget.summary` (`PodDisruptionBudget.tmpl`) | A PodDisruptionBudget: min/max available, current budget state. |
 | `HorizontalPodAutoscaler.summary` (`HorizontalPodAutoscaler.tmpl`) | A HorizontalPodAutoscaler: current/desired vs. min-max range. |
 | `VerticalPodAutoscaler.summary` (`VerticalPodAutoscaler.tmpl`) | A VerticalPodAutoscaler: update mode, per-container target recommendation. |
+| `ResourceClaim.summary` (`ResourceClaim.tmpl`) | A ResourceClaim: allocated/not-allocated, reserved/not-reserved. Used by Pod's `pod_device_claims` section via `managed_resource_line`. |
 | `generic_health_summary` | `dict "obj" "callerNamespace"(opt)`. Fallback for any kind without its own `"<Kind>.summary"` — kstatus, a bare `status.ready` bool, observedGeneration mismatch. Reasonable to call directly for a mixed list of your own CRD kinds. |
 | `resource_health_summary` | `dict "obj" "callerNamespace"(opt)`. Dispatches to `obj`'s own `"<Kind>.summary"`/`"<Kind>.<group>.summary"` if one is defined (via `RenderableObject.HealthSummary`), falling back to `generic_health_summary`. This is what `managed_resource_line` calls internally; call it directly when you have a mixed-kind list and don't want to dispatch yourself. |
 

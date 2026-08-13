@@ -1,0 +1,50 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"resource.k8s.io/v1","kind":"ResourceClaim","metadata":{"annotations":{},"name":"artifact-allocated-claim","namespace":"dra-artifacts"},"spec":{"devices":{"requests":[{"exactly":{"deviceClassName":"artifact-gpu-class"},"name":"gpu"}]}}}
+  creationTimestamp: "2026-08-12T22:55:00Z"
+  finalizers:
+  - resource.kubernetes.io/delete-protection
+  name: artifact-allocated-claim
+  namespace: dra-artifacts
+  resourceVersion: "6499392"
+  uid: c7fadc6c-8dbf-4d1e-af45-707996cfd135
+spec:
+  devices:
+    requests:
+    - exactly:
+        allocationMode: ExactCount
+        count: 1
+        deviceClassName: artifact-gpu-class
+      name: gpu
+status:
+  allocation:
+    devices:
+      results:
+      - device: gpu-0
+        driver: gpu.example.com
+        pool: artifact-pool
+        request: gpu
+    nodeSelector:
+      nodeSelectorTerms:
+      - matchFields:
+        - key: metadata.name
+          operator: In
+          values:
+          - kstat-e2e-shared
+  devices:
+  - conditions:
+    - lastTransitionTime: "2026-08-01T09:00:00Z"
+      message: device is healthy
+      reason: Ready
+      status: "True"
+      type: Ready
+    device: gpu-0
+    driver: gpu.example.com
+    pool: artifact-pool
+  reservedFor:
+  - name: artifact-dra-pod-allocated
+    resource: pods
+    uid: 52e402c3-46c8-404e-8a5a-0899cd207893

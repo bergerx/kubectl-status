@@ -1,0 +1,23 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceSlice
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"resource.k8s.io/v1","kind":"ResourceSlice","metadata":{"annotations":{},"name":"artifact-slice"},"spec":{"devices":[{"attributes":{"model":{"string":"H100"}},"name":"gpu-0","taints":[{"effect":"NoSchedule","key":"maintenance"}]}],"driver":"gpu.example.com","nodeName":"kstat-e2e-shared","pool":{"generation":1,"name":"artifact-pool","resourceSliceCount":1}}}
+  creationTimestamp: "2026-08-12T22:55:00Z"
+  generation: 1
+  name: artifact-slice
+  resourceVersion: "6499081"
+  uid: 55319eb6-bbac-490f-8990-7b83a53c42bd
+spec:
+  devices:
+  - attributes:
+      model:
+        string: H100
+    name: gpu-0
+  driver: gpu.example.com
+  nodeName: kstat-e2e-shared
+  pool:
+    generation: 1
+    name: artifact-pool
+    resourceSliceCount: 1

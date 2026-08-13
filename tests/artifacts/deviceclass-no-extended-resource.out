@@ -1,0 +1,3 @@
+
+DeviceClass/artifact-unsatisfiable-class, created 1m ago, gen:1
+  Selects: device.driver == "nonexistent.example.com"

@@ -1,0 +1,5 @@
+
+ResourceSlice/artifact-slice, created 1m ago, gen:1
+  Driver: gpu.example.com, pool artifact-pool (gen 1), node Node/kstat-e2e-shared
+  Devices: 1
+    gpu-0

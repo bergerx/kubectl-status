@@ -1,0 +1,3 @@
+
+DeviceClass/artifact-gpu-class, created 1m ago, gen:2
+  Selects: device.driver == "gpu.example.com"

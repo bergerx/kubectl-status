@@ -1,0 +1,5 @@
+
+ResourceClaim/artifact-unallocated-claim -n dra-artifacts, created 1m ago
+  Requests:
+    gpu: DeviceClass/artifact-unsatisfiable-class
+  Not allocated: dependent Pods cannot schedule

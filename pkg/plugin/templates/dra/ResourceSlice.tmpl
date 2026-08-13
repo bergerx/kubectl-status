@@ -1,0 +1,70 @@
+{{- define "ResourceSlice" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: resource.k8s.io/v1, Kind=ResourceSlice (cluster-scoped) */ -}}
+    {{- /* The DRA counterpart of a PV: driver-published device inventory for one pool, the same
+           role a PV plays for a CSI driver's storage inventory -- except a pool is commonly split
+           across several ResourceSlices, and per-device attributes/capacity are high-cardinality
+           on a real GPU/NIC fleet. Treated purely as inventory/diagnostics, same restraint
+           CONVENTIONS.md § "ResourceSlice: diagnostic, not inventory dump" calls for: never a
+           full attribute/capacity dump, never a claim cross-reference (that lookup is expensive
+           and still wouldn't explain a specific claim's allocation -- see ResourceClaim.tmpl for
+           what actually got allocated to a workload). Manual edits are overwritten by the owning
+           driver on its next reconcile, so this never suggests editing one directly.
+           kstatus_summary is omitted: ResourceSlice has no status subresource at all, so it would
+           always print the same uninformative "Current: Resource is current" (see
+           CONVENTIONS.md's § Section order, CronJob example). */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "application_details" . }}
+    {{- $spec := .Spec | default dict }}
+    {{- $pool := $spec.pool | default dict }}
+    {{- "Driver:" | bold | nindent 2 }} {{ $spec.driver | cyan }}
+    {{- with $pool.name }}, pool {{ . | cyan }}{{ end }}
+    {{- with $pool.generation }} (gen {{ . | toString | cyan }}){{ end }}
+    {{- $sliceCount := $pool.resourceSliceCount | default 1 }}
+    {{- if ne ($sliceCount | int) 1 }}, {{ printf "%v slices in this pool" $sliceCount | cyan }}{{ end }}
+    {{- if $spec.allNodes }}
+        {{- ", " }}{{ "all nodes" | cyan }}
+    {{- else if $spec.nodeName }}
+        {{- ", node " }}{{ $.Include "resource_ref" (dict "kind" "Node" "name" $spec.nodeName) }}
+    {{- else if $spec.nodeSelector }}
+        {{- with $spec.nodeSelector.nodeSelectorTerms }}, nodes matching {{ formatNodeSelectorTerms . | cyan }}{{ end }}
+    {{- else if $spec.perDeviceNodeSelection }}
+        {{- ", " }}{{ "per-device node selection" | cyan }}
+    {{- end }}
+    {{- with $spec.devices }}
+        {{- $count := len . }}
+        {{- $maxNamed := 10 }}
+        {{- "Devices:" | bold | nindent 2 }} {{ $count | toString | cyan }}
+        {{- if le $count $maxNamed }}
+            {{- range . }}
+                {{- .name | cyan | nindent 4 }}
+                {{- if $spec.perDeviceNodeSelection }}
+                    {{- if .nodeName }} (node {{ .nodeName | cyan }}){{ end }}
+                    {{- if .allNodes }} (all nodes){{ end }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+        {{- $taintedCount := 0 }}
+        {{- range . }}{{ if .taints }}{{ $taintedCount = add1 $taintedCount }}{{ end }}{{ end }}
+        {{- if gt $taintedCount 0 }}
+            {{- printf "%d of %d devices tainted" $taintedCount $count | yellow | nindent 2 }}
+        {{- end }}
+        {{- $sharedCount := 0 }}
+        {{- range . }}{{ if .consumesCounters }}{{ $sharedCount = add1 $sharedCount }}{{ end }}{{ end }}
+        {{- if gt $sharedCount 0 }}
+            {{- printf "%d of %d devices consume shared counters" $sharedCount $count | cyan | nindent 2 }}
+        {{- end }}
+        {{- $multiAllocCount := 0 }}
+        {{- range . }}{{ if .allowMultipleAllocations }}{{ $multiAllocCount = add1 $multiAllocCount }}{{ end }}{{ end }}
+        {{- if gt $multiAllocCount 0 }}
+            {{- printf "%d of %d devices allow multiple allocations" $multiAllocCount $count | cyan | nindent 2 }}
+        {{- end }}
+    {{- end }}
+    {{- with $spec.sharedCounters }}
+        {{- "Shared counter sets:" | bold | nindent 2 }} {{ range $i, $cs := . }}{{ if $i }}, {{ end }}{{ $cs.name | cyan }}{{ end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

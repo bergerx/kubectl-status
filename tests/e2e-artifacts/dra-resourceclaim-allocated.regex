@@ -1,0 +1,6 @@
+\A
+ResourceClaim/e2e-dra-claim -n e2e-dra-alloc, created 1m ago
+  Requests:
+    gpu: DeviceClass/e2e-dra-gpu, allocated dev-0 from e2e-dra-fake\.example\.com/e2e-dra-pool
+  Allocated, reserved for Pod/e2e-dra-pod
+\z
