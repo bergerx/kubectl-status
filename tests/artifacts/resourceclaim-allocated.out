@@ -1,0 +1,7 @@
+
+ResourceClaim/artifact-allocated-claim -n dra-artifacts, created 1m ago
+  Requests:
+    gpu: DeviceClass/artifact-gpu-class, allocated gpu-0 from gpu.example.com/artifact-pool
+  Allocated, reserved for Pod/artifact-dra-pod-allocated
+  Device status: gpu-0 (driver gpu.example.com, pool artifact-pool)
+    Ready:True Ready, device is healthy for 1m

@@ -244,6 +244,20 @@ kubectl patch node "${node_name}" --subresource=status --type=strategic -p "$(ca
 EOF
 )"
 
+# run.sh prints the invoked command as a shell-prompt line before execing the
+# real binary, so the rendered screenshot shows what was run, not just its
+# output. It's a separate script (rather than inlining into --execute's
+# command string) so shot()'s arguments don't need extra quoting/escaping to
+# survive being embedded in another shell command line.
+runner="${tmp_dir}/run.sh"
+cat > "${runner}" <<EOF
+#!/usr/bin/env bash
+set -e
+echo "\$ kubectl status \$*"
+exec "${bin}" "\$@" --color always
+EOF
+chmod +x "${runner}"
+
 shot() {
   local out="$1"
   shift
@@ -259,7 +273,7 @@ shot() {
   # fixed offset on top of that for --window's traffic-light dots, so even a
   # small --padding value leaves a visible gap above/below the text; 0 for
   # top/bottom keeps that gap to the unavoidable minimum.
-  go run github.com/charmbracelet/freeze@latest --execute "${bin} $* --color always" \
+  go run github.com/charmbracelet/freeze@latest --execute "${runner} $*" \
     --window --show-line-numbers=false --font.family "${font_family}" --wrap 120 \
     --padding 0,10,0,10 \
     -o "${assets}/${out}" </dev/null

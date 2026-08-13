@@ -1,0 +1,4 @@
+\A
+DeviceClass/e2e-dra-unsatisfiable, created 1m ago, gen:1
+  Selects: device\.driver == "e2e-dra-nonexistent\.example\.com"
+\z

@@ -1,0 +1,21 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"resource.k8s.io/v1","kind":"ResourceClaimTemplate","metadata":{"annotations":{},"name":"artifact-gpu-template","namespace":"dra-artifacts"},"spec":{"spec":{"devices":{"requests":[{"exactly":{"deviceClassName":"artifact-gpu-class"},"name":"gpu"}]}}}}
+  creationTimestamp: "2026-08-12T22:55:00Z"
+  name: artifact-gpu-template
+  namespace: dra-artifacts
+  resourceVersion: "6499079"
+  uid: 7f9730db-2700-4f35-b085-f45f6cc8f8ee
+spec:
+  metadata: {}
+  spec:
+    devices:
+      requests:
+      - exactly:
+          allocationMode: ExactCount
+          count: 1
+          deviceClassName: artifact-gpu-class
+        name: gpu

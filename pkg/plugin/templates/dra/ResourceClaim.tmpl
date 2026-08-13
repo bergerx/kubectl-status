@@ -1,0 +1,108 @@
+{{- define "ResourceClaim" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: resource.k8s.io/v1, Kind=ResourceClaim */ -}}
+    {{- /* The DRA counterpart of a PVC: a namespaced request for one or more devices that records
+           its own allocation result, the same way a PVC both asks for storage and records which
+           PV it got bound to. See PersistentVolumeClaim.tmpl for the storage-side pattern this
+           mirrors. observed_generation_summary/conditions_summary are omitted: this Kind has
+           neither a status.observedGeneration nor top-level status.conditions field -- only
+           status.allocation/devices/reservedFor, all rendered below. kstatus_summary is also
+           omitted: with no conditions/observedGeneration for it to reason about, it always prints
+           the same uninformative "Current: Resource is current", the same case CONVENTIONS.md's
+           § Section order calls out for CronJob. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "application_details" . }}
+    {{- $status := .Status | default dict }}
+    {{- $allocation := $status.allocation }}
+    {{- $allResults := (($allocation | default dict).devices | default dict).results | default list }}
+    {{- $.Include "dra_device_requests" (dict "ctx" $ "devices" (.Spec.devices | default dict) "allResults" $allResults) }}
+    {{- if not $allocation }}
+        {{- "Not allocated" | red | bold | nindent 2 }}: dependent Pods cannot schedule
+    {{- else }}
+        {{- "Allocated" | green | nindent 2 }}
+        {{- with $allocation.allocationTimestamp }} {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+        {{- $reservedFor := $status.reservedFor | default list }}
+        {{- if not $reservedFor }}
+            {{- ", " }}{{ "not reserved" | yellow | bold }}
+        {{- else }}
+            {{- $entries := list }}
+            {{- range $reservedFor }}
+                {{- $entries = $entries | append ($.Include "dra_reserved_for_ref" (dict "ctx" $ "consumer" .)) }}
+            {{- end }}
+            {{- if eq (len $entries) 1 }}
+                {{- ", reserved for " }}{{ index $entries 0 }}
+            {{- else }}
+                {{- "Reserved for:" | bold | nindent 2 }}
+                {{- range $entries }}{{ . | nindent 4 }}{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with $status.devices }}
+        {{- if eq (len .) 1 }}
+            {{- "Device status:" | bold | nindent 2 }} {{ $.Include "dra_device_status" (dict "ctx" $ "dev" (index . 0)) }}
+        {{- else }}
+            {{- "Device status:" | bold | nindent 2 }}
+            {{- range . }}{{ $.Include "dra_device_status" (dict "ctx" $ "dev" .) | nindent 4 }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "ResourceClaim.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects dict "obj" (ResourceClaim RenderableObject) "callerNamespace" (optional). Same
+           dict "obj"/"callerNamespace" contract every "<Kind>.summary" template uses -- see
+           resource_health_summary. Consumed by Pod.tmpl's pod_device_claims section via
+           managed_resource_line, the same way PersistentVolumeClaim relies on being resolvable
+           through resource_health_summary wherever a PVC is named rather than fully rendered. */ -}}
+    {{- $claim := .obj }}
+    {{- template "resource_ref" (dict "kind" $claim.Kind "name" $claim.Name "namespace" $claim.Namespace "callerNamespace" .callerNamespace) }}
+    {{- $status := $claim.Status | default dict }}
+    {{- $allocation := $status.allocation }}
+    {{- if not $allocation }}
+        {{- ", " }}{{ "not allocated" | red | bold }}
+    {{- else }}
+        {{- ", " }}{{ "allocated" | green }}
+        {{- with $allocation.allocationTimestamp }} {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+        {{- if not ($status.reservedFor | default list) }}
+            {{- ", " }}{{ "not reserved" | yellow }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "dra_reserved_for_ref" }}
+    {{- /* Expects dict "ctx" (owning RenderableObject) "consumer" (one status.reservedFor[] entry
+           -- apiGroup/name/resource/uid, no namespace field: a claim's consumers always share its
+           own namespace). "resource" is a lowercase plural API resource name -- "pods" is by far
+           the common case and gets the full Pod/name treatment; anything else is shown as the raw
+           resource/name pair since there's no reliable plural-to-Kind mapping in general. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $consumer := .consumer }}
+    {{- if eq $consumer.resource "pods" }}
+        {{- $ctx.Include "resource_ref" (dict "kind" "Pod" "name" $consumer.name "namespace" $ctx.Namespace "callerNamespace" $ctx.Namespace) }}
+    {{- else }}
+        {{- printf "%s/%s" $consumer.resource $consumer.name | cyan }}
+    {{- end }}
+{{- end -}}
+
+{{- define "dra_device_status" }}
+    {{- /* Expects dict "ctx" "dev" (one status.devices[] entry -- AllocatedDeviceStatus: device,
+           driver, pool, conditions, networkData, shareID). Driver-reported per-device health;
+           most drivers never populate status.devices at all, so this only ever shows up when a
+           driver has something to say. "data" (opaque per-driver JSON) is deliberately never
+           rendered, same restraint as elsewhere in this package. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $dev := .dev }}
+    {{- printf "%s (driver %s, pool %s)" $dev.device $dev.driver $dev.pool | cyan }}
+    {{- with $dev.shareID }} (share {{ . | cyan }}){{ end }}
+    {{- with $dev.networkData }}
+        {{- with .interfaceName }}, iface {{ . | cyan }}{{ end }}
+        {{- with .ips }}, ips {{ join "," . | cyan }}{{ end }}
+    {{- end }}
+    {{- range $dev.conditions }}
+        {{- $ctx.Include "condition_summary" . | nindent 4 }}
+    {{- end }}
+{{- end -}}

@@ -1,0 +1,23 @@
+{{- define "ResourceClaimTemplate" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: resource.k8s.io/v1, Kind=ResourceClaimTemplate */ -}}
+    {{- /* The DRA counterpart of a Pod spec's volumeClaimTemplates entry: a namespaced, reusable
+           request shape a Pod turns into its own per-Pod ResourceClaim (spec.resourceClaims[].
+           resourceClaimTemplateName -- see Pod.tmpl's pod_device_claims). Renders only the
+           request shape via the same dra_device_requests partial ResourceClaim.tmpl uses, with an
+           empty allocation result set since a template itself is never allocated. Deliberately
+           doesn't list the ResourceClaims it has generated: that lookup has no label/field
+           selector to key off (generated claims are only linked back via ownerReferences) and
+           scales with replica count, unlike a single Kind/name reference. kstatus_summary is
+           omitted: ResourceClaimTemplate has no status subresource at all, so it would always
+           print the same uninformative "Current: Resource is current" (see CONVENTIONS.md's
+           § Section order, CronJob example). */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "application_details" . }}
+    {{- $ctSpec := .Spec.spec | default dict }}
+    {{- $.Include "dra_device_requests" (dict "ctx" $ "devices" ($ctSpec.devices | default dict) "allResults" (list)) }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
