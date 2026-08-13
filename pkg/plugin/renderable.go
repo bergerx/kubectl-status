@@ -18,7 +18,7 @@ import (
 
 func newRenderableObject(obj map[string]interface{}, engine *renderEngine, repo *input.ResourceRepo) RenderableObject {
 	r := RenderableObject{
-		Unstructured: unstructured.Unstructured{Object: obj},
+		Unstructured: unstructured.Unstructured{Object: sanitizeObject(obj)},
 		engine:       engine,
 		repo:         repo,
 		Config:       engine.cfg.Viper,
