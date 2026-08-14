@@ -313,12 +313,13 @@
         {{- /* $matchLabels is nil when the selector uses only matchExpressions; passing nil to
              KubeGetByLabelsMap builds an empty selector and matches every pod in the namespace. */ -}}
         {{- if and $matchLabels (not ($.LiveQueriesDisabled)) }}
-            {{- if $.Config.GetBool "deep" }}
-                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
+            {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
+                {{- /* A problematic Pod gets the full render even outside --deep -- summarizing a
+                       Pod that's already flagged as the workload's problem just forces a second
+                       lookup (--deep or naming the Pod directly) to see what's actually wrong. */ -}}
+                {{- if or ($.Config.GetBool "deep") .Problematic }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}
-                {{- end }}
-            {{- else }}
-                {{- range $.KubeGetByLabelsMap $.Namespace "pods" $matchLabels }}
+                {{- else }}
                     {{- $.Include "Pod.summary" (dict "obj" . "callerNamespace" $.Namespace) | nindent 4 }}
                 {{- end }}
             {{- end }}

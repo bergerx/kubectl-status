@@ -198,7 +198,8 @@ taking the object itself rather than a dict:
 | `resource_health_summary` | `dict "obj" "callerNamespace"(opt)`. Dispatches to `obj`'s own `"<Kind>.summary"`/`"<Kind>.<group>.summary"` if one is defined (via `RenderableObject.HealthSummary`), falling back to `generic_health_summary`. This is what `managed_resource_line` calls internally; call it directly when you have a mixed-kind list and don't want to dispatch yourself. |
 
 `selector_with_health_summary` (`.` = the object with `.Spec.selector`) renders the `Selector: ...`
-line plus each matching Pod via `Pod.summary` (or full inline under `--deep`) — the pattern
+line plus each matching Pod via `Pod.summary` (full inline under `--deep`, and also full inline for
+any matched Pod that's individually `.Problematic` even without `--deep`) — the pattern
 [CONVENTIONS.md](CONVENTIONS.md#label-selectors) calls out by name for any `LabelSelector` field
 targeting Pods.
 
@@ -407,7 +408,11 @@ etc. is viper's public API, not this project's.
 rather than nil/panicking when absent. `StatusConditions()` returns `status.conditions` sorted by
 `type` ascending (controllers don't guarantee an order — see #787). `String()` returns `"Kind/name[ns]"`
 for logging. `KStatus()` returns `*kstatus.Result` (`sigs.k8s.io/cli-utils/pkg/kstatus/status`) —
-`.Status.String`, `.Message`, `.Conditions`.
+`.Status.String`, `.Message`, `.Conditions`. `Problematic() bool` is `KStatus().Status != Current`
+(false, not true, when kstatus itself failed to compute a result) — the boolean form of the check
+`kstatus_if_abnormal` renders as text, for callers deciding whether to do something rather than
+print something — e.g. inlining a matched Pod's full render outside `--deep` (see
+[CONVENTIONS.md § Rendering depth](CONVENTIONS.md#rendering-depth)).
 
 ### Rendering / inclusion
 
@@ -466,7 +471,7 @@ All silently return empty/zero (never an error a template sees) when the query f
 
 ## Everything else is internal
 
-Every other `{{define}}` name in `pkg/plugin/templates/*.tmpl` — 87 of them — is called only from
+Every other `{{define}}` name in `pkg/plugin/templates/*.tmpl` — 86 of them — is called only from
 within the file that defines it (a Kind's own private sub-blocks) and is not part of this contract,
 regardless of how generically it's named or how long it's been stable in practice. Grouped by file for
 reference (not a call contract — names here can be renamed, split, or merged freely):
@@ -502,7 +507,7 @@ reference (not a call contract — names here can be renamed, split, or merged f
 - **`StatefulSet.tmpl`** (2): `statefulset_volume_claims`, `recent_statefulset_rollouts`.
 - **`DaemonSet.tmpl`** (2): `daemonset_replicas_status`, `recent_daemonset_rollouts`.
 - **`Deployment.tmpl`** (1): `recent_deployment_rollouts`.
-- **`Job.tmpl`** (2): `job_failed_pod_summary`, `job_indexed_details`.
+- **`Job.tmpl`** (1): `job_indexed_details`.
 - **`Namespace.tmpl`** (1): `namespace_psa_level`.
 - **`LimitRange.tmpl`** (1): `limit_range_item`.
 - **`MutatingWebhookConfiguration.tmpl`** (1): `mwc_webhook_entry`.
