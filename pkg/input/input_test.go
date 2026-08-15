@@ -150,6 +150,105 @@ func TestOwnersClusterScopedOwner(t *testing.T) {
 	}
 }
 
+// TestResolvePartialNameArgs covers `k status TYPE name` falling back to a substring match on
+// the resource's name once the exact name lookup fails, e.g. `k status deploy component`
+// matching Deployment/myapp-mycomponent -- but only after the exact match already failed, so
+// exact names and plain `TYPE` (list-all) calls are left untouched.
+func TestResolvePartialNameArgs(t *testing.T) {
+	newDeploymentFactory := func(t *testing.T, names ...string) *cmdtesting.TestFactory {
+		t.Helper()
+		f := newTestFactory()
+		var objs []runtime.Object
+		for _, name := range names {
+			objs = append(objs, &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "apps/v1",
+				"kind":       "Deployment",
+				"metadata": map[string]interface{}{
+					"name":      name,
+					"namespace": "test",
+				},
+			}})
+		}
+		f.FakeDynamicClient = fakedynamic.NewSimpleDynamicClient(scheme.Scheme, objs...)
+		return f
+	}
+
+	t.Run("exact name match is left untouched", func(t *testing.T) {
+		f := newDeploymentFactory(t, "myapp-mycomponent")
+		t.Cleanup(func() { f.Cleanup() })
+		repo, err := NewResourceRepo(f, viper.New())
+		if err != nil {
+			t.Fatal(err)
+		}
+		repo.viper.Set("namespace", "test")
+		got := repo.resolvePartialNameArgs([]string{"deployments.apps", "myapp-mycomponent"})
+		want := []string{"deployments.apps", "myapp-mycomponent"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("type-only call (list all) is left untouched", func(t *testing.T) {
+		f := newDeploymentFactory(t, "myapp-mycomponent")
+		t.Cleanup(func() { f.Cleanup() })
+		repo, err := NewResourceRepo(f, viper.New())
+		if err != nil {
+			t.Fatal(err)
+		}
+		repo.viper.Set("namespace", "test")
+		got := repo.resolvePartialNameArgs([]string{"deployments"})
+		want := []string{"deployments"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("partial name falls back to a substring match once the exact lookup fails", func(t *testing.T) {
+		f := newDeploymentFactory(t, "myapp-mycomponent")
+		t.Cleanup(func() { f.Cleanup() })
+		repo, err := NewResourceRepo(f, viper.New())
+		if err != nil {
+			t.Fatal(err)
+		}
+		repo.viper.Set("namespace", "test")
+		got := repo.resolvePartialNameArgs([]string{"deployments.apps", "component"})
+		want := []string{"deployments.apps", "myapp-mycomponent"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("no match at all (even partial) is left untouched", func(t *testing.T) {
+		f := newDeploymentFactory(t, "myapp-mycomponent")
+		t.Cleanup(func() { f.Cleanup() })
+		repo, err := NewResourceRepo(f, viper.New())
+		if err != nil {
+			t.Fatal(err)
+		}
+		repo.viper.Set("namespace", "test")
+		got := repo.resolvePartialNameArgs([]string{"deployments.apps", "does-not-exist"})
+		want := []string{"deployments.apps", "does-not-exist"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("multiple partial matches are all included", func(t *testing.T) {
+		f := newDeploymentFactory(t, "myapp-mycomponent", "otherapp-mycomponent")
+		t.Cleanup(func() { f.Cleanup() })
+		repo, err := NewResourceRepo(f, viper.New())
+		if err != nil {
+			t.Fatal(err)
+		}
+		repo.viper.Set("namespace", "test")
+		got := repo.resolvePartialNameArgs([]string{"deployments.apps", "component"})
+		want := []string{"deployments.apps", "myapp-mycomponent", "otherapp-mycomponent"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+}
+
 // newAPIServiceFactory builds a test factory whose dynamic client can Get/Create
 // apiregistration.k8s.io APIService objects -- a group client-go's own scheme doesn't know about,
 // so the fake dynamic client needs an explicit List-kind mapping for it.
