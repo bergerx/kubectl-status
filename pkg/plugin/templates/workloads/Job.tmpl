@@ -31,13 +31,13 @@
             {{- end }}
         {{- end }}
         {{- with $failedPods }}
+            {{- /* Every entry here is already known bad -- filtered to phase=="Failed" above --
+                   so unlike selector_with_health_summary's general membership list, this doesn't
+                   need a .Problematic check (kstatus itself actually reports a terminal Failed
+                   phase as Current, not a signal to gate on): always render the full Pod. */ -}}
             {{- "Failed pods" | red | bold | nindent 2 }}:
             {{- range . }}
-                {{- if $.Config.GetBool "deep" }}
-                    {{- $.IncludeRenderableObject . | nindent 4 }}
-                {{- else }}
-                    {{- $.Include "job_failed_pod_summary" . | nindent 4 }}
-                {{- end }}
+                {{- $.IncludeRenderableObject . | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}
@@ -54,7 +54,7 @@
         {{- with $pendingPods }}
             {{- "Pending pods" | yellow | bold | nindent 2 }}:
             {{- range . }}
-                {{- if $.Config.GetBool "deep" }}
+                {{- if or ($.Config.GetBool "deep") .Problematic }}
                     {{- $.IncludeRenderableObject . | nindent 4 }}
                 {{- else }}
                     {{- $.Include "Pod.summary" (dict "obj" . "callerNamespace" $.Namespace) | nindent 4 }}
@@ -94,20 +94,6 @@
     {{- end }}
     {{- template "kstatus_if_abnormal" $obj }}
     {{- template "other_unhealthy_conditions" $obj }}
-{{- end -}}
-
-{{- define "job_failed_pod_summary" }}
-    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- .Name | bold }}
-    {{- range .Status.containerStatuses }}
-        {{- with .state.terminated }}
-            {{- if ne (.reason | default "") "Completed" }}
-                {{- ": " }}{{ .reason | default "Error" | colorKeyword }}
-                {{- if .exitCode }}, exit {{ .exitCode | toString | cyan }}{{ end }}
-                {{- with .message }}, {{ . | trim | red }}{{ end }}
-            {{- end }}
-        {{- end }}
-    {{- end }}
 {{- end -}}
 
 {{- define "job_indexed_details" }}

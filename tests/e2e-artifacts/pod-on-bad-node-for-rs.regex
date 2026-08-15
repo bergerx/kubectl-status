@@ -3,7 +3,20 @@ ReplicaSet/bad-rs -n e2e-bad-node-rs, created 1m ago, gen:1
   InProgress: Available: 0/1
     Reconciling: LessAvailable, Available: 0/1
   Selector: app=kubectl-status-test-bad-rs
-    Pod/pod-on-bad-node-for-rs, created 1m ago Pending, node cordoned & MemoryPressure:True & Ready:False, untolerated node taint, InProgress: Pod is in the Pending phase
+    Pod/pod-on-bad-node-for-rs -n e2e-bad-node-rs, created 1m ago by ReplicaSet/bad-rs, gen:1 Pending BestEffort
+      InProgress: Pod is in the Pending phase
+        Reconciling: PodPending, Pod is in the Pending phase
+      Managed by kubectl-status-test-bad-rs application
+      PodScheduled:Unknown -> Initialized:Unknown -> ContainersReady:Unknown -> Ready:Unknown
+      Node/kubectl-status-test-bad-node-[a-z0-9]+ cordoned \(unschedulable\)
+        MemoryPressure:True KubeletHasInsufficientMemory, kubelet has insufficient memory available for 1m
+        Ready:False KubeletNotReady, kubelet is not ready for 1m
+        taint dedicated=gpu:NoSchedule \(not tolerated\)
+        taint node\.kubernetes\.io/unschedulable:NoSchedule \(not tolerated\)
+(?:        taint node\.kubernetes\.io/memory-pressure:NoSchedule \(not tolerated\)
+        taint node\.kubernetes\.io/not-ready:NoSchedule \(not tolerated\)|        taint node\.kubernetes\.io/not-ready:NoSchedule \(not tolerated\)
+        taint node\.kubernetes\.io/memory-pressure:NoSchedule \(not tolerated\))
+      OOM / eviction risk: Node kubectl-status-test-bad-node-[a-z0-9]+ has MemoryPressure\. Pod is BestEffort, the first kubelet eviction candidate under node memory pressure and has essentially no kernel-OOM protection\. Pod Priority affects eviction order, not OOM protection\.
   Not matched by any Service
   Outage: ReplicaSet has no Ready replicas\.
 \z

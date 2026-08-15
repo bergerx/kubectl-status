@@ -134,7 +134,9 @@ for the full list and the discovery mechanism:
 
 **`--deep`** — full inline render with `$.IncludeRenderableObject . | nindent 4`.
 
-For **label selectors**, `selector_with_health_summary` in `common.tmpl` implements all three modes automatically — prefer it over hand-rolling the same logic.
+For **matched Pods** specifically, a Pod whose own kstatus disagrees with `Current` (crash-looping, unschedulable, stuck Pending, ...) gets the full inline render even outside `--deep` — see `.Problematic` in [TEMPLATE-API.md](TEMPLATE-API.md). A Pod that's already flagged as the workload's problem shouldn't need a second `--deep` invocation just to see what's wrong with it. Gate this with `if or ($.Config.GetBool "deep") .Problematic` around the same `IncludeRenderableObject`/`"Pod.summary"` branch used for `--deep`.
+
+For **label selectors**, `selector_with_health_summary` in `workloads_common.tmpl` implements all three modes automatically, including the problematic-Pod inlining above — prefer it over hand-rolling the same logic.
 
 For **reference fields** (spec fields pointing to another resource by kind/name), show `Kind/name -n ns` via the `resource_ref` sub-template in the default case, and `$.IncludeRenderableObject` in deep mode. `HTTPRoute.tmpl` has worked examples of both single-ref and list-of-refs forms.
 

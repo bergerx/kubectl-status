@@ -4,7 +4,15 @@ Deployment/e2e-rollouts-blocked-deployment -n e2e-rollouts-blocked-deployment, c
     Reconciling: LessAvailable, Available: 0/1
   desired:1, existing:1, ready:0, updated:1, available:0, unavailable:1
   Selector: app=e2e-rollouts-blocked-deployment
-    Pod/e2e-rollouts-blocked-deployment-[a-z0-9]+-[a-z0-9]+, created 1m ago Pending, 0/1 ready ImagePullBackOff, InProgress: Pod is in the Pending phase, Ready:False ContainersNotReady, ContainersNotReady
+    Pod/e2e-rollouts-blocked-deployment-[a-z0-9]+-[a-z0-9]+ -n e2e-rollouts-blocked-deployment, created 1m ago by ReplicaSet/e2e-rollouts-blocked-deployment-[a-z0-9]+, gen:1, started after 1m Pending BestEffort
+      InProgress: Pod is in the Pending phase
+        Reconciling: PodPending, Pod is in the Pending phase
+      Managed by e2e-rollouts-blocked-deployment application
+      PodScheduled:True -> Initialized:True -> ContainersReady:False -> Ready:False
+        ContainersReady:False ContainersNotReady, containers with unready status: \[app\] for 1m
+        Ready:False ContainersNotReady, containers with unready status: \[app\] for 1m
+      Containers: app \(kubectl-status-e2e-this-image-does-not-exist\) Waiting ImagePullBackOff: Back-off pulling image "kubectl-status-e2e-this-image-does-not-exist": ErrImagePull: Error response from daemon: pull access denied for kubectl-status-e2e-this-image-does-not-exist, repository does not exist or may require 'docker login': denied: requested access to the resource is denied
+      \(no imagePullSecrets on this Pod — if this image is on a private registry not covered by node-level credentials, that's likely why\)
   Not matched by any Service
   Available:False MinimumReplicasUnavailable, Deployment does not have minimum availability\. for 1m
   Progressing:True ReplicaSetUpdated, ReplicaSet "e2e-rollouts-blocked-deployment-[a-z0-9]+" is progressing\. for 1m
