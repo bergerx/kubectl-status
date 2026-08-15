@@ -145,6 +145,7 @@ func (r *ResourceRepo) newBaseBuilder() *resource.Builder {
 }
 
 func (r *ResourceRepo) CLIQueryResults(args []string) *resource.Result {
+	args = r.resolvePartialNameArgs(args)
 	builder := r.newBaseBuilder().
 		LabelSelectorParam(r.viper.GetString("selector")).
 		FieldSelectorParam(r.viper.GetString("field-selector"))
@@ -160,6 +161,72 @@ func (r *ResourceRepo) CLIQueryResults(args []string) *resource.Result {
 		builder = builder.ResourceTypeOrNameArgs(true, args...)
 	}
 	return builder.Do()
+}
+
+// resolvePartialNameArgs implements `k status TYPE name` matching by substring when the exact
+// name doesn't exist, e.g. `k status deploy component` matching Deployment/myapp-mycomponent.
+// It only handles the common single-type "TYPE name..." shape (as opposed to "TYPE/NAME" or
+// multiple comma-separated types), and only kicks in once the exact name lookup has already
+// come back NotFound, so `k status deploy pod-full-name` and `k status deploy` keep behaving
+// exactly as before. Names that still don't match anything (even partially) are passed through
+// unchanged so the normal "not found" error is reported.
+func (r *ResourceRepo) resolvePartialNameArgs(args []string) []string {
+	if len(args) < 2 || r.viper.GetBool("local") {
+		return args
+	}
+	resourceTypeArg := args[0]
+	if strings.ContainsAny(resourceTypeArg, "/,") {
+		return args
+	}
+	mapping, err := r.mappingFor(resourceTypeArg)
+	if err != nil {
+		return args
+	}
+	namespace := r.viper.GetString("namespace")
+	if mapping.Scope.Name() != meta.RESTScopeNameNamespace {
+		namespace = ""
+	}
+	resolvedNames := make([]string, 0, len(args)-1)
+	changed := false
+	for _, name := range args[1:] {
+		_, getErr := r.dynamicClient.Resource(mapping.Resource).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if getErr == nil {
+			resolvedNames = append(resolvedNames, name)
+			continue
+		}
+		if !apierrors.IsNotFound(getErr) {
+			resolvedNames = append(resolvedNames, name)
+			continue
+		}
+		matches, listErr := r.namesContaining(mapping.Resource, namespace, name)
+		if listErr != nil || len(matches) == 0 {
+			resolvedNames = append(resolvedNames, name)
+			continue
+		}
+		klog.V(4).InfoS("partial name match", "resourceType", resourceTypeArg, "requested", name, "matched", matches)
+		resolvedNames = append(resolvedNames, matches...)
+		changed = true
+	}
+	if !changed {
+		return args
+	}
+	return append([]string{resourceTypeArg}, resolvedNames...)
+}
+
+// namesContaining lists every object of the given resource and returns the names that contain
+// substr, used as the fallback once an exact name lookup has failed.
+func (r *ResourceRepo) namesContaining(gvr schema.GroupVersionResource, namespace, substr string) ([]string, error) {
+	list, err := r.dynamicClient.Resource(gvr).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, item := range list.Items {
+		if strings.Contains(item.GetName(), substr) {
+			names = append(names, item.GetName())
+		}
+	}
+	return names, nil
 }
 
 func (r *ResourceRepo) Objects(namespace string, args []string, labelSelector string) (Objects, error) {
