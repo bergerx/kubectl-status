@@ -1,0 +1,15 @@
+apiVersion: resource.k8s.io/v1
+kind: DeviceClass
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"resource.k8s.io/v1","kind":"DeviceClass","metadata":{"annotations":{},"name":"artifact-gpu-class"},"spec":{"extendedResourceName":"gpu.example.com/gpu","selectors":[{"cel":{"expression":"device.driver == \"gpu.example.com\" \u0026\u0026 device.attributes[\"gpu.example.com\"].memory.compareTo(quantity(\"40Gi\")) \u003e= 0"}}]}}
+  creationTimestamp: "2026-08-12T22:55:00Z"
+  generation: 2
+  name: artifact-gpu-class
+  resourceVersion: "6499167"
+  uid: 5f3ce3a2-d126-4ef9-b3ec-5b1050dbd6fb
+spec:
+  selectors:
+  - cel:
+      expression: device.driver == "gpu.example.com"

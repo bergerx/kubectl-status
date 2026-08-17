@@ -98,7 +98,7 @@ govulncheck:
 #--------------------------
 .PHONY: test
 test: vet staticcheck
-	go test ./...
+	go test -coverprofile=cover.out ./...
 
 #--------------------------
 # E2E cluster identity

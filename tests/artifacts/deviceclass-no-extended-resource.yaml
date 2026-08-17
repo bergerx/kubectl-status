@@ -1,0 +1,15 @@
+apiVersion: resource.k8s.io/v1
+kind: DeviceClass
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"resource.k8s.io/v1","kind":"DeviceClass","metadata":{"annotations":{},"name":"artifact-unsatisfiable-class"},"spec":{"selectors":[{"cel":{"expression":"device.driver == \"nonexistent.example.com\""}}]}}
+  creationTimestamp: "2026-08-12T22:55:00Z"
+  generation: 1
+  name: artifact-unsatisfiable-class
+  resourceVersion: "6499078"
+  uid: 1f2e099a-ea90-4cd1-9f0c-de07b250aba1
+spec:
+  selectors:
+  - cel:
+      expression: device.driver == "nonexistent.example.com"

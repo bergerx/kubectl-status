@@ -1,0 +1,11 @@
+
+Pod/artifact-dra-pod-allocated -n dra-artifacts, created 1m ago, gen:1, started after 1m Pending BestEffort
+  InProgress: Pod is in the Pending phase
+    Reconciling: PodPending, Pod is in the Pending phase
+  PodScheduled:True -> Initialized:True -> ContainersReady:False -> Ready:False
+    ContainersReady:False ContainersNotReady, containers with unready status: [main] for 1m
+    PodReadyToStartContainers:False for 1m
+    Ready:False ContainersNotReady, containers with unready status: [main] for 1m
+  Standalone POD.
+  Containers: main (busybox) Waiting ContainerCreating, claims: gpu
+  Device claims: gpu: ResourceClaim/artifact-allocated-claim

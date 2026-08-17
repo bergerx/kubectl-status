@@ -1,0 +1,139 @@
+{{- define "dra_device_requests" }}
+    {{- /* Expects dict "ctx" (owning RenderableObject) "devices" (spec.devices -- a DeviceClaim:
+           requests/constraints/config) "allResults" (status.allocation.devices.results, or an
+           empty list for an unallocated ResourceClaim / a ResourceClaimTemplate, which has no
+           status at all). Shared by ResourceClaim.tmpl and ResourceClaimTemplate.tmpl so the two
+           render the request shape identically -- the Template only ever passes an empty
+           allResults. config (opaque per-driver JSON parameters) is deliberately never rendered:
+           there's no generic way to make arbitrary driver JSON meaningful, the same restraint
+           DeviceClass.tmpl applies to its own config. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $devices := .devices | default dict }}
+    {{- $allResults := .allResults | default list }}
+    {{- with $devices.requests }}
+        {{- "Requests:" | bold | nindent 2 }}
+        {{- range . }}
+            {{- $ctx.Include "dra_device_request" (dict "ctx" $ctx "req" . "allResults" $allResults) | nindent 4 }}
+        {{- end }}
+    {{- end }}
+    {{- with $devices.constraints }}
+        {{- "Constraints:" | bold | nindent 2 }}
+        {{- range . }}
+            {{- $scope := "all requests" }}
+            {{- with .requests }}{{ $scope = join ", " . }}{{ end }}
+            {{- if .matchAttribute }}
+                {{- printf "same %s across %s" .matchAttribute $scope | cyan | nindent 4 }}
+            {{- else if .distinctAttribute }}
+                {{- printf "distinct %s across %s" .distinctAttribute $scope | cyan | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "dra_device_request" }}
+    {{- /* Expects dict "ctx" "req" (one spec.devices.requests[] entry) "allResults" (full
+           status.allocation.devices.results list, or empty). A DeviceRequest carries either
+           "exactly" one device selection or a list of "firstAvailable" alternatives -- the two
+           are mutually exclusive per the API. Allocation results key back to a request by name
+           ("exactly") or "<request name>/<subrequest name>" ("firstAvailable"), so which
+           alternative actually got picked only shows up once results are matched here. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $req := .req }}
+    {{- $allResults := .allResults | default list }}
+    {{- $req.name | bold }}:
+    {{- if $req.exactly }}
+        {{- $results := list }}
+        {{- range $allResults }}{{ if eq .request $req.name }}{{ $results = $results | append . }}{{ end }}{{ end }}
+        {{- $ctx.Include "dra_device_subrequest" (dict "ctx" $ctx "sub" $req.exactly "results" $results) }}
+    {{- else if $req.firstAvailable }}
+        {{- range $req.firstAvailable }}
+            {{- $subName := .name }}
+            {{- $prefix := printf "%s/%s" $req.name $subName }}
+            {{- $results := list }}
+            {{- range $allResults }}{{ if eq .request $prefix }}{{ $results = $results | append . }}{{ end }}{{ end }}
+            {{- printf "alternative %s" $subName | cyan | nindent 4 }}
+            {{- $ctx.Include "dra_device_subrequest" (dict "ctx" $ctx "sub" . "results" $results) }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "dra_device_subrequest" }}
+    {{- /* Expects dict "ctx" "sub" (ExactDeviceRequest or DeviceSubRequest -- same field set minus
+           "name", already rendered by the caller) "results" (allocation results for this
+           (sub)request, 0-N entries -- allocationMode "All" can allocate more than one device to
+           a single request). DeviceClass is resolved with an explicit "" namespace, same as
+           storageclass_summary's $ctx.KubeGetFirst "" "StorageClass" call -- it's cluster-scoped,
+           and deep_render_ref's own default-to-ctx-namespace fallback (via sprig's `default`,
+           which can't distinguish an intentionally-empty "" from an absent key) would otherwise
+           hand it the claim's own namespace. */ -}}
+    {{- $ctx := .ctx }}
+    {{- $sub := .sub }}
+    {{- /* The DeviceClass ref stays on this line in every mode; its --deep inline render (if any)
+           is deferred to $deepBlock and emitted only once the whole line -- selectors, capacity,
+           tolerations, allocation result -- is complete, the same reason deep_render_ref appends
+           rather than substitutes for a ref named mid-sentence (CONVENTIONS.md § Rendering
+           depth). Substituting it in place here would otherwise splice a multi-line object between
+           this ref and the rest of the line, gluing whatever comes next onto the object's last
+           line instead of the sentence it belongs to. */ -}}
+    {{- $deepBlock := "" }}
+    {{- with $sub.deviceClassName }}
+        {{- $dc := $ctx.KubeGetFirst "" "DeviceClass" . }}
+        {{- " " }}{{ $ctx.Include "resource_ref" (dict "kind" "DeviceClass" "name" .) }}
+        {{- if and (not $dc.Object) (not $ctx.LiveQueriesDisabled) }}
+            {{- " " }}{{ "not found" | red | bold }}
+        {{- end }}
+        {{- if and $dc.Object ($ctx.Config.GetBool "deep") }}
+            {{- $deepBlock = $ctx.IncludeRenderableObject $dc }}
+        {{- end }}
+    {{- end }}
+    {{- if eq ($sub.allocationMode | default "ExactCount") "All" }}
+        {{- " " }}{{ "(all matching devices)" | yellow }}
+    {{- else if ne ($sub.count | default 1 | int) 1 }}
+        {{- printf " (count: %d)" ($sub.count | int) | cyan }}
+    {{- end }}
+    {{- if $sub.adminAccess }}
+        {{- " " }}{{ "adminAccess" | yellow | bold }}
+    {{- end }}
+    {{- /* $onOwnLine tracks whether the selector list above already broke onto its own indented
+           block (2+ entries) -- if so, capacity/tolerations get the same treatment instead of
+           appending to the tail of the last selector's line, where they'd read as part of that
+           CEL expression rather than separate attributes of the request. */ -}}
+    {{- $onOwnLine := false }}
+    {{- with $sub.selectors }}
+        {{- if eq (len .) 1 }}
+            {{- " where " }}{{ (index . 0).cel.expression | cyan }}
+        {{- else }}
+            {{- $onOwnLine = true }}
+            {{- range . }}
+                {{- with .cel }}{{ .expression | cyan | nindent 6 }}{{ end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- $capReq := ($sub.capacity | default dict).requests }}
+    {{- with $capReq }}
+        {{- $parts := list }}
+        {{- range $name := keys $capReq | sortAlpha }}{{ $parts = $parts | append (printf "%s:%s" $name (index $capReq $name)) }}{{ end }}
+        {{- $text := printf "capacity[%s]" (join ", " $parts) | cyan }}
+        {{- if $onOwnLine }}{{ $text | nindent 6 }}{{ else }}{{ " " }}{{ $text }}{{ end }}
+    {{- end }}
+    {{- with $sub.tolerations }}
+        {{- $parts := list }}
+        {{- range . }}
+            {{- $v := "" }}{{ with .value }}{{ $v = printf "=%s" . }}{{ end }}
+            {{- $parts = $parts | append (printf "%s%s:%s" .key $v (.effect | default "None")) }}
+        {{- end }}
+        {{- $text := printf "tolerates[%s]" (join ", " $parts) | cyan }}
+        {{- if $onOwnLine }}{{ $text | nindent 6 }}{{ else }}{{ " " }}{{ $text }}{{ end }}
+    {{- end }}
+    {{- range .results }}
+        {{- ", " }}{{ "allocated" | green }} {{ .device | cyan }} from {{ .driver | cyan }}/{{ .pool | cyan }}
+        {{- with .shareID }} (share {{ . | cyan }}){{ end }}
+        {{- $consumedCap := .consumedCapacity }}
+        {{- with $consumedCap }}
+            {{- $parts := list }}
+            {{- range $name := keys $consumedCap | sortAlpha }}{{ $parts = $parts | append (printf "%s:%s" $name (index $consumedCap $name)) }}{{ end }}
+            {{- printf " consumed[%s]" (join ", " $parts) | cyan }}
+        {{- end }}
+    {{- end }}
+    {{- with $deepBlock }}{{ . | nindent 4 }}{{ end }}
+{{- end -}}

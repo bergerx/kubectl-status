@@ -18,7 +18,7 @@ import (
 
 func newRenderableObject(obj map[string]interface{}, engine *renderEngine, repo *input.ResourceRepo) RenderableObject {
 	r := RenderableObject{
-		Unstructured: unstructured.Unstructured{Object: obj},
+		Unstructured: unstructured.Unstructured{Object: sanitizeObject(obj)},
 		engine:       engine,
 		repo:         repo,
 		Config:       engine.cfg.Viper,
@@ -51,6 +51,16 @@ func (r RenderableObject) KStatus() *kstatus.Result {
 		klog.V(2).ErrorS(err, "kstatus.Compute failed", "r", r)
 	}
 	return result
+}
+
+// Problematic reports whether the object's kstatus disagrees with Current -- the same "not
+// Current" test kstatus_if_abnormal already uses in templates -- for callers that need it as a
+// plain bool rather than rendered text, e.g. deciding whether a matched Pod is worth a full
+// inline render even outside --deep. Returns false when kstatus.Compute failed to produce a
+// result (rather than treating "unknown" as "problematic").
+func (r RenderableObject) Problematic() bool {
+	result := r.KStatus()
+	return result != nil && result.Status != kstatus.CurrentStatus
 }
 
 func (r RenderableObject) newRenderableObject(obj map[string]interface{}) RenderableObject {

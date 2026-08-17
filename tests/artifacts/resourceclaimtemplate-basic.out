@@ -1,0 +1,4 @@
+
+ResourceClaimTemplate/artifact-gpu-template -n dra-artifacts, created 1m ago
+  Requests:
+    gpu: DeviceClass/artifact-gpu-class
