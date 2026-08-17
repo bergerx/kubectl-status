@@ -38,8 +38,9 @@ public release notes or advisory are published.
 ## Scope
 
 kubectl-status is a read-only `kubectl` plugin: it queries the Kubernetes API
-and renders output locally, and does not itself expose network services. Of
-particular interest are issues such as:
+and renders output locally, and does not itself expose network services. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for the actors and data flow behind this.
+Of particular interest are issues such as:
 
 - Template rendering bugs that could leak, mishandle, or execute untrusted
   data from cluster objects.

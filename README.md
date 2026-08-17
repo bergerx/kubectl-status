@@ -20,6 +20,7 @@ Use it when `kubectl get` is too shallow and `kubectl describe` is too much.
 - [Usage](#usage)
 - [Scope and extending it](#scope-and-extending-it)
 - [Development](#development)
+    * [Architecture](./ARCHITECTURE.md)
     * [Conventions](./CONVENTIONS.md)
 - [License](#license)
 
@@ -142,6 +143,7 @@ condition `type`, a suffix pattern like `*Problematic`, or a prefix pattern like
 
 ## Development
 
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — actors, actions, and data flow
 - [CONVENTIONS.md](./CONVENTIONS.md) — output philosophy, color rules, and template patterns
 - [TEMPLATE-API.md](./TEMPLATE-API.md) — the stable template/funcMap surface a custom `<Kind>.tmpl` can depend on
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — how to build, test, and submit changes
