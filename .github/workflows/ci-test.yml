@@ -22,6 +22,20 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - run: make test
+        env:
+          # See pkg/plugin/template_coverage.go: adds line-level .tmpl coverage as a side effect of
+          # this same `make test` run (confirmed output-transparent, see
+          # pkg/plugin/template_coverage_test.go) rather than a separate, duplicate test run.
+          #
+          # Must be absolute: `go test ./...` runs each package's test binary with its cwd set to
+          # that package's own source directory (not the repo root), and env: values here are
+          # literal strings -- GitHub Actions does not shell-expand them -- so a relative path
+          # would land at e.g. pkg/plugin/unit-template-cover.out and cmd/unit-template-cover.out
+          # instead of the repo root, where `make template-cover-html` below looks for it.
+          # ${{ github.workspace }} is the one GH Actions expression usable here (it's substituted
+          # before the shell ever runs); the e2e step below hits the same hazard but is a real
+          # shell command, so it uses $(pwd) instead.
+          KUBECTL_STATUS_TEMPLATE_COVERAGE: ${{ github.workspace }}/unit-template-cover.out
       - name: Upload unit test coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
@@ -57,7 +71,12 @@ jobs:
           # headroom plus setup slack.
           timeout_minutes: 30
           max_attempts: 2
-          command: ASSUME_MINIKUBE_IS_CONFIGURED=true make test-e2e
+          # KUBECTL_STATUS_TEMPLATE_COVERAGE inlined here (rather than a step-level `env:`) since
+          # nick-fields/retry runs `command:` as its own shell invocation -- see the unit test step
+          # above for why this rides the existing test-e2e run instead of a separate one, and for
+          # why the path must be absolute ($(pwd), since this line genuinely runs through a shell
+          # unlike the unit step's env: block, where the equivalent ${{ github.workspace }} lives).
+          command: ASSUME_MINIKUBE_IS_CONFIGURED=true KUBECTL_STATUS_TEMPLATE_COVERAGE=$(pwd)/e2e-template-cover.out make test-e2e
       - name: Upload e2e test coverage to Codecov
         # if: always() -- uploads whatever coverage was captured even if a retry attempt of
         # the e2e step above failed; codecov-action just no-ops if cover-e2e.out is missing.
@@ -66,5 +85,16 @@ jobs:
         with:
           files: cover-e2e.out
           flags: e2e
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Render template coverage
+        if: always()
+        run: make template-cover-html
+      - name: Upload template coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: template-cover.out
+          flags: templates
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -216,7 +216,15 @@ func buildTemplateSet(funcs template.FuncMap) (*templateSet, error) {
 	// per-ecosystem subdirectories (templates/<group>/<Kind>.tmpl, templates/<group>/<group>_common.tmpl
 	// -- see #807). ParseFS accepts multiple glob patterns; this does not touch the separate
 	// user-override glob in parseUserOverlay below, which stays a flat ~/.kubectl-status/templates/*.tmpl.
-	embedded, err := template.New("templates").Funcs(funcs).ParseFS(templatesFS, "templates/*.tmpl", "templates/*/*.tmpl")
+	var embedded *template.Template
+	var err error
+	if templateCoverageEnabled() {
+		// See template_coverage.go: only active under KUBECTL_STATUS_TEMPLATE_COVERAGE (the
+		// Makefile's coverage targets), never in normal CLI use or the default `make test`.
+		embedded, err = buildInstrumentedEmbedded(funcs)
+	} else {
+		embedded, err = template.New("templates").Funcs(funcs).ParseFS(templatesFS, "templates/*.tmpl", "templates/*/*.tmpl")
+	}
 	if err != nil {
 		klog.V(3).ErrorS(err, "Error parsing some templates")
 		return nil, err
