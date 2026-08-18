@@ -13,3 +13,34 @@
 codecov:
   notify:
     after_n_builds: 3
+
+# Per-flag project checks, targeted at each flag's baseline on master as of 2026-08-18 (PR #859:
+# unittests 74.72%, e2e 83.37%, templates 64.04%) -- see #858. Targets are set a point or two
+# below that baseline rather than at it, so this only fails a PR that meaningfully regresses
+# coverage, not one that happens to land a fraction of a percent under today's number; it's
+# intentionally not raising the bar to require improvement over what's already merged.
+#
+# `default: false` turns off Codecov's own flagless "project" check, which otherwise blends these
+# three unrelated line-coverage reports (Go source lines from unittests/e2e vs. .tmpl template
+# lines, see pkg/plugin/template_coverage.go) into one number that moves for reasons unrelated to
+# either kind of coverage -- e.g. PR #859 added the templates flag and the blended figure dropped
+# from ~84% to ~69% despite no coverage regression in either underlying report.
+coverage:
+  status:
+    project:
+      default: false
+      unittests:
+        flags:
+          - unittests
+        target: 74%
+        threshold: 1%
+      e2e:
+        flags:
+          - e2e
+        target: 83%
+        threshold: 1%
+      templates:
+        flags:
+          - templates
+        target: 64%
+        threshold: 1%
