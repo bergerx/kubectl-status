@@ -98,7 +98,12 @@ govulncheck:
 #--------------------------
 .PHONY: test
 test: vet staticcheck
-	go test -coverprofile=cover.out ./...
+	# -coverpkg=./...: without it, coverage for a package is only attributed from tests
+	# living in that same package -- e.g. pkg/plugin code reached only via cmd/local_test.go
+	# (not via pkg/plugin's own tests) would otherwise show as uncovered.
+	# -covermode=atomic: at least one test uses t.Parallel(), so counter writes need to be
+	# race-safe.
+	go test -coverprofile=cover.out -coverpkg=./... -covermode=atomic ./...
 
 #--------------------------
 # E2E cluster identity
@@ -216,8 +221,16 @@ test-e2e: vet staticcheck install-e2e-deps
 	# e2e-minikube-up (the only other target that creates $(E2E_HOME)), so on a bare
 	# CI runner $(E2E_LOCKFILE)'s parent dir wouldn't otherwise exist and flock would
 	# fail outright.
+	# -coverprofile/-coverpkg/-covermode: executeCMD() (cmd/e2e_helpers_test.go) calls
+	# RootCmd()/Execute() in-process rather than shelling out to a built binary, so standard
+	# go coverage instrumentation faithfully captures what the e2e suite exercises, including
+	# pkg/ code that unit tests may not reach the same way. -coverpkg=./... is needed since
+	# these tests live in package main (cmd/e2e_*_test.go) -- without it only cmd's own
+	# statements would be tracked, missing pkg/. -covermode=atomic: -parallel=4 below runs
+	# subtests concurrently against the same instrumented code, so counter writes need to be
+	# race-safe.
 	@mkdir -p $(E2E_HOME)
-	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
+	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*' -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# The cluster (profile: $(E2E_PROFILE)) is shared across every worktree/branch/session on
@@ -227,8 +240,9 @@ test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# namespace names, so two concurrent runs would otherwise collide).
 	# using count to prevent caching; see the timeout note in the ASSUME_MINIKUBE_IS_CONFIGURED
 	# branch above.
-	# See the gotestsum note, and the -parallel=4 note above the other branch's go test invocation.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*'
+	# See the gotestsum note, the -parallel=4 note above the other branch's go test invocation,
+	# and the coverage flags note above the other branch's invocation.
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*' -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
 endif
 
 # Passed through to test-e2e-quick's own invocation below, not test-e2e's: UPDATE_FIXTURES=true
