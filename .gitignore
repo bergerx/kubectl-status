@@ -10,6 +10,7 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 cover.out
+cover-e2e.out
 cover.html
 coverage.txt
 

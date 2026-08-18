@@ -22,10 +22,11 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - run: make test
-      - name: Upload coverage to Codecov
+      - name: Upload unit test coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: cover.out
+          flags: unittests
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Start minikube
@@ -57,3 +58,13 @@ jobs:
           timeout_minutes: 30
           max_attempts: 2
           command: ASSUME_MINIKUBE_IS_CONFIGURED=true make test-e2e
+      - name: Upload e2e test coverage to Codecov
+        # if: always() -- uploads whatever coverage was captured even if a retry attempt of
+        # the e2e step above failed; codecov-action just no-ops if cover-e2e.out is missing.
+        if: always()
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: cover-e2e.out
+          flags: e2e
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
