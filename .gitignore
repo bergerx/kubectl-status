@@ -14,6 +14,12 @@ cover-e2e.out
 cover.html
 coverage.txt
 
+# Output of `make template-cover-html` (see Makefile) -- .tmpl line coverage
+unit-template-cover.out
+e2e-template-cover.out
+template-cover.out
+template-cover.html
+
 bin/
 dist/
 .e2e/
