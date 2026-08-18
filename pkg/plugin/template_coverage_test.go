@@ -21,7 +21,14 @@ import (
 func TestMain(m *testing.M) {
 	code := m.Run()
 	if err := FlushTemplateCoverageProfile(); err != nil {
+		// A flush failure (e.g. a relative KUBECTL_STATUS_TEMPLATE_COVERAGE path -- see that
+		// function's doc) must fail the run, not just log: a silent failure here was exactly how
+		// this surfaced originally, as a much harder to diagnose failure two steps later in
+		// `make template-cover-html`, well after `go test` itself had already reported success.
 		fmt.Fprintln(os.Stderr, "template coverage: failed to write profile:", err)
+		if code == 0 {
+			code = 1
+		}
 	}
 	os.Exit(code)
 }

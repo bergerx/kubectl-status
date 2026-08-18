@@ -114,9 +114,13 @@ test: vet staticcheck
 # running tests here too would silently double the cost of whichever of those runs already
 # happened, which is exactly what this instrumentation is designed to avoid (it's provably
 # output-transparent, see pkg/plugin/template_coverage_test.go, precisely so it can ride the
-# existing `make test`/`make test-e2e` runs instead of requiring a separate one). Typical use:
-#   KUBECTL_STATUS_TEMPLATE_COVERAGE=unit-template-cover.out make test
-#   KUBECTL_STATUS_TEMPLATE_COVERAGE=e2e-template-cover.out ASSUME_MINIKUBE_IS_CONFIGURED=true make test-e2e
+# existing `make test`/`make test-e2e` runs instead of requiring a separate one). Typical use, run
+# from the repo root (KUBECTL_STATUS_TEMPLATE_COVERAGE must be an absolute path: `go test ./...`
+# runs each package's test binary from that package's own directory, not the repo root, so a bare
+# relative filename here would silently land inside pkg/plugin/ or cmd/ instead -- FlushTemplateCoverageProfile
+# in pkg/plugin/template_coverage.go rejects a relative one outright rather than doing that):
+#   KUBECTL_STATUS_TEMPLATE_COVERAGE=$(pwd)/unit-template-cover.out make test
+#   KUBECTL_STATUS_TEMPLATE_COVERAGE=$(pwd)/e2e-template-cover.out ASSUME_MINIKUBE_IS_CONFIGURED=true make test-e2e
 #   make template-cover-html
 .PHONY: template-cover-html
 template-cover-html:

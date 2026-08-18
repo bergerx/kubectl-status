@@ -104,6 +104,14 @@ func FlushTemplateCoverageProfile() error {
 	if path == "" {
 		return nil
 	}
+	// `go test ./...` runs each package's test binary with its cwd set to that package's own
+	// source directory, not wherever `go test`/`make` was invoked from -- so a relative path here
+	// would silently land inside pkg/plugin/ or cmd/ instead of wherever the caller (e.g.
+	// `make template-cover-html`) actually looks for it, for a process-boundary reason that isn't
+	// obvious from the resulting "file not found". Fail loudly instead.
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("%s must be an absolute path (got %q): go test runs each package's test binary from that package's own directory, not the repo root", templateCoverageEnvVar, path)
+	}
 	return coverageRecorder.writeProfile(path)
 }
 

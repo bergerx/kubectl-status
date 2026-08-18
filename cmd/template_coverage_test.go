@@ -20,7 +20,12 @@ import (
 func TestMain(m *testing.M) {
 	code := m.Run()
 	if err := plugin.FlushTemplateCoverageProfile(); err != nil {
+		// See pkg/plugin/template_coverage_test.go's TestMain for why this must fail the run
+		// rather than just log.
 		fmt.Fprintln(os.Stderr, "template coverage: failed to write profile:", err)
+		if code == 0 {
+			code = 1
+		}
 	}
 	os.Exit(code)
 }
