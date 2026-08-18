@@ -1,0 +1,15 @@
+# See https://github.com/bergerx/kubectl-status/issues/858: without this, Codecov posts the PR
+# comment/status check as soon as it receives the *first* upload for a commit, so the initial
+# comment only reflects whichever flag's job finished first and the rest show up later as silent
+# edits. .github/workflows/ci-test.yml uploads three separate flags per commit -- unittests
+# (`make test`), e2e (`make test-e2e`), templates (this repo's own .tmpl line coverage, see
+# pkg/plugin/template_coverage.go) -- so wait for all three before notifying.
+#
+# Tradeoff: since the e2e job can take up to ~30 min, this delays the PR comment/status until it
+# finishes, rather than getting quick feedback from the unittests upload alone. If any of these
+# three uploads is ever made conditional (e.g. skipped for docs-only changes), coverage
+# targets/thresholds added here later will need `carryforward: true` for that flag, or a commit
+# where it didn't run will be treated as 0% for that flag -- see #858.
+codecov:
+  notify:
+    after_n_builds: 3
