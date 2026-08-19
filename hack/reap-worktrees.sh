@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prunes session-driven git worktrees under .claude/worktrees/ (e.g. Claude
-# Code remote-control worktrees) that are done with, so their disk, branch
-# and e2e minikube profile don't pile up. Two ways a worktree counts as done:
+# Code remote-control worktrees) that are done with, so their disk and
+# branch don't pile up. Two ways a worktree counts as done:
 #
 #   1. Its branch has a merged/closed PR on GitHub -- reap worktree + branch.
 #   2. It's "abandoned": no live `claude agents` session has it as cwd
@@ -10,15 +10,11 @@
 #      this path never assumes the branch's work is safe to discard:
 #        - the worktree checkout itself is always removable (branch history
 #          survives in the ref regardless);
-#        - the branch ref, and its e2e minikube profile via the
-#          reference-transaction hook, are only deleted if the branch is
-#          fully merged into origin/master (checked explicitly with
-#          merge-base, since `git branch -d` alone checks against local HEAD,
-#          which can lag origin) -- unmerged work is left for manual review
-#          instead of being force-deleted;
-#        - a lingering minikube profile for the branch is deleted directly
-#          either way, since reclaiming host resources doesn't risk any git
-#          history.
+#        - the branch ref is only deleted if the branch is fully merged
+#          into origin/master (checked explicitly with merge-base, since
+#          `git branch -d` alone checks against local HEAD, which can lag
+#          origin) -- unmerged work is left for manual review instead of
+#          being force-deleted.
 #   A worktree with uncommitted changes is never touched, in either path.
 #
 # Usage: hack/reap-worktrees.sh [--apply] [--stale-days N]
@@ -81,28 +77,6 @@ is_session_live() {
 	printf '%s\n' "$live_cwds" | grep -qxF "$wt"
 }
 
-hash_script="$repo_root/hack/e2e-hash.sh"
-
-reap_minikube_profile() {
-	local br="$1"
-	command -v minikube >/dev/null 2>&1 || return 0
-	[ -x "$hash_script" ] || return 0
-	local branch_hash
-	branch_hash="$("$hash_script" "$br")"
-	local profiles
-	profiles="$(minikube profile list -o json 2>/dev/null \
-		| grep -o "\"Name\"[[:space:]]*:[[:space:]]*\"kstat-e2e-[a-z0-9-]*-${branch_hash}-[a-f0-9]\{8\}\"" \
-		| cut -d'"' -f4 \
-		| sort -u || true)"
-	local profile
-	for profile in $profiles; do
-		echo "      deleting e2e minikube profile '$profile'"
-		if $apply; then
-			minikube delete -p "$profile" >/dev/null 2>&1 || true
-		fi
-	done
-}
-
 process_worktree() {
 	local wt="$1" br="$2"
 
@@ -124,7 +98,6 @@ process_worktree() {
 		fi
 		if git merge-base --is-ancestor "$br" origin/master 2>/dev/null; then
 			echo "REAP  $br ($wt): PR $pr_state (merged into origin/master)"
-			reap_minikube_profile "$br"
 			if $apply; then
 				git worktree unlock "$wt" 2>/dev/null || true
 				git worktree remove "$wt" || { echo "      ERROR removing worktree, leaving for manual review"; return; }
@@ -134,7 +107,6 @@ process_worktree() {
 			fi
 		else
 			echo "PARTIAL-REAP  $br ($wt): PR $pr_state but has unmerged work -- removing worktree, keeping branch for manual review"
-			reap_minikube_profile "$br"
 			if $apply; then
 				git worktree unlock "$wt" 2>/dev/null || true
 				git worktree remove "$wt" || echo "      ERROR removing worktree, leaving for manual review"
@@ -165,7 +137,6 @@ process_worktree() {
 
 	if git merge-base --is-ancestor "$br" origin/master 2>/dev/null; then
 		echo "REAP  $br ($wt): abandoned (${last_commit_age_days}d), merged into origin/master"
-		reap_minikube_profile "$br"
 		if $apply; then
 			git worktree unlock "$wt" 2>/dev/null || true
 			git worktree remove "$wt" || { echo "      ERROR removing worktree, leaving for manual review"; return; }
@@ -175,7 +146,6 @@ process_worktree() {
 		fi
 	else
 		echo "PARTIAL-REAP  $br ($wt): abandoned (${last_commit_age_days}d) but has unmerged work -- removing worktree, keeping branch for manual review"
-		reap_minikube_profile "$br"
 		if $apply; then
 			git worktree unlock "$wt" 2>/dev/null || true
 			git worktree remove "$wt" || echo "      ERROR removing worktree, leaving for manual review"
