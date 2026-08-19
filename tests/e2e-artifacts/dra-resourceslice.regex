@@ -1,6 +1,6 @@
 \A
 ResourceSlice/e2e-dra-slice, created 1m ago, gen:1
-  Driver: e2e-dra-fake\.example\.com, pool e2e-dra-pool \(gen 1\), node Node/minikube
+  Driver: e2e-dra-fake\.example\.com, pool e2e-dra-pool \(gen 1\), node Node/e2e-node
   Devices: 1
     dev-0
 \z

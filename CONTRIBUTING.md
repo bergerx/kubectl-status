@@ -249,7 +249,7 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
    if the controller isn't already running against the e2e cluster, deploy it during test setup
    (see the `ensureX` installer pattern under
    [Cluster Dependencies](#cluster-dependencies)), create the actual resource against a live
-   minikube cluster, and capture whatever status the controller writes. This applies to both
+   cluster, and capture whatever status the controller writes. This applies to both
    `tests/artifacts/` fixtures and `tests/e2e-artifacts/` manifests.
 
 3. **Include updated artifacts in PRs** - reviewers use `.out` file diffs to verify template changes.
@@ -285,49 +285,63 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
 `make test-e2e` runs the `TestE2E*` suite against a real cluster. That suite has three top-level
 entry points — `TestE2EParallel` (`cmd/main_test.go`), which calls one topical `runXSubtests`
 function per `cmd/e2e_*_test.go` file, plus `TestE2EDynamicManifests` (`cmd/e2e_dynamic_test.go`)
-and `TestE2EAgainstVanillaMinikube` (`cmd/e2e_vanilla_test.go`) — sharing the harness in
+and `TestE2EAgainstVanillaCluster` (`cmd/e2e_vanilla_test.go`) — sharing the harness in
 `cmd/e2e_helpers_test.go` (`cmdTest`, `applyManifest`/`waitFor`, the `ensureX` dependency
 installers). `cmd/local_test.go` holds the
 tests that need no cluster and so run under plain `make test` instead. `make test-e2e` manages one
-**shared** minikube cluster/profile (`kstat-e2e-shared`), reused across every worktree, branch, and
-session on your machine — not one per branch/session. Run `make print-e2e-profile` to see the
-profile name and kubeconfig path (`~/.kstat-e2e/shared.kubeconfig`) it uses. `install-e2e-deps`
+**shared** [kind](https://kind.sigs.k8s.io/) cluster (`kstat-e2e-shared`), reused across every
+worktree, branch, and session on your machine — not one per branch/session. Run
+`make print-e2e-cluster` to see the cluster name and kubeconfig path
+(`~/.kstat-e2e/shared.kubeconfig`) it uses. Its shape is `hack/kind-cluster.yaml` (single node) and
+its Kubernetes version is the digest-pinned `KIND_NODE_IMAGE` in `hack/versions.env` — the same two
+values CI passes to `helm/kind-action`, so a local run and CI render against the identical
+Kubernetes build. `install-e2e-deps`
 runs against that same cluster right after it's created, so deps always land on the cluster the
 tests actually use (see [Cluster Dependencies](#cluster-dependencies) below for what it does and
 doesn't install). The cluster is left running after the tests finish, for fast reruns from any
-worktree/session; delete it explicitly with `make e2e-minikube-down` when you're sure no other
+worktree/session; delete it explicitly with `make e2e-cluster-down` when you're sure no other
 worktree/session still needs it — this tears it down for everyone sharing it, not just you.
+
+`kind` (and Docker) must be on your PATH for the local targets; CI installs it via
+`helm/kind-action`. `make e2e-cluster-up` reuses a running shared cluster rather than recreating
+it — but since a kind node is a container, a cluster can survive a host reboot as *stopped*
+containers and still be listed by `kind get clusters` while answering nothing. The target checks
+both, and recreates a listed-but-unresponsive cluster rather than handing it to the suite.
 
 Because the cluster is shared and the e2e suite uses fixed (not generated) scratch namespace
 names, two `test-e2e`/`test-e2e-quick` runs against it at the same time would collide with
 "already exists" errors. Both targets guard against that with `flock` on a host-global lockfile:
 a second invocation (from another worktree, another terminal, a background Claude Code task)
 simply waits for the first to finish rather than racing it or getting its own cluster. This trades
-some concurrency for a much smaller footprint — one 4 CPU/6 GB VM total instead of one per
+some concurrency for a much smaller footprint — one cluster total instead of one per
 worktree/branch/session, which is what actually hogs the host if left unchecked. `flock` (from
 `util-linux`) is required; it's standard on Linux but not present on macOS by default.
 
 If a run is killed ungracefully (Ctrl+C, OOM) mid-subtest, its cleanup won't run and it can leave
 a stale namespace behind that collides with the next run's fixed name. Recover with
 `kubectl --kubeconfig ~/.kstat-e2e/shared.kubeconfig delete ns <name>`, or nuke and recreate the
-whole cluster with `make e2e-minikube-down e2e-minikube-up`.
+whole cluster with `make e2e-cluster-down e2e-cluster-up`.
 
-CI instead sets `ASSUME_MINIKUBE_IS_CONFIGURED=true`, which makes `make test-e2e` skip all of the
+CI instead sets `ASSUME_CLUSTER_IS_CONFIGURED=true`, which makes `make test-e2e` skip all of the
 above and use whatever cluster your current kubeconfig context already points at (that's what
-`medyagh/setup-minikube` in `ci-test.yml` provisions) — set the same var locally if you'd rather
+`helm/kind-action` in `ci-test.yml` provisions) — set the same var locally if you'd rather
 manage the cluster yourself.
 
 Note: `TestE2E*` functions invoked directly via `go test -run TestE2E...` (bypassing the
-Makefile) fall back to using the bare test function name as the minikube profile if `E2E_PROFILE`
+Makefile) fall back to using the bare test function name as the cluster name if `E2E_CLUSTER`
 isn't set in the environment, which starts (and leaks) a one-off cluster instead of using the
-shared one — export `E2E_PROFILE` yourself (e.g. from `make print-e2e-profile`) to land on the
+shared one — export `E2E_CLUSTER` yourself (e.g. from `make print-e2e-cluster`) to land on the
 shared cluster too.
 
 #### Cluster Dependencies
 
 metrics-server is the only dependency installed upfront, by the `install-e2e-deps` target — see
 the comment there for why it has to be an invariant of the whole run rather than one group's
-concern. Everything else (cert-manager, Gateway API CRDs, Cilium/Calico CRDs, VolumeSnapshot CRDs,
+concern. That target also recreates kind's default `standard` StorageClass with
+`volumeBindingMode: Immediate`: kind's binds `WaitForFirstConsumer`, and several subtests create a
+PVC with no consuming Pod and then wait for it to Bind. `volumeBindingMode` is immutable, so it's a
+delete-and-recreate (`kubectl replace --force`) of the live object with only that field rewritten,
+not a hand-written class. Everything else (cert-manager, Gateway API CRDs, Cilium/Calico CRDs, VolumeSnapshot CRDs,
 Karpenter CRDs, Istio CRDs, VPA, Crossplane, Flux) is installed on demand by the test that needs it,
 so a cluster only ever grows the dependencies the suite actually exercises. No manual setup either
 way.
@@ -374,12 +388,12 @@ same `make test-e2e` target, so it stays in sync automatically.
 
 `make test-e2e` reruns `vet`/`staticcheck`/`install-e2e-deps` and the whole ~60-subtest `TestE2E*`
 pattern every time, which is wasteful while iterating on a single scenario. Once you have a cluster
-up (`make e2e-minikube-up install-e2e-deps`, one time — it's left running afterwards, see above),
+up (`make e2e-cluster-up install-e2e-deps`, one time — it's left running afterwards, see above),
 use `make test-e2e-quick RUN='<pattern>'` to rerun just the subtest(s) you're working on against
 that same cluster, skipping the lint steps and the deps install:
 
 ```bash
-make e2e-minikube-up install-e2e-deps   # once per shared cluster
+make e2e-cluster-up install-e2e-deps   # once per shared cluster
 make test-e2e-quick RUN='TestE2EParallel/podscheduling'
 ```
 

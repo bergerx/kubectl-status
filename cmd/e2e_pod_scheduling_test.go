@@ -223,7 +223,7 @@ func runPodSchedulingSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
 
-		// A minikube cluster has no globalDefault PriorityClass out of the box, so setting it here
+		// The e2e cluster has no globalDefault PriorityClass out of the box, so setting it here
 		// is safe: it won't clash with any other PriorityClass in the (parallel) test pool.
 		never := corev1.PreemptNever
 		pc := &schedulingv1.PriorityClass{

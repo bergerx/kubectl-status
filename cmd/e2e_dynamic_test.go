@@ -55,10 +55,10 @@ import (
 //
 // The other two entry points exist for reasons this one can't absorb: TestE2EParallel owns the
 // concurrent pool and the single e2eClients() setup its subtests share (see #719), and
-// TestE2EAgainstVanillaMinikube (cmd/e2e_vanilla_test.go) covers CLI error/usage paths that need no
+// TestE2EAgainstVanillaCluster (cmd/e2e_vanilla_test.go) covers CLI error/usage paths that need no
 // cluster dependency at all. Don't add a fourth.
 func TestE2EDynamicManifests(t *testing.T) {
-	e2eMinikubeTest(t)
+	e2eClusterTest(t)
 	hackOpts, clientset, dynamicClient := e2eClients(t)
 	t.Run("pod containers section warns when metrics-server's APIService is missing", func(t *testing.T) {
 		// Issue #165 case 1: metrics-server was never installed. We simulate that by removing
@@ -196,7 +196,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 	t.Run("PersistentVolumeClaim surfaces its ReadWriteOncePod holder and a scheduling conflict", func(t *testing.T) {
 		// Issue #669: a ReadWriteOncePod claim allows only one non-terminal Pod to use it at a
 		// time -- enforced by the kube-scheduler's built-in VolumeRestrictions plugin, no CSI
-		// driver involved, so this is fully deterministic on minikube's default scheduler.
+		// driver involved, so this is fully deterministic on the cluster's default scheduler.
 		// Before this, PersistentVolumeClaim.tmpl gave no indication of which Pod currently
 		// holds the claim, nor any explicit signal when a second Pod is stuck behind it.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
@@ -279,9 +279,9 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// surfaces the PV's spec.nodeAffinity when the Pod itself can't be scheduled -- a fact
 		// PersistentVolume.tmpl, StorageClass.tmpl, and Pod.tmpl never connected before. There's
 		// no live cluster mechanism that reliably produces a real zone-restricted CSI PV on
-		// minikube (its hostpath storage-provisioner isn't zone-aware), so -- same "create
+		// the e2e cluster (kind's local-path provisioner isn't zone-aware), so -- same "create
 		// directly against the API" trick the VolumeAttachment/RWOP-conflict subtests above use
-		// -- we hand-craft a PV with a nodeAffinity requirement no real minikube Node label
+		// -- we hand-craft a PV with a nodeAffinity requirement no real Node label
 		// satisfies, and a PVC statically bound to it via spec.volumeName (bypassing dynamic
 		// provisioning). The kube-scheduler's VolumeBinding plugin still evaluates a bound PVC's
 		// PV nodeAffinity against candidate Nodes for real, so the consuming Pod below stays
@@ -391,7 +391,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 
 		storageClasses, err := clientset.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
 		require.NoError(t, err)
-		require.NotEmpty(t, storageClasses.Items, "expected minikube's default storage-provisioner addon to have registered a StorageClass")
+		require.NotEmpty(t, storageClasses.Items, "expected the cluster's default storage provisioner to have registered a StorageClass")
 		provisioner := storageClasses.Items[0].Provisioner
 
 		scName := "e2e-wfc-topologies"
@@ -430,8 +430,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: podName, Labels: map[string]string{"app": podName}},
 			Spec: corev1.PodSpec{
 				// An unsatisfiable nodeSelector unrelated to storage guarantees this Pod's own
-				// PodScheduled=False deterministically, without racing whether minikube's
-				// topology-unaware hostpath provisioner would otherwise happily bind the
+				// PodScheduled=False deterministically, without racing whether the cluster's
+				// topology-unaware local-path provisioner would otherwise happily bind the
 				// WaitForFirstConsumer claim once the scheduler picks a node for it -- the
 				// node-selector filter rejects every Node before scheduling ever reaches volume
 				// binding, so the claim also stays reliably unbound.
@@ -462,13 +462,13 @@ func TestE2EDynamicManifests(t *testing.T) {
 	t.Run("pod nodeSelector key no NodePool declares surfaces a Karpenter incompatibility, a satisfiable one stays silent", func(t *testing.T) {
 		// Kept out of TestE2EParallel's pool, same reasoning as the PV-zone/WFC-topologies
 		// subtests above: the fixtures below pin kube-scheduler's exact "0/N nodes are
-		// available" message, which only holds for this minikube cluster's real node count --
+		// available" message, which only holds for this cluster's real node count --
 		// running alongside TestE2EParallel's createBadNode-based subtests would transiently add
 		// an extra (fake) Node and change that count out from under this assertion.
 		//
 		// No real Karpenter controller runs here (CRDs only, see ensureKarpenterCRDs), so neither
 		// Pod below is ever actually provisioned for -- ordinary real-node scheduling failure
-		// (no matching Node exists in this minikube cluster either) is what keeps them Pending,
+		// (no matching Node exists in this cluster either) is what keeps them Pending,
 		// which is all that's needed to exercise the render path: it only reads the NodePool's
 		// declared spec.requirements, never its status/conditions (never populated without a
 		// reconciler) or whether a NodeClaim was actually created.
