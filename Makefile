@@ -263,9 +263,13 @@ test-e2e: vet staticcheck install-e2e-deps
 	# race-safe.
 	# -race: dynamic analysis (data race detection) for the OpenSSF Best Practices badge's
 	# dynamic_analysis criterion -- #838. Especially relevant here since -parallel=4 runs
-	# subtests concurrently against shared in-process state.
+	# subtests concurrently against shared in-process state. Its instrumentation overhead
+	# (extra CPU per goroutine, competing with the in-VM control plane for the same cores)
+	# pushed a real CI run past the old 25m budget with only one subtest (pod-container-logs)
+	# still in flight -- see the panic in #861 -- so -timeout is raised to 40m to give that
+	# overhead headroom; ci-test.yml's own wrapper timeout is raised to match.
 	@mkdir -p $(E2E_HOME)
-	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*' -race -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
+	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=40m -parallel=4 -run 'TestE2E*' -race -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# The cluster (profile: $(E2E_PROFILE)) is shared across every worktree/branch/session on
@@ -277,7 +281,7 @@ test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# branch above.
 	# See the gotestsum note, the -parallel=4 note above the other branch's go test invocation,
 	# and the coverage flags note above the other branch's invocation.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*' -race -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=40m -parallel=4 -run 'TestE2E*' -race -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
 endif
 
 # Passed through to test-e2e-quick's own invocation below, not test-e2e's: UPDATE_FIXTURES=true
