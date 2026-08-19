@@ -1,0 +1,30 @@
+# kind cluster config for the e2e suite, consumed by both `make e2e-cluster-up`
+# (local) and helm/kind-action in .github/workflows/ci-test.yml -- one checked-in
+# shape for both, rather than the previous split where local ran `minikube start
+# --cpus=4 --memory=6g` and CI ran medyagh/setup-minikube with `cpus: max` and
+# minikube's default memory, i.e. two differently-sized clusters producing the
+# same fixtures.
+#
+# Deliberately NOT setting `name:` here. #867 will run a second cluster (a
+# parallel pool and a serial one) off this same file with only `--name`/the
+# action's `cluster_name` differing, so the name has to stay the caller's to
+# choose -- see the E2E_CLUSTER note in the Makefile. Keep anything that is
+# per-cluster *identity* out of this file; anything that is per-cluster *shape*
+# (extra nodes, feature gates, kubelet patches) can be added here when it should
+# apply to every e2e cluster, or split into a second hack/kind-<role>.yaml when
+# it genuinely should not.
+#
+# Node image is deliberately not pinned here either: kind reads `image:` from
+# this file, but pinning it in two places (here and hack/versions.env, which
+# CI's node_image input and the Makefile both read) is how they drift. Callers
+# pass --image $(KIND_NODE_IMAGE) instead, so hack/versions.env stays the single
+# source of truth for it like every other dependency version.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  # Single node, matching what minikube gave us -- D4 in #864. Multi-node is a
+  # deliberate coverage change (it moves kube-scheduler's "0/N nodes are
+  # available" strings that several fixtures pin, and changes which node
+  # nodes.Items[0] picks), tracked separately in #868 rather than smuggled into
+  # the provider swap.
+  - role: control-plane
