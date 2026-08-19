@@ -103,7 +103,10 @@ test: vet staticcheck
 	# (not via pkg/plugin's own tests) would otherwise show as uncovered.
 	# -covermode=atomic: at least one test uses t.Parallel(), so counter writes need to be
 	# race-safe.
-	go test -coverprofile=cover.out -coverpkg=./... -covermode=atomic ./...
+	# gotestsum wraps go test the same way test-e2e below already does (see its comment for
+	# --format rationale); --junitfile is the only reason it's used here, feeding Codecov Test
+	# Analytics (per-test pass/fail/flake history, not coverage) in ci-test.yml.
+	go run $(GOTESTSUM_MODULE) --junitfile unit-junit.xml -- -coverprofile=cover.out -coverpkg=./... -covermode=atomic ./...
 
 # template-cover-html renders line-level coverage for pkg/plugin/templates/*.tmpl files -- Go's own
 # `go test -coverprofile` (above) only instruments compiled .go statements, it has no visibility
@@ -238,6 +241,9 @@ test-e2e: vet staticcheck install-e2e-deps
 	# per package (default --format=pkgname) -- the ~60 fixture/scenario subtests in
 	# cmd/e2e_*_test.go otherwise flood the terminal with "=== RUN"/"--- PASS" and t.Logf
 	# noise on every green run.
+	# --junitfile: per-test pass/fail/duration for Codecov Test Analytics, uploaded separately
+	# from coverage in ci-test.yml (unlike coverage, this has no templates-flag equivalent --
+	# see the `test` target's own --junitfile for why).
 	# -parallel=4: bounds how many TestE2EParallel subtests hit the cluster at once. Go's
 	# default (GOMAXPROCS, i.e. host core count) can far exceed what the e2e-minikube-up VM
 	# above is sized for, causing widespread `kubectl wait` timeouts instead of a speedup.
@@ -255,7 +261,7 @@ test-e2e: vet staticcheck install-e2e-deps
 	# subtests concurrently against the same instrumented code, so counter writes need to be
 	# race-safe.
 	@mkdir -p $(E2E_HOME)
-	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*' -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
+	RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*' -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
 else
 test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# The cluster (profile: $(E2E_PROFILE)) is shared across every worktree/branch/session on
@@ -267,7 +273,7 @@ test-e2e: vet staticcheck e2e-minikube-up install-e2e-deps
 	# branch above.
 	# See the gotestsum note, the -parallel=4 note above the other branch's go test invocation,
 	# and the coverage flags note above the other branch's invocation.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*' -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
+	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_MINIKUBE_IS_CONFIGURED=true flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=25m -parallel=4 -run 'TestE2E*' -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
 endif
 
 # Passed through to test-e2e-quick's own invocation below, not test-e2e's: UPDATE_FIXTURES=true

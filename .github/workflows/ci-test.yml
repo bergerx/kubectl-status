@@ -43,6 +43,20 @@ jobs:
           flags: unittests
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload unit test results to Codecov
+        # if: always() -- Test Analytics' main value (flaky-test detection, failure history)
+        # comes from seeing failing runs too, not just green ones.
+        # codecov/test-results-action is deprecated in favor of report_type: test_results on
+        # this same action (https://github.com/codecov/test-results-action), so this reuses the
+        # codecov-action already pinned above rather than pinning a second, sunsetting action.
+        if: always()
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: unit-junit.xml
+          flags: unittests
+          report_type: test_results
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
       - name: Start minikube
         uses: medyagh/setup-minikube@e9e035a86bbc3caea26a450bd4dbf9d0c453682e # v0.0.21
         with:
@@ -85,6 +99,17 @@ jobs:
         with:
           files: cover-e2e.out
           flags: e2e
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload e2e test results to Codecov
+        # if: always() -- same rationale as the unit test results step above: a retry attempt
+        # that ultimately failed should still surface in Test Analytics.
+        if: always()
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: e2e-junit.xml
+          flags: e2e
+          report_type: test_results
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Render template coverage
