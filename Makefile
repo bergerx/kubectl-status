@@ -180,14 +180,6 @@ reap:
 reap-apply:
 	./hack/reap-worktrees.sh --apply
 
-.PHONY: install-hooks
-install-hooks:
-	@hooks_dir="$$(git rev-parse --git-path hooks)"; \
-	mkdir -p "$$hooks_dir"; \
-	install -m 755 hack/git-hooks/reference-transaction "$$hooks_dir/reference-transaction"; \
-	echo "Installed hack/git-hooks/reference-transaction -> $$hooks_dir/reference-transaction"; \
-	echo "(shared by all worktrees of this clone; deletes a branch's e2e minikube profile when the branch is deleted)"
-
 .PHONY: e2e-cluster-up
 e2e-cluster-up:
 	@mkdir -p $(E2E_HOME)
