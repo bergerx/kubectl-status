@@ -286,7 +286,8 @@ section calls `KubeGet "" "flowschemas"` to cross-reference which FlowSchemas ro
 unconditionally suppressed under `--shallow`, so no static fixture can exercise it. These are
 built-in cluster resources (1.29+ uses `flowcontrol.apiserver.k8s.io/v1`) — no manifests to apply.
 
-**Target e2e test:** `t.Run("prioritylevelconfiguration-flowschemas", ...)` under
-`TestE2EDynamicManifests` — no `applyManifest`/`waitFor` needed. `cmdTest{args: []string{"prioritylevelconfiguration/workload-high", "--v", "5"}}`
+**Target e2e test:** `t.Run("prioritylevelconfiguration-flowschemas", ...)` in `TestE2EParallel`'s
+pool (it only reads built-in cluster resources, so it perturbs nothing) — no
+`applyManifest`/`waitFor` needed. `cmdTest{args: []string{"prioritylevelconfiguration/workload-high", "--v", "5"}}`
 (non-`--shallow`) asserting the `FlowSchemas` section lists the expected cross-referenced
 FlowSchemas, plus a `--shallow` variant asserting the section is absent.

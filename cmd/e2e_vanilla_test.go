@@ -6,8 +6,21 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// TestE2EAgainstVanillaCluster covers the CLI's own error/usage paths plus two whole-cluster
+// renders. It runs on the cluster-wide cluster (see e2e_clusterwide_test.go) rather than the pool's:
+// its "node query" fixture is a whole-output match against a single Node, and the pool transiently
+// grows a second one whenever a createBadNode-based subtest is in flight.
+//
+// It is the one entry point that does NOT call t.Parallel(), and that is load-bearing rather than
+// an oversight. Go runs the non-parallel top-level tests one at a time and only then releases the
+// parallel ones, so this function gets the cluster to itself -- which it needs, because its node
+// render also pins live metrics, and TestE2EClusterWide's first subtest deletes the metrics-server
+// APIService for a few seconds. Two top-level tests have no way to order themselves against each
+// other short of a package-level lock; one of them simply not being parallel is that ordering.
+// It is also the cheapest of the three (no installs, no controllers), so serializing it costs a
+// minute, not a fraction of the suite.
 func TestE2EAgainstVanillaCluster(t *testing.T) {
-	e2eClusterTest(t)
+	e2eClusterTest(t, clusterWideCluster)
 	hackOpts := testHackOpts(t)
 	klog.InitFlags(nil)
 	t.Log("starting tests...")
