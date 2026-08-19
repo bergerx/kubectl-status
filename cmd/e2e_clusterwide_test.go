@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,61 +15,55 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// TestE2EDynamicManifests holds the scenarios that have a specific, stated reason not to be in
-// TestE2EParallel's pool. It is the exception, not the default: a new subtest belongs in the pool
-// (cmd/main_test.go) unless it trips one of that function's two criteria, and the reason goes in a
-// comment on the subtest.
+// TestE2EClusterWide runs on the second of the suite's two kind clusters (#867): the one for
+// subtests that can't share a cluster with TestE2EParallel's pool -- in either direction. Either
+// they mutate cluster-wide state the pool's renders read, or their own fixtures pin cluster-wide
+// state the pool moves:
 //
-// The reasons that actually qualify are narrow, and all of them are about what the subtest does
-// *to* its neighbours:
-//   - it perturbs cluster-wide state they read (the metrics-server APIService subtest deletes the
-//     APIService other renders depend on),
-//   - it starves a shared dependency (the VPA subtest pegs a full CPU to give the recommender
-//     something to act on, which on a single-node cluster takes metrics-server's readiness probe
-//     down with it),
-//   - it pins kube-scheduler's exact "0/N nodes are available" message (the PV-zone and
-//     Karpenter-nodeSelector subtests below), which would drift if run alongside
-//     TestE2EParallel's createBadNode-based subtests changing the node count.
+//   - deleting the v1beta1.metrics.k8s.io APIService, which every render with a usage line needs
+//     (the first subtest below),
+//   - starving metrics-server: the VPA subtest pegs a CPU to give the recommender something to act
+//     on, which on a single-node cluster takes metrics-server's readiness probe down with it,
+//   - pinning kube-scheduler's exact "0/N nodes are available" message, which is a function of the
+//     cluster's node count -- and the pool's createBadNode subtests transiently add a node.
 //
-// Several things that look disqualifying aren't. Needing a live cluster interaction the offline
-// artifacts can't reach ($.KubeGetFirst, $.IncludeRenderableObject/$.Include) doesn't -- most of the
-// pool needs one. Installing a real controller and waiting for it to reconcile doesn't either: the
-// installers are shared onceInstallers serialized by installMu, so ensureX is safe from inside a
-// t.Parallel() subtest, and the Flux scenario (runFluxSubtests, cmd/e2e_flux_test.go) is in the pool
-// on exactly that basis. Nor does depending on metrics, as long as the subtest is a consumer of them
-// rather than a threat to them. And how the objects come into being certainly doesn't, whatever the
-// "DynamicManifests" name suggests: the subtests below build objects in Go, apply static YAML from
-// tests/e2e-artifacts, and mutate objects the cluster already has, in no particular pattern.
+// This is not a serial bucket and there is no exemption to earn: the subtests here run with
+// t.Parallel() exactly like the pool's, they just run on a cluster that is otherwise idle. The
+// choice a new subtest faces is "does anything else on my cluster see what I do (or do I see what
+// it does)?", not "can I justify skipping the pool" -- see CONTRIBUTING.md. That question used to
+// be litigated per subtest (#784, #832) against three criteria that only existed because both
+// buckets shared one cluster.
 //
-// See #784, where the Flux scenario went from a standalone top-level test to a subtest here before
-// anyone checked it against the pool's criteria -- which it met.
+// Keeping this cluster's dependency set small is what makes it nearly free: metrics-server (from
+// `make install-e2e-deps`) plus ensureVPA and ensureKarpenterCRDs. Everything heavy -- cert-manager,
+// Flux, Crossplane, Kyverno, Gatekeeper, Gateway API, Istio, Cilium/Calico -- stays on the pool's
+// cluster. Don't reach for a pool dependency from here without checking that; installing it twice
+// is most of the cost the second cluster was supposed to avoid.
 //
-// See #832, where auditing this function's subtests against the criteria above found six with no
-// actual reason to be here -- promoted to runStorageSubtests (cmd/e2e_storage_test.go),
-// runCrossplaneSubtests (cmd/e2e_crossplane_test.go), and runHelmReleaseSubtests
-// (cmd/e2e_helm_test.go). The PersistentVolumeClaim RWOP-holder subtest and the
-// WaitForFirstConsumer-topologies subtest below weren't part of that audit's named list and haven't
-// been individually confirmed against the pool's criteria -- don't assume they're exceptions for a
-// stated reason the way the ones above are.
-//
-// The other two entry points exist for reasons this one can't absorb: TestE2EParallel owns the
-// concurrent pool and the single e2eClients() setup its subtests share (see #719), and
-// TestE2EAgainstVanillaCluster (cmd/e2e_vanilla_test.go) covers CLI error/usage paths that need no
-// cluster dependency at all. Don't add a fourth.
-func TestE2EDynamicManifests(t *testing.T) {
-	e2eClusterTest(t)
+// The other two entry points: TestE2EParallel (cmd/main_test.go) owns the pool and the single
+// e2eClients() setup its subtests share (see #719), and TestE2EAgainstVanillaCluster
+// (cmd/e2e_vanilla_test.go) covers CLI error/usage paths -- it shares this cluster, and see its doc
+// comment for why it alone stays non-parallel. Don't add a fourth.
+func TestE2EClusterWide(t *testing.T) {
+	t.Parallel()
+	e2eClusterTest(t, clusterWideCluster)
 	hackOpts, clientset, dynamicClient := e2eClients(t)
+	// The one subtest in the suite without t.Parallel(), and the only reason this cluster can't be
+	// a straight second pool: for the few seconds it holds, no render anywhere on this cluster can
+	// see metrics. Go parks parallel subtests until the parent function returns, so a plain
+	// non-parallel t.Run here runs to completion -- APIService restored and re-Available -- before
+	// any sibling below starts. That is a property of this subtest, not a bucket to justify a
+	// place in; siblings are unaffected and stay parallel.
 	t.Run("pod containers section warns when metrics-server's APIService is missing", func(t *testing.T) {
 		// Issue #165 case 1: metrics-server was never installed. We simulate that by removing
 		// just the APIService object that fronts it (not the Deployment/Service), which is
-		// exactly what KubeMetricsUnavailableReason checks -- so the round trip is near-instant
-		// and doesn't disturb metrics-server's actual health for other subtests.
+		// exactly what KubeMetricsUnavailableReason checks -- so the round trip is near-instant.
 		opts := combineOpts(hackOpts, viperTestHackOpts())
-		apiServiceYAML, err := exec.Command("kubectl", "get", "apiservice", "v1beta1.metrics.k8s.io", "-o", "yaml").Output()
+		apiServiceYAML, err := kubectlCmd(t, "get", "apiservice", "v1beta1.metrics.k8s.io", "-o", "yaml").Output()
 		require.NoError(t, err)
-		require.NoError(t, exec.Command("kubectl", "delete", "apiservice", "v1beta1.metrics.k8s.io").Run())
+		require.NoError(t, kubectlCmd(t, "delete", "apiservice", "v1beta1.metrics.k8s.io").Run())
 		t.Cleanup(func() {
-			applyCmd := exec.Command("kubectl", "apply", "-f", "-")
+			applyCmd := kubectlCmd(t, "apply", "-f", "-")
 			applyCmd.Stdin = bytes.NewReader(apiServiceYAML)
 			require.NoError(t, applyCmd.Run())
 			waitForMetricsAPIServiceAvailable(t)
@@ -86,7 +79,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		t.Cleanup(func() {
 			clientset.CoreV1().Pods("default").Delete(context.TODO(), "e2e-pod-metrics-server-missing", metav1.DeleteOptions{})
 		})
-		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
+		require.NoError(t, kubectlCmd(t, "wait", "--for=condition=Ready",
 			"pod/e2e-pod-metrics-server-missing", "--timeout=2m").Run())
 
 		cmdTest{
@@ -95,12 +88,12 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("VerticalPodAutoscaler reverse-matches its target workload and shows an applied recommendation", func(t *testing.T) {
-		// Deliberately kept out of TestE2EParallel's pool: the burner container below
-		// intentionally pegs a full CPU to give the VPA recommender a reason to act, and on a
-		// single-node cluster that starves metrics-server's own readiness probe when it runs
-		// alongside the other concurrent subtests -- causing unrelated renders elsewhere to
-		// intermittently report "metrics-server is not available". Running it serially, alongside
-		// the other genuinely cluster-wide-affecting subtest above, avoids that.
+		t.Parallel()
+		// On this cluster and not the pool's: the burner container below intentionally loads a
+		// CPU to give the VPA recommender a reason to act, and on a single-node cluster that
+		// starves metrics-server's own readiness probe -- which made unrelated renders elsewhere
+		// intermittently report "metrics-server is not available". Nothing else here consumes
+		// metrics while it runs.
 		ensureVPA(t)
 		opts := combineOpts(hackOpts, viperTestHackOpts())
 		ns := "e2e-vpa"
@@ -141,7 +134,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}
 		_, err = clientset.AppsV1().Deployments(ns).Create(context.TODO(), dep, metav1.CreateOptions{})
 		require.NoError(t, err)
-		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Available",
+		require.NoError(t, kubectlCmd(t, "wait", "--for=condition=Available",
 			"deployment/"+name, "-n", ns, "--timeout=4m").Run())
 		originalPod := waitForPodByLabel(t, ns, "app="+name)
 
@@ -180,7 +173,7 @@ func TestE2EDynamicManifests(t *testing.T) {
 		// its readiness -- under concurrent cluster load its Running/Ready transition can lag
 		// well behind that, and the fixture below pins the Deployment as fully Available, so wait
 		// for that explicitly rather than racing the kubelet.
-		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Available",
+		require.NoError(t, kubectlCmd(t, "wait", "--for=condition=Available",
 			"deployment/"+name, "-n", ns, "--timeout=5m").Run())
 		waitForVPAPodsMatched(t, ns, name)
 
@@ -194,6 +187,12 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("PersistentVolumeClaim surfaces its ReadWriteOncePod holder and a scheduling conflict", func(t *testing.T) {
+		t.Parallel()
+		// On this cluster and not the pool's: the blocked-Pod fixture pins kube-scheduler's exact
+		// "0/1 nodes are available" message, which is a function of the cluster's node count --
+		// the pool's createBadNode subtests transiently make that 0/2. (#832 noted this subtest
+		// had never been checked against the old pool criteria; the node count is the reason, and
+		// it's the same one the three subtests below have.)
 		// Issue #669: a ReadWriteOncePod claim allows only one non-terminal Pod to use it at a
 		// time -- enforced by the kube-scheduler's built-in VolumeRestrictions plugin, no CSI
 		// driver involved, so this is fully deterministic on the cluster's default scheduler.
@@ -275,12 +274,15 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("Pod surfaces a bound PV's zone-restricting nodeAffinity when it can't be scheduled", func(t *testing.T) {
+		t.Parallel()
+		// On this cluster and not the pool's: the fixture pins kube-scheduler's "0/1 nodes are
+		// available" message, which the pool's createBadNode subtests would move.
 		// Issue #738: pod_storage_locality resolves a Pod's PVC-backed volume to its bound PV and
 		// surfaces the PV's spec.nodeAffinity when the Pod itself can't be scheduled -- a fact
 		// PersistentVolume.tmpl, StorageClass.tmpl, and Pod.tmpl never connected before. There's
 		// no live cluster mechanism that reliably produces a real zone-restricted CSI PV on
 		// the e2e cluster (kind's local-path provisioner isn't zone-aware), so -- same "create
-		// directly against the API" trick the VolumeAttachment/RWOP-conflict subtests above use
+		// directly against the API" trick the VolumeAttachment/RWOP-conflict subtests use
 		// -- we hand-craft a PV with a nodeAffinity requirement no real Node label
 		// satisfies, and a PVC statically bound to it via spec.volumeName (bypassing dynamic
 		// provisioning). The kube-scheduler's VolumeBinding plugin still evaluates a bound PVC's
@@ -376,6 +378,9 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("Pod hedges on an unbound WaitForFirstConsumer PVC's allowedTopologies", func(t *testing.T) {
+		t.Parallel()
+		// On this cluster and not the pool's, same as the subtest above: the fixture pins
+		// kube-scheduler's "0/1 nodes are available" message.
 		// Issue #738: an unbound claim against a WaitForFirstConsumer class with
 		// allowedTopologies has no PV yet to cross-check, so pod_storage_locality must hedge
 		// ("isn't zone-pinned yet ... may still constrain") instead of asserting a zone. Reuses
@@ -460,7 +465,8 @@ func TestE2EDynamicManifests(t *testing.T) {
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pod nodeSelector key no NodePool declares surfaces a Karpenter incompatibility, a satisfiable one stays silent", func(t *testing.T) {
-		// Kept out of TestE2EParallel's pool, same reasoning as the PV-zone/WFC-topologies
+		t.Parallel()
+		// On this cluster and not the pool's, same reasoning as the PV-zone/WFC-topologies
 		// subtests above: the fixtures below pin kube-scheduler's exact "0/N nodes are
 		// available" message, which only holds for this cluster's real node count --
 		// running alongside TestE2EParallel's createBadNode-based subtests would transiently add

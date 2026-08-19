@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -54,7 +53,7 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		dep.Spec.Template.Spec.Containers[0].Image = "nginx:1.26"
 		_, err = clientset.AppsV1().Deployments(ns).Update(context.TODO(), dep, metav1.UpdateOptions{})
 		require.NoError(t, err)
-		rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=4m")
+		rolloutCmd := kubectlCmd(t, "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=4m")
 		output, err := rolloutCmd.CombinedOutput()
 		t.Logf("rollout status for %s: %s", name, output)
 		require.NoError(t, err)
@@ -274,17 +273,17 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 			applyManifestInNamespace(t, "e2e-artifacts/rollouts-three-revisions.yaml", ns)
 			waitForInNamespace(t, "deployment/"+name, "condition=Available", ns)
 
-			out, err := exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.26", "-n", ns).CombinedOutput()
+			out, err := kubectlCmd(t, "set", "image", "deployment/"+name, "nginx=nginx:1.26", "-n", ns).CombinedOutput()
 			require.NoError(t, err, string(out))
-			rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=4m")
+			rolloutCmd := kubectlCmd(t, "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=4m")
 			output, err := rolloutCmd.CombinedOutput()
 			t.Logf("rollout status for %s (nginx:1.26): %s", name, output)
 			require.NoError(t, err)
 			waitForSinglePod(t, ns, "app="+name)
 
-			out, err = exec.Command("kubectl", "set", "image", "deployment/"+name, "nginx=nginx:1.27", "-n", ns).CombinedOutput()
+			out, err = kubectlCmd(t, "set", "image", "deployment/"+name, "nginx=nginx:1.27", "-n", ns).CombinedOutput()
 			require.NoError(t, err, string(out))
-			rolloutCmd = exec.Command("kubectl", "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=4m")
+			rolloutCmd = kubectlCmd(t, "rollout", "status", "deployment/"+name, "-n", ns, "--timeout=4m")
 			output, err = rolloutCmd.CombinedOutput()
 			t.Logf("rollout status for %s (nginx:1.27): %s", name, output)
 			require.NoError(t, err)
