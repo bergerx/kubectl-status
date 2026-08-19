@@ -7,7 +7,7 @@ Deployment/rollout-diff-test -n e2e-rollout-diff, created 1m ago, gen:2 rev:2
       Terminating: Resource scheduled for deletion
       Managed by rollout-diff-test application
       PodScheduled:True -> Initialized:True -> ContainersReady:True -> Ready:True for 1m
-      Containers: nginx \(nginx:1\.25\) Running for 1m and Ready(?: \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\))?
+      Containers: nginx \(docker\.io/library/nginx:1\.25\) Running for 1m and Ready(?: \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\))?
       (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
 (?:      rootfs usage: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+ \([0-9]+%\)
 )?(?:      Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
@@ -16,19 +16,19 @@ Deployment/rollout-diff-test -n e2e-rollout-diff, created 1m ago, gen:2 rev:2
       Terminating: Resource scheduled for deletion
       Managed by rollout-diff-test application
       PodScheduled:True -> Initialized:True -> ContainersReady:True -> Ready:True for 1m
-      Containers: nginx \(nginx:1\.25\) Running for 1m and Ready(?: \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\))?
+      Containers: nginx \(docker\.io/library/nginx:1\.25\) Running for 1m and Ready(?: \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\))?
       (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
 (?:      rootfs usage: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+ \([0-9]+%\)
 )?(?:      Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
 )?)?  Not matched by any Service
   Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for 1m
-  Progressing:True NewReplicaSetAvailable, ReplicaSet "rollout-diff-test-7cf6c88cf8" has successfully progressed\. for 1m
+  Progressing:True NewReplicaSetAvailable, ReplicaSet "rollout-diff-test-7d6c56db99" has successfully progressed\. for 1m
   Rollouts:
-    1m ago, managed by ReplicaSet/rollout-diff-test-f96b445cf
-    1m ago, managed by ReplicaSet/rollout-diff-test-7cf6c88cf8, has 1 replicas
+    1m ago, managed by ReplicaSet/rollout-diff-test-7cbd5b46b4
+    1m ago, managed by ReplicaSet/rollout-diff-test-7d6c56db99, has 1 replicas
       Diff:
-      --- a ReplicaSet/rollout-diff-test-f96b445cf\t\S+ \S+ \S+ \S+ \(1m ago\)
-      \+\+\+ b ReplicaSet/rollout-diff-test-7cf6c88cf8\t\S+ \S+ \S+ \S+ \(1m ago\)
+      --- a ReplicaSet/rollout-diff-test-7cbd5b46b4\t\S+ \S+ \S+ \S+ \(1m ago\)
+      \+\+\+ b ReplicaSet/rollout-diff-test-7d6c56db99\t\S+ \S+ \S+ \S+ \(1m ago\)
       @@ -36,7 \+36,7 @@
              "spec": \{
                "containers": \[

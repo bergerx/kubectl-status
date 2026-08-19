@@ -1,6 +1,8 @@
 \A
 Node/[a-z0-9.-]+, created \d+[a-z]+ ago
   linux .+, kernel \S+, kubelet v[\d.]+(?:, kube-proxy \S+)?, \S+
+  cloudprovider kind
+    providerID: kind://docker/\S+/[a-z0-9.-]+
   images \d+
   Current: Resource is Ready
   kubelet ok(?:, \S+:\S+)*, container logs: retains up to [\d.]+[A-Za-z]+ per container \(\S+ x \d+ files\)
