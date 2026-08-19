@@ -153,7 +153,7 @@ func createBadNode(t *testing.T, clientset *kubernetes.Clientset) string {
 }
 
 func nodeNameModifier(stdout string) string {
-	return string(regexp.MustCompile(`Node/[a-z0-9-]+`).ReplaceAll([]byte(stdout), []byte(`Node/minikube`)))
+	return string(regexp.MustCompile(`Node/[a-z0-9-]+`).ReplaceAll([]byte(stdout), []byte(`Node/e2e-node`)))
 }
 
 // assertStdoutMatchesRegexFixture matches stdout against the regex in tests/<fixture> (a path
@@ -644,52 +644,64 @@ func executeCMD(t *testing.T, args []string, opts ...func(*plugin.RenderConfig))
 	return stdout.String(), stderr.String(), err
 }
 
-func startMinikube(t *testing.T) {
+func startCluster(t *testing.T) {
 	t.Helper()
-	// `make test-e2e`/`test-e2e-quick` use one fixed shared profile name (see Makefile)
-	// and pass ASSUME_MINIKUBE_IS_CONFIGURED=true, so they never reach this function.
+	// `make test-e2e`/`test-e2e-quick` use one fixed shared cluster name (see Makefile)
+	// and pass ASSUME_CLUSTER_IS_CONFIGURED=true, so they never reach this function.
 	// This fallback only matters for ad hoc `go test -run TestE2E...` invocations that
-	// bypass the Makefile entirely: set E2E_PROFILE yourself (`make print-e2e-profile`
+	// bypass the Makefile entirely: set E2E_CLUSTER yourself (`make print-e2e-cluster`
 	// prints the same shared name the Makefile would use) to land on that same cluster
 	// instead of starting (and leaking) a one-off one named after t.Name().
-	clusterName := os.Getenv("E2E_PROFILE")
+	clusterName := os.Getenv("E2E_CLUSTER")
 	if clusterName == "" {
 		clusterName = t.Name()
 	}
-	t.Logf("Creating temp folder for minikube.kubeconfig for minikube %s ...", clusterName)
+	t.Logf("Creating temp folder for kind.kubeconfig for cluster %s ...", clusterName)
 	dir, err := os.MkdirTemp("", clusterName)
 	require.NoError(t, err)
-	kubeconfig := path.Join(dir, "minikube.kubeconfig")
+	kubeconfig := path.Join(dir, "kind.kubeconfig")
 	t.Setenv("KUBECONFIG", kubeconfig)
-	t.Logf("Starting Minikube cluster %s with %s ...", clusterName, kubeconfig)
-	// --cpus/--memory: matches the Makefile's e2e-minikube-up sizing, needed for TestE2EParallel's
-	// subtests to run concurrently without overwhelming the VM (see that target's comment).
-	startMinikube := exec.Command("minikube", "start", "-p", clusterName, "--addons=metrics-server", "--cpus=4", "--memory=6g")
-	require.NoError(t, startMinikube.Run())
-	require.NoError(t, exec.Command("kubectl", "-n", "kube-system", "rollout", "status",
-		"deployment/metrics-server", "--timeout=120s").Run())
+	t.Logf("Starting kind cluster %s with %s ...", clusterName, kubeconfig)
+	// --image/--config: the same digest-pinned node image and cluster shape the Makefile's
+	// e2e-cluster-up uses, so an ad hoc run renders against the same Kubernetes build as
+	// `make test-e2e` rather than whatever the installed kind's default node image is.
+	nodeImage, err := versionsEnvValue("KIND_NODE_IMAGE")
+	require.NoError(t, err)
+	startCluster := exec.Command("kind", "create", "cluster", "--name", clusterName,
+		"--image", nodeImage, "--config", path.Join("..", "hack", "kind-cluster.yaml"), "--wait", "300s")
+	require.NoError(t, startCluster.Run())
+	// kind has no addons, so metrics-server is an explicit install here the way it is in the
+	// Makefile's install-e2e-deps -- see that target for why --kubelet-insecure-tls is
+	// load-bearing on kind rather than a convenience.
+	metricsServerVersion, err := versionsEnvValue("METRICS_SERVER_VERSION")
+	require.NoError(t, err)
+	require.NoError(t, helmRepoAddUpdate("metrics-server", "https://kubernetes-sigs.github.io/metrics-server/"))
+	output, err := exec.Command("helm", "upgrade", "--install", "metrics-server", "metrics-server/metrics-server",
+		"--version", metricsServerVersion, "-n", "kube-system",
+		"--set", "args={--kubelet-insecure-tls}", "--wait", "--timeout", "5m").CombinedOutput()
+	require.NoErrorf(t, err, "helm upgrade metrics-server: %s", output)
 	t.Cleanup(func() {
-		cmd := exec.Command("minikube", "delete", "-p", clusterName)
-		t.Logf("Deleting Minikube cluster %s...", clusterName)
+		cmd := exec.Command("kind", "delete", "cluster", "--name", clusterName)
+		t.Logf("Deleting kind cluster %s...", clusterName)
 		if err := cmd.Run(); err != nil {
-			t.Log("Error deleting Minikube cluster:", err)
+			t.Log("Error deleting kind cluster:", err)
 		}
-		t.Logf("Deleting temp folder for minikube %s: %s ...", clusterName, dir)
+		t.Logf("Deleting temp folder for cluster %s: %s ...", clusterName, dir)
 		if err := os.RemoveAll(dir); err != nil {
-			t.Log("Error deleting temp folder of minikube.kubeconfig:", err)
+			t.Log("Error deleting temp folder of kind.kubeconfig:", err)
 		}
 	})
 }
 
-func e2eMinikubeTest(t *testing.T) {
+func e2eClusterTest(t *testing.T) {
 	t.Helper()
 	if os.Getenv("RUN_E2E_TESTS") != "true" {
 		t.Skip("Skipping e2e test as RUN_E2E_TESTS is not set to true")
 	}
-	if os.Getenv("ASSUME_MINIKUBE_IS_CONFIGURED") == "true" {
-		t.Logf("assuming current kubeconfig context is pointng a minikube to run e2e tests")
+	if os.Getenv("ASSUME_CLUSTER_IS_CONFIGURED") == "true" {
+		t.Logf("assuming current kubeconfig context is pointing at a cluster to run e2e tests against")
 	} else {
-		startMinikube(t)
+		startCluster(t)
 	}
 }
 
@@ -854,7 +866,7 @@ func createFromManifestCapturingName(t *testing.T, filepath, kind string) string
 // namespace.
 //
 // The timeout has margin above what any single wait needs on an idle cluster: TestE2EParallel's
-// pool shares one minikube VM across -parallel subtests, and runFluxSubtests' ensureFlux install
+// pool shares one cluster across -parallel subtests, and runFluxSubtests' ensureFlux install
 // is the heaviest of them, so a controller (e.g. the PDB/disruption controller another subtest is
 // waiting on) can legitimately take longer to reconcile while it's running. A 4m budget measured
 // this timing out at ~248s on a loaded CI runner; 8m keeps a real hang catchable well inside the
@@ -1311,8 +1323,8 @@ var volumeSnapshotCRDsInstaller onceInstaller
 
 // ensureVolumeSnapshotCRDs installs the VolumeSnapshot/VolumeSnapshotContent CRDs (snapshot.
 // storage.k8s.io), needed by TestE2EDynamicManifests' VolumeSnapshot(Content) subtests. Same
-// "CRDs only" reasoning as Gateway API/Cilium/Calico above: minikube's hostpath
-// storage-provisioner has no CSI snapshot support, and getting a real snapshot to reach
+// "CRDs only" reasoning as Gateway API/Cilium/Calico above: kind's local-path
+// provisioner has no CSI snapshot support, and getting a real snapshot to reach
 // ReadyToUse deterministically would need a real CSI driver + external-snapshotter controller
 // running, which isn't available here -- so the subtests create VolumeSnapshot/
 // VolumeSnapshotContent objects (and their status) directly against the API instead (same trick
@@ -1636,7 +1648,7 @@ func ensureKyverno(t *testing.T) {
 		// ClusterCleanupPolicy, unrelated to PolicyReport generation, so it's pure unused
 		// footprint here. The three *Controller.resources.requests.cpu overrides shrink the chart's
 		// default 100m/controller: the shared cluster's node measured Allocatable cpu: 2 (not the
-		// 4 `make e2e-minikube-up` requests -- the docker driver caps it to whatever the host
+		// 4 `make e2e-cluster-up` requests -- the docker driver caps it to whatever the host
 		// actually has), and every other onceInstaller's controllers plus kube-system already sit
 		// at ~97% of that before Kyverno's own pods are counted, so the chart's defaults leave the
 		// reports-controller Pending on "Insufficient cpu" (confirmed against this exact cluster).

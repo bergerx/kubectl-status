@@ -34,7 +34,7 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 
 		storageClasses, err := clientset.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
 		require.NoError(t, err)
-		require.NotEmpty(t, storageClasses.Items, "expected minikube's default storage-provisioner addon to have registered a StorageClass")
+		require.NotEmpty(t, storageClasses.Items, "expected the cluster's default storage provisioner to have registered a StorageClass")
 		provisioner := storageClasses.Items[0].Provisioner
 
 		scName := "e2e-wait-for-first-consumer"
@@ -181,8 +181,8 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		t.Parallel()
 		// Issue #669: VolumeAttachment has zero references anywhere in the templates today, so a
 		// PV/PVC pair can render fully Bound while the actual CSI attach/detach is stuck or
-		// erroring -- invisible from both the Pod and PVC/PV views. minikube's own
-		// storage-provisioner addon isn't a real CSI driver (hostpath needs no attacher), so it
+		// erroring -- invisible from both the Pod and PVC/PV views. kind's own local-path
+		// provisioner isn't a real CSI driver (it needs no attacher), so it
 		// never creates VolumeAttachment objects itself -- there's nothing to wait on
 		// deterministically. Instead we create the VolumeAttachment object directly against the
 		// API (same trick as the StorageClass subtest above): the apiserver only validates the
@@ -264,7 +264,7 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		t.Parallel()
 		// Issue #669: VolumeSnapshot/VolumeSnapshotContent (snapshot.storage.k8s.io) had no
 		// standalone templates -- `kubectl status volumesnapshot/x` fell through to
-		// DefaultResource. minikube's hostpath storage-provisioner has no CSI snapshot support,
+		// DefaultResource. kind's local-path provisioner has no CSI snapshot support,
 		// so getting a real snapshot to reach ReadyToUse deterministically isn't possible here;
 		// instead (same trick as the VolumeAttachment subtest above) the objects and their
 		// status are created directly against the API -- the apiserver only validates their

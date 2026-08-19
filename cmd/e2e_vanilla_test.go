@@ -6,8 +6,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func TestE2EAgainstVanillaMinikube(t *testing.T) {
-	e2eMinikubeTest(t)
+func TestE2EAgainstVanillaCluster(t *testing.T) {
+	e2eClusterTest(t)
 	hackOpts := testHackOpts(t)
 	klog.InitFlags(nil)
 	t.Log("starting tests...")
@@ -25,7 +25,7 @@ func TestE2EAgainstVanillaMinikube(t *testing.T) {
 		{
 			// Renders against a namespace this test owns rather than kube-system: the pods there
 			// belong to the cluster, so their images, replica-hash names, restart counts and live
-			// usage all move with the minikube/Kubernetes version and with whatever else the
+			// usage all move with the Kubernetes version and with whatever else the
 			// shared cluster has been doing, none of which a whole-output fixture can pin.
 			name:            "pods in a namespace should render every pod in it",
 			args:            []string{"pods", "-n", "e2e-pods-in-namespace", "--include-events=false", "--include-managed-fields=false"},
