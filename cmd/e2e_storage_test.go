@@ -136,10 +136,14 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		const nodeName = "e2e-rwop-conflict-no-such-node"
 
 		pvcName := "e2e-rwop-conflict-pvc"
+		accessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod}
+		createStaticHostPathPV(t, clientset, ns, pvcName, accessModes)
+		emptySC := ""
 		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
 			Spec: corev1.PersistentVolumeClaimSpec{
-				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod},
+				AccessModes:      accessModes,
+				StorageClassName: &emptySC,
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
 				},
@@ -204,13 +208,18 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		require.NotEmpty(t, nodes.Items)
 		nodeName := nodes.Items[0].Name
 
-		// No storageClassName -- picks up the cluster's default class (Immediate binding), so
-		// this actually provisions and binds a real PV to attach the fake VolumeAttachment to.
+		// A static PV, not dynamic provisioning -- kind's local-path provisioner would never
+		// attach a VolumeAttachment of its own (see the comment above), and this needs a real
+		// bound PV to attach the fake VolumeAttachment to.
 		pvcName := "e2e-attach-error-pvc"
+		accessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+		createStaticHostPathPV(t, clientset, ns, pvcName, accessModes)
+		emptySC := ""
 		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
 			Spec: corev1.PersistentVolumeClaimSpec{
-				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				AccessModes:      accessModes,
+				StorageClassName: &emptySC,
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
 				},

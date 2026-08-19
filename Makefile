@@ -261,25 +261,6 @@ install-e2e-deps:
 	# gap and render a spurious "metrics-server is not available" line. Poll the actual data path
 	# instead of the rollout.
 	$(E2E_KUBECONFIG_ENV) bash -c 'for ((i=1; i<=60; i++)); do kubectl get --raw /apis/metrics.k8s.io/v1beta1/nodes >/dev/null 2>&1 && exit 0; sleep 2; done; echo "metrics.k8s.io never became queryable" >&2; exit 1'
-	# kind's default `standard` StorageClass (rancher.io/local-path) binds WaitForFirstConsumer,
-	# where minikube's bound Immediately. Four subtests create a PVC with no consuming Pod and
-	# then block on phase=Bound (RWOP holder/blocked, RWOP conflict, VolumeAttachment attach
-	# error) -- under WaitForFirstConsumer those claims stay Pending until waitForInNamespace's
-	# 8m timeout. volumeBindingMode is immutable, so the class has to be deleted and recreated
-	# rather than patched; `kubectl replace --force` is exactly that delete+create.
-	# Recreated from the live object with only that one field rewritten, rather than from a
-	# hand-written manifest, so the provisioner/reclaimPolicy/parameters stay whatever the node
-	# image actually ships (two subtests clone the cluster's own provisioner into a custom class
-	# and would drift from a hardcoded copy).
-	# Guarded on the current value so a warm cluster isn't churned on every run: deleting a
-	# StorageClass another run is mid-provision against is worth avoiding when it's a no-op.
-	$(E2E_KUBECONFIG_ENV) bash -c 'if [ "$$(kubectl get storageclass standard -o jsonpath={.volumeBindingMode})" != "Immediate" ]; then \
-		kubectl get storageclass standard -o yaml --show-managed-fields=false \
-			| sed "s/^volumeBindingMode: .*/volumeBindingMode: Immediate/" \
-			| kubectl replace --force -f -; \
-	else \
-		echo "StorageClass/standard already binds Immediate, leaving it as-is."; \
-	fi'
 
 .PHONY: test-e2e
 ifeq ($(ASSUME_CLUSTER_IS_CONFIGURED),true)
