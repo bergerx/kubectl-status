@@ -5,7 +5,7 @@ go 1.26.6
 require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.19.0
-	github.com/go-sprout/sprout v1.0.3
+	github.com/go-sprout/sprout v1.1.0
 	github.com/ivanpirog/coloredcobra v1.0.1
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 	github.com/robfig/cron/v3 v3.0.1
