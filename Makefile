@@ -186,7 +186,7 @@ install-hooks:
 	mkdir -p "$$hooks_dir"; \
 	install -m 755 hack/git-hooks/reference-transaction "$$hooks_dir/reference-transaction"; \
 	echo "Installed hack/git-hooks/reference-transaction -> $$hooks_dir/reference-transaction"; \
-	echo "(shared by all worktrees of this clone; deletes a branch's e2e minikube profile when the branch is deleted)"
+	echo "(shared by all worktrees of this clone; deletes a branch's legacy e2e minikube profile, if any, when the branch is deleted -- see #866)"
 
 .PHONY: e2e-cluster-up
 e2e-cluster-up:
@@ -209,7 +209,7 @@ e2e-cluster-up:
 			exit 0; \
 		fi; \
 		echo "Shared e2e cluster '$(E2E_CLUSTER)' exists but its API server is not answering; recreating it."; \
-		kind delete cluster --name $(E2E_CLUSTER); \
+		$(E2E_KUBECONFIG_ENV) kind delete cluster --name $(E2E_CLUSTER); \
 	fi; \
 	echo "kind create cluster --name $(E2E_CLUSTER) --image $(KIND_NODE_IMAGE) --config hack/kind-cluster.yaml"; \
 	$(E2E_KUBECONFIG_ENV) kind create cluster --name $(E2E_CLUSTER) --image $(KIND_NODE_IMAGE) --config hack/kind-cluster.yaml --wait 300s
