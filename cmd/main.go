@@ -182,7 +182,16 @@ func initFlags(cmd *cobra.Command) *genericclioptions.ConfigFlags {
 	return configFlags
 }
 
+// colorCobraMu serializes cc.Init(), which internally calls the cobra package's
+// AddTemplateFunc -- a write to cobra's process-global templateFuncs map, not
+// anything scoped to the *cobra.Command instance passed in. Concurrent RootCmd()
+// calls (e.g. parallel e2e tests invoking the command in-process) would otherwise
+// race on that shared map.
+var colorCobraMu sync.Mutex
+
 func initColorCobra(cmd *cobra.Command) {
+	colorCobraMu.Lock()
+	defer colorCobraMu.Unlock()
 	cc.Init(&cc.Config{
 		RootCmd:         cmd,
 		Headings:        cc.HiCyan + cc.Bold + cc.Underline,
