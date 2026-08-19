@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -59,7 +58,7 @@ func runNetworkPolicySubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 
 		// The full-output regex fixture below pins the Pod to a Running/Ready state, so this
 		// must wait rather than race the kubelet -- otherwise the render can catch it Pending.
-		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
+		require.NoError(t, kubectlCmd(t, "wait", "--for=condition=Ready",
 			"pod/netpol-selected-pod", "-n", ns, "--timeout=4m").Run())
 
 		cmdTest{
@@ -137,7 +136,7 @@ func runNetworkPolicySubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 
 		// The full-output regex fixture below pins the Pod to a Running/Ready state, so this
 		// must wait rather than race the kubelet -- otherwise the render can catch it Pending.
-		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
+		require.NoError(t, kubectlCmd(t, "wait", "--for=condition=Ready",
 			"pod/netpol-multi-selected-pod", "-n", ns, "--timeout=4m").Run())
 
 		cmdTest{
@@ -232,7 +231,7 @@ func runNetworkPolicySubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig
 
 		// The full-output regex fixture below pins the Pod to a Running/Ready state, so this
 		// must wait rather than race the kubelet -- otherwise the render can catch it Pending.
-		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
+		require.NoError(t, kubectlCmd(t, "wait", "--for=condition=Ready",
 			"pod/cni-policy-selected-pod", "-n", ns, "--timeout=4m").Run())
 
 		cmdTest{

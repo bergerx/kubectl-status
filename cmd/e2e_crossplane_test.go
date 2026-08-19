@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,7 +29,7 @@ func runCrossplaneSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), 
 		require.NoError(t, err)
 
 		applyManifest(t, "e2e-artifacts/crossplane-xstatusprobe.yaml")
-		require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Established",
+		require.NoError(t, kubectlCmd(t, "wait", "--for=condition=Established",
 			"xrd/xstatusprobes.tests.kubectl-status.io", "--timeout=60s").Run())
 		applyManifestInNamespace(t, "e2e-artifacts/crossplane-xr.yaml", ns)
 		waitForInNamespace(t, "xstatusprobe/probe-a", "condition=Synced", ns)
@@ -44,7 +43,7 @@ func runCrossplaneSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), 
 		// pin a stable message instead of racing a transient "Replicas: 0/1" kstatus summary.
 		waitForInNamespace(t, "xstatusprobe/probe-a", "condition=Responsive", ns)
 		waitForInNamespace(t, "deployment/probe-a-blocked", "condition=Progressing", ns)
-		require.NoError(t, exec.Command("kubectl", "wait", "-n", ns,
+		require.NoError(t, kubectlCmd(t, "wait", "-n", ns,
 			"--for=condition=PodScheduled=false", "pod", "-l", "app=probe-a-blocked", "--timeout=2m").Run())
 		// kstatus (sigs.k8s.io/cli-utils/pkg/kstatus/status.ScheduleWindow) gives a Pod 15s from
 		// its creationTimestamp before reporting Unschedulable as Failed rather than InProgress --

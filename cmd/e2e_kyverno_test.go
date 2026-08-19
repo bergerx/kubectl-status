@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -83,7 +82,7 @@ func runKyvernoSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 // takes no `-n` for.
 func waitForClusterScoped(t *testing.T, resource, forParam string) {
 	t.Helper()
-	cmd := exec.Command("kubectl", "wait", "--for", forParam, resource, "--timeout=2m")
+	cmd := kubectlCmd(t, "wait", "--for", forParam, resource, "--timeout=2m")
 	output, err := cmd.CombinedOutput()
 	t.Logf("wait result for %s: %s", resource, string(output))
 	require.NoError(t, err)
@@ -133,7 +132,7 @@ func waitForPolicyReportSummary(t *testing.T, kind, namespace string, want func(
 		} else {
 			args = append(args, "-A")
 		}
-		out, err := exec.Command("kubectl", args...).CombinedOutput()
+		out, err := kubectlCmd(t, args...).CombinedOutput()
 		if err != nil {
 			t.Logf("kubectl get %s: %v: %s", kind, err, out)
 			return false

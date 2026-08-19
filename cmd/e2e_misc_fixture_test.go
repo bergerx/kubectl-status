@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -133,7 +132,7 @@ func runMiscFixtureSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig),
 		// ConstraintTemplate is cluster-scoped, so this can't go through waitForInNamespace.
 		// status.created is set once gatekeeper-controller-manager has generated and established
 		// the K8sRequiredLabels CRD from this template.
-		output, err := exec.Command("kubectl", "wait", "--for=jsonpath={.status.created}=true",
+		output, err := kubectlCmd(t, "wait", "--for=jsonpath={.status.created}=true",
 			"constrainttemplate/k8srequiredlabels", "--timeout=120s").CombinedOutput()
 		t.Logf("wait result for constrainttemplate/k8srequiredlabels: %s", output)
 		require.NoError(t, err)

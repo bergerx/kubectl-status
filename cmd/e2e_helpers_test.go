@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -677,29 +676,181 @@ func executeCMD(t *testing.T, args []string, opts ...func(*plugin.RenderConfig))
 	cmd.SetOut(stdout)
 	stderr := &bytes.Buffer{}
 	cmd.SetErr(stderr)
+	// The rendered command gets the same explicit --kubeconfig/--context every kubectl shell-out
+	// below gets, so a render lands on the cluster its entry point owns rather than on the
+	// ambient current-context. A no-op for cmd/local_test.go's offline tests, which share cmdTest
+	// but register no target (see e2eTargetFor).
+	args = e2eTargetFor(t).renderArgs(args)
 	cmd.SetArgs(args)
 	t.Logf("running command with: %s", strings.Join(args, " "))
 	err := cmd.Execute()
 	return stdout.String(), stderr.String(), err
 }
 
-func startCluster(t *testing.T) {
+// ---------------------------------------------------------------------------
+// Which cluster a subtest talks to (#867).
+//
+// The suite runs against two kind clusters, so nothing below may fall back to "whatever the
+// ambient kubeconfig's current-context happens to be": every cluster interaction -- the `kubectl`
+// and `helm` shell-outs, the client-go clients, and the rendered kubectl-status command itself --
+// is targeted explicitly. An entry point declares which cluster its subtests own by passing a
+// role to e2eClusterTest, that resolves to an e2eTarget once, and every helper picks the target
+// back up from the *testing.T it is handed.
+//
+// Test code knows roles, not cluster names: the names differ between a local run
+// (kstat-e2e-shared*) and CI (kstat-e2e*), and both are chosen outside Go -- see E2E_POOL_CLUSTER /
+// E2E_CLUSTERWIDE_CLUSTER in the Makefile and in ci-test.yml's job-level env.
+//
+// Targeting kubectl-status itself needs no production change: --kubeconfig and --context are real
+// flags on RootCmd already (genericclioptions.ConfigFlags, cmd/main.go), merely hidden from the
+// default help by hideNoisyFlags.
+// ---------------------------------------------------------------------------
+
+// e2eClusterRole is one of the two clusters, named by what it is for rather than by what it is
+// called. contextEnv/clusterEnv are the environment variables the Makefile (and CI) use to say
+// which real cluster plays this role: contextEnv for an already-provisioned one
+// (ASSUME_CLUSTER_IS_CONFIGURED=true), clusterEnv for the ad hoc `go test -run TestE2E...`
+// fallback that provisions its own.
+type e2eClusterRole struct {
+	name       string
+	contextEnv string
+	clusterEnv string
+}
+
+var (
+	// poolCluster carries TestE2EParallel's pool, i.e. nearly everything, including every heavy
+	// dependency (cert-manager, Flux, Crossplane, Kyverno, Gatekeeper, Gateway API, Istio,
+	// Cilium/Calico).
+	poolCluster = e2eClusterRole{
+		name:       "pool",
+		contextEnv: "E2E_POOL_CONTEXT",
+		clusterEnv: "E2E_POOL_CLUSTER",
+	}
+	// clusterWideCluster carries the subtests that cannot share a cluster with the pool in either
+	// direction -- they mutate cluster-wide state the pool's renders read, or their own fixtures
+	// pin cluster-wide state the pool mutates. See TestE2EClusterWide (cmd/e2e_clusterwide_test.go)
+	// for the whole list; its dependency set is metrics-server plus ensureVPA and
+	// ensureKarpenterCRDs, which is what makes a second cluster nearly free rather than a 2x
+	// install tax.
+	clusterWideCluster = e2eClusterRole{
+		name:       "cluster-wide",
+		contextEnv: "E2E_CLUSTERWIDE_CONTEXT",
+		clusterEnv: "E2E_CLUSTERWIDE_CLUSTER",
+	}
+)
+
+// e2eTarget is one cluster, addressed the way every client here needs it: a kubeconfig path
+// ("" meaning the ambient $KUBECONFIG / ~/.kube/config resolution, which is what CI wants since
+// helm/kind-action writes both clusters into the default kubeconfig) plus the context to select
+// inside it. Comparable on purpose -- onceInstaller keys its per-cluster install results on it.
+type e2eTarget struct {
+	kubeconfig string
+	context    string
+}
+
+// flags renders the target as command-line flags. contextFlag differs per tool: kubectl and
+// kubectl-status spell it --context, helm spells it --kube-context. Both accept these before the
+// subcommand, which is where they go so a caller's args stay verbatim.
+func (tg e2eTarget) flags(contextFlag string) []string {
+	var flags []string
+	if tg.kubeconfig != "" {
+		flags = append(flags, "--kubeconfig", tg.kubeconfig)
+	}
+	if tg.context != "" {
+		flags = append(flags, contextFlag, tg.context)
+	}
+	return flags
+}
+
+func (tg e2eTarget) kubectl(args ...string) *exec.Cmd {
+	return exec.Command("kubectl", append(tg.flags("--context"), args...)...)
+}
+
+func (tg e2eTarget) helm(args ...string) *exec.Cmd {
+	return exec.Command("helm", append(tg.flags("--kube-context"), args...)...)
+}
+
+// renderArgs appends the target to a kubectl-status invocation's own args. Appended rather than
+// prepended so an arg list that starts with a resource still parses the same way, and so the flags
+// show up at the end of executeCMD's log line where they read as the harness's addition.
+func (tg e2eTarget) renderArgs(args []string) []string {
+	return append(append([]string{}, args...), tg.flags("--context")...)
+}
+
+// kubectlCmd is the shorthand for the helpers and subtests that have a *testing.T in hand, which
+// is every `kubectl` shell-out in the suite. There's deliberately no helmCmd twin: every `helm`
+// call sits inside an ensureX install closure, and those are t-free by contract (see
+// onceInstaller), so they resolve the target once in their wrapper and call target.helm directly.
+func kubectlCmd(t *testing.T, args ...string) *exec.Cmd {
 	t.Helper()
-	// `make test-e2e`/`test-e2e-quick` use one fixed shared cluster name (see Makefile)
-	// and pass ASSUME_CLUSTER_IS_CONFIGURED=true, so they never reach this function.
-	// This fallback only matters for ad hoc `go test -run TestE2E...` invocations that
-	// bypass the Makefile entirely: set E2E_CLUSTER yourself (`make print-e2e-cluster`
-	// prints the same shared name the Makefile would use) to land on that same cluster
-	// instead of starting (and leaking) a one-off one named after t.Name().
-	clusterName := os.Getenv("E2E_CLUSTER")
+	return e2eTargetFor(t).kubectl(args...)
+}
+
+// e2eTargets maps a top-level test's name to the cluster its subtests run against. Keyed by the
+// top-level name (t.Name()'s first path segment) rather than being passed down through every
+// helper signature: subtests nest several levels deep and the ~40 helpers below would each have
+// grown a parameter that is constant for a whole entry point.
+var (
+	e2eTargetsMu sync.Mutex
+	e2eTargets   = map[string]e2eTarget{}
+)
+
+func e2eRootTestName(t *testing.T) string {
+	root, _, _ := strings.Cut(t.Name(), "/")
+	return root
+}
+
+func setE2ETarget(t *testing.T, target e2eTarget) {
+	t.Helper()
+	e2eTargetsMu.Lock()
+	defer e2eTargetsMu.Unlock()
+	e2eTargets[e2eRootTestName(t)] = target
+}
+
+// e2eTargetFor returns the cluster t's entry point owns. The zero value (no flags, i.e. ambient
+// kubeconfig and current-context) is correct for the offline tests in cmd/local_test.go, which
+// share cmdTest but never touch a cluster -- but for a TestE2E* test it would mean silently
+// running against whichever cluster happened to be current, which is exactly the failure this
+// whole mechanism exists to prevent (it would look green while both buckets shared one cluster).
+// So that case fails loudly instead.
+func e2eTargetFor(t *testing.T) e2eTarget {
+	t.Helper()
+	root := e2eRootTestName(t)
+	e2eTargetsMu.Lock()
+	defer e2eTargetsMu.Unlock()
+	target, ok := e2eTargets[root]
+	if !ok && strings.HasPrefix(root, "TestE2E") {
+		t.Fatalf("%s did not register a cluster to run against: every TestE2E* entry point must "+
+			"call e2eClusterTest(t, <role>) before doing anything with a cluster", root)
+	}
+	return target
+}
+
+// startCluster provisions a cluster for role and returns how to reach it.
+//
+// `make test-e2e`/`test-e2e-quick` bring both clusters up themselves (see the Makefile) and pass
+// ASSUME_CLUSTER_IS_CONFIGURED=true, so they never reach this function. This fallback only matters
+// for ad hoc `go test -run TestE2E...` invocations that bypass the Makefile entirely: set the
+// role's cluster env var yourself (`make print-e2e-cluster` prints both shared names) to land on
+// the shared clusters instead of starting (and leaking) one-off ones named after t.Name().
+//
+// The kubeconfig is a per-test temp file whose path is handed back in the returned target, rather
+// than t.Setenv("KUBECONFIG", ...) as this used to do. That is what lets the entry points call
+// t.Parallel(): t.Setenv panics on an already-parallel test, and with two clusters a single
+// process-global KUBECONFIG could not have described both anyway.
+func startCluster(t *testing.T, role e2eClusterRole) e2eTarget {
+	t.Helper()
+	clusterName := os.Getenv(role.clusterEnv)
 	if clusterName == "" {
 		clusterName = t.Name()
 	}
-	t.Logf("Creating temp folder for kind.kubeconfig for cluster %s ...", clusterName)
+	t.Logf("Creating temp folder for kind.kubeconfig for the %s cluster %s ...", role.name, clusterName)
 	dir, err := os.MkdirTemp("", clusterName)
 	require.NoError(t, err)
 	kubeconfig := path.Join(dir, "kind.kubeconfig")
-	t.Setenv("KUBECONFIG", kubeconfig)
+	// kind names the context it writes after the cluster, prefixed -- the same name ci-test.yml
+	// and the Makefile derive their E2E_*_CONTEXT values from.
+	target := e2eTarget{kubeconfig: kubeconfig, context: "kind-" + clusterName}
 	t.Logf("Starting kind cluster %s with %s ...", clusterName, kubeconfig)
 	// --image/--config: the same digest-pinned node image and cluster shape the Makefile's
 	// e2e-cluster-up uses, so an ad hoc run renders against the same Kubernetes build as
@@ -707,15 +858,19 @@ func startCluster(t *testing.T) {
 	nodeImage, err := versionsEnvValue("KIND_NODE_IMAGE")
 	require.NoError(t, err)
 	startCluster := exec.Command("kind", "create", "cluster", "--name", clusterName,
+		"--kubeconfig", kubeconfig,
 		"--image", nodeImage, "--config", path.Join("..", "hack", "kind-cluster.yaml"), "--wait", "300s")
 	require.NoError(t, startCluster.Run())
 	// kind has no addons, so metrics-server is an explicit install here the way it is in the
 	// Makefile's install-e2e-deps -- see that target for why --kubelet-insecure-tls is
-	// load-bearing on kind rather than a convenience.
+	// load-bearing on kind rather than a convenience. Both roles need it: the pool because
+	// metrics availability is an invariant of the whole pool, the cluster-wide one because its
+	// VPA subtest needs a recommender with real samples and its metrics-server-APIService subtest
+	// needs an APIService to delete in the first place.
 	metricsServerVersion, err := versionsEnvValue("METRICS_SERVER_VERSION")
 	require.NoError(t, err)
 	require.NoError(t, helmRepoAddUpdate("metrics-server", "https://kubernetes-sigs.github.io/metrics-server/"))
-	output, err := exec.Command("helm", "upgrade", "--install", "metrics-server", "metrics-server/metrics-server",
+	output, err := target.helm("upgrade", "--install", "metrics-server", "metrics-server/metrics-server",
 		"--version", metricsServerVersion, "-n", "kube-system",
 		"--set", "args={--kubelet-insecure-tls}", "--wait", "--timeout", "5m").CombinedOutput()
 	require.NoErrorf(t, err, "helm upgrade metrics-server: %s", output)
@@ -730,32 +885,51 @@ func startCluster(t *testing.T) {
 			t.Log("Error deleting temp folder of kind.kubeconfig:", err)
 		}
 	})
+	return target
 }
 
-func e2eClusterTest(t *testing.T) {
+// e2eClusterTest is the first thing every TestE2E* entry point calls: it skips the test unless the
+// e2e suite was asked for, works out which real cluster plays the role the caller asked for, and
+// records it for every helper the entry point's subtests will reach.
+func e2eClusterTest(t *testing.T, role e2eClusterRole) {
 	t.Helper()
 	if os.Getenv("RUN_E2E_TESTS") != "true" {
 		t.Skip("Skipping e2e test as RUN_E2E_TESTS is not set to true")
 	}
 	if os.Getenv("ASSUME_CLUSTER_IS_CONFIGURED") == "true" {
-		t.Logf("assuming current kubeconfig context is pointing at a cluster to run e2e tests against")
-	} else {
-		startCluster(t)
+		kubeContext := os.Getenv(role.contextEnv)
+		if kubeContext == "" {
+			// Deliberately fatal rather than falling back to the current context. With two
+			// clusters, "no context" means both entry points would quietly run against the same
+			// one -- which mostly still passes, and only shows up as the occasional inexplicable
+			// fixture mismatch when the pool's node count or metrics availability moves under a
+			// cluster-wide subtest. `make test-e2e`/`test-e2e-quick` always set both vars.
+			t.Fatalf("ASSUME_CLUSTER_IS_CONFIGURED=true but %s is unset: the e2e suite needs a "+
+				"kube context for each of its two clusters (see the Makefile's E2E_POOL_CONTEXT/"+
+				"E2E_CLUSTERWIDE_CONTEXT, and CONTRIBUTING.md)", role.contextEnv)
+		}
+		t.Logf("using the %s cluster via kube context %s", role.name, kubeContext)
+		setE2ETarget(t, e2eTarget{context: kubeContext})
+		return
 	}
+	setE2ETarget(t, startCluster(t, role))
 }
 
 func e2eClients(t *testing.T) ([]func(*plugin.RenderConfig), *kubernetes.Clientset, dynamic.Interface) {
 	t.Helper()
 	hackOpts := testHackOpts(t)
-	kubeconfigPath := os.Getenv("KUBECONFIG")
-	if kubeconfigPath == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			t.Fatalf("failed to get user home directory: %v", err)
-		}
-		kubeconfigPath = filepath.Join(homeDir, ".kube", "config")
+	// Built from the entry point's explicit target rather than from $KUBECONFIG: with two
+	// clusters the process environment can't say which one this test wants. The deferred loading
+	// rules keep the ambient resolution ($KUBECONFIG, else ~/.kube/config) for the kubeconfig
+	// *file* -- which is what CI needs, since helm/kind-action writes both clusters into the
+	// default one -- while ConfigOverrides.CurrentContext picks this test's cluster inside it.
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	target := e2eTargetFor(t)
+	if target.kubeconfig != "" {
+		loadingRules.ExplicitPath = target.kubeconfig
 	}
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		loadingRules, &clientcmd.ConfigOverrides{CurrentContext: target.context}).ClientConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -775,7 +949,7 @@ func e2eClients(t *testing.T) ([]func(*plugin.RenderConfig), *kubernetes.Clients
 // creationTimestamp.
 func waitForPodScheduleWindow(t *testing.T, namespace, labelSelector string) {
 	t.Helper()
-	cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
+	cmd := kubectlCmd(t, "get", "pods", "-n", namespace, "-l", labelSelector,
 		"-o", "jsonpath={.items[0].metadata.creationTimestamp}")
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err)
@@ -793,7 +967,7 @@ func waitForCrossplaneComposedRefs(t *testing.T, namespace, name string, wantCou
 	t.Helper()
 	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
-		cmd := exec.Command("kubectl", "get", "xstatusprobe", name, "-n", namespace,
+		cmd := kubectlCmd(t, "get", "xstatusprobe", name, "-n", namespace,
 			"-o", "jsonpath={.spec.crossplane.resourceRefs}")
 		output, err := cmd.CombinedOutput()
 		if err == nil {
@@ -835,11 +1009,11 @@ func deleteNamespaceAndWait(t *testing.T, clientset *kubernetes.Clientset, names
 func applyManifest(t *testing.T, filepath string) {
 	t.Helper()
 	filepath = path.Join("..", "tests", filepath)
-	cmd := exec.Command("kubectl", "apply", "-f", filepath)
+	cmd := kubectlCmd(t, "apply", "-f", filepath)
 	output, err := cmd.CombinedOutput()
 	t.Cleanup(func() {
 		t.Logf("deleting manifest %s", filepath)
-		cmd := exec.Command("kubectl", "delete", "-f", filepath)
+		cmd := kubectlCmd(t, "delete", "-f", filepath)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Logf("warning: failed to delete manifest %s: %v (output: %s)", filepath, err, string(output))
@@ -859,11 +1033,11 @@ func applyManifest(t *testing.T, filepath string) {
 func applyManifestInNamespace(t *testing.T, filepath, namespace string) {
 	t.Helper()
 	filepath = path.Join("..", "tests", filepath)
-	cmd := exec.Command("kubectl", "apply", "-n", namespace, "-f", filepath)
+	cmd := kubectlCmd(t, "apply", "-n", namespace, "-f", filepath)
 	output, err := cmd.CombinedOutput()
 	t.Cleanup(func() {
 		t.Logf("deleting manifest %s from namespace %s", filepath, namespace)
-		cmd := exec.Command("kubectl", "delete", "-n", namespace, "-f", filepath)
+		cmd := kubectlCmd(t, "delete", "-n", namespace, "-f", filepath)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Logf("warning: failed to delete manifest %s from namespace %s: %v (output: %s)", filepath, namespace, err, string(output))
@@ -885,11 +1059,11 @@ func applyManifestInNamespace(t *testing.T, filepath, namespace string) {
 func createFromManifestCapturingName(t *testing.T, filepath, kind string) string {
 	t.Helper()
 	filepath = path.Join("..", "tests", filepath)
-	output, err := exec.Command("kubectl", "create", "-f", filepath, "-o", "jsonpath={.metadata.name}").CombinedOutput()
+	output, err := kubectlCmd(t, "create", "-f", filepath, "-o", "jsonpath={.metadata.name}").CombinedOutput()
 	require.NoErrorf(t, err, "kubectl create -f %s: %s", filepath, output)
 	name := string(output)
 	t.Cleanup(func() {
-		delOutput, err := exec.Command("kubectl", "delete", kind, name).CombinedOutput()
+		delOutput, err := kubectlCmd(t, "delete", kind, name).CombinedOutput()
 		if err != nil {
 			t.Logf("warning: failed to delete %s/%s: %v (output: %s)", kind, name, err, delOutput)
 			return
@@ -912,7 +1086,7 @@ func createFromManifestCapturingName(t *testing.T, filepath, kind string) string
 // job's -timeout=25m without the wait racing pool contention it doesn't control.
 func waitForInNamespace(t *testing.T, resource, forParam, namespace string) {
 	t.Helper()
-	cmd := exec.Command("kubectl", "wait", "-n", namespace, "--for", forParam, resource, "--timeout=8m")
+	cmd := kubectlCmd(t, "wait", "-n", namespace, "--for", forParam, resource, "--timeout=8m")
 	output, err := cmd.CombinedOutput()
 	t.Logf("wait result for %s in namespace %s: %s", resource, namespace, string(output))
 	require.NoError(t, err)
@@ -929,7 +1103,7 @@ func waitForSinglePod(t *testing.T, namespace, labelSelector string) {
 	t.Helper()
 	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
-		cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
+		cmd := kubectlCmd(t, "get", "pods", "-n", namespace, "-l", labelSelector,
 			"-o", "jsonpath={.items[*].metadata.name}")
 		output, err := cmd.CombinedOutput()
 		if err == nil {
@@ -951,7 +1125,7 @@ func waitForPodByLabel(t *testing.T, namespace, labelSelector string) string {
 	t.Helper()
 	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
-		cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
+		cmd := kubectlCmd(t, "get", "pods", "-n", namespace, "-l", labelSelector,
 			"-o", "jsonpath={.items[*].metadata.name}")
 		output, err := cmd.CombinedOutput()
 		if err == nil {
@@ -975,7 +1149,7 @@ func waitForStatefulSetUpdateRevisionChange(t *testing.T, namespace, name, stale
 	t.Helper()
 	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
-		cmd := exec.Command("kubectl", "get", "statefulset", name, "-n", namespace,
+		cmd := kubectlCmd(t, "get", "statefulset", name, "-n", namespace,
 			"-o", "jsonpath={.status.updateRevision}")
 		output, err := cmd.CombinedOutput()
 		if err == nil {
@@ -997,7 +1171,7 @@ func waitForPodReadyInNamespace(t *testing.T, namespace, podName string) {
 	t.Helper()
 	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
-		cmd := exec.Command("kubectl", "get", "pod", podName, "-n", namespace,
+		cmd := kubectlCmd(t, "get", "pod", podName, "-n", namespace,
 			"-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`)
 		output, err := cmd.CombinedOutput()
 		if err == nil && strings.TrimSpace(string(output)) == "True" {
@@ -1024,7 +1198,7 @@ func waitForContainerWaitingReasonInNamespace(t *testing.T, resource, containerN
 	}
 	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
-		cmd := exec.Command("kubectl", args...)
+		cmd := kubectlCmd(t, args...)
 		output, err := cmd.CombinedOutput()
 		if err == nil && strings.TrimSpace(string(output)) == reason {
 			t.Logf("%s container %s reached waiting reason %s", resource, containerName, reason)
@@ -1043,7 +1217,7 @@ func waitForPodMetrics(t *testing.T, namespace, name string) {
 	rawPath := fmt.Sprintf("/apis/metrics.k8s.io/v1beta1/namespaces/%s/pods/%s", namespace, name)
 	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
-		if err := exec.Command("kubectl", "get", "--raw", rawPath).Run(); err == nil {
+		if err := kubectlCmd(t, "get", "--raw", rawPath).Run(); err == nil {
 			t.Logf("metrics available for pod %s/%s", namespace, name)
 			return
 		}
@@ -1072,7 +1246,7 @@ func waitForContainerMetrics(t *testing.T, namespace, name string, containerName
 	}
 	deadline := time.Now().Add(4 * time.Minute)
 	for time.Now().Before(deadline) {
-		output, err := exec.Command("kubectl", "get", "--raw", rawPath).Output()
+		output, err := kubectlCmd(t, "get", "--raw", rawPath).Output()
 		if err == nil {
 			var m podMetrics
 			if json.Unmarshal(output, &m) == nil {
@@ -1108,7 +1282,7 @@ func waitForMetricsAPIServiceAvailable(t *testing.T) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
-		output, err := exec.Command("kubectl", "get", "apiservice", "v1beta1.metrics.k8s.io",
+		output, err := kubectlCmd(t, "get", "apiservice", "v1beta1.metrics.k8s.io",
 			"-o", `jsonpath={.status.conditions[?(@.type=="Available")].status}`).Output()
 		if err == nil && strings.TrimSpace(string(output)) == "True" {
 			t.Log("metrics-server APIService is Available again")
@@ -1126,7 +1300,7 @@ func waitForVPARecommendation(t *testing.T, namespace, name string) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Minute)
 	for time.Now().Before(deadline) {
-		output, err := exec.Command("kubectl", "get", "vpa", name, "-n", namespace,
+		output, err := kubectlCmd(t, "get", "vpa", name, "-n", namespace,
 			"-o", "jsonpath={.status.recommendation.containerRecommendations[0].target.cpu}").CombinedOutput()
 		if err == nil && strings.TrimSpace(string(output)) != "" {
 			t.Logf("VPA %s/%s has a recommendation: %s", namespace, name, strings.TrimSpace(string(output)))
@@ -1146,7 +1320,7 @@ func waitForVPAPodsMatched(t *testing.T, namespace, name string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
-		output, err := exec.Command("kubectl", "get", "vpa", name, "-n", namespace,
+		output, err := kubectlCmd(t, "get", "vpa", name, "-n", namespace,
 			"-o", `jsonpath={.status.conditions[?(@.type=="NoPodsMatched")].status}`).CombinedOutput()
 		if err == nil && strings.TrimSpace(string(output)) != "True" {
 			t.Logf("VPA %s/%s no longer reports NoPodsMatched", namespace, name)
@@ -1164,7 +1338,7 @@ func waitForPodRecreated(t *testing.T, namespace, labelSelector, originalPodName
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Minute)
 	for time.Now().Before(deadline) {
-		output, err := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", labelSelector,
+		output, err := kubectlCmd(t, "get", "pods", "-n", namespace, "-l", labelSelector,
 			"-o", "jsonpath={.items[*].metadata.name}").CombinedOutput()
 		if err == nil {
 			for _, name := range strings.Fields(string(output)) {
@@ -1187,35 +1361,39 @@ func waitForPodRecreated(t *testing.T, namespace, labelSelector, originalPodName
 // API CRDs, Cilium/Calico CRDs, VPA, Crossplane, Flux) instead of everything being installed
 // unconditionally by `make install-e2e-deps` before any test runs. metrics-server is the one
 // exception left as a Makefile step: it must be available before TestE2EParallel's pool starts
-// (see that function's doc comment), not merely before whichever group happens to use it.
+// (see that function's doc comment), not merely before whichever group happens to use it, and it
+// is installed on both clusters (see the Makefile) since TestE2EClusterWide needs it too.
 //
 // A dependency used by more than one topical group (Gateway API CRDs: service-routing and
 // tls-validation) needs to install exactly once across the whole run, not once per group -- each
-// onceInstaller below is a package-level singleton shared by every caller, guarded by
-// sync.Once. The error from that single install attempt is cached and replayed to every caller
-// (including ones after the first) rather than only failing the subtest that happened to trigger
-// the install: sync.Once.Do still marks itself done even if its function calls t.FailNow
-// (testify's require does, via runtime.Goexit), so the install closures below stay t-free and
-// return a plain error instead.
+// onceInstaller below is a package-level singleton shared by every caller. The error from that
+// single install attempt is cached and replayed to every caller (including ones after the first)
+// rather than only failing the subtest that happened to trigger the install, so the install
+// closures below stay t-free and return a plain error instead: a `require` inside one exits via
+// runtime.Goexit, and a caller that skipped the install because it was already "done" would have
+// no idea it had failed.
+//
+// "Once" is per cluster, not per process (#867): the suite runs against two clusters, and an
+// installer called from both must install on both. Keyed on the e2eTarget rather than on the role
+// so the key is the thing that actually determines where an install lands.
 // ---------------------------------------------------------------------------
 
 type onceInstaller struct {
-	once sync.Once
-	err  error
+	// results holds one entry per cluster this installer has been asked for; the zero
+	// onceInstaller is ready to use (the map is created on first insert). Guarded by installMu
+	// below, which every install already holds anyway.
+	results map[e2eTarget]error
 }
 
 // installMu serializes every install against every other one, across all onceInstallers. The
-// sync.Once above only keeps a single dependency from being installed twice; it says nothing about
-// two *different* ones overlapping. Most call sites can't overlap on their own: a group-level
-// ensureX in TestE2EParallel runs in that function's own goroutine, which a parallel subtest can't
-// resume ahead of (t.Run parks such a subtest and only releases it once the parent function
-// returns), and TestE2EDynamicManifests has no parallel subtests at all. But that's a property of
-// where those call sites happen to sit, not something the type enforces, and ensureFlux is already
-// the exception: it's called from inside a t.Parallel() subtest (runFluxSubtests,
-// cmd/e2e_flux_test.go), where without this mutex it would race installs of unrelated dependencies
-// running concurrently in sibling subtests. Serializing here costs nothing to be sure of -- a warm
+// per-target result map above only keeps a single dependency from being installed twice on the same
+// cluster; it says nothing about two *different* ones overlapping. Several call sites genuinely
+// can overlap: ensureFlux is called from inside a t.Parallel() subtest (runFluxSubtests,
+// cmd/e2e_flux_test.go), TestE2EClusterWide's ensureVPA/ensureKarpenterCRDs now are too, and since
+// the entry points themselves run in parallel a group-level ensureX on the pool's cluster can now
+// overlap an install on the other one. Serializing here costs nothing to be sure of -- a warm
 // re-run of every installer totals ~15s, and a cold one is exactly the case you want taking the
-// cluster one dependency at a time rather than several controller rollouts at once.
+// host one dependency at a time rather than several controller rollouts at once.
 //
 // Held only around the install itself, never around require.NoError: install closures are t-free by
 // contract (see above), but keeping the assertion outside means even a stray require inside one
@@ -1224,14 +1402,21 @@ var installMu sync.Mutex
 
 func (o *onceInstaller) ensure(t *testing.T, install func() error) {
 	t.Helper()
-	func() {
+	target := e2eTargetFor(t)
+	err := func() error {
 		installMu.Lock()
 		defer installMu.Unlock()
-		o.once.Do(func() {
-			o.err = install()
-		})
+		if err, done := o.results[target]; done {
+			return err
+		}
+		err := install()
+		if o.results == nil {
+			o.results = map[e2eTarget]error{}
+		}
+		o.results[target] = err
+		return err
 	}()
-	require.NoError(t, o.err)
+	require.NoError(t, err)
 }
 
 var (
@@ -1287,6 +1472,7 @@ var gatewayAPICRDsInstaller onceInstaller
 // kubectl.kubernetes.io/last-applied-configuration annotation trips the 262144-byte annotation
 // limit; server-side apply doesn't need that annotation.
 func ensureGatewayAPICRDs(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	gatewayAPICRDsInstaller.ensure(t, func() error {
 		version, err := versionsEnvValue("GATEWAY_API_VERSION")
@@ -1294,7 +1480,7 @@ func ensureGatewayAPICRDs(t *testing.T) {
 			return err
 		}
 		url := fmt.Sprintf("https://github.com/kubernetes-sigs/gateway-api/releases/download/%s/experimental-install.yaml", version)
-		output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput()
+		output, err := target.kubectl("apply", "--server-side", "-f", url).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("kubectl apply gateway-api CRDs: %w: %s", err, output)
 		}
@@ -1308,6 +1494,7 @@ var certManagerInstaller onceInstaller
 // pinned in hack/versions.env (shared with hack/generate-screenshots.sh); bump them there
 // periodically.
 func ensureCertManager(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	certManagerInstaller.ensure(t, func() error {
 		version, err := versionsEnvValue("CERT_MANAGER_VERSION")
@@ -1315,10 +1502,10 @@ func ensureCertManager(t *testing.T) {
 			return err
 		}
 		url := fmt.Sprintf("https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml", version)
-		if output, err := exec.Command("kubectl", "apply", "-f", url).CombinedOutput(); err != nil {
+		if output, err := target.kubectl("apply", "-f", url).CombinedOutput(); err != nil {
 			return fmt.Errorf("kubectl apply cert-manager.yaml: %w: %s", err, output)
 		}
-		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=300s",
+		output, err := target.kubectl("wait", "--for=condition=Available", "--timeout=300s",
 			"deployment", "--all", "-n", "cert-manager").CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("kubectl wait cert-manager deployments: %w: %s", err, output)
@@ -1341,6 +1528,7 @@ var ciliumCalicoCRDsInstaller onceInstaller
 // OpenAPI schemas are large enough to trip the same client-side last-applied-configuration
 // annotation limit as HTTPRoute above.
 func ensureCiliumCalicoCRDs(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	ciliumCalicoCRDsInstaller.ensure(t, func() error {
 		urls := []string{
@@ -1349,7 +1537,7 @@ func ensureCiliumCalicoCRDs(t *testing.T) {
 			"https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/crds.yaml",
 		}
 		for _, url := range urls {
-			output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput()
+			output, err := target.kubectl("apply", "--server-side", "-f", url).CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("kubectl apply %s: %w: %s", url, err, output)
 			}
@@ -1361,7 +1549,7 @@ func ensureCiliumCalicoCRDs(t *testing.T) {
 var volumeSnapshotCRDsInstaller onceInstaller
 
 // ensureVolumeSnapshotCRDs installs the VolumeSnapshot/VolumeSnapshotContent CRDs (snapshot.
-// storage.k8s.io), needed by TestE2EDynamicManifests' VolumeSnapshot(Content) subtests. Same
+// storage.k8s.io), needed by the VolumeSnapshot(Content) subtests (runStorageSubtests). Same
 // "CRDs only" reasoning as Gateway API/Cilium/Calico above: kind's local-path
 // provisioner has no CSI snapshot support, and getting a real snapshot to reach
 // ReadyToUse deterministically would need a real CSI driver + external-snapshotter controller
@@ -1371,6 +1559,7 @@ var volumeSnapshotCRDsInstaller onceInstaller
 // apiserver, not a controller actually reconciling them. VolumeSnapshotClass isn't installed:
 // nothing here creates one, spec.volumeSnapshotClassName is just a free-form string reference.
 func ensureVolumeSnapshotCRDs(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	volumeSnapshotCRDsInstaller.ensure(t, func() error {
 		version, err := versionsEnvValue("EXTERNAL_SNAPSHOTTER_VERSION")
@@ -1382,7 +1571,7 @@ func ensureVolumeSnapshotCRDs(t *testing.T) {
 			fmt.Sprintf("https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/%s/client/config/crd/snapshot.storage.k8s.io_volumesnapshotcontents.yaml", version),
 		}
 		for _, url := range urls {
-			output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput()
+			output, err := target.kubectl("apply", "--server-side", "-f", url).CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("kubectl apply %s: %w: %s", url, err, output)
 			}
@@ -1399,6 +1588,7 @@ var karpenterCRDsInstaller onceInstaller
 // controller installed) are enough -- same "CRDs only" reasoning as ensureCiliumCalicoCRDs/
 // ensureVolumeSnapshotCRDs above.
 func ensureKarpenterCRDs(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	karpenterCRDsInstaller.ensure(t, func() error {
 		version, err := versionsEnvValue("KARPENTER_VERSION")
@@ -1410,7 +1600,7 @@ func ensureKarpenterCRDs(t *testing.T) {
 			fmt.Sprintf("https://raw.githubusercontent.com/kubernetes-sigs/karpenter/%s/pkg/apis/crds/karpenter.sh_nodeclaims.yaml", version),
 		}
 		for _, url := range urls {
-			output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput()
+			output, err := target.kubectl("apply", "--server-side", "-f", url).CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("kubectl apply %s: %w: %s", url, err, output)
 			}
@@ -1440,23 +1630,24 @@ func helmRepoAddUpdate(name, url string) error {
 
 var vpaInstaller onceInstaller
 
-// ensureVPA installs VerticalPodAutoscaler, needed by TestE2EDynamicManifests' VPA subtest.
+// ensureVPA installs VerticalPodAutoscaler, needed by TestE2EClusterWide's VPA subtest.
 // Unlike the CRD-only installers above, that scenario exercises it actually acting (the updater
 // evicting/recreating a Pod to apply a recommendation), so its controllers (recommender/updater/
 // admission-controller) need to run for real, not just the CRDs. The upstream project has no
 // plain `kubectl apply` release bundle (its install script generates webhook certs locally), so
 // this uses the cowboysysop community Helm chart instead.
 func ensureVPA(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	vpaInstaller.ensure(t, func() error {
 		if err := helmRepoAddUpdate("cowboysysop", "https://cowboysysop.github.io/charts/"); err != nil {
 			return err
 		}
-		if output, err := exec.Command("helm", "upgrade", "--install", "vpa", "cowboysysop/vertical-pod-autoscaler",
+		if output, err := target.helm("upgrade", "--install", "vpa", "cowboysysop/vertical-pod-autoscaler",
 			"--version", "11.1.1", "-n", "kube-system", "--wait", "--timeout", "5m").CombinedOutput(); err != nil {
 			return fmt.Errorf("helm upgrade vpa: %w: %s", err, output)
 		}
-		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=120s",
+		output, err := target.kubectl("wait", "--for=condition=Available", "--timeout=120s",
 			"deployment", "-l", "app.kubernetes.io/instance=vpa", "-n", "kube-system").CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("kubectl wait vpa deployments: %w: %s", err, output)
@@ -1468,7 +1659,7 @@ func ensureVPA(t *testing.T) {
 var crossplaneInstaller onceInstaller
 
 // ensureCrossplane installs Crossplane core plus the two Composition Functions the e2e test
-// Composition needs, required by TestE2EDynamicManifests' Crossplane subtest. That scenario
+// Composition needs, required by the Crossplane subtest (runCrossplaneSubtests). That scenario
 // exercises a real XR composing real children (a Composition Function renders them and derives
 // readiness), not just kubectl-status reading static CRDs, so Crossplane needs to actually
 // reconcile -- same "controller must actually run" reasoning as VPA above. No cloud provider is
@@ -1478,6 +1669,7 @@ var crossplaneInstaller onceInstaller
 // Their versions are pinned in the manifest itself (not hack/versions.env) since they're only
 // used here.
 func ensureCrossplane(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	crossplaneInstaller.ensure(t, func() error {
 		version, err := versionsEnvValue("CROSSPLANE_VERSION")
@@ -1487,21 +1679,21 @@ func ensureCrossplane(t *testing.T) {
 		if err := helmRepoAddUpdate("crossplane-stable", "https://charts.crossplane.io/stable"); err != nil {
 			return err
 		}
-		if output, err := exec.Command("helm", "upgrade", "--install", "crossplane", "crossplane-stable/crossplane",
+		if output, err := target.helm("upgrade", "--install", "crossplane", "crossplane-stable/crossplane",
 			"--version", version, "-n", "crossplane-system", "--create-namespace", "--wait", "--timeout", "5m").CombinedOutput(); err != nil {
 			return fmt.Errorf("helm upgrade crossplane: %w: %s", err, output)
 		}
 		functionsManifest := path.Join("..", "tests", "e2e-artifacts", "crossplane-functions.yaml")
-		if output, err := exec.Command("kubectl", "apply", "-f", functionsManifest).CombinedOutput(); err != nil {
+		if output, err := target.kubectl("apply", "-f", functionsManifest).CombinedOutput(); err != nil {
 			return fmt.Errorf("kubectl apply %s: %w: %s", functionsManifest, err, output)
 		}
 		// 5m, matching the helm installs above rather than being the one short wait in the
 		// function: both Functions are OCI packages pulled on demand, so this is a cold pull of
 		// two images plus a Deployment rollout, racing whatever else the suite has running.
-		output, err := exec.Command("kubectl", "wait", "--for=condition=Healthy", "--timeout=300s",
+		output, err := target.kubectl("wait", "--for=condition=Healthy", "--timeout=300s",
 			"function.pkg.crossplane.io", "--all").CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("kubectl wait crossplane functions: %w: %s%s", err, output, crossplaneDiagnostics())
+			return fmt.Errorf("kubectl wait crossplane functions: %w: %s%s", err, output, crossplaneDiagnostics(target))
 		}
 		return nil
 	})
@@ -1523,6 +1715,7 @@ var fluxInstaller onceInstaller
 // the bundle's CRDs are large enough to trip the same client-side last-applied-configuration
 // annotation limit as the Gateway API bundle above.
 func ensureFlux(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	fluxInstaller.ensure(t, func() error {
 		version, err := versionsEnvValue("FLUX_VERSION")
@@ -1530,15 +1723,15 @@ func ensureFlux(t *testing.T) {
 			return err
 		}
 		url := fmt.Sprintf("https://github.com/fluxcd/flux2/releases/download/%s/install.yaml", version)
-		if output, err := exec.Command("kubectl", "apply", "--server-side", "-f", url).CombinedOutput(); err != nil {
+		if output, err := target.kubectl("apply", "--server-side", "-f", url).CombinedOutput(); err != nil {
 			return fmt.Errorf("kubectl apply flux install.yaml: %w: %s", err, output)
 		}
 		// 300s matches the cert-manager/Crossplane installs: four controller Deployments, each a
 		// cold image pull, racing whatever else the suite has running on the shared cluster.
-		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=300s",
+		output, err := target.kubectl("wait", "--for=condition=Available", "--timeout=300s",
 			"deployment", "--all", "-n", "flux-system").CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("kubectl wait flux deployments: %w: %s%s", err, output, fluxDiagnostics())
+			return fmt.Errorf("kubectl wait flux deployments: %w: %s%s", err, output, fluxDiagnostics(target))
 		}
 		return nil
 	})
@@ -1548,13 +1741,13 @@ func ensureFlux(t *testing.T) {
 // crossplaneDiagnostics exists: `kubectl wait`'s timeout message names no cause, and this install
 // runs unattended on a cluster the rest of the suite is loading, so this is the only evidence
 // anyone gets after the fact.
-func fluxDiagnostics() string {
+func fluxDiagnostics(target e2eTarget) string {
 	var b strings.Builder
 	for _, args := range [][]string{
 		{"get", "pods", "-n", "flux-system", "-o", "wide"},
 		{"get", "events", "-n", "flux-system", "--sort-by=.lastTimestamp"},
 	} {
-		out, err := exec.Command("kubectl", args...).CombinedOutput()
+		out, err := target.kubectl(args...).CombinedOutput()
 		fmt.Fprintf(&b, "\n--- kubectl %s ---\n%s", strings.Join(args, " "), out)
 		if err != nil {
 			fmt.Fprintf(&b, "(%v)\n", err)
@@ -1569,7 +1762,7 @@ func fluxDiagnostics() string {
 // never got scheduled are indistinguishable in CI logs after the fact. The install runs
 // unattended on a cluster the rest of the suite is loading, so whatever is collected here is the
 // only evidence anyone gets -- the failure is not reproducible by re-reading the log later.
-func crossplaneDiagnostics() string {
+func crossplaneDiagnostics(target e2eTarget) string {
 	var b strings.Builder
 	for _, args := range [][]string{
 		{"get", "function.pkg.crossplane.io", "-o", "wide"},
@@ -1577,7 +1770,7 @@ func crossplaneDiagnostics() string {
 		{"get", "pods", "-n", "crossplane-system", "-o", "wide"},
 		{"get", "events", "-n", "crossplane-system", "--sort-by=.lastTimestamp"},
 	} {
-		out, err := exec.Command("kubectl", args...).CombinedOutput()
+		out, err := target.kubectl(args...).CombinedOutput()
 		fmt.Fprintf(&b, "\n--- kubectl %s ---\n%s", strings.Join(args, " "), out)
 		if err != nil {
 			fmt.Fprintf(&b, "(%v)\n", err)
@@ -1616,6 +1809,7 @@ var istioCRDsWanted = []string{
 // --server-side: these CRDs' embedded schemas are large enough to trip client-side apply's
 // last-applied-configuration annotation limit, as the Gateway API's do.
 func ensureIstioCRDs(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	istioCRDsInstaller.ensure(t, func() error {
 		version, err := versionsEnvValue("ISTIO_VERSION")
@@ -1646,7 +1840,7 @@ func ensureIstioCRDs(t *testing.T) {
 		if len(wanted) != len(istioCRDsWanted) {
 			return fmt.Errorf("istio CRD bundle %s: found %d of %v", url, len(wanted), istioCRDsWanted)
 		}
-		cmd := exec.Command("kubectl", "apply", "--server-side", "-f", "-")
+		cmd := target.kubectl("apply", "--server-side", "-f", "-")
 		cmd.Stdin = strings.NewReader(strings.Join(wanted, "\n---\n"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("kubectl apply istio CRDs: %w: %s", err, output)
@@ -1668,6 +1862,7 @@ var kyvernoInstaller onceInstaller
 // Chart version is pinned in hack/versions.env as KYVERNO_VERSION (the chart version, e.g.
 // "3.8.2" -- Kyverno's Helm chart and app versions diverge, chart 3.8.2 ships app v1.18.2).
 func ensureKyverno(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	kyvernoInstaller.ensure(t, func() error {
 		version, err := versionsEnvValue("KYVERNO_VERSION")
@@ -1693,22 +1888,22 @@ func ensureKyverno(t *testing.T) {
 		// reports-controller Pending on "Insufficient cpu" (confirmed against this exact cluster).
 		// 10m each is still generous for a controller that's idle between the handful of events
 		// this one test namespace produces.
-		if output, err := exec.Command("helm", "upgrade", "--install", "kyverno", "kyverno/kyverno",
+		if output, err := target.helm("upgrade", "--install", "kyverno", "kyverno/kyverno",
 			"--version", version, "-n", "kyverno", "--create-namespace", "--wait", "--timeout", "5m",
 			"--set", "features.backgroundScan.backgroundScanInterval=30s",
 			"--set", "cleanupController.enabled=false",
 			"--set", "admissionController.resources.requests.cpu=10m",
 			"--set", "backgroundController.resources.requests.cpu=10m",
 			"--set", "reportsController.resources.requests.cpu=10m").CombinedOutput(); err != nil {
-			return fmt.Errorf("helm upgrade kyverno: %w: %s%s", err, output, kyvernoDiagnostics())
+			return fmt.Errorf("helm upgrade kyverno: %w: %s%s", err, output, kyvernoDiagnostics(target))
 		}
 		// Belt-and-suspenders alongside helm --wait above, matching ensureVPA: confirms the
 		// specific signal (Deployments Available) the rest of the suite depends on, with its own
 		// diagnostics if it's ever the one that times out instead of helm's own wait.
-		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=300s",
+		output, err := target.kubectl("wait", "--for=condition=Available", "--timeout=300s",
 			"deployment", "--all", "-n", "kyverno").CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("kubectl wait kyverno deployments: %w: %s%s", err, output, kyvernoDiagnostics())
+			return fmt.Errorf("kubectl wait kyverno deployments: %w: %s%s", err, output, kyvernoDiagnostics(target))
 		}
 		return nil
 	})
@@ -1717,13 +1912,13 @@ func ensureKyverno(t *testing.T) {
 // kyvernoDiagnostics dumps why the controllers never came up, for the same reason
 // fluxDiagnostics/crossplaneDiagnostics exist: a bare timeout names no cause, and this install
 // runs unattended on a cluster the rest of the suite is loading.
-func kyvernoDiagnostics() string {
+func kyvernoDiagnostics(target e2eTarget) string {
 	var b strings.Builder
 	for _, args := range [][]string{
 		{"get", "pods", "-n", "kyverno", "-o", "wide"},
 		{"get", "events", "-n", "kyverno", "--sort-by=.lastTimestamp"},
 	} {
-		out, err := exec.Command("kubectl", args...).CombinedOutput()
+		out, err := target.kubectl(args...).CombinedOutput()
 		fmt.Fprintf(&b, "\n--- kubectl %s ---\n%s", strings.Join(args, " "), out)
 		if err != nil {
 			fmt.Fprintf(&b, "(%v)\n", err)
@@ -1769,6 +1964,7 @@ var gatekeeperInstaller onceInstaller
 // global replace, so they can't accidentally touch an unrelated document that happens to share
 // that text.
 func ensureGatekeeper(t *testing.T) {
+	target := e2eTargetFor(t)
 	t.Helper()
 	gatekeeperInstaller.ensure(t, func() error {
 		version, err := versionsEnvValue("GATEKEEPER_VERSION")
@@ -1803,12 +1999,12 @@ func ensureGatekeeper(t *testing.T) {
 			}
 			docs = append(docs, d)
 		}
-		cmd := exec.Command("kubectl", "apply", "--server-side", "-f", "-")
+		cmd := target.kubectl("apply", "--server-side", "-f", "-")
 		cmd.Stdin = strings.NewReader(strings.Join(docs, "\n---\n"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("kubectl apply gatekeeper bundle: %w: %s", err, output)
 		}
-		output, err := exec.Command("kubectl", "wait", "--for=condition=Available", "--timeout=300s",
+		output, err := target.kubectl("wait", "--for=condition=Available", "--timeout=300s",
 			"deployment", "--all", "-n", "gatekeeper-system").CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("kubectl wait gatekeeper deployments: %w: %s", err, output)
