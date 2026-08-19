@@ -4,8 +4,9 @@ Pod/netpol-selected-pod -n e2e-netpol-pod, created 1m ago, gen:1, started after 
   Managed by kubectl-status-test-netpol-target application
   PodScheduled:True -> Initialized:True -> ContainersReady:True -> Ready:True for 1m
   Standalone POD\.
-  Containers: app \(busybox:latest\) Running for 1m and Ready \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+  Containers: app \(docker\.io/library/busybox:latest\) Running for 1m and Ready(?: \(logs: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\))?
   (?:usage cpu usage:[0-9.]+/\[no-req, no-lim\], mem usage:[0-9.]+[A-Za-z]+/\[no-req, no-lim\]|cpu: \[no-req, no-lim\], mem: \[no-req, no-lim\], \(no metrics yet\))
-  Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
+(?:  rootfs usage: [0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+ \([0-9]+%\)
+)?  Volumes: ephemeral-storage \([0-9.]+[A-Za-z]+/[0-9.]+[A-Za-z]+\[[0-9]+%\]\)
   NetworkPolicy: selected by NetworkPolicy deny-ingress-to-app \(ingress restricted\)
 \z

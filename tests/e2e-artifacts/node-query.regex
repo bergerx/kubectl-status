@@ -1,6 +1,8 @@
 \A
 Node/[a-z0-9-]+, created 1m ago
   linux [^\n]+ \(amd64\), kernel [^\n,]+, kubelet v[0-9][^\n,]*(?:, kube-proxy v[0-9][^\n,]*)?, [a-z]+://[0-9][^\n,]*
+  cloudprovider kind
+    providerID: kind://docker/\S+/[a-z0-9.-]+
   images [0-9]+
   Current: Resource is Ready
   DiskPressure:False KubeletHasNoDiskPressure, kubelet has no disk pressure for 1m
