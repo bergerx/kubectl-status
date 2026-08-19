@@ -8,5 +8,5 @@ Pod/e2e-dra-pod -n e2e-dra-alloc, created 1m ago, gen:1, started after 1m Pendin
     Ready:False ContainersNotReady, containers with unready status: \[main\] for 1m
   Standalone POD\.
   Containers: main \(busybox\) Waiting ContainerCreating, claims: gpu
-  Device claims: gpu: ResourceClaim/e2e-dra-claim, allocated
+  Device claims: gpu: ResourceClaim/e2e-dra-claim, allocated 1m ago
 \z

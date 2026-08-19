@@ -4,5 +4,5 @@ ResourceClaim/e2e-dra-claim -n e2e-dra-alloc, created 1m ago
     gpu: DeviceClass/e2e-dra-gpu, allocated dev-0 from e2e-dra-fake\.example\.com/e2e-dra-pool
         DeviceClass/e2e-dra-gpu, created 1m ago, gen:1
           Selects: device\.driver == "e2e-dra-fake\.example\.com"
-  Allocated, reserved for Pod/e2e-dra-pod
+  Allocated 1m ago, reserved for Pod/e2e-dra-pod
 \z

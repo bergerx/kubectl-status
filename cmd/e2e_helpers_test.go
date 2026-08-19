@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
@@ -150,6 +151,44 @@ func createBadNode(t *testing.T, clientset *kubernetes.Clientset) string {
 		return true
 	}, time.Minute, time.Second, "Node/%s never got all of the expected taints %v", node.Name, wantTaints)
 	return node.Name
+}
+
+// createStaticHostPathPV pre-binds a cluster-scoped hostPath PersistentVolume to the given
+// namespace/name via claimRef, so the PV controller binds that PVC to it alone -- deterministic
+// even with -parallel=4 racing other subtests for the default StorageClass. kind's default
+// provisioner (rancher.io/local-path) only provisions once the scheduler has stamped the PVC's
+// volume.kubernetes.io/selected-node annotation, which never happens under
+// volumeBindingMode: Immediate (that annotation is a WaitForFirstConsumer-only mechanism) -- so a
+// PVC that must be Bound before any consuming Pod exists can't go through dynamic provisioning at
+// all here and needs a static PV instead. hostPath's DirectoryOrCreate only creates the directory
+// on the node once a Pod actually mounts it, so this never touches the node's filesystem for a
+// caller whose Pod stays Pending or whose PVC is only ever inspected, not mounted.
+// The caller's PVC must set StorageClassName to a pointer to "" (not nil): nil gets defaulted to
+// the cluster's default StorageClass by the DefaultStorageClass admission plugin, which then
+// fails to match this PV's own empty StorageClassName.
+func createStaticHostPathPV(t *testing.T, clientset *kubernetes.Clientset, claimNamespace, claimName string, accessModes []corev1.PersistentVolumeAccessMode) {
+	t.Helper()
+	hostPathType := corev1.HostPathDirectoryOrCreate
+	pv := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "kubectl-status-test-static-pv-"},
+		Spec: corev1.PersistentVolumeSpec{
+			Capacity:                      corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+			AccessModes:                   accessModes,
+			PersistentVolumeReclaimPolicy: corev1.PersistentVolumeReclaimDelete,
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/tmp/kstat-e2e-pv/" + claimNamespace + "-" + claimName,
+					Type: &hostPathType,
+				},
+			},
+			ClaimRef: &corev1.ObjectReference{Namespace: claimNamespace, Name: claimName},
+		},
+	}
+	pv, err := clientset.CoreV1().PersistentVolumes().Create(context.TODO(), pv, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		clientset.CoreV1().PersistentVolumes().Delete(context.TODO(), pv.Name, metav1.DeleteOptions{})
+	})
 }
 
 func nodeNameModifier(stdout string) string {

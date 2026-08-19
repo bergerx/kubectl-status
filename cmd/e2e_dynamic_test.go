@@ -206,13 +206,18 @@ func TestE2EDynamicManifests(t *testing.T) {
 		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
 
-		// No storageClassName -- picks up the cluster's default class (Immediate binding), so
-		// the claim binds to a real PV before any Pod exists.
+		// A static PV, not dynamic provisioning -- kind's local-path provisioner never binds a
+		// claim before a consuming Pod exists (see createStaticHostPathPV), and this claim needs
+		// to be bound to a real PV before any Pod exists.
 		pvcName := "e2e-rwop-pvc"
+		accessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod}
+		createStaticHostPathPV(t, clientset, ns, pvcName, accessModes)
+		emptySC := ""
 		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
 			Spec: corev1.PersistentVolumeClaimSpec{
-				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod},
+				AccessModes:      accessModes,
+				StorageClassName: &emptySC,
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
 				},
