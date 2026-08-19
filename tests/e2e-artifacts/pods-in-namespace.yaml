@@ -1,4 +1,4 @@
-# Fixture for the "pods in a namespace" list query in TestE2EAgainstVanillaMinikube: a namespace
+# Fixture for the "pods in a namespace" list query in TestE2EAgainstVanillaCluster: a namespace
 # holding more than one Pod, so the query renders several objects in one go.
 #
 # Both Pods carry the never-removed scheduling gate from cmd/e2e_helpers_test.go

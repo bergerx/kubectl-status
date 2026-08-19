@@ -132,7 +132,7 @@ func runDRASubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), clients
 				Pool: resourcev1.ResourcePool{
 					// Fixed rather than derived from nodeName: the pool name is the driver's own
 					// choice, unrelated to which node happens to run this cluster, and CI's
-					// minikube node name differs from a local dev cluster's -- keeping it out of
+					// node name differs from a local dev cluster's -- keeping it out of
 					// the pool name keeps the fixtures below free of a value that varies by
 					// environment (unlike an actual Node/ ref, which nodeNameModifier normalizes).
 					Name:               "e2e-dra-pool",
