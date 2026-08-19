@@ -363,7 +363,11 @@ test-e2e: vet staticcheck install-e2e-deps
 	# race-safe.
 	# -race: dynamic analysis (data race detection) for the OpenSSF Best Practices badge's
 	# dynamic_analysis criterion -- #838. Especially relevant here since -parallel=4 runs
-	# subtests concurrently against shared in-process state.
+	# subtests concurrently against shared in-process state. Its instrumentation overhead
+	# (extra CPU per goroutine, competing with the in-VM control plane for the same cores)
+	# pushed a real CI run past the old 25m budget with only one subtest (pod-container-logs)
+	# still in flight -- see the panic in #861 -- so -timeout is raised to 40m to give that
+	# overhead headroom; ci-test.yml's own wrapper timeout is raised to match.
 	@mkdir -p $(E2E_HOME)
 	RUN_E2E_TESTS=true ASSUME_CLUSTER_IS_CONFIGURED=true $(E2E_CONTEXT_ENV) flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=40m -parallel=4 -run 'TestE2E*' -race -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
 else
