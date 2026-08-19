@@ -57,21 +57,41 @@ jobs:
           report_type: test_results
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
-      - name: Start minikube
-        uses: medyagh/setup-minikube@e9e035a86bbc3caea26a450bd4dbf9d0c453682e # v0.0.21
+      # hack/versions.env is the single source of truth for the kind CLI version and the
+      # digest-pinned node image (like every other dependency version in this repo), but
+      # `with:` values can't be shell-expanded -- only ${{ }} expressions are substituted, and
+      # there's no expression that reads a file. So the pins are read into step outputs here
+      # and referenced below, rather than being duplicated (and left to drift) in this file.
+      - name: Read kind pins from hack/versions.env
+        id: kind-pins
+        run: |
+          # shellcheck disable=SC1091
+          source hack/versions.env
+          echo "version=${KIND_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "node_image=${KIND_NODE_IMAGE}" >> "$GITHUB_OUTPUT"
+      - name: Create kind cluster
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
-          addons: metrics-server
-          # minikube's own default is --cpus=2, sized for serial use, and the suite below runs
-          # with -parallel=4. The Makefile already learned this the hard way and starts its
-          # cluster with --cpus=4 (see e2e-minikube-up's note on the defaults getting
-          # overwhelmed into widespread `kubectl wait` timeouts) -- but CI runs the
-          # ASSUME_MINIKUBE_IS_CONFIGURED branch, which skips e2e-minikube-up entirely, so that
-          # sizing never applied here and CI has been running the whole suite on 2 CPUs.
-          # "max" rather than a literal 4 so this tracks the runner size instead of pinning to
-          # today's 4-vCPU ubuntu-latest.
-          cpus: max
-          # memory is deliberately left at minikube's default: unlike --cpus it auto-sizes from
-          # the host, so naming a figure here could only shrink it.
+          cluster_name: kstat-e2e
+          # version/node_image set explicitly rather than taking the action's defaults: those
+          # currently give kind v0.31.0 and a k8s 1.35.x node image -- older than what
+          # hack/versions.env pins -- and they'd move underneath us whenever the action moves.
+          # The whole point of pinning the node image by digest is that CI and a local
+          # `make e2e-cluster-up` render against the identical Kubernetes build.
+          version: ${{ steps.kind-pins.outputs.version }}
+          node_image: ${{ steps.kind-pins.outputs.node_image }}
+          # Same single-node cluster shape as local runs -- see hack/kind-cluster.yaml.
+          config: hack/kind-cluster.yaml
+          wait: 300s
+          # No CPU/memory sizing here, unlike the minikube step this replaced: a kind node is a
+          # container with no CPU limit, so it already sees the whole runner. The `cpus: max`
+          # input that used to be needed (the suite runs with -parallel=4, minikube defaulted to
+          # 2 CPUs) has no kind equivalent and is no longer necessary.
+          #
+          # metrics-server and the default StorageClass's binding mode were minikube addons and
+          # are not installed here: kind has no addons, so `make install-e2e-deps` (run as a
+          # dependency of `make test-e2e` below) owns both, which also keeps CI and local runs
+          # installing them the same way.
       - name: Run e2e tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
@@ -90,7 +110,7 @@ jobs:
           # above for why this rides the existing test-e2e run instead of a separate one, and for
           # why the path must be absolute ($(pwd), since this line genuinely runs through a shell
           # unlike the unit step's env: block, where the equivalent ${{ github.workspace }} lives).
-          command: ASSUME_MINIKUBE_IS_CONFIGURED=true KUBECTL_STATUS_TEMPLATE_COVERAGE=$(pwd)/e2e-template-cover.out make test-e2e
+          command: ASSUME_CLUSTER_IS_CONFIGURED=true KUBECTL_STATUS_TEMPLATE_COVERAGE=$(pwd)/e2e-template-cover.out make test-e2e
       - name: Upload e2e test coverage to Codecov
         # if: always() -- uploads whatever coverage was captured even if a retry attempt of
         # the e2e step above failed; codecov-action just no-ops if cover-e2e.out is missing.
