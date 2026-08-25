@@ -2,12 +2,13 @@
 # Regenerates the demo screenshots in assets/*.png from a live cluster.
 #
 # Requires:
-#   - kubectl pointed at a disposable/dev cluster (e.g. minikube) -- this script
+#   - kubectl pointed at a disposable/dev cluster (e.g. kind) -- this script
 #     creates and deletes its own namespace, but does not touch any other
-#     namespace or cluster-scoped state, EXCEPT: it installs the Gateway API
-#     CRDs and cert-manager cluster-wide if they aren't already present (needed
-#     for the HTTPRoute/TCPRoute and cert-manager-issued-Secret screenshots),
-#     and removes them again in cleanup if this run is what installed them. Set
+#     namespace or cluster-scoped state, EXCEPT: it installs metrics-server, the
+#     Gateway API CRDs and cert-manager cluster-wide if they aren't already
+#     present (needed for the resource-usage, HTTPRoute/TCPRoute and
+#     cert-manager-issued-Secret screenshots), and removes them again in cleanup
+#     if this run is what installed them. Set
 #     ASSUME_KUBECONFIG_IS_DISPOSABLE=true to skip the confirmation prompt (e.g.
 #     in CI).
 #   - freeze (https://github.com/charmbracelet/freeze): go install github.com/charmbracelet/freeze@latest
@@ -22,6 +23,7 @@ font_family="JetBrains Mono"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/versions.env"
 gateway_api_version="${GATEWAY_API_VERSION}"
 cert_manager_version="${CERT_MANAGER_VERSION}"
+metrics_server_version="${METRICS_SERVER_VERSION}"
 
 if [ "$(uname)" = "Darwin" ]; then
   # macOS has no fontconfig; dropping a .ttf into ~/Library/Fonts is enough,
@@ -54,13 +56,15 @@ fi
 
 context="$(kubectl config current-context)"
 
-is_minikube=false
-metrics_server_already_enabled=false
-if command -v minikube >/dev/null 2>&1 && [ "${context}" = "minikube" ]; then
-  is_minikube=true
-  if minikube addons list 2>/dev/null | grep -q "metrics-server.*enabled"; then
-    metrics_server_already_enabled=true
-  fi
+# Was metrics-server already there before this run? kind has no addons to toggle
+# (unlike the minikube setup this replaced), so metrics-server is a plain Helm
+# release here -- installed the same way `make install-e2e-deps` installs it, and
+# uninstalled again in cleanup only if this run is what put it there. Detection is
+# on the APIService rather than the Helm release so a metrics-server installed by
+# any other means (an addon, a raw manifest apply) is also left alone.
+metrics_server_already_installed=false
+if kubectl get apiservice v1beta1.metrics.k8s.io >/dev/null 2>&1; then
+  metrics_server_already_installed=true
 fi
 
 gateway_api_already_installed=false
@@ -78,10 +82,11 @@ if [ "${ASSUME_KUBECONFIG_IS_DISPOSABLE:-}" != "true" ]; then
 This will, on kubectl context '${context}':
   - create and delete a namespace
 EOF
-  if [ "${is_minikube}" = "true" ] && [ "${metrics_server_already_enabled}" = "false" ]; then
+  if [ "${metrics_server_already_installed}" = "false" ]; then
     cat <<EOF
-  - enable the minikube 'metrics-server' addon, then disable it again when done
-    (cluster-wide, affects other workloads using it in the meantime)
+  - install metrics-server (chart ${metrics_server_version}) into kube-system, then
+    remove it again when done (cluster-wide, affects other workloads using it in
+    the meantime; needed for the resource-usage numbers in the pod screenshot)
 EOF
   fi
   if [ "${gateway_api_already_installed}" = "false" ]; then
@@ -131,9 +136,9 @@ cleanup() {
       '{"status": {"conditions": [{"$patch": "delete", "type": "RebootScheduled"}]}}' \
       >/dev/null 2>&1 || true
   fi
-  if [ "${is_minikube}" = "true" ] && [ "${metrics_server_already_enabled}" = "false" ]; then
-    echo "Disabling metrics-server addon..."
-    minikube addons disable metrics-server >/dev/null 2>&1 || true
+  if [ "${metrics_server_already_installed}" = "false" ]; then
+    echo "Uninstalling metrics-server..."
+    helm uninstall metrics-server -n kube-system >/dev/null 2>&1 || true
   fi
   echo "Deleting namespace ${ns}..."
   kubectl delete namespace "${ns}" --ignore-not-found --wait=false >/dev/null
@@ -150,13 +155,27 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [ "${is_minikube}" = "true" ] && [ "${metrics_server_already_enabled}" = "false" ]; then
-  echo "Enabling minikube metrics-server addon..."
-  minikube addons enable metrics-server >/dev/null
-elif [ "${is_minikube}" = "true" ]; then
-  echo "minikube metrics-server addon is already enabled; leaving it as-is."
+if [ "${metrics_server_already_installed}" = "false" ]; then
+  echo "Installing metrics-server (chart ${metrics_server_version})..."
+  # --kubelet-insecure-tls: on kind the kubelet serving certs are self-signed and
+  # not issued by the cluster CA, so without it every scrape fails x509
+  # verification -- quietly, since the Deployment still goes Available and the
+  # APIService still registers, leaving the pod screenshot with no usage numbers.
+  # See the same flag and reasoning in the Makefile's install-e2e-deps.
+  helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ >/dev/null
+  helm repo update metrics-server >/dev/null
+  helm upgrade --install metrics-server metrics-server/metrics-server \
+    --version "${metrics_server_version}" -n kube-system \
+    --set 'args={--kubelet-insecure-tls}' --wait --timeout 5m >/dev/null
+  # helm --wait proves the Deployment is Available, not that the aggregated API
+  # answers -- and the screenshots below render usage numbers straight after this.
+  # Same poll, same reason, as the Makefile's install-e2e-deps.
+  for ((i=1; i<=60; i++)); do
+    kubectl get --raw /apis/metrics.k8s.io/v1beta1/nodes >/dev/null 2>&1 && break
+    sleep 2
+  done
 else
-  echo "Not running against minikube (context: ${context}); skipping metrics-server addon management. Resource-usage data in the pod screenshot will only appear if metrics-server is already installed." >&2
+  echo "metrics-server already installed; leaving it as-is."
 fi
 
 if [ "${gateway_api_already_installed}" = "false" ]; then

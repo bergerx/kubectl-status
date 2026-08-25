@@ -24,7 +24,7 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
 
 Access Grafana:
 ```bash
-minikube service kube-prometheus-stack-grafana -n monitoring
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
 # default creds: admin / prom-operator
 ```
 
@@ -274,7 +274,7 @@ branches (all three are `KubeGetByLabelsMap`/`KubeGet` calls, unconditionally no
 **Target e2e tests:**
 - `t.Run("job-failed", ...)` — `applyManifest`/`waitFor(t, "job/job-failed", "condition=failed")`, assert `Failed pods` section + `--deep` variant inlining the failed Pod.
 - `t.Run("cronjob-with-jobs", ...)` — apply a `schedule: "*/1 * * * *"` CronJob, `waitFor` `.status.lastScheduleTime`, assert the `Jobs` section lists the owned Job + `--deep` variant.
-- Pending-pods case needs a new manifest designed specifically for it (e.g. a Job requesting `cpu: 1000` on a single-node minikube) before it can become a subtest.
+- Pending-pods case needs a new manifest designed specifically for it (e.g. a Job requesting `cpu: 1000` on the single-node e2e cluster) before it can become a subtest.
 
 ---
 

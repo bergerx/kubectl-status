@@ -26,9 +26,9 @@ import (
 // actually runs alongside its siblings instead of just living next to them; that subtest-level
 // t.Parallel() is what makes siblings run concurrently, regardless of this function's own.
 //
-// This function itself must NOT call t.Parallel(): e2eMinikubeTest below falls back to
-// startMinikube, which calls t.Setenv("KUBECONFIG", ...) for ad hoc `go test -run TestE2E...` runs
-// that don't set ASSUME_MINIKUBE_IS_CONFIGURED=true -- and t.Setenv panics if called on a test
+// This function itself must NOT call t.Parallel(): e2eClusterTest below falls back to
+// startCluster, which calls t.Setenv("KUBECONFIG", ...) for ad hoc `go test -run TestE2E...` runs
+// that don't set ASSUME_CLUSTER_IS_CONFIGURED=true -- and t.Setenv panics if called on a test
 // already marked parallel.
 //
 // Subtests are grouped topically into runXSubtests functions in cmd/e2e_*_test.go, each called
@@ -36,7 +36,7 @@ import (
 // instead: that would break the single e2eClients() setup / shared parallel pool this function
 // provides them.
 func TestE2EParallel(t *testing.T) {
-	e2eMinikubeTest(t)
+	e2eClusterTest(t)
 	hackOpts, clientset, dynamicClient := e2eClients(t)
 	runOwnersSubtests(t, hackOpts, clientset)
 	runPodSchedulingSubtests(t, hackOpts, clientset)

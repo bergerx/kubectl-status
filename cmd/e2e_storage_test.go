@@ -34,7 +34,7 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 
 		storageClasses, err := clientset.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
 		require.NoError(t, err)
-		require.NotEmpty(t, storageClasses.Items, "expected minikube's default storage-provisioner addon to have registered a StorageClass")
+		require.NotEmpty(t, storageClasses.Items, "expected the cluster's default storage provisioner to have registered a StorageClass")
 		provisioner := storageClasses.Items[0].Provisioner
 
 		scName := "e2e-wait-for-first-consumer"
@@ -136,10 +136,14 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		const nodeName = "e2e-rwop-conflict-no-such-node"
 
 		pvcName := "e2e-rwop-conflict-pvc"
+		accessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod}
+		createStaticHostPathPV(t, clientset, ns, pvcName, accessModes)
+		emptySC := ""
 		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
 			Spec: corev1.PersistentVolumeClaimSpec{
-				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod},
+				AccessModes:      accessModes,
+				StorageClassName: &emptySC,
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
 				},
@@ -181,8 +185,8 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		t.Parallel()
 		// Issue #669: VolumeAttachment has zero references anywhere in the templates today, so a
 		// PV/PVC pair can render fully Bound while the actual CSI attach/detach is stuck or
-		// erroring -- invisible from both the Pod and PVC/PV views. minikube's own
-		// storage-provisioner addon isn't a real CSI driver (hostpath needs no attacher), so it
+		// erroring -- invisible from both the Pod and PVC/PV views. kind's own local-path
+		// provisioner isn't a real CSI driver (it needs no attacher), so it
 		// never creates VolumeAttachment objects itself -- there's nothing to wait on
 		// deterministically. Instead we create the VolumeAttachment object directly against the
 		// API (same trick as the StorageClass subtest above): the apiserver only validates the
@@ -204,13 +208,18 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		require.NotEmpty(t, nodes.Items)
 		nodeName := nodes.Items[0].Name
 
-		// No storageClassName -- picks up the cluster's default class (Immediate binding), so
-		// this actually provisions and binds a real PV to attach the fake VolumeAttachment to.
+		// A static PV, not dynamic provisioning -- kind's local-path provisioner would never
+		// attach a VolumeAttachment of its own (see the comment above), and this needs a real
+		// bound PV to attach the fake VolumeAttachment to.
 		pvcName := "e2e-attach-error-pvc"
+		accessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+		createStaticHostPathPV(t, clientset, ns, pvcName, accessModes)
+		emptySC := ""
 		_, err = clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
 			Spec: corev1.PersistentVolumeClaimSpec{
-				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				AccessModes:      accessModes,
+				StorageClassName: &emptySC,
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
 				},
@@ -264,7 +273,7 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		t.Parallel()
 		// Issue #669: VolumeSnapshot/VolumeSnapshotContent (snapshot.storage.k8s.io) had no
 		// standalone templates -- `kubectl status volumesnapshot/x` fell through to
-		// DefaultResource. minikube's hostpath storage-provisioner has no CSI snapshot support,
+		// DefaultResource. kind's local-path provisioner has no CSI snapshot support,
 		// so getting a real snapshot to reach ReadyToUse deterministically isn't possible here;
 		// instead (same trick as the VolumeAttachment subtest above) the objects and their
 		// status are created directly against the API -- the apiserver only validates their
