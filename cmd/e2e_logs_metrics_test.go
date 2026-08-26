@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -100,7 +99,7 @@ func runPodLogsAndMetricsSubtests(t *testing.T, hackOpts []func(*plugin.RenderCo
 				},
 			}, metav1.CreateOptions{})
 			require.NoError(t, err)
-			require.NoError(t, exec.Command("kubectl", "wait", "--for=condition=Ready",
+			require.NoError(t, kubectlCmd(t, "wait", "--for=condition=Ready",
 				"pod/e2e-metrics-pod", "-n", ns, "--timeout=4m").Run())
 			waitForPodMetrics(t, ns, "e2e-metrics-pod")
 		}

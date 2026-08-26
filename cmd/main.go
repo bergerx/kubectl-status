@@ -182,7 +182,18 @@ func initFlags(cmd *cobra.Command) *genericclioptions.ConfigFlags {
 	return configFlags
 }
 
+// colorCobraMu serializes cc.Init: it calls cobra.AddTemplateFunc, which writes into cobra's
+// package-level (and unsynchronized) template function map. RootCmd() -- and so this -- runs once
+// per process for the production binary, but the e2e suite calls RootCmd() fresh per subtest
+// invocation, and #867 (two clusters, parallel entry points) made enough of those concurrent to
+// turn this into an actually-hit "fatal error: concurrent map writes" rather than a latent race.
+// The lock only wraps this registration step, not command execution, so it doesn't serialize the
+// e2e suite's actual parallel work -- same scoping rationale as fatalMu above.
+var colorCobraMu sync.Mutex
+
 func initColorCobra(cmd *cobra.Command) {
+	colorCobraMu.Lock()
+	defer colorCobraMu.Unlock()
 	cc.Init(&cc.Config{
 		RootCmd:         cmd,
 		Headings:        cc.HiCyan + cc.Bold + cc.Underline,

@@ -118,7 +118,7 @@ func runStorageSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		// one non-terminal Pod is scheduled against the same RWOP claim -- it has to render an
 		// explicit conflict instead. The kube-scheduler's VolumeRestrictions plugin normally
 		// prevents this from happening for real (see the ReadWriteOncePod holder/conflict
-		// subtest in cmd/e2e_dynamic_test.go), so to exercise the conflict branch
+		// subtest in cmd/e2e_clusterwide_test.go), so to exercise the conflict branch
 		// deterministically we set spec.nodeName at Pod creation time, which
 		// skips the scheduler (and its RWOP check) entirely -- same "create it directly against
 		// the API" trick the VolumeAttachment subtest below uses to bypass needing a real CSI

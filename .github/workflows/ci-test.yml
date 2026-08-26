@@ -12,6 +12,17 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # #867 split the e2e suite across two kind clusters (see CONTRIBUTING.md's "Running e2e
+      # Tests Locally"); with two clusters there's no single "current context" for `make
+      # test-e2e` to fall back to under ASSUME_CLUSTER_IS_CONFIGURED=true, so these two are
+      # required in that mode. Named kstat-e2e*, not kstat-e2e-shared* like the local dev
+      # clusters (Makefile's E2E_POOL_CLUSTER/E2E_CLUSTERWIDE_CLUSTER default), since a CI run's
+      # clusters live only for that run and aren't shared across workers the way the local ones
+      # are shared across worktrees/sessions. Set at job level so both the "Create kind cluster"
+      # steps below and the `make test-e2e` step read the identical names.
+      E2E_POOL_CONTEXT: kind-kstat-e2e
+      E2E_CLUSTERWIDE_CONTEXT: kind-kstat-e2e-clusterwide
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -69,9 +80,10 @@ jobs:
           source hack/versions.env
           echo "version=${KIND_VERSION}" >> "$GITHUB_OUTPUT"
           echo "node_image=${KIND_NODE_IMAGE}" >> "$GITHUB_OUTPUT"
-      - name: Create kind cluster
+      - name: Create kind cluster (pool)
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
+          # Must match E2E_POOL_CONTEXT above (kind names the context "kind-"+cluster_name).
           cluster_name: kstat-e2e
           # version/node_image set explicitly rather than taking the action's defaults: those
           # currently give kind v0.31.0 and a k8s 1.35.x node image -- older than what
@@ -92,6 +104,22 @@ jobs:
           # are not installed here: kind has no addons, so `make install-e2e-deps` (run as a
           # dependency of `make test-e2e` below) owns both, which also keeps CI and local runs
           # installing them the same way.
+      - name: Create kind cluster (cluster-wide)
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+        with:
+          # #867's second cluster -- see the job-level env: comment above and
+          # CONTRIBUTING.md's "Running e2e Tests Locally" for why TestE2EClusterWide/
+          # TestE2EAgainstVanillaCluster need a cluster of their own. Must match
+          # E2E_CLUSTERWIDE_CONTEXT above. Same version/node_image/config/wait as the pool
+          # cluster -- see that step's comments; kind merges this cluster's context into the
+          # same runner-default kubeconfig alongside the pool's rather than overwriting it, the
+          # same way local shared.kubeconfig holds both (see the Makefile's "E2E cluster
+          # identity" section).
+          cluster_name: kstat-e2e-clusterwide
+          version: ${{ steps.kind-pins.outputs.version }}
+          node_image: ${{ steps.kind-pins.outputs.node_image }}
+          config: hack/kind-cluster.yaml
+          wait: 300s
       - name: Run e2e tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:

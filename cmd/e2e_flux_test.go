@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -20,14 +19,14 @@ import (
 // thing in play is the Flux install itself, which is a shared onceInstaller like the CRD bundles
 // the other groups pull in, not a fixed object name this test could collide on.
 //
-// Installing a real controller doesn't by itself make a scenario serial, and neither does depending
-// on metrics: the fixtures pin podinfo's HPA at its resting 2/2 against a 99%-of-request CPU target,
-// which is a function of podinfo being idle rather than of what else is on the cluster, and the
-// render's relative timestamps are frozen by ApplyTestHack's DurationRound rather than measured. The
-// one subtest that genuinely can't run here (VPA, in TestE2EDynamicManifests) is excluded because it
-// *pegs a CPU* and starves metrics-server for everyone else -- a cause, not a sensitivity. See #784:
-// this scenario was a standalone top-level test, then briefly serial, before either was checked
-// against the criteria above.
+// Installing a real controller doesn't by itself keep a scenario off the pool's cluster, and neither
+// does depending on metrics: the fixtures pin podinfo's HPA at its resting 2/2 against a
+// 99%-of-request CPU target, which is a function of podinfo being idle rather than of what else is
+// on the cluster, and the render's relative timestamps are frozen by ApplyTestHack's DurationRound
+// rather than measured. The one metrics scenario that genuinely can't run here (VPA, in
+// TestE2EClusterWide) is on the other cluster because it *pegs a CPU* and starves metrics-server for
+// everyone else -- a cause, not a sensitivity. See #784: this scenario was a standalone top-level
+// test, then briefly serial, before either was checked against the criteria above.
 func runFluxSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), clientset *kubernetes.Clientset) {
 	// This covers Kustomization.tmpl's live-query branches, which every offline artifact under
 	// tests/artifacts/kustomization-* leaves untouched because --shallow/--local make KubeGetFirst
@@ -88,7 +87,7 @@ func runFluxSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), client
 		// goes on reporting Ready because nothing re-checks it until spec.interval (60m) elapses.
 		// kubectl, not the clientset, so the deletion is ordered against the waits above the same way
 		// every other manifest change in this suite is.
-		out, err := exec.Command("kubectl", "delete", "service", "podinfo", "-n", ns, "--wait").CombinedOutput()
+		out, err := kubectlCmd(t, "delete", "service", "podinfo", "-n", ns, "--wait").CombinedOutput()
 		require.NoErrorf(t, err, "failed to delete the managed Service out-of-band: %s", out)
 		t.Logf("deleted managed Service podinfo in %s out-of-band: %s", ns, out)
 
@@ -136,7 +135,7 @@ func waitForFluxHPASettled(t *testing.T, namespace, name string) {
 	waitForInNamespace(t, "hpa/"+name, "condition=ScalingActive", namespace)
 	waitForInNamespace(t, "hpa/"+name, "condition=ScalingLimited", namespace)
 	require.Eventuallyf(t, func() bool {
-		out, err := exec.Command("kubectl", "get", "hpa", name, "-n", namespace,
+		out, err := kubectlCmd(t, "get", "hpa", name, "-n", namespace,
 			"-o", "jsonpath={.status.desiredReplicas}/{.status.currentReplicas}").Output()
 		if err != nil {
 			return false

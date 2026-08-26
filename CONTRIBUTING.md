@@ -282,84 +282,108 @@ Test artifacts in `tests/artifacts/` verify template output changes. When modify
 
 ### Running e2e Tests Locally
 
-`make test-e2e` runs the `TestE2E*` suite against a real cluster. That suite has three top-level
-entry points — `TestE2EParallel` (`cmd/main_test.go`), which calls one topical `runXSubtests`
-function per `cmd/e2e_*_test.go` file, plus `TestE2EDynamicManifests` (`cmd/e2e_dynamic_test.go`)
-and `TestE2EAgainstVanillaCluster` (`cmd/e2e_vanilla_test.go`) — sharing the harness in
-`cmd/e2e_helpers_test.go` (`cmdTest`, `applyManifest`/`waitFor`, the `ensureX` dependency
-installers). `cmd/local_test.go` holds the
-tests that need no cluster and so run under plain `make test` instead. `make test-e2e` manages one
-**shared** [kind](https://kind.sigs.k8s.io/) cluster (`kstat-e2e-shared`), reused across every
-worktree, branch, and session on your machine — not one per branch/session. Run
-`make print-e2e-cluster` to see the cluster name and kubeconfig path
-(`~/.kstat-e2e/shared.kubeconfig`) it uses. Its shape is `hack/kind-cluster.yaml` (single node) and
-its Kubernetes version is the digest-pinned `KIND_NODE_IMAGE` in `hack/versions.env` — the same two
+`make test-e2e` runs the `TestE2E*` suite against real clusters. That suite has three top-level
+entry points, split across **two** [kind](https://kind.sigs.k8s.io/) clusters (#867) because two of
+them interfere with each other through cluster-scoped state (node count, the metrics-server
+`APIService`) that no namespace can isolate:
+
+- `TestE2EParallel` (`cmd/main_test.go`) — the pool. Calls one topical `runXSubtests` function per
+  `cmd/e2e_*_test.go` file; this is where a new subtest goes by default. Owns the
+  `kstat-e2e-shared` cluster and every heavy dependency (cert-manager, Flux, Crossplane, Kyverno,
+  Gatekeeper, Gateway API, Istio, Cilium/Calico).
+- `TestE2EClusterWide` (`cmd/e2e_clusterwide_test.go`) and `TestE2EAgainstVanillaCluster`
+  (`cmd/e2e_vanilla_test.go`) — share the `kstat-e2e-shared-clusterwide` cluster, kept otherwise
+  idle (just `ensureVPA`/`ensureKarpenterCRDs`) so the two clusters cost little more than one. See
+  `cmd/e2e_clusterwide_test.go`'s doc comment for exactly which subtests belong here instead of the
+  pool.
+
+All three share the harness in `cmd/e2e_helpers_test.go` (`cmdTest`, `applyManifest`/`waitFor`, the
+`ensureX` dependency installers, and the `e2eTarget`/`e2eClusterRole` plumbing that tells every
+`kubectl`/`helm`/rendered-command shell-out which of the two clusters to hit via `--context`).
+`cmd/local_test.go` holds the tests that need no cluster and so run under plain `make test` instead.
+
+Both clusters are **shared**, reused across every worktree, branch, and session on your machine —
+not one pair per branch/session. Run `make print-e2e-cluster` to see both cluster names, their kube
+contexts, and the kubeconfig path (`~/.kstat-e2e/shared.kubeconfig`) they live in (kind merges both
+into one file). Their shape is `hack/kind-cluster.yaml` (single node, same file for both) and their
+Kubernetes version is the digest-pinned `KIND_NODE_IMAGE` in `hack/versions.env` — the same two
 values CI passes to `helm/kind-action`, so a local run and CI render against the identical
-Kubernetes build. `install-e2e-deps`
-runs against that same cluster right after it's created, so deps always land on the cluster the
-tests actually use (see [Cluster Dependencies](#cluster-dependencies) below for what it does and
-doesn't install). The cluster is left running after the tests finish, for fast reruns from any
-worktree/session; delete it explicitly with `make e2e-cluster-down` when you're sure no other
-worktree/session still needs it — this tears it down for everyone sharing it, not just you.
+Kubernetes build. `install-e2e-deps` runs against both clusters right after they're created (see
+[Cluster Dependencies](#cluster-dependencies) below for what it does and doesn't install). Both are
+left running after the tests finish, for fast reruns from any worktree/session; delete them
+explicitly with `make e2e-cluster-down` when you're sure no other worktree/session still needs
+them — this tears them down for everyone sharing them, not just you.
 
 `kind` (and Docker) must be on your PATH for the local targets; CI installs it via
-`helm/kind-action`. `make e2e-cluster-up` reuses a running shared cluster rather than recreating
+`helm/kind-action`. `make e2e-cluster-up` reuses each running shared cluster rather than recreating
 it — but since a kind node is a container, a cluster can survive a host reboot as *stopped*
 containers and still be listed by `kind get clusters` while answering nothing. The target checks
-both, and recreates a listed-but-unresponsive cluster rather than handing it to the suite.
+both clusters for both conditions, and recreates a listed-but-unresponsive one rather than handing
+it to the suite.
 
-Because the cluster is shared and the e2e suite uses fixed (not generated) scratch namespace
-names, two `test-e2e`/`test-e2e-quick` runs against it at the same time would collide with
-"already exists" errors. Both targets guard against that with `flock` on a host-global lockfile:
-a second invocation (from another worktree, another terminal, a background Claude Code task)
-simply waits for the first to finish rather than racing it or getting its own cluster. This trades
-some concurrency for a much smaller footprint — one cluster total instead of one per
+Because the clusters are shared and the e2e suite uses fixed (not generated) scratch namespace
+names, two `test-e2e`/`test-e2e-quick` runs against them at the same time would collide with
+"already exists" errors. Both targets guard against that with `flock` on a host-global lockfile —
+one lock for the pair of clusters, not one per cluster, since a run needs both for its whole
+duration: a second invocation (from another worktree, another terminal, a background Claude Code
+task) simply waits for the first to finish rather than racing it or getting its own clusters. This
+trades some concurrency for a much smaller footprint — two clusters total instead of two per
 worktree/branch/session, which is what actually hogs the host if left unchecked. `flock` (from
 `util-linux`) is required; it's standard on Linux but not present on macOS by default.
 
 If a run is killed ungracefully (Ctrl+C, OOM) mid-subtest, its cleanup won't run and it can leave
 a stale namespace behind that collides with the next run's fixed name. Recover with
-`kubectl --kubeconfig ~/.kstat-e2e/shared.kubeconfig delete ns <name>`, or nuke and recreate the
-whole cluster with `make e2e-cluster-down e2e-cluster-up`.
+`kubectl --kubeconfig ~/.kstat-e2e/shared.kubeconfig --context <context> delete ns <name>` (see
+`make print-e2e-cluster` for the context names), or nuke and recreate both clusters with
+`make e2e-cluster-down e2e-cluster-up`.
 
-CI instead sets `ASSUME_CLUSTER_IS_CONFIGURED=true`, which makes `make test-e2e` skip all of the
-above and use whatever cluster your current kubeconfig context already points at (that's what
-`helm/kind-action` in `ci-test.yml` provisions) — set the same var locally if you'd rather
-manage the cluster yourself.
+CI instead sets `ASSUME_CLUSTER_IS_CONFIGURED=true` plus `E2E_POOL_CONTEXT`/
+`E2E_CLUSTERWIDE_CONTEXT`, which makes `make test-e2e` skip all of the above and use whichever kube
+contexts those two vars name (that's what `helm/kind-action` in `ci-test.yml` provisions, into the
+runner's default kubeconfig) — set the same vars locally if you'd rather manage the clusters
+yourself. Both vars are required in this mode: with two clusters there's no single "current
+context" to fall back to, so the suite fails loudly instead of silently running both entry points
+against the same cluster.
 
-Note: `TestE2E*` functions invoked directly via `go test -run TestE2E...` (bypassing the
-Makefile) fall back to using the bare test function name as the cluster name if `E2E_CLUSTER`
-isn't set in the environment, which starts (and leaks) a one-off cluster instead of using the
-shared one — export `E2E_CLUSTER` yourself (e.g. from `make print-e2e-cluster`) to land on the
-shared cluster too.
+Note: `TestE2E*` functions invoked directly via `go test -run TestE2E...` (bypassing the Makefile)
+fall back to using the bare test function name as the cluster name for whichever role they own if
+`E2E_POOL_CLUSTER`/`E2E_CLUSTERWIDE_CLUSTER` isn't set in the environment, which starts (and leaks)
+a one-off cluster instead of using the shared one — export both yourself (`make print-e2e-cluster`
+prints the shared names) to land on the shared clusters too.
 
 #### Cluster Dependencies
 
-metrics-server is the only dependency installed upfront, by the `install-e2e-deps` target — see
-the comment there for why it has to be an invariant of the whole run rather than one group's
-concern. That target also recreates kind's default `standard` StorageClass with
-`volumeBindingMode: Immediate`: kind's binds `WaitForFirstConsumer`, and several subtests create a
-PVC with no consuming Pod and then wait for it to Bind. `volumeBindingMode` is immutable, so it's a
-delete-and-recreate (`kubectl replace --force`) of the live object with only that field rewritten,
-not a hand-written class. Everything else (cert-manager, Gateway API CRDs, Cilium/Calico CRDs, VolumeSnapshot CRDs,
-Karpenter CRDs, Istio CRDs, VPA, Crossplane, Flux) is installed on demand by the test that needs it,
-so a cluster only ever grows the dependencies the suite actually exercises. No manual setup either
-way.
+metrics-server is the only dependency installed upfront, on **both** clusters, by the
+`install-e2e-deps` target — see the comment there for why it has to be an invariant of the whole
+run rather than one group's concern (the cluster-wide cluster needs it just as much: its VPA
+subtest needs a recommender fed by real samples, and its metrics-server-`APIService` subtest needs
+an `APIService` there to delete in the first place). That target also recreates each cluster's
+default `standard` StorageClass with `volumeBindingMode: Immediate`: kind's binds
+`WaitForFirstConsumer`, and several subtests create a PVC with no consuming Pod and then wait for it
+to Bind. `volumeBindingMode` is immutable, so it's a delete-and-recreate (`kubectl replace --force`)
+of the live object with only that field rewritten, not a hand-written class. Everything else
+(cert-manager, Gateway API CRDs, Cilium/Calico CRDs, VolumeSnapshot CRDs, Karpenter CRDs, Istio
+CRDs, VPA, Crossplane, Flux) is installed on demand by the test that needs it, via the `ensureX(t)`
+functions below, which target their own subtest's cluster — so all of those land on the pool's
+cluster, and only the cluster-wide bucket's own two (`ensureVPA`, `ensureKarpenterCRDs`) go to the
+other one. That asymmetry is what makes the second cluster nearly free instead of a 2x install tax;
+keep it that way when adding a new dependency. A cluster only ever grows the dependencies the suite
+actually exercises on it. No manual setup either way.
 
 Note that "on demand" tracks the *entry point*, not your `-run` pattern. The `runXSubtests`
 functions are plain calls, and `-run` filters at `t.Run` below them, so any
 `RUN='TestE2EParallel/...'` still runs every group's install regardless of which subtests survive
 the filter — cert-manager, Gateway API CRDs and Cilium/Calico CRDs go in even for a pattern that
 matches nothing. On a warm cluster that's a few seconds and not worth restructuring for; on a fresh
-one it's the bulk of a narrow run's wall clock. `TestE2EDynamicManifests` doesn't have this
-property: its `ensureX` calls sit inside the subtest bodies, so filtering does skip them.
-`runFluxSubtests` is the one pool group that does the same, for the same reason — `ensureFlux` is
-the suite's heaviest install, so it sits inside the `t.Run` rather than at the top of the group,
-where it would go in on any `TestE2EParallel` run whose pattern doesn't even reach that subtest.
+one it's the bulk of a narrow run's wall clock. `TestE2EClusterWide` doesn't have this property: its
+`ensureX` calls sit inside the subtest bodies, so filtering does skip them. `runFluxSubtests` is the
+one pool group that does the same, for the same reason — `ensureFlux` is the suite's heaviest
+install, so it sits inside the `t.Run` rather than at the top of the group, where it would go in on
+any `TestE2EParallel` run whose pattern doesn't even reach that subtest.
 
 The installers are the `ensureX(t)` functions in `cmd/e2e_helpers_test.go`; keep new ones there
 rather than inline in a test file. A topical group in `TestE2EParallel` calls the ones it needs at
-the top of its `runXSubtests` function; under `TestE2EDynamicManifests`, where a dependency usually
+the top of its `runXSubtests` function; under `TestE2EClusterWide`, where a dependency usually
 serves a single scenario, the call goes at the top of that subtest instead — including when the
 scenario lives in its own file behind a `runXSubtests` function. Most install CRDs only —
 kubectl-status reads and matches these objects client-side, so no real controller is needed;
@@ -415,28 +439,32 @@ to query either way), which makes `KubeGetFirst` a no-op — they can't exercise
 related object" or `--deep` include branches, so the live e2e suite is the only place that covers
 them.
 
-**Put new subtests in `TestE2EParallel`'s pool by default, running with `t.Parallel()`.** Don't
-opt a new subtest out of the pool just because it feels risky or touches cluster state — write it
-parallel and dedicated (own namespace/generated names, see [Parallel-Safe e2e
-Subtests](#parallel-safe-e2e-subtests) below) unless it actually trips one of the exceptions below.
-`TestE2EDynamicManifests` (or a serial subtest) is the exception, and a subtest only earns a place
-there by tripping one of the two criteria in `TestE2EParallel`'s doc comment (`cmd/main_test.go`) —
-with the reason written on the subtest, so the next person inherits a rule rather than a precedent.
-The qualifying reasons are all about what a subtest does *to* its neighbours: it perturbs
-cluster-wide state they read (deleting the metrics-server `APIService`), it starves a shared
-dependency (the VPA subtest pegs a full CPU and takes metrics-server's readiness probe down with it
-on a single-node cluster), or it can't be given a namespace/generated name of its own.
+**Put new subtests in `TestE2EParallel`'s pool by default, running with `t.Parallel()`.** Every
+subtest in the suite runs with `t.Parallel()` now (#867) — there's no serial bucket left to opt
+into, so the question is never "can I justify skipping the pool," it's "does anything else on *my*
+cluster see what I do, or do I see what it does?" (see `cmd/e2e_clusterwide_test.go`'s doc comment).
+Don't opt a new subtest out of the pool just because it feels risky or touches cluster state — write
+it parallel and dedicated (own namespace/generated names, see [Parallel-Safe e2e
+Subtests](#parallel-safe-e2e-subtests) below) unless it actually trips one of the interference
+reasons below, in which case it belongs in `TestE2EClusterWide` instead, with the reason written on
+the subtest so the next person inherits a rule rather than a precedent. The qualifying reasons are
+all about what a subtest does *to*, or has done *to it by*, its neighbours on the same cluster: it
+perturbs cluster-wide state they read (deleting the metrics-server `APIService`), it starves a
+shared dependency (the VPA subtest pegs a full CPU and takes metrics-server's readiness probe down
+with it on a single-node cluster), or it pins a fact about the cluster (kube-scheduler's exact
+`0/N nodes are available` message) that another subtest's fixture could move.
 
-Because the shared cluster is reused by every subtest in the pool at once, be especially careful
-with anything cluster-scoped: mutating or deleting a cluster-level resource (a Node, a CRD, a
+Because each cluster is reused by every subtest that runs on it at once, be especially careful with
+anything cluster-scoped: mutating or deleting a cluster-level resource (a Node, a CRD, a
 ClusterRole, the metrics-server `APIService`, a webhook config, ...), or relying on a *fixed*
 cluster-scoped name another subtest could also use, can silently change another subtest's rendered
 output rather than fail loudly with a name collision. Prefer generated names
 (`GenerateName`/`metav1.GenerateName`, see `createBadNode`) for any cluster-scoped object a subtest
-creates, and never mutate a cluster-scoped resource another subtest might read unless that subtest
-is one of the documented non-parallel exceptions above.
+creates, and never mutate a cluster-scoped resource another subtest on the same cluster might read
+unless that subtest is one of the documented interference cases in `TestE2EClusterWide`.
 
-Several things look disqualifying but aren't, and shouldn't be used to justify a serial subtest:
+Several things look disqualifying but aren't, and shouldn't be used to justify moving a subtest to
+`TestE2EClusterWide`:
 
 - **Needing a live-cluster query.** Most of the pool needs one; that's the normal case, not an
   exception.
@@ -448,13 +476,13 @@ Several things look disqualifying but aren't, and shouldn't be used to justify a
   load. Relative timestamps aren't a hazard either: `ApplyTestHack` freezes `DurationRound`, so
   `created 1m ago` is a constant, not elapsed time.
 - **How the objects come into being** (built in Go, applied from static YAML, or patched in place).
-  This distinguishes nothing, whatever the `DynamicManifests` name suggests.
+  This distinguishes nothing.
 
 See #784: the Flux scenario was a standalone top-level test, then a serial subtest, before anyone
 checked it against the criteria — which it met, so it's a pool group now. Don't add a fourth
 top-level `TestE2E*` function either; a scenario long enough to crowd its host file can live in its
 own `cmd/e2e_*_test.go` behind a `runXSubtests` function, the way `runFluxSubtests` does. The file a
-subtest sits in and the entry point it runs under are separate choices.
+subtest sits in and the entry point (and therefore cluster) it runs under are separate choices.
 
 Assert on stdout with a whole-output `.regex` fixture (`stdoutRegexPath`, or
 `assertStdoutMatchesRegexFixture` when the subtest also needs to assert something the fixture can't
