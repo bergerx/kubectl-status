@@ -1,110 +1,24 @@
 package plugin
 
 import (
-	"context"
 	"embed"
+	"fmt"
 	"io/fs"
-	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
-	"sync"
 	"text/template"
+	"time"
 
-	"github.com/go-sprout/sprout/sprigin"
+	"github.com/go-sprout/sprout"
+	"github.com/go-sprout/sprout/group/hermetic"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/klog/v2"
 )
 
 //go:embed templates
 var templatesFS embed.FS
-
-var deprecationFilterOnce sync.Once
-
-// setupDeprecationFilter installs, once for the life of the process, a slog handler that drops
-// go-sprout's per-call deprecation-signature warnings and forwards anything else to os.Stderr.
-//
-// go-sprout (our sprig replacement) logs a WARN via slog on every call to a
-// function whose signature changed during the sprig->sprout migration (e.g.
-// get, hasKey, append). These fire once per template execution per call site,
-// so they flood the output; sprigin gives no way to disable them other than
-// filtering the global slog default handler. See
-// https://github.com/bergerx/kubectl-status/issues/688 for migrating the
-// templates to the new signatures, at which point this filter can go away.
-//
-// This used to reinstall a fresh handler (writing to that invocation's streams.ErrOut) on every
-// newRenderEngine call. sprigin reads slog.Default() again on every single template function
-// call, not just once when the funcMap is built, so two renders in flight at once (e.g. parallel
-// e2e subtests) would race rebinding the global default and could route one render's output
-// through another's ErrOut. The only thing this handler is known to ever emit is the
-// deprecation-tagged warnings it drops (see #688), so installing it once and forwarding the
-// (currently unreachable) non-deprecated case to os.Stderr rather than a per-render writer is
-// behaviorally identical to before, without serializing renders against each other.
-//
-// The handler is built fresh (not by wrapping the pre-existing
-// slog.Default().Handler()): the zero-value default handler bridges back
-// into the standard "log" package's global, mutex-protected logger, and
-// re-installing a wrapper around it as the new default causes that bridge
-// to call back into itself, deadlocking on the mutex.
-func setupDeprecationFilter() {
-	deprecationFilterOnce.Do(func() {
-		slog.SetDefault(slog.New(deprecationNoticeFilter{Handler: slog.NewTextHandler(os.Stderr, nil)}))
-	})
-}
-
-// deprecationNoticeFilter drops log records tagged with a "notice"="deprecated"
-// attribute. go-sprout's deprecated.SignatureWarn attaches that attribute via
-// Logger.With(...) rather than as a Record attribute, so WithAttrs must be
-// overridden explicitly here too: without it, Go's method promotion on the
-// embedded slog.Handler returns the *inner* handler from WithAttrs, silently
-// discarding this wrapper for every subsequent Handle call.
-type deprecationNoticeFilter struct {
-	slog.Handler
-	drop bool
-}
-
-func isDeprecatedNoticeAttr(a slog.Attr) bool {
-	return a.Key == "notice" && a.Value.Kind() == slog.KindString && a.Value.String() == "deprecated"
-}
-
-func (h deprecationNoticeFilter) Enabled(ctx context.Context, level slog.Level) bool {
-	if h.drop {
-		return false
-	}
-	return h.Handler.Enabled(ctx, level)
-}
-
-func (h deprecationNoticeFilter) Handle(ctx context.Context, r slog.Record) error {
-	if h.drop {
-		return nil
-	}
-	drop := false
-	r.Attrs(func(a slog.Attr) bool {
-		if isDeprecatedNoticeAttr(a) {
-			drop = true
-			return false
-		}
-		return true
-	})
-	if drop {
-		return nil
-	}
-	return h.Handler.Handle(ctx, r)
-}
-
-func (h deprecationNoticeFilter) WithAttrs(attrs []slog.Attr) slog.Handler {
-	drop := h.drop
-	for _, a := range attrs {
-		if isDeprecatedNoticeAttr(a) {
-			drop = true
-		}
-	}
-	return deprecationNoticeFilter{Handler: h.Handler.WithAttrs(attrs), drop: drop}
-}
-
-func (h deprecationNoticeFilter) WithGroup(name string) slog.Handler {
-	return deprecationNoticeFilter{Handler: h.Handler.WithGroup(name), drop: h.drop}
-}
 
 // renderEngine provides methods to build kubernetes api queries from provided cli options.
 // Also holds the parsed templates.
@@ -162,7 +76,6 @@ type templateSet struct {
 
 func newRenderEngine(streams genericiooptions.IOStreams, cfg *RenderConfig) (*renderEngine, error) {
 	klog.V(5).InfoS("Creating new render engine instance...")
-	setupDeprecationFilter()
 	ts, err := getTemplate(cfg)
 	if err != nil {
 		klog.V(3).ErrorS(err, "Error parsing templates")
@@ -176,27 +89,506 @@ func newRenderEngine(streams genericiooptions.IOStreams, cfg *RenderConfig) (*re
 	}, nil
 }
 
-// templateFuncs builds the combined go-sprout/sprig-compatible and project funcMap every
+// templateFuncs builds the combined native sprout (hermetic group) and project funcMap every
 // template tree (embedded and user) is parsed with.
 func templateFuncs(cfg *RenderConfig) template.FuncMap {
-	sprigFuncMap := sprigin.TxtFuncMap()
+	handler := sprout.New(sprout.WithGroups(hermetic.RegistryGroup()))
+	sproutFuncMap := handler.Build()
 	// env/expandEnv let a template read the process environment, which isn't needed by any
 	// built-in template and would let a stray template dropped into ~/.kubectl-status/templates
-	// leak env vars (e.g. cloud credentials) into rendered output. sprigin's sprig-compat layer
-	// also registers "expandenv" as a separate lowercase alias for the same function (see
-	// bc_registerSprigFuncs in go-sprout/sprout/sprigin), so it must be deleted too or it'd
-	// still let a template read the environment despite the deletions above.
-	delete(sprigFuncMap, "env")
-	delete(sprigFuncMap, "expandEnv")
-	delete(sprigFuncMap, "expandenv")
-	funcs := make(template.FuncMap, len(sprigFuncMap)+32)
-	for name, fn := range sprigFuncMap {
+	// leak env vars (e.g. cloud credentials) into rendered output.
+	delete(sproutFuncMap, "env")
+	delete(sproutFuncMap, "expandEnv")
+	delete(sproutFuncMap, "expandenv")
+	// Add sprig-compatible aliases that templates depend on.
+	// Native sprout uses different names; templates use sprig aliases.
+	aliases := map[string]string{
+		"int":        "toInt",
+		"atoi":       "toInt",
+		"int64":      "toInt64",
+		"float64":    "toFloat64",
+		"toDecimal":  "toOctal",
+		"lower":      "toLower",
+		"tolower":    "toLower",
+		"lowercase":  "toLower",
+		"upper":      "toUpper",
+		"toupper":    "toUpper",
+		"uppercase":  "toUpper",
+		"title":      "toTitleCase",
+		"titlecase":  "toTitleCase",
+		"camelcase":  "toPascalCase",
+		"snake":      "toSnakeCase",
+		"snakecase":  "toSnakeCase",
+		"kebab":      "toKebabCase",
+		"kebabcase":  "toKebabCase",
+		"swapcase":   "swapCase",
+		"b64enc":     "base64Encode",
+		"b64dec":     "base64Decode",
+		"b32enc":     "base32Encode",
+		"b32dec":     "base32Decode",
+		"base":       "pathBase",
+		"dir":        "pathDir",
+		"ext":        "pathExt",
+		"clean":      "pathClean",
+		"isAbs":      "pathIsAbs",
+		"ago":        "dateAgo",
+		"toStrings":  "strSlice",
+	}
+	for alias, orig := range aliases {
+		if fn, ok := sproutFuncMap[orig]; ok {
+			sproutFuncMap[alias] = fn
+		}
+	}
+	// Compat wrappers for functions that changed signature between sprig and sprout,
+	// or that now error on nil where templates expect graceful handling.
+	// These wrappers detect sprig-style call sites (dict first) vs sprout-style
+	// (dict last via pipeline) and avoid hard errors that sprigin previously
+	// swallowed via SafeCall.
+	addCompatWrappers(sproutFuncMap)
+	funcs := make(template.FuncMap, len(sproutFuncMap)+32)
+	for name, fn := range sproutFuncMap {
 		funcs[name] = fn
 	}
 	for name, fn := range cfg.funcMap() {
 		funcs[name] = fn
 	}
 	return funcs
+}
+
+func isMap(v any) bool {
+	if v == nil {
+		return false
+	}
+	_, ok := v.(map[string]any)
+	return ok
+}
+
+func isList(v any) bool {
+	if v == nil {
+		return false
+	}
+	rt := reflect.TypeOf(v)
+	return rt.Kind() == reflect.Slice || rt.Kind() == reflect.Array
+}
+
+func toInt(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case int32:
+		return int(n)
+	case float64:
+		return int(n)
+	case float32:
+		return int(n)
+	case string:
+		var i int
+		fmt.Sscan(n, &i)
+		return i
+	default:
+		rv := reflect.ValueOf(v)
+		switch rv.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return int(rv.Int())
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return int(rv.Uint())
+		case reflect.Float32, reflect.Float64:
+			return int(rv.Float())
+		}
+		return 0
+	}
+}
+
+func addCompatWrappers(m template.FuncMap) {
+	// Capture original funcs before overriding
+	origGet := m["get"]
+	origHasKey := m["hasKey"]
+	origSet := m["set"]
+	origUnset := m["unset"]
+	origPick := m["pick"]
+	origOmit := m["omit"]
+	origDig := m["dig"]
+	origAppend := m["append"]
+	origPrepend := m["prepend"]
+	origSlice := m["slice"]
+	origWithout := m["without"]
+	origToDate := m["toDate"]
+	origKindIs := m["kindIs"]
+	origKindOf := m["kindOf"]
+
+	// Helpers to call underlying via reflection with nil handling
+	call := func(fn any, args ...any) (any, error) {
+		v := reflect.ValueOf(fn)
+		in := make([]reflect.Value, len(args))
+		for i, a := range args {
+			if a == nil {
+				// Pass typed nil for map/string cases
+				// Infer expected type from function signature if possible
+				expectedType := v.Type().In(i)
+				in[i] = reflect.Zero(expectedType)
+			} else {
+				in[i] = reflect.ValueOf(a)
+				// Ensure assignable: if types mismatch, try conversion
+				if !in[i].Type().AssignableTo(v.Type().In(i)) {
+					if in[i].Type().ConvertibleTo(v.Type().In(i)) {
+						in[i] = in[i].Convert(v.Type().In(i))
+					}
+				}
+			}
+		}
+		out := v.Call(in)
+		if len(out) == 2 {
+			var err error
+			if !out[1].IsNil() {
+				err = out[1].Interface().(error)
+			}
+			return out[0].Interface(), err
+		}
+		if len(out) == 1 {
+			return out[0].Interface(), nil
+		}
+		return nil, nil
+	}
+
+	// Typed wrappers avoid reflection zero-value pitfalls for maps
+	if origGet != nil {
+		if typed, ok := origGet.(func(string, map[string]any) (any, error)); ok {
+			m["get"] = func(args ...any) (any, error) {
+				if len(args) != 2 {
+					return call(origGet, args...)
+				}
+				if isMap(args[0]) && !isMap(args[1]) {
+					if key, ok := args[1].(string); ok {
+						if dict, ok := args[0].(map[string]any); ok {
+							return typed(key, dict)
+						}
+					}
+					return call(origGet, args[1], args[0])
+				}
+				if key, ok := args[0].(string); ok {
+					if dict, ok := args[1].(map[string]any); ok {
+						return typed(key, dict)
+					}
+					if args[1] == nil {
+						return typed(key, nil)
+					}
+				}
+				return call(origGet, args...)
+			}
+		} else {
+			m["get"] = func(args ...any) (any, error) {
+				if len(args) != 2 {
+					return call(origGet, args...)
+				}
+				if isMap(args[0]) && !isMap(args[1]) {
+					return call(origGet, args[1], args[0])
+				}
+				return call(origGet, args...)
+			}
+		}
+	}
+	if origHasKey != nil {
+		if typed, ok := origHasKey.(func(string, map[string]any) (bool, error)); ok {
+			m["hasKey"] = func(args ...any) (any, error) {
+				if len(args) != 2 {
+					return call(origHasKey, args...)
+				}
+				if isMap(args[0]) && !isMap(args[1]) {
+					if key, ok := args[1].(string); ok {
+						if dict, ok := args[0].(map[string]any); ok {
+							return typed(key, dict)
+						}
+					}
+					return call(origHasKey, args[1], args[0])
+				}
+				if key, ok := args[0].(string); ok {
+					switch v := args[1].(type) {
+					case map[string]any:
+						return typed(key, v)
+					case nil:
+						return typed(key, nil)
+					default:
+						// Handle typed nil map via reflection
+						if args[1] == nil {
+							return typed(key, nil)
+						}
+					}
+				}
+				return call(origHasKey, args...)
+			}
+		} else {
+			m["hasKey"] = func(args ...any) (any, error) {
+				if len(args) != 2 {
+					return call(origHasKey, args...)
+				}
+				if isMap(args[0]) && !isMap(args[1]) {
+					return call(origHasKey, args[1], args[0])
+				}
+				return call(origHasKey, args...)
+			}
+		}
+	}
+	if origSet != nil {
+		m["set"] = func(args ...any) (any, error) {
+			if len(args) != 3 {
+				return call(origSet, args...)
+			}
+			if isMap(args[0]) && !isMap(args[2]) {
+				return call(origSet, args[1], args[2], args[0])
+			}
+			return call(origSet, args...)
+		}
+	}
+	if origUnset != nil {
+		m["unset"] = func(args ...any) (any, error) {
+			if len(args) != 2 {
+				return call(origUnset, args...)
+			}
+			if isMap(args[0]) && !isMap(args[1]) {
+				return call(origUnset, args[1], args[0])
+			}
+			return call(origUnset, args...)
+		}
+	}
+	if origPick != nil {
+		m["pick"] = func(args ...any) (any, error) {
+			if len(args) < 2 {
+				return call(origPick, args...)
+			}
+			if isMap(args[0]) && !isMap(args[len(args)-1]) {
+				dict := args[0]
+				keys := args[1:]
+				newArgs := append(keys, dict)
+				return call(origPick, newArgs...)
+			}
+			return call(origPick, args...)
+		}
+	}
+	if origOmit != nil {
+		m["omit"] = func(args ...any) (any, error) {
+			if len(args) < 2 {
+				return call(origOmit, args...)
+			}
+			if isMap(args[0]) && !isMap(args[len(args)-1]) {
+				dict := args[0]
+				keys := args[1:]
+				newArgs := append(keys, dict)
+				return call(origOmit, newArgs...)
+			}
+			return call(origOmit, args...)
+		}
+	}
+	if origDig != nil {
+		m["dig"] = func(args ...any) (any, error) {
+			// Sprig signature: dig key1 key2 ... default dict
+			// Sprout signature: dig keys... dict (no default, uses pipeline)
+			// Detect sprig form by checking if we have at least 3 args, last is map, and not all keys are strings
+			// Simpler: if len>=3 and last is map, treat second-last as default if not all keys are maps/lists
+			if len(args) < 3 {
+				return call(origDig, args...)
+			}
+			dict, ok := args[len(args)-1].(map[string]any)
+			if !ok {
+				return call(origDig, args...)
+			}
+			// All args except last are potential keys + default. If any key parsing fails due to non-string
+			// (like int default), it's sprig form. We'll implement sprig dig directly.
+			keysRaw := args[:len(args)-1]
+			// Try to see if last of keysRaw is intended as default (non-string or always)
+			// Sprigin sprigDig always treats second-last as default
+			defaultVal := keysRaw[len(keysRaw)-1]
+			keysPart := keysRaw[:len(keysRaw)-1]
+			// Validate keysPart are all strings
+			keys := make([]string, 0, len(keysPart))
+			allStrings := true
+			for _, k := range keysPart {
+				if s, ok := k.(string); ok {
+					keys = append(keys, s)
+				} else {
+					allStrings = false
+					break
+				}
+			}
+			if !allStrings || len(keysPart) == 0 {
+				// Fall back to sprout native
+				return call(origDig, args...)
+			}
+			// Sprig dig: look up keys sequentially, return default if not found
+			current := any(dict)
+			for i, key := range keys {
+				mm, ok := current.(map[string]any)
+				if !ok {
+					return defaultVal, nil
+				}
+				val, exists := mm[key]
+				if !exists {
+					return defaultVal, nil
+				}
+				if i == len(keys)-1 {
+					if val == nil {
+						return defaultVal, nil
+					}
+					return val, nil
+				}
+				current = val
+			}
+			return defaultVal, nil
+		}
+	}
+	if origAppend != nil {
+		m["append"] = func(args ...any) (any, error) {
+			if len(args) != 2 {
+				return call(origAppend, args...)
+			}
+			if isList(args[0]) && !isList(args[1]) {
+				// sprig: append(list, value) -> sprout: append(value, list)
+				return call(origAppend, args[1], args[0])
+			}
+			return call(origAppend, args...)
+		}
+	}
+	if origPrepend != nil {
+		m["prepend"] = func(args ...any) (any, error) {
+			if len(args) != 2 {
+				return call(origPrepend, args...)
+			}
+			if isList(args[0]) && !isList(args[1]) {
+				return call(origPrepend, args[1], args[0])
+			}
+			return call(origPrepend, args...)
+		}
+	}
+	if origSlice != nil {
+		m["slice"] = func(args ...any) (res any, err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					res = []any{}
+					err = nil
+				}
+			}()
+			if len(args) >= 2 && isList(args[0]) && !isList(args[len(args)-1]) {
+				// Sprig order: slice list start [end]
+				listVal := reflect.ValueOf(args[0])
+				if listVal.Kind() != reflect.Slice && listVal.Kind() != reflect.Array {
+					return call(origSlice, args...)
+				}
+				length := listVal.Len()
+				start := toInt(args[1])
+				end := length
+				if len(args) > 2 {
+					end = toInt(args[2])
+				}
+				if start < 0 {
+					start = 0
+				}
+				if start > length {
+					return []any{}, nil
+				}
+				if end < start {
+					return []any{}, nil
+				}
+				if end > length {
+					end = length
+				}
+				// Direct slice without calling sprout to avoid panic on edge cases
+				return listVal.Slice(start, end).Interface(), nil
+			}
+			// Sprout order: slice indices..., list
+			res, err = call(origSlice, args...)
+			if err != nil && strings.Contains(err.Error(), "out of") {
+				return []any{}, nil
+			}
+			return res, err
+		}
+	}
+	if origWithout != nil {
+		m["without"] = func(args ...any) (any, error) {
+			if len(args) < 2 {
+				return call(origWithout, args...)
+			}
+			if isList(args[0]) && !isList(args[len(args)-1]) {
+				list := args[0]
+				omit := args[1:]
+				newArgs := append(omit, list)
+				return call(origWithout, newArgs...)
+			}
+			return call(origWithout, args...)
+		}
+	}
+	if origToDate != nil {
+		m["toDate"] = func(args ...any) (any, error) {
+			// toDate is called as: value | toDate layout  => sprout: toDate(layout, value)
+			// We already handle pipeline correctly without swapping, but need to tolerate
+			// nil/missing values that previously were swallowed.
+			if len(args) != 2 {
+				return call(origToDate, args...)
+			}
+			// Detect sprig order vs sprout order: sprig had value first? No, toDate is
+			// conversion func with layout first in both, pipeline passes layout first via
+			// template semantics, so no swap needed. Just handle nil gracefully.
+			layout, ok1 := args[0].(string)
+			if !ok1 {
+				// If first arg is not string, it might be the value (sprig order swap attempt)
+				// Try swapped
+				if s, ok := args[1].(string); ok {
+					layout = s
+					// value is args[0]
+					if args[0] == nil {
+						return time.Time{}, nil
+					}
+					valStr := fmt.Sprint(args[0])
+					if valStr == "" || valStr == "<nil>" || valStr == "<no value>" {
+						return time.Time{}, nil
+					}
+					return call(origToDate, layout, valStr)
+				}
+				return time.Time{}, fmt.Errorf("invalid value; expected string")
+			}
+			val := args[1]
+			if val == nil {
+				return time.Time{}, nil
+			}
+			valStr, ok2 := val.(string)
+			if !ok2 {
+				valStr = fmt.Sprint(val)
+			}
+			if valStr == "" {
+				// Match sprout error for empty string but avoid "invalid value" for nil
+				return call(origToDate, layout, valStr)
+			}
+			return call(origToDate, layout, valStr)
+		}
+	}
+	if origKindIs != nil {
+		m["kindIs"] = func(args ...any) (any, error) {
+			if len(args) != 2 {
+				return call(origKindIs, args...)
+			}
+			// kindIs(target, value) - target is string, value is any
+			// If value is nil, return false without error (sprigin swallowed)
+			if args[1] == nil {
+				return false, nil
+			}
+			// Also handle if nil is typed nil interface inside map
+			if reflect.ValueOf(args[1]).Kind() == reflect.Ptr && reflect.ValueOf(args[1]).IsNil() {
+				return false, nil
+			}
+			return call(origKindIs, args...)
+		}
+	}
+	if origKindOf != nil {
+		m["kindOf"] = func(args ...any) (any, error) {
+			if len(args) != 1 {
+				return call(origKindOf, args...)
+			}
+			if args[0] == nil {
+				return "invalid", nil
+			}
+			return call(origKindOf, args...)
+		}
+	}
 }
 
 // We don't overlay templates dynamically, we use them all in all cases, this may be inefficient and changing this
