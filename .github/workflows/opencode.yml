@@ -1,0 +1,33 @@
+name: opencode
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  opencode:
+    if: |
+      contains(github.event.comment.body, '/oc') ||
+      contains(github.event.comment.body, '/opencode')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run OpenCode
+        uses: anomalyco/opencode/github@latest
+        env:
+          # Free $0 model via OpenCode Zen — no Anthropic/OpenAI billing needed.
+          # Create a (free) Zen API key at https://opencode.ai/auth and store as repo secret OPENCODE_API_KEY.
+          # This repo is open source, so the contributor-free tier's training-data consent is acceptable (see https://opencode.ai/docs/zen#privacy).
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: opencode/muse-spark-1.2-contributor-free
+          # share: true  # default for public repos
