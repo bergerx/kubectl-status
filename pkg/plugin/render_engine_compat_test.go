@@ -334,3 +334,52 @@ func TestCompatBadArityDelegates(t *testing.T) {
 		t.Fatal("expected arity error from get with a single argument")
 	}
 }
+
+// TestCompatCallDegeneratePaths drives the reflect-based call helper through the branches a
+// normal wrapper invocation never reaches: a typed-nil argument (hit via append's fall-through),
+// an argument count larger than the wrapped function's fixed parameter count, and an argument
+// whose type is neither assignable nor convertible to the wrapped parameter type. These used to
+// panic through reflect; they must now surface a normal error and let the template fail gracefully
+// instead of aborting the process.
+func TestCompatCallDegeneratePaths(t *testing.T) {
+	cfg := NewRenderConfig(viper.New())
+	funcs := templateFuncs(cfg)
+	run := func(t *testing.T, tmplStr string) (string, error) {
+		t.Helper()
+		parsed, err := template.New("t").Funcs(funcs).Parse(tmplStr)
+		if err != nil {
+			t.Fatalf("Parse: %v", err)
+		}
+		var b strings.Builder
+		err = parsed.Execute(&b, nil)
+		return b.String(), err
+	}
+
+	t.Run("typed nil argument", func(t *testing.T) {
+		// append nil list: nil reaches call's a==nil branch (the wrapper's sprig-order
+		// check fails because a nil first arg is not a list, so it falls through to call).
+		_, err := run(t, `{{ $l := list 1 2 }}{{ append nil $l }}`)
+		if err != nil {
+			t.Fatalf("append with nil value: unexpected error %v", err)
+		}
+	})
+
+	t.Run("wrong argument count", func(t *testing.T) {
+		// append with three arguments exceeds its two fixed parameters after every one of
+		// those is satisfied (all assignable), so it must exercise call's arity branch and
+		// return an error, not panic.
+		_, err := run(t, `{{ append 1 2 3 }}`)
+		if err == nil {
+			t.Fatal("expected arity error from append with three arguments")
+		}
+	})
+
+	t.Run("incompatible argument type", func(t *testing.T) {
+		// get "key" 123: the second arg (int) is not assignable/convertible to the
+		// map[string]any parameter; must error, not panic.
+		_, err := run(t, `{{ get "key" 123 }}`)
+		if err == nil {
+			t.Fatal("expected type error from get with a non-map second argument")
+		}
+	})
+}
