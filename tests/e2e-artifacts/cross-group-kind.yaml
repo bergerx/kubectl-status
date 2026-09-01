@@ -1,0 +1,33 @@
+# Both objects deliberately share the name "shared-name" in the same namespace, so that resolving
+# the reference by Kind alone silently returns the wrong one instead of reporting it missing --
+# without the core Secret here, a regression back to the bare-Kind lookup would still make the
+# test pass, just for the wrong reason.
+# No metadata.namespace: applyManifestInNamespace supplies it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: shared-name
+type: Opaque
+stringData:
+  core-only-key: core-value
+---
+apiVersion: keyvault.azure.m.upbound.io/v1beta1
+kind: Secret
+metadata:
+  name: shared-name
+spec:
+  forProvider:
+    name: shared-name
+---
+apiVersion: tests.kubectl-status.io/v1alpha1
+kind: XSecretHolder
+metadata:
+  name: holder-a
+spec:
+  resourceRefs:
+  - apiVersion: keyvault.azure.m.upbound.io/v1beta1
+    kind: Secret
+    name: shared-name
+  - apiVersion: v1
+    kind: Secret
+    name: shared-name

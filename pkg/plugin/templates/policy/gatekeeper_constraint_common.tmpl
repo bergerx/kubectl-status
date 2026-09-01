@@ -37,7 +37,7 @@
                -- no lookup needed to know the name, only to fetch the object itself in --deep. */ -}}
         {{- $ctName := . | lower }}
         {{- $.Include "resource_ref" (dict "kind" "ConstraintTemplate" "name" $ctName) | nindent 2 }}
-        {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" "ConstraintTemplate" "name" $ctName) }}
+        {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" "ConstraintTemplate" "name" $ctName "group" "templates.gatekeeper.sh") }}
     {{- end }}
     {{- with .Spec.match }}
         {{- /* .kinds is optional -- matching by namespaces/namespaceSelector alone is valid, and

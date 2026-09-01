@@ -70,10 +70,10 @@
                 {{- else if eq .resource "thanosrulers" }}{{ $kind = "ThanosRuler" }}
                 {{- else if eq .resource "alertmanagers" }}{{ $kind = "Alertmanager" }}
                 {{- end }}
-                {{- $obj := $.KubeGetFirst .namespace $kind .name }}
+                {{- $obj := $.KubeGetFirst .namespace (qualifyKind $kind .group) .name }}
                 {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
             {{- else }}
-                {{- $.Include "resource_ref" (dict "kind" .resource "name" .name "namespace" .namespace "callerNamespace" $.Namespace) | nindent 4 }}
+                {{- $.Include "resource_ref" (dict "kind" .resource "name" .name "namespace" .namespace "callerNamespace" $.Namespace "group" .group) | nindent 4 }}
             {{- end }}
         {{- end }}
     {{- end }}

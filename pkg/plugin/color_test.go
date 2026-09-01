@@ -24,6 +24,7 @@ func TestResourceRef(t *testing.T) {
 		namespace       interface{}
 		callerNamespace interface{}
 		nameSuffix      interface{}
+		group           interface{}
 		want            string
 	}{
 		{
@@ -76,10 +77,47 @@ func TestResourceRef(t *testing.T) {
 			refName: nil,
 			want:    "/",
 		},
+		{
+			name:    "third-party group qualifies the kind",
+			kind:    "Secret",
+			refName: "my-secret",
+			group:   "keyvault.azure.m.upbound.io/v1beta1",
+			want:    "Secret.keyvault.azure.m.upbound.io/my-secret",
+		},
+		{
+			name:    "bare group (no version) qualifies the kind too",
+			kind:    "Issuer",
+			refName: "ca",
+			group:   "cert-manager.io",
+			want:    "Issuer.cert-manager.io/ca",
+		},
+		{
+			name:    "built-in group is left off screen",
+			kind:    "Deployment",
+			refName: "web",
+			group:   "apps/v1",
+			want:    "Deployment/web",
+		},
+		{
+			name:    "core group apiVersion is left off screen",
+			kind:    "Secret",
+			refName: "my-secret",
+			group:   "v1",
+			want:    "Secret/my-secret",
+		},
+		{
+			name:            "group is rendered before the namespace suffix",
+			kind:            "Secret",
+			refName:         "my-secret",
+			namespace:       "ns1",
+			callerNamespace: "ns2",
+			group:           "keyvault.azure.m.upbound.io/v1beta1",
+			want:            "Secret.keyvault.azure.m.upbound.io/my-secret -n ns1",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := resourceRef(tt.kind, tt.refName, tt.namespace, tt.callerNamespace, tt.nameSuffix)
+			got := resourceRef(tt.kind, tt.refName, tt.namespace, tt.callerNamespace, tt.nameSuffix, tt.group)
 			if got != tt.want {
 				t.Fatalf("resourceRef() = %q, want %q", got, tt.want)
 			}

@@ -1,0 +1,66 @@
+# Two CRDs whose only purpose is to reproduce a Kind name that exists in more than one API group:
+# "Secret" is the core Kubernetes Kind, and it is also a real provider Kind in Upbound's Azure
+# provider (secret.keyvault.azure.m.upbound.io). A reference naming just the Kind resolves through
+# discovery to the core one, which is how a Crossplane XR composing a provider Secret used to
+# render an unrelated core Secret's contents under the right name.
+#
+# XSecretHolder stands in for the XR: it needs no Crossplane installation at all, since
+# detectCrossplaneResource (pkg/plugin/default_resource_detectors.go) keys off a bare
+# spec.resourceRefs, which is exactly the field carrying the ambiguous reference.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: secrets.keyvault.azure.m.upbound.io
+spec:
+  group: keyvault.azure.m.upbound.io
+  names:
+    kind: Secret
+    listKind: SecretList
+    plural: secrets
+    singular: secret
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+          status:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: xsecretholders.tests.kubectl-status.io
+spec:
+  group: tests.kubectl-status.io
+  names:
+    kind: XSecretHolder
+    listKind: XSecretHolderList
+    plural: xsecretholders
+    singular: xsecretholder
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+          status:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true

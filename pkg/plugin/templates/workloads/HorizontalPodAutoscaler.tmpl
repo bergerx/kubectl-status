@@ -7,10 +7,10 @@
     {{- template "observed_generation_summary" . }}
     {{- with .Spec.scaleTargetRef }}
         {{- if $.Config.GetBool "deep" }}
-            {{- $obj := $.KubeGetFirst $.Namespace (.kind | default "Deployment") .name }}
+            {{- $obj := $.KubeGetFirst $.Namespace (qualifyKind (.kind | default "Deployment") .apiVersion) .name }}
             {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 2 }}{{ end }}
         {{- else }}
-            {{- "Scales" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Deployment") "name" .name) }}
+            {{- "Scales" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Deployment") "name" .name "group" .apiVersion) }}
         {{- end }}
     {{- end }}
     {{- $minReplicas := 1 }}{{- if .Spec | hasKey "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | int }}{{- end }}

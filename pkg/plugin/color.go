@@ -18,12 +18,19 @@ import (
 // existing/external user template calling `{{template "resource_ref" (dict ...)}}` keeps working
 // unchanged against that thin wrapper.
 //
-// kind/name/namespace/callerNamespace/nameSuffix are interface{} rather than string: a ref field a
-// CRD marks required can still arrive nil from a hand-written manifest rendered with -f (a missing
-// dict key resolves to an untyped nil the same way), and cast.ToString degrades that to "" instead
-// of erroring the call and aborting the whole object's render.
-func resourceRef(kind, name, namespace, callerNamespace, nameSuffix interface{}) string {
-	kindStr := cast.ToString(kind)
+// apiVersionOrGroup is whatever the reference says about its API group -- a full apiVersion
+// ("keyvault.azure.m.upbound.io/v1beta1"), a bare group, or nothing. A group Kubernetes doesn't
+// serve itself is rendered into the Kind as "Kind.group/name": Kind alone is not a unique name
+// across groups, and a Crossplane/Flux-managed "Secret" from keyvault.azure.m.upbound.io shown as
+// plain "Secret/foo" reads as the core Secret it isn't. Built-in groups stay off screen (see
+// isBuiltinAPIGroup) -- "Deployment.apps/foo" is noise nobody asked for.
+//
+// kind/name/namespace/callerNamespace/nameSuffix/apiVersionOrGroup are interface{} rather than
+// string: a ref field a CRD marks required can still arrive nil from a hand-written manifest
+// rendered with -f (a missing dict key resolves to an untyped nil the same way), and cast.ToString
+// degrades that to "" instead of erroring the call and aborting the whole object's render.
+func resourceRef(kind, name, namespace, callerNamespace, nameSuffix, apiVersionOrGroup interface{}) string {
+	kindStr := displayKind(kind, apiVersionOrGroup)
 	nameStr := cast.ToString(name)
 	namespaceStr := cast.ToString(namespace)
 	callerNamespaceStr := cast.ToString(callerNamespace)
