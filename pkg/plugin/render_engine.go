@@ -221,20 +221,37 @@ func addCompatWrappers(m template.FuncMap) {
 	// Helpers to call underlying via reflection with nil handling
 	call := func(fn any, args ...any) (any, error) {
 		v := reflect.ValueOf(fn)
+		t := v.Type()
 		in := make([]reflect.Value, len(args))
 		for i, a := range args {
-			if a == nil {
-				// Pass typed nil for map/string cases
-				// Infer expected type from function signature if possible
-				expectedType := v.Type().In(i)
-				in[i] = reflect.Zero(expectedType)
+			// A variadic signature has exactly one "in" parameter (the variadic
+			// slice); every argument past the fixed prefix targets that slice's
+			// element type. t.In(i) panics for i >= NumIn, so resolve the target
+			// type up front instead of letting reflect panic -- several wrapped
+			// sprout functions (pick/omit/dig/slice/without) are variadic.
+			var expectedType reflect.Type
+			if t.IsVariadic() && i >= t.NumIn()-1 {
+				expectedType = t.In(t.NumIn() - 1).Elem()
+			} else if i >= t.NumIn() {
+				return nil, fmt.Errorf("%v: wrong number of arguments", t)
 			} else {
-				in[i] = reflect.ValueOf(a)
-				// Ensure assignable: if types mismatch, try conversion
-				if !in[i].Type().AssignableTo(v.Type().In(i)) {
-					if in[i].Type().ConvertibleTo(v.Type().In(i)) {
-						in[i] = in[i].Convert(v.Type().In(i))
-					}
+				expectedType = t.In(i)
+			}
+			if a == nil {
+				// Pass a typed zero value of the expected parameter type rather than
+				// an untyped nil, so e.g. a template can read a key from a missing
+				// dict without reflect panicking on a nil/mismatched assignment.
+				in[i] = reflect.Zero(expectedType)
+				continue
+			}
+			in[i] = reflect.ValueOf(a)
+			// Ensure assignable: if types mismatch, try conversion. Return an error
+			// instead of panicking on a genuinely incompatible argument order.
+			if !in[i].Type().AssignableTo(expectedType) {
+				if in[i].Type().ConvertibleTo(expectedType) {
+					in[i] = in[i].Convert(expectedType)
+				} else {
+					return nil, fmt.Errorf("%v: cannot use %v as %v for argument %d", t, in[i].Type(), expectedType, i)
 				}
 			}
 		}
@@ -259,6 +276,8 @@ func addCompatWrappers(m template.FuncMap) {
 				if len(args) != 2 {
 					return call(origGet, args...)
 				}
+				// sprig order: get dict key. dict may be nil/missing, which sprigin's
+				// SafeCall used to swallow into a zero value.
 				if isMap(args[0]) && !isMap(args[1]) {
 					if key, ok := args[1].(string); ok {
 						if dict, ok := args[0].(map[string]any); ok {
@@ -266,6 +285,12 @@ func addCompatWrappers(m template.FuncMap) {
 						}
 					}
 					return call(origGet, args[1], args[0])
+				}
+				if args[0] == nil {
+					if key, ok := args[1].(string); ok {
+						return typed(key, nil)
+					}
+					return call(origGet, args...)
 				}
 				if key, ok := args[0].(string); ok {
 					if dict, ok := args[1].(map[string]any); ok {
@@ -295,6 +320,8 @@ func addCompatWrappers(m template.FuncMap) {
 				if len(args) != 2 {
 					return call(origHasKey, args...)
 				}
+				// sprig order: hasKey dict key. A missing/nil dict yields false rather
+				// than panicking (sprigin's SafeCall swallowed that too).
 				if isMap(args[0]) && !isMap(args[1]) {
 					if key, ok := args[1].(string); ok {
 						if dict, ok := args[0].(map[string]any); ok {
@@ -302,6 +329,12 @@ func addCompatWrappers(m template.FuncMap) {
 						}
 					}
 					return call(origHasKey, args[1], args[0])
+				}
+				if args[0] == nil {
+					if key, ok := args[1].(string); ok {
+						return typed(key, nil)
+					}
+					return call(origHasKey, args...)
 				}
 				if key, ok := args[0].(string); ok {
 					switch v := args[1].(type) {
