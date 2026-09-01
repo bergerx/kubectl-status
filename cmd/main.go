@@ -170,7 +170,7 @@ func initFlags(cmd *cobra.Command) *genericclioptions.ConfigFlags {
 	resourceBuilderFlags := genericclioptions.NewResourceBuilderFlags().
 		WithAll(false).
 		WithAllNamespaces(false).
-		WithFile(false).
+		WithFile(false, nil).
 		WithLabelSelector("").
 		WithFieldSelector("").
 		WithLatest()
