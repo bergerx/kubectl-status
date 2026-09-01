@@ -37,7 +37,9 @@
     {{- /* Flux gates reconciliation on spec.dependsOn: while any listed object is not Ready this
            one isn't reconciled at all, which is the usual explanation for an object that just
            sits there with a stale revision. Entries carry only name/namespace -- they always
-           refer to the same kind as the object declaring them. */ -}}
+           refer to the same kind as the object declaring them -- which is why the refs are printed
+           unqualified (the reader just read that Kind on the header line) while the --deep fetch
+           passes the group anyway, so a same-named Kind in another group can't win the lookup. */ -}}
     {{- with .Spec.dependsOn }}
         {{- "Depends on" | bold | nindent 2 }}
         {{- range $index, $dep := . }}
@@ -46,7 +48,7 @@
         {{- /* Deep renders each dependency below the list rather than inline in it, so the
                one-line "who is blocking me" summary survives in every mode. */ -}}
         {{- range $dep := . }}
-            {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" ($dep.kind | default $.Kind) "name" $dep.name "namespace" ($dep.namespace | default $.Namespace)) }}
+            {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" ($dep.kind | default $.Kind) "name" $dep.name "namespace" ($dep.namespace | default $.Namespace) "group" (ternary ($.APIVersion | toString) "" (not $dep.kind))) }}
         {{- end }}
     {{- end }}
 {{- end -}}

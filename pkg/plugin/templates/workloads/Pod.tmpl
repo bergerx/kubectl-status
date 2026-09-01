@@ -678,7 +678,7 @@
             {{- if not $claimName }}
                 {{- $line = printf "%s: %s" ($podClaim.name | bold) ("not yet generated" | yellow) }}
             {{- else }}
-                {{- $line = printf "%s: %s" ($podClaim.name | bold) ($pod.Include "managed_resource_line" (dict "ctx" $pod "kind" "ResourceClaim" "name" $claimName "namespace" $pod.Namespace)) }}
+                {{- $line = printf "%s: %s" ($podClaim.name | bold) ($pod.Include "managed_resource_line" (dict "ctx" $pod "kind" "ResourceClaim" "name" $claimName "namespace" $pod.Namespace "group" "resource.k8s.io")) }}
             {{- end }}
             {{- $entries = $entries | append $line }}
         {{- end }}

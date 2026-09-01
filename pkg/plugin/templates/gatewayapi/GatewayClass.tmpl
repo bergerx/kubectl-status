@@ -10,10 +10,10 @@
     {{- with .Spec.parametersRef }}
         {{- if $.Config.GetBool "deep" }}
             {{- $ns := coalesce .namespace $.Namespace }}
-            {{- $obj := $.KubeGetFirst $ns .kind .name }}
+            {{- $obj := $.KubeGetFirst $ns (qualifyKind .kind .group) .name }}
             {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
         {{- else }}
-            {{- "Parameters" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" .namespace) }}
+            {{- "Parameters" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" .namespace "group" .group) }}
         {{- end }}
     {{- end }}
     {{- with .Spec.description }}

@@ -412,6 +412,10 @@ func (r RenderableObject) KubeGetNetworkPoliciesMatchingPod(namespace string, po
 // first and then listed in turn. Called on the Namespace RenderableObject itself (like
 // KubeGetEvents), not given one as a parameter, since it only ever makes sense for the object
 // being rendered.
+// gatekeeperConstraintsGroup is the API group Gatekeeper serves every generated Constraint CRD
+// under, regardless of which ConstraintTemplate declared it.
+const gatekeeperConstraintsGroup = "constraints.gatekeeper.sh"
+
 func (r RenderableObject) KubeGetGatekeeperConstraintsMatchingNamespace() (out []RenderableObject) {
 	out = make([]RenderableObject, 0)
 	if r.LiveQueriesDisabled() {
@@ -421,13 +425,18 @@ func (r RenderableObject) KubeGetGatekeeperConstraintsMatchingNamespace() (out [
 	namespaceName := r.Name()
 	namespaceLabels := stringifyLabels(r.Labels())
 	seenKinds := map[string]bool{}
-	for _, ct := range r.KubeGet("", "ConstraintTemplate") {
+	for _, ct := range r.KubeGet("", qualifyKind("ConstraintTemplate", "templates.gatekeeper.sh")) {
 		kind, _, _ := unstructured.NestedString(ct.Object, "spec", "crd", "spec", "names", "kind")
 		if kind == "" || seenKinds[kind] {
 			continue
 		}
 		seenKinds[kind] = true
-		for _, constraint := range r.KubeGet("", kind) {
+		// Qualified with Gatekeeper's own group: a ConstraintTemplate is free to declare a Kind
+		// name that also exists elsewhere in the cluster (a CRD called "Deployment" or "Secret" is
+		// nothing unusual for a policy set), and a bare Kind lets the RESTMapper resolve to
+		// whichever group wins the tie -- listing unrelated objects and matching them against
+		// namespace selectors they never had.
+		for _, constraint := range r.KubeGet("", qualifyKind(kind, gatekeeperConstraintsGroup)) {
 			matchSpec, _, _ := unstructured.NestedMap(constraint.Object, "spec", "match")
 			if gatekeeperConstraintMatchesNamespace(matchSpec, namespaceName, namespaceLabels) {
 				out = append(out, constraint)

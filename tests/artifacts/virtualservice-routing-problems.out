@@ -3,8 +3,8 @@ VirtualService/productpage -n bookinfo, created 1m ago, gen:11
   Current: Resource is current
   Hosts: bookinfo.example.com
   Gateways:
-    Gateway/bookinfo-gateway
-    Gateway/shared-gateway -n istio-system
+    Gateway.networking.istio.io/bookinfo-gateway
+    Gateway.networking.istio.io/shared-gateway -n istio-system
     mesh (sidecars)
   HTTP:
     retired when (uri=/legacy) or (uri prefix /v0/)

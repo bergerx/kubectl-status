@@ -152,10 +152,21 @@ Either shape is fine; the requirement is that the ref itself stays on screen in 
 For a **list of resources another object manages** — a Kustomization's `status.inventory`, a Crossplane XR's `resourceRefs`, the objects in a Helm release manifest — use `managed_resource_line`, which implements all three modes plus the not-found case in one call:
 
 ```
-{{- $.Include "managed_resource_line" (dict "ctx" $ "kind" $kind "name" $name "namespace" $ns) | nindent 4 }}
+{{- $.Include "managed_resource_line" (dict "ctx" $ "kind" $kind "name" $name "namespace" $ns "group" $group) | nindent 4 }}
 ```
 
 It renders the full inline object under `--deep`, a per-kind health summary by default (via `resource_health_summary`, so a mixed-kind list needs no dispatch of its own), and a bare `resource_ref` when the object can't be fetched. A reference with nothing behind it is additionally marked `missing`, since naming a resource you manage is a claim that it exists; that marking is suppressed when live queries are off, where *every* lookup comes back empty for an unrelated reason. Callers apply their own `nindent` — the helper emits no leading indentation, so the same call works at any depth.
+
+### Always pass the API group with a reference
+
+A `Kind` is not a unique name: `Secret` exists in the core group *and* in `keyvault.azure.m.upbound.io`, `Gateway` in both `gateway.networking.k8s.io` and `networking.istio.io`. `KubeGet`/`KubeGetFirst` resolve an unqualified kind through discovery across every group and silently pick whichever wins the tie — which is how a Crossplane XR composing a provider `Secret` ended up rendering an unrelated core Secret's contents under the right name.
+
+So wherever a reference carries an `apiVersion` or a `group` (an `ownerReference`, a Crossplane `resourceRefs` entry, a Flux inventory id's third segment, a Gateway API `backendRef`, a Helm release manifest document), pass it on:
+
+- to the **lookup**, via `qualifyKind` — `$.KubeGetFirst $ns (qualifyKind .kind .apiVersion) .name` — or the `"group"` key of `managed_resource_line`/`deep_render_ref`.
+- to the **display**, via the `"group"` key of `resource_ref`. Only a group Kubernetes doesn't serve itself is actually printed (`Secret.keyvault.azure.m.upbound.io/creds`); `Deployment.apps` is noise and is suppressed, so passing the group is always safe.
+
+Where the group is a fixed constant the template already knows (Gatekeeper's `constraints.gatekeeper.sh`, Istio's `networking.istio.io`), pass the literal. The two places that deliberately stay unqualified are an object's own header line in `status_summary_line` (nothing to disambiguate it against — the user asked for it by name) and a Flux `spec.dependsOn` ref (always the same Kind as the object declaring it, which the header line just showed).
 
 ### Go template `and`/`or` do not short-circuit
 

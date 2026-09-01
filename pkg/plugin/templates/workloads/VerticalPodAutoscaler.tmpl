@@ -7,10 +7,10 @@
     {{- template "observed_generation_summary" . }}
     {{- with .Spec.targetRef }}
         {{- if $.Config.GetBool "deep" }}
-            {{- $obj := $.KubeGetFirst $.Namespace (.kind | default "Deployment") .name }}
+            {{- $obj := $.KubeGetFirst $.Namespace (qualifyKind (.kind | default "Deployment") .apiVersion) .name }}
             {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 2 }}{{ end }}
         {{- else }}
-            {{- "Targets" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Deployment") "name" .name) }}
+            {{- "Targets" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Deployment") "name" .name "group" .apiVersion) }}
         {{- end }}
     {{- end }}
     {{- $updateMode := (.Spec.updatePolicy | default dict).updateMode | default "Auto" }}

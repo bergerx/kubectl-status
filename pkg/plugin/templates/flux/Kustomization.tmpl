@@ -51,7 +51,12 @@
             {{- $parts := splitList "_" (.id | default "" | toString) }}
             {{- /* An id that doesn't split into four is bucketed rather than counted under its own
                    text, which would otherwise put the whole malformed id in the kind summary. */ -}}
-            {{- $kind := ternary (last $parts) "unparsable" (eq (len $parts) 4) }}
+            {{- /* Counted under the same group-qualified kind the entries themselves are printed
+                   as below, so two same-named Kinds from different groups aren't summed into one
+                   bogus count. Written as an if rather than a ternary because both branches of a
+                   ternary are evaluated, and "index $parts 2" errors on a malformed id. */ -}}
+            {{- $kind := "unparsable" }}
+            {{- if eq (len $parts) 4 }}{{ $kind = displayKind (index $parts 3) (index $parts 2) }}{{ end }}
             {{- $_ := $countsByKind | set $kind (add1 (int ($countsByKind | get $kind))) }}
             {{- $ids = $ids | append (.id | default "" | toString) }}
         {{- end }}
@@ -67,12 +72,16 @@
             {{- if eq (len $parts) 4 }}
                 {{- $entryNamespace := index $parts 0 }}
                 {{- $entryName := index $parts 1 }}
+                {{- /* Empty for the core group ("ns_name__Secret"), which is exactly what the ref
+                       and the lookup want -- an id naming a non-core group is the case that used
+                       to resolve to the wrong Kind of the same name. */ -}}
+                {{- $entryGroup := index $parts 2 }}
                 {{- $entryKind := index $parts 3 }}
                 {{- /* An inventory entry is a record of an apply that already succeeded, so an
                        object missing from underneath one was deleted out-of-band or left behind by
                        a prune that couldn't finish -- and the Kustomization reports Ready either
                        way. managed_resource_line flags that for us. */ -}}
-                {{- $.Include "managed_resource_line" (dict "ctx" $ "kind" $entryKind "name" $entryName "namespace" $entryNamespace) | nindent 4 }}
+                {{- $.Include "managed_resource_line" (dict "ctx" $ "kind" $entryKind "name" $entryName "namespace" $entryNamespace "group" $entryGroup) | nindent 4 }}
             {{- else }}
                 {{- $entry | toString | cyan | nindent 4 }}
             {{- end }}

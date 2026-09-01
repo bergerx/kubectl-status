@@ -30,17 +30,21 @@
            object doing the referencing; when it matches "namespace" the namespace is redundant on
            screen and is dropped) "nameSuffix" (optional -- a qualifier of the name itself, such
            as a port, placed against the name so it can't be misread as qualifying the trailing
-           " -n namespace" instead)), so every existing/external user template calling
-           template "resource_ref" (dict ...) directly keeps working unchanged. The actual
-           formatting logic lives in the resourceRef Go function (color.go), which gets a
-           compiler-checked parameter list and unit test coverage instead of an unchecked dict;
+           " -n namespace" instead) "group" (optional -- the referenced object's apiVersion or bare
+           API group; a group Kubernetes doesn't serve itself is rendered as "Kind.group/name",
+           since Kind alone is not a unique name across groups)), so every existing/external user
+           template calling template "resource_ref" (dict ...) directly keeps working unchanged.
+           The actual formatting logic lives in the resourceRef Go function (color.go), which gets
+           a compiler-checked parameter list and unit test coverage instead of an unchecked dict;
            see issue #810. */ -}}
-    {{- resourceRef .kind .name .namespace .callerNamespace .nameSuffix -}}
+    {{- resourceRef .kind .name .namespace .callerNamespace .nameSuffix .group -}}
 {{- end -}}
 
 {{- define "deep_render_ref" }}
     {{- /* Expects dict "ctx" (the RenderableObject doing the referencing) "kind" "name"
-           "namespace" (optional, defaults to the caller's) "indent" (optional, defaults to 4).
+           "namespace" (optional, defaults to the caller's) "group" (optional -- the referenced
+           object's apiVersion or bare API group, so the fetch resolves the right Kind when the
+           same Kind name exists in more than one group) "indent" (optional, defaults to 4).
            Renders the referenced object inline under the caller's line when --deep is set, and
            nothing at all otherwise -- so a caller pairs it with a resource_ref line, which stays
            on screen in every mode:
@@ -56,7 +60,7 @@
            either needing an explicit check here. */ -}}
     {{- $ctx := .ctx }}
     {{- if $ctx.Config.GetBool "deep" }}
-        {{- $obj := $ctx.KubeGetFirst (.namespace | default $ctx.Namespace) .kind .name }}
+        {{- $obj := $ctx.KubeGetFirst (.namespace | default $ctx.Namespace) (qualifyKind .kind .group) .name }}
         {{- if $obj.Object }}
             {{- $ctx.IncludeRenderableObject $obj | nindent (int (.indent | default 4)) }}
         {{- end }}
@@ -65,7 +69,8 @@
 
 {{- define "managed_resource_line" }}
     {{- /* Expects dict "ctx" (the RenderableObject doing the managing) "kind" "name" "namespace"
-           (optional, defaults to the caller's).
+           (optional, defaults to the caller's) "group" (optional -- the managed object's
+           apiVersion or bare API group).
 
            One line for one object that some other object claims to manage, in whichever of the
            three rendering modes is active: the full inline render under --deep, a compact per-kind
@@ -86,9 +91,13 @@
            would be a lie. */ -}}
     {{- $ctx := .ctx }}
     {{- $namespace := .namespace | default $ctx.Namespace }}
-    {{- $obj := $ctx.KubeGetFirst $namespace .kind .name }}
+    {{- /* The group is what makes the lookup land on the object the managing resource actually
+           named: a bare "Secret" resolves to core/v1 through discovery whichever group the
+           reference meant, so a Crossplane XR composing a secret.keyvault.azure.m.upbound.io used
+           to render an unrelated core Secret's contents under the right name. */ -}}
+    {{- $obj := $ctx.KubeGetFirst $namespace (qualifyKind .kind .group) .name }}
     {{- if not $obj.Object }}
-        {{- $ctx.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" $namespace "callerNamespace" $ctx.Namespace) }}
+        {{- $ctx.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" $namespace "callerNamespace" $ctx.Namespace "group" .group) }}
         {{- if not $ctx.LiveQueriesDisabled }} {{ "missing" | red | bold }}: no such object in the cluster{{ end }}
     {{- else if $ctx.Config.GetBool "deep" }}
         {{- $ctx.IncludeRenderableObject $obj }}
@@ -112,6 +121,10 @@
 
 {{- define "status_summary_line" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Deliberately unqualified by API group, unlike the references below: this is the header
+           of the object the user asked for by name, where there is nothing to disambiguate it
+           against, and "PrometheusRule.monitoring.coreos.com/foo" would buy nothing for the length.
+           A reference to some *other* object is the case where the group is load-bearing. */ -}}
     {{- if (.Object | default dict).inline }}
         {{- template "resource_ref" (dict "kind" .Kind "name" .Name) }}
     {{- else }}
@@ -119,7 +132,7 @@
     {{- end }}
     {{- with .Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if .Metadata.ownerReferences }} by {{ range $index, $ownerReference := .Metadata.ownerReferences }}
-        {{- if $index }},{{ end }}{{ template "resource_ref" (dict "kind" $ownerReference.kind "name" $ownerReference.name) }}
+        {{- if $index }},{{ end }}{{ template "resource_ref" (dict "kind" $ownerReference.kind "name" $ownerReference.name "group" $ownerReference.apiVersion) }}
     {{- end }}{{ end }}
     {{- with .Metadata.generation }}, gen:{{ . }}{{ end }}
     {{- if and .Status.startTime (ne .Kind "Job") }}
@@ -237,7 +250,7 @@
             {{- end }}{{ end }}
         {{- end }}
         {{- range .Orphans }}
-            {{- "Orphan" | red | bold | nindent 2 }}: owner {{ template "resource_ref" (dict "kind" .Kind "name" .Name) }} referenced in ownerReferences no longer exists
+            {{- "Orphan" | red | bold | nindent 2 }}: owner {{ template "resource_ref" (dict "kind" .Kind "name" .Name "group" .APIVersion) }} referenced in ownerReferences no longer exists
         {{- end }}
     {{- end }}
 {{- end }}
@@ -300,7 +313,7 @@
            itself rather than at status.observedGeneration (controller-runtime's metav1.Condition
            carries its own per-condition observedGeneration; some operators only set it there). */ -}}
     {{- $obj := .obj }}
-    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace "group" $obj.APIVersion) }}
     {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- with $obj.KStatus }}, {{ .Status.String | colorKeyword }}{{ with .Message }}: {{ . }}{{ end }}{{ end }}
     {{- if $obj.Status | hasKey "ready" }}
