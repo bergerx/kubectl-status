@@ -25,7 +25,8 @@
            silently picks one -- on a cluster running both, the Gateway API's wins, so a
            "no such Gateway" check here would report every healthy Istio Gateway as missing.
            See #789; naming the ref without claiming anything about it is correct under either
-           resolution. */ -}}
+           resolution. The ref is printed group-qualified for the same reason: on such a cluster
+           a bare "Gateway/foo" is genuinely ambiguous to the reader too. */ -}}
     {{- with .Spec.gateways }}
         {{- "Gateways" | bold | nindent 2 }}:
         {{- $single := eq (len .) 1 }}
@@ -38,7 +39,7 @@
                 {{- $parts := . | toString | splitList "/" }}
                 {{- $gwNs := $.Namespace }}{{ $gwName := . | toString }}
                 {{- if eq (len $parts) 2 }}{{ $gwNs = index $parts 0 }}{{ $gwName = index $parts 1 }}{{ end }}
-                {{- $entry = $.Include "resource_ref" (dict "kind" "Gateway" "name" $gwName "namespace" $gwNs "callerNamespace" $.Namespace) }}
+                {{- $entry = $.Include "resource_ref" (dict "kind" "Gateway" "name" $gwName "namespace" $gwNs "callerNamespace" $.Namespace "group" "networking.istio.io") }}
             {{- end }}
             {{- if $single }} {{ $entry }}{{ else }}{{ $entry | nindent 4 }}{{ end }}
         {{- end }}

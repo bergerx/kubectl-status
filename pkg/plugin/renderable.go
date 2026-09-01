@@ -68,7 +68,10 @@ func (r RenderableObject) newRenderableObject(obj map[string]interface{}) Render
 }
 
 func (r RenderableObject) String() string {
-	kindAndName := fmt.Sprintf("%s/%s", r.Kind(), r.Name())
+	// Group-qualified for a non-built-in group, the same way every reference on screen is (see
+	// displayKind): this string is user-visible through the "already printed" line, where a bare
+	// Kind can name an object from a different group than the one actually printed.
+	kindAndName := fmt.Sprintf("%s/%s", displayKind(r.Kind(), r.APIVersion()), r.Name())
 	if namespace := r.Namespace(); namespace != "" {
 		kindAndName = fmt.Sprintf("%s[%s]", kindAndName, namespace)
 	}
@@ -203,7 +206,11 @@ func (r RenderableObject) renderTemplate(templateName string, data interface{}) 
 
 func (r RenderableObject) executeTemplate(wr io.Writer, name string, data any) error {
 	target, ok := data.(RenderableObject)
-	if ok && target.Kind() == name && r.engine.renderedUIDs.checkAdd(target.GetUID()) && !r.Config.GetBool("watching") {
+	// A Kind that exists in more than one API group is dispatched through a group-qualified
+	// template name ("Kind.group", see templateSet.findTemplateName), so comparing against the bare
+	// Kind alone would miss exactly those objects and re-render them in full instead of collapsing
+	// the repeat into "already printed".
+	if ok && isWholeObjectTemplate(name, target) && r.engine.renderedUIDs.checkAdd(target.GetUID()) && !r.Config.GetBool("watching") {
 		klog.V(3).InfoS("skip rendering of the RenderableObject as its already rendered",
 			"r", r, "templateName", name)
 		_, _ = color.New(color.FgWhite).Fprintf(wr, "%s is already printed", target.String())
@@ -211,6 +218,15 @@ func (r RenderableObject) executeTemplate(wr io.Writer, name string, data any) e
 	}
 	tree := r.engine.templateSet.resolveIncludeTree(name, r.currentTree)
 	return tree.ExecuteTemplate(wr, name, data)
+}
+
+// isWholeObjectTemplate reports whether templateName is the entry point that renders target in
+// full -- its Kind, or the "Kind.group" form findTemplateName uses when that Kind name is shared
+// across API groups -- as opposed to one of the many partials that also execute against a
+// RenderableObject and must never be deduplicated.
+func isWholeObjectTemplate(templateName string, target RenderableObject) bool {
+	kind := target.Kind()
+	return kind != "" && (templateName == kind || templateName == qualifyKind(kind, target.APIVersion()))
 }
 
 type uidSet map[types.UID]struct{}

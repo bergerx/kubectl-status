@@ -126,18 +126,22 @@ rendered as `.` (no `dict`).
 The building blocks [CONVENTIONS.md § Rendering depth](CONVENTIONS.md#rendering-depth) documents for
 implementing the `--shallow`/default/`--deep` pattern.
 
-- **`resource_ref`** — `dict "kind" "name" "namespace"(opt) "callerNamespace"(opt) "nameSuffix"(opt)`.
+- **`resource_ref`** — `dict "kind" "name" "namespace"(opt) "callerNamespace"(opt) "nameSuffix"(opt) "group"(opt)`.
   Renders `Kind/name`, `-n namespace` appended unless `namespace == callerNamespace`, an optional
   suffix glued onto `name` (e.g. a port) so it can't be misread as qualifying the namespace instead.
+  `group` is the referenced object's `apiVersion` or bare API group; a group Kubernetes doesn't serve
+  itself renders as `Kind.group/name` (`Secret.keyvault.azure.m.upbound.io/creds`), while built-in
+  groups stay off screen — see `displayKind`. Pass it whenever the reference carries one: `Kind` alone
+  is not a unique name across API groups.
   `kind`/`name` are defended with `default ""` so a nil ref field degrades to an empty segment instead
   of aborting the whole object's render.
-- **`deep_render_ref`** — `dict "ctx" "kind" "name" "namespace"(opt, defaults to ctx's) "indent"(opt, default 4)`.
+- **`deep_render_ref`** — `dict "ctx" "kind" "name" "namespace"(opt, defaults to ctx's) "group"(opt, the referenced object's apiVersion or bare API group, so the fetch resolves the right Kind) "indent"(opt, default 4)`.
   Renders nothing unless `--deep`; when `--deep`, fetches the referenced object and inlines it,
   indented. Pairs with a `resource_ref` call on the line above so the reference itself survives in
   every mode — see the worked example in
   [CONVENTIONS.md](CONVENTIONS.md#rendering-depth). Silent (no fetch attempted) whenever the object
   can't be found, which covers `--shallow`/`--local` without an extra check.
-- **`managed_resource_line`** — `dict "ctx" "kind" "name" "namespace"(opt, defaults to ctx's)`. One
+- **`managed_resource_line`** — `dict "ctx" "kind" "name" "namespace"(opt, defaults to ctx's) "group"(opt, the managed object's apiVersion or bare API group — used both for the lookup and for the printed ref)`. One
   line for one object some other object claims to manage (a Kustomization's `status.inventory`, a
   Crossplane XR's `resourceRefs`, a Helm release manifest entry): the full inline render under
   `--deep`, a compact per-kind health summary by default (via `resource_health_summary`), or a bare
@@ -357,7 +361,8 @@ a third-party contract, not this project's — see the
 | `karpenterDisqualifyingKey` | `(nodePoolRequirements, podRequirements []interface{}) string` | The specific key that disqualifies one NodePool from a Pod's requirements. |
 | `networkPolicyPolicyTypes`, `calicoPolicyTypes` | `(spec map[string]interface{}) []string` | Effective `Ingress`/`Egress` policy types, applying each API's own default-when-absent rule. |
 | `ciliumPolicyDirections` (func `ciliumPolicyDirectionsForTemplate`) | `(obj map[string]interface{}, podLabels map[string]interface{}) []string` | Ingress/egress directions a CiliumNetworkPolicy's rules actually restrict for the given Pod labels. |
-| `qualifyKind` | `(kind, group string) string` | `"Kind.group"` (empty group renders as bare `Kind`) — the same qualification scheme `findTemplateName` uses to disambiguate a Kind that exists in more than one API group. |
+| `qualifyKind` | `(kind, apiVersionOrGroup interface{}) string` | The group-qualified `TYPE` argument for `KubeGet`/`KubeGetFirst`: `"Kind.group"`, or a bare `Kind` for the core group. Accepts a full `apiVersion` (`"cert-manager.io/v1"`), a bare group, a bare version (`"v1"`, i.e. no group) or nil. The version is deliberately dropped, so the lookup follows the CRD's currently-preferred version. Same qualification scheme `findTemplateName` uses to disambiguate a Kind that exists in more than one API group — **always pass the group when the reference carries one**, since a bare Kind lets the RESTMapper pick whichever group wins the tie. |
+| `displayKind` | `(kind, apiVersionOrGroup interface{}) string` | The on-screen counterpart of `qualifyKind`: `"Kind.group"` only when the group is one Kubernetes doesn't serve itself, a bare `Kind` for the core and built-in groups (`apps`, `batch`, `policy`, `autoscaling`, `extensions`, anything under `k8s.io`). `resource_ref` applies this to its `group` key; templates printing a bare kind (e.g. a Flux `Kustomization`'s per-kind inventory counts) call it directly. |
 | `hostnameIntersections` | `(listenerHostname string, routeHostnames interface{}) []string` | Gateway API hostname-matching between a Listener and a Route. |
 | `istioHost` | `(host, namespace string) IstioHostRef` | Resolves an Istio host reference. Returns `{Key, Name, Namespace string; InCluster bool}`. |
 

@@ -59,7 +59,7 @@
            managed_resource_line, the same way PersistentVolumeClaim relies on being resolvable
            through resource_health_summary wherever a PVC is named rather than fully rendered. */ -}}
     {{- $claim := .obj }}
-    {{- template "resource_ref" (dict "kind" $claim.Kind "name" $claim.Name "namespace" $claim.Namespace "callerNamespace" .callerNamespace) }}
+    {{- template "resource_ref" (dict "kind" $claim.Kind "name" $claim.Name "namespace" $claim.Namespace "callerNamespace" .callerNamespace "group" $claim.APIVersion) }}
     {{- $status := $claim.Status | default dict }}
     {{- $allocation := $status.allocation }}
     {{- if not $allocation }}

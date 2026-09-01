@@ -1,0 +1,17 @@
+apiVersion: tests.kubectl-status.io/v1alpha1
+kind: XSecretHolder
+metadata:
+  creationTimestamp: "2026-07-19T20:11:10Z"
+  generation: 1
+  name: holder-a
+  namespace: e2e-cross-group-kind
+  resourceVersion: "1144"
+  uid: 8f1c6a20-5d7e-4c1a-9f42-2b0d6e7a1c33
+spec:
+  resourceRefs:
+  - apiVersion: keyvault.azure.m.upbound.io/v1beta1
+    kind: Secret
+    name: shared-name
+  - apiVersion: v1
+    kind: Secret
+    name: shared-name

@@ -4,7 +4,7 @@ XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
     Reconciling: Creating, Unready resources: blocked-workload, config
   Composition/status-probe, revision CompositionRevision/status-probe-[a-z0-9]+, update policy Automatic
   Composed resources:
-    Deployment/probe-a-blocked -n e2e-crossplane-xr, created 1m ago by XStatusProbe/probe-a, gen:1 rev:1
+    Deployment/probe-a-blocked -n e2e-crossplane-xr, created 1m ago by XStatusProbe\.tests\.kubectl-status\.io/probe-a, gen:1 rev:1
       InProgress: Available: 0/1
         Reconciling: LessAvailable, Available: 0/1
       desired:1, existing:1, ready:0, updated:1, available:0, unavailable:1
@@ -42,7 +42,7 @@ XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
           Composition/status-probe, revision CompositionRevision/status-probe-[a-z0-9]+, update policy Automatic
           Composed resources:
             Deployment/probe-a-blocked\[e2e-crossplane-xr\] is already printed
-            ConfigMap/probe-a-config -n e2e-crossplane-xr, created 1m ago by XStatusProbe/probe-a
+            ConfigMap/probe-a-config -n e2e-crossplane-xr, created 1m ago by XStatusProbe\.tests\.kubectl-status\.io/probe-a
               Owners:
                 XStatusProbe/probe-a -n e2e-crossplane-xr, created 1m ago, gen:3
                   InProgress: Unready resources: blocked-workload, config

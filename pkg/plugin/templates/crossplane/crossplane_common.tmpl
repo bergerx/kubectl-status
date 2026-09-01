@@ -51,7 +51,10 @@
            from crossplane_default_resource. Since this now runs for every CRD kind that has no dedicated
            template, a coincidentally-named but differently-shaped spec.resourceRefs/spec.crossplane
            field (e.g. not a list of {kind,name} objects) must be ignored rather than treated as a
-           template error that would blank out that resource's whole render. */ -}}
+           template error that would blank out that resource's whole render.
+           Each entry's apiVersion is forwarded as the ref's group: composed resources routinely use
+           a provider Kind whose name is also a core one (Secret in keyvault.azure.m.upbound.io),
+           and without the group both the lookup and the printed ref land on the core Kind. */ -}}
     {{- $refs := .Spec.resourceRefs }}
     {{- $crossplane := .Spec.crossplane }}
     {{- if kindIs "map" $crossplane }}
@@ -70,7 +73,7 @@
         {{- range . }}
             {{- $ns := $.Namespace }}
             {{- with .namespace }}{{ $ns = . }}{{ end }}
-            {{- $.Include "managed_resource_line" (dict "ctx" $ "kind" .kind "name" .name "namespace" $ns) | nindent 4 }}
+            {{- $.Include "managed_resource_line" (dict "ctx" $ "kind" .kind "name" .name "namespace" $ns "group" .apiVersion) | nindent 4 }}
         {{- end }}
     {{- end }}
 {{- end }}
@@ -143,7 +146,7 @@
             {{- end }}
         {{- end }}
         {{- with .Spec.providerConfigRef }}
-            {{- $.Include "resource_ref" (dict "kind" (.kind | default "ProviderConfig") "name" .name) | nindent 2 }}
+            {{- $.Include "resource_ref" (dict "kind" (.kind | default "ProviderConfig") "name" .name "group" .apiVersion) | nindent 2 }}
         {{- end }}
         {{- $policies := .Spec.managementPolicies }}
         {{- if kindIs "slice" $policies }}

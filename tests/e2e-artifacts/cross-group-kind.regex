@@ -1,0 +1,7 @@
+\A
+XSecretHolder/holder-a -n e2e-cross-group-kind, created 1m ago, gen:1
+  Current: Resource is current
+  Composed resources:
+    Secret\.keyvault\.azure\.m\.upbound\.io/shared-name, created 1m ago, Current: Resource is current
+    Secret/shared-name, created 1m ago, Current: Resource is always ready
+\z
