@@ -86,6 +86,7 @@ func (cfg *RenderConfig) funcMap() template.FuncMap {
 		"percent":                         percent,
 		"colorPercent":                    colorPercent,
 		"resourceRef":                     resourceRef,
+		"displayKind":                     displayKind,
 		"evictionHeadroom":                evictionHeadroom,
 		"evictionAnnotation":              evictionAnnotation,
 		"quotaRolloutHeadroom":            quotaRolloutHeadroom,

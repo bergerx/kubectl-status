@@ -1,5 +1,5 @@
 
-NodeClaim/default-fghij, created 1m ago by NodePool/default, gen:1
+NodeClaim/default-fghij, created 1m ago by NodePool.karpenter.sh/default, gen:1
   InProgress: NodeClaim is not initialized
     Reconciling: NodeClaimNotInitialized, NodeClaim is not initialized
   NodeClass: EC2NodeClass/default

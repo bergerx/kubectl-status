@@ -13,7 +13,7 @@
                 {{- $obj := $.KubeGetFirst $.Namespace (qualifyKind .kind .group) .name }}
                 {{- if $obj.Object }}{{ $.IncludeRenderableObject $obj | nindent 4 }}{{ end }}
             {{- else }}
-                {{- $.Include "resource_ref" (dict "kind" .kind "name" .name) | nindent 4 }}
+                {{- $.Include "resource_ref" (dict "kind" .kind "name" .name "group" .group) | nindent 4 }}
                 {{- with .sectionName }} [{{ . | cyan }}]{{ end }}
             {{- end }}
         {{- end }}
@@ -24,7 +24,7 @@
         {{- with .caCertificateRefs }}
             {{- "CA certs" | bold | nindent 4 }}:
             {{- range . }}
-                {{- $.Include "resource_ref" (dict "kind" .kind "name" .name) | nindent 6 }}
+                {{- $.Include "resource_ref" (dict "kind" .kind "name" .name "group" .group) | nindent 6 }}
             {{- end }}
         {{- end }}
         {{- with .subjectAltNames }}
@@ -37,7 +37,7 @@
     {{- with .Status.ancestors }}
         {{- "Status" | bold | nindent 2 }}:
         {{- range . }}
-            {{- $.Include "resource_ref" (dict "kind" (.ancestorRef.kind | default "Gateway") "name" .ancestorRef.name "namespace" .ancestorRef.namespace "callerNamespace" $.Namespace) | nindent 4 }}
+            {{- $.Include "resource_ref" (dict "kind" (.ancestorRef.kind | default "Gateway") "name" .ancestorRef.name "namespace" .ancestorRef.namespace "callerNamespace" $.Namespace "group" .ancestorRef.group) | nindent 4 }}
             {{- with .controllerName }} ({{ . }}){{ end }}
             {{- range .conditions | sortMapListByKeysValue "type" }}
                 {{- $.Include "condition_summary" . | nindent 6 }}

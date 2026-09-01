@@ -24,8 +24,8 @@
            original PV status line. */ -}}
     {{- with .Spec.storageClassName }}{{ $.Include "storageclass_summary" (dict "ctx" $ "name" . "provisionerShown" ($.Annotations | hasKey "pv.kubernetes.io/provisioned-by")) }}{{ end }}
     {{- with .Spec.claimRef }}
-        {{- "Created" | nindent 2 }} for {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" .namespace) }}
-        {{- $pvc := $.KubeGetFirst .namespace .kind .name }}
+        {{- "Created" | nindent 2 }} for {{ $.Include "resource_ref" (dict "kind" .kind "name" .name "namespace" .namespace "group" .apiVersion) }}
+        {{- $pvc := $.KubeGetFirst .namespace (qualifyKind .kind .apiVersion) .name }}
         {{- if $pvc.Object }}
             {{- if ne $pvc.Metadata.uid .uid }}
                 {{- "Dangling" | red | bold | nindent 4 }}: The PVC referenced in this PV is replaced by a new one. And a new PV is created for the replacement PVC.

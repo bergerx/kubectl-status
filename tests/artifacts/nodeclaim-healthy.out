@@ -1,5 +1,5 @@
 
-NodeClaim/default-abcde, created 1m ago by NodePool/default, gen:1
+NodeClaim/default-abcde, created 1m ago by NodePool.karpenter.sh/default, gen:1
   Current: Resource is Ready
   NodeClass: EC2NodeClass/default
   Capacity: m5.large (spot) in us-east-1a

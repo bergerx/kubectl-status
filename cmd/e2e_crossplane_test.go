@@ -64,4 +64,35 @@ func runCrossplaneSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), 
 			stdoutRegexPath: "e2e-artifacts/crossplane-xr-deep.regex",
 		}.assert(t, nil, opts...)
 	})
+
+	t.Run("a composed resource is resolved in the API group its reference names", func(t *testing.T) {
+		t.Parallel()
+		// No ensureCrossplane: detectCrossplaneResource (default_resource_detectors.go) keys off a
+		// bare spec.resourceRefs, so a plain CRD carrying that field exercises the composed-resource
+		// rendering path without a Crossplane installation -- and this scenario is about reference
+		// resolution, not about anything Crossplane's controllers do.
+		//
+		// The reference names Kind=Secret in keyvault.azure.m.upbound.io (a real Upbound Azure
+		// provider Kind), while a core v1 Secret of the *same name* exists in the same namespace.
+		// Resolving by Kind alone resolves to core/v1 through discovery, so before the group was
+		// passed through both composed lines rendered the core Secret: same name, same summary,
+		// twice. The two lines below have to stay distinguishable.
+		opts := combineOpts(hackOpts, viperTestHackOpts())
+		ns := "e2e-cross-group-kind"
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(),
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
+		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
+		require.NoError(t, err)
+
+		applyManifest(t, "e2e-artifacts/cross-group-kind-crds.yaml")
+		require.NoError(t, kubectlCmd(t, "wait", "--for=condition=Established",
+			"crd/secrets.keyvault.azure.m.upbound.io", "crd/xsecretholders.tests.kubectl-status.io",
+			"--timeout=60s").Run())
+		applyManifestInNamespace(t, "e2e-artifacts/cross-group-kind.yaml", ns)
+
+		cmdTest{
+			args:            []string{"xsecretholder/holder-a", "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath: "e2e-artifacts/cross-group-kind.regex",
+		}.assert(t, nil, opts...)
+	})
 }
