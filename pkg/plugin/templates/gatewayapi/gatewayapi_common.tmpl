@@ -26,10 +26,10 @@
     {{- "→ " | nindent 4 }}{{ $ctx.Include "resource_ref" (dict "kind" ($ref.kind | default "Service") "name" $ref.name "namespace" $ref.namespace "callerNamespace" $ctx.Namespace) }}
     {{- if .colorize }}
         {{- with $ref.port }}:{{ . | toString | cyan }}{{ end }}
-        {{- if and ($ref | hasKey "weight") (ne ($ref.weight | int) 1) }}, weight:{{ $ref.weight | toString | cyan }}{{ end }}
+        {{- if and ($ref | hasKey "weight") (ne ($ref.weight | toInt) 1) }}, weight:{{ $ref.weight | toString | cyan }}{{ end }}
     {{- else }}
         {{- with $ref.port }}:{{ . }}{{ end }}
-        {{- if and ($ref | hasKey "weight") (ne ($ref.weight | int) 1) }}, weight:{{ $ref.weight }}{{ end }}
+        {{- if and ($ref | hasKey "weight") (ne ($ref.weight | toInt) 1) }}, weight:{{ $ref.weight }}{{ end }}
     {{- end }}
 {{- end -}}
 

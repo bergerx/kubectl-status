@@ -62,7 +62,7 @@
     {{- if $ctx.Config.GetBool "deep" }}
         {{- $obj := $ctx.KubeGetFirst (.namespace | default $ctx.Namespace) (qualifyKind .kind .group) .name }}
         {{- if $obj.Object }}
-            {{- $ctx.IncludeRenderableObject $obj | nindent (int (.indent | default 4)) }}
+            {{- $ctx.IncludeRenderableObject $obj | nindent (toInt (.indent | default 4)) }}
         {{- end }}
     {{- end }}
 {{- end -}}
@@ -318,7 +318,7 @@
     {{- with $obj.KStatus }}, {{ .Status.String | colorKeyword }}{{ with .Message }}: {{ . }}{{ end }}{{ end }}
     {{- if $obj.Status | hasKey "ready" }}
         {{- $ready := $obj.Status.ready }}
-        {{- if kindIs "bool" $ready }}
+        {{- if and (ne (printf "%T" $ready) "<nil>") (kindIs "bool" $ready) }}
             {{- ", ready:" }}{{ if $ready }}{{ "true" | green }}{{ else }}{{ "false" | red | bold }}{{ end }}
         {{- end }}
     {{- end }}
@@ -438,10 +438,10 @@
     {{- /* reconcile:disabled and ssa:Ignore both drop the object out of apply *and* prune, so it
            keeps whatever state it has however far the source moves on -- and its Kustomization
            still reports Ready, because skipping is a success. */ -}}
-    {{- if eq ($meta | get "kustomize.toolkit.fluxcd.io/reconcile" | default "" | toString | lower) "disabled" }}
+    {{- if eq ($meta | get "kustomize.toolkit.fluxcd.io/reconcile" | default "" | toString | toLower) "disabled" }}
         {{- "Flux reconcile disabled" | yellow | bold | nindent 2 }}: neither applied nor pruned by its Kustomization, however far the source moves on
     {{- end }}
-    {{- $ssa := $meta | get "kustomize.toolkit.fluxcd.io/ssa" | default "" | toString | lower }}
+    {{- $ssa := $meta | get "kustomize.toolkit.fluxcd.io/ssa" | default "" | toString | toLower }}
     {{- if eq $ssa "ignore" }}
         {{- "Flux apply policy Ignore" | yellow | bold | nindent 2 }}: never applied and never pruned, even while it is still in the source
     {{- else if eq $ssa "merge" }}
@@ -451,17 +451,17 @@
     {{- end }}
     {{- /* Usually set on a Namespace, PVC or PV to protect it from an accidental prune, and just as
            usually forgotten -- after which deleting it from the source silently leaves it running. */ -}}
-    {{- if eq ($meta | get "kustomize.toolkit.fluxcd.io/prune" | default "" | toString | lower) "disabled" }}
+    {{- if eq ($meta | get "kustomize.toolkit.fluxcd.io/prune" | default "" | toString | toLower) "disabled" }}
         {{- "Flux prune disabled" | yellow | bold | nindent 2 }}: kept running in the cluster after it is removed from the source
     {{- end }}
     {{- /* Meant to be removed once the immutable change is through; left on a StatefulSet it turns
            an ordinary field change into a delete and recreate. */ -}}
-    {{- if eq ($meta | get "kustomize.toolkit.fluxcd.io/force" | default "" | toString | lower) "enabled" }}
+    {{- if eq ($meta | get "kustomize.toolkit.fluxcd.io/force" | default "" | toString | toLower) "enabled" }}
         {{- "Flux force enabled" | yellow | bold | nindent 2 }}: deleted and recreated when a patch hits an immutable field
     {{- end }}
     {{- /* Only bites on a HelmRelease that turned drift detection on; there it is the reason one
            object in the release keeps its out-of-band edits while the rest lose theirs. */ -}}
-    {{- if eq ($meta | get "helm.toolkit.fluxcd.io/driftDetection" | default "" | toString | lower) "disabled" }}
+    {{- if eq ($meta | get "helm.toolkit.fluxcd.io/driftDetection" | default "" | toString | toLower) "disabled" }}
         {{- "Flux drift detection disabled" | bold | nindent 2 }}: out-of-band changes to this object are not reverted
     {{- end }}
 {{- end -}}

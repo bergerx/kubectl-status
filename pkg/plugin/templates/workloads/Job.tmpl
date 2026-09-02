@@ -11,7 +11,7 @@
     {{- if .Spec.suspend }}, {{ "Suspended" | yellow | bold }}{{ end }}
     {{- if .Status.active }}, {{ "Active" | yellow | bold }}{{ end }}
     {{- if .Status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
-    {{- if .Status.failed }}, {{ printf "Failed: %d" (.Status.failed | int) | red | bold }}{{ with .Spec.backoffLimit }}/{{ . | toString }}{{ end }}{{ end }}
+    {{- if .Status.failed }}, {{ printf "Failed: %d" (.Status.failed | toInt) | red | bold }}{{ with .Spec.backoffLimit }}/{{ . | toString }}{{ end }}{{ end }}
     {{- if eq (.Spec.completionMode | default "NonIndexed") "Indexed" }}
         {{- template "job_indexed_details" . }}
     {{- else }}
@@ -85,7 +85,7 @@
     {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if $obj.Status.active }}, {{ "Active" | yellow | bold }}{{ end }}
     {{- if $obj.Status.succeeded }}, {{ "Succeeded" | green }}{{ end }}
-    {{- if $obj.Status.failed }}, {{ printf "Failed: %d" ($obj.Status.failed | int) | red | bold }}{{ end }}
+    {{- if $obj.Status.failed }}, {{ printf "Failed: %d" ($obj.Status.failed | toInt) | red | bold }}{{ end }}
     {{- if $obj.Status.startTime }}, started {{ $obj.Status.startTime | colorAgo }}{{ agoSuffix }}{{ end }}
     {{- if and $obj.Status.startTime $obj.Status.completionTime }}
         {{- $started := $obj.Status.startTime | toDate "2006-01-02T15:04:05Z" -}}
@@ -98,8 +98,8 @@
 
 {{- define "job_indexed_details" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
-    {{- $total := .Spec.completions | int }}
-    {{- $succeeded := coalesce .Status.succeeded 0 | int }}
+    {{- $total := .Spec.completions | toInt }}
+    {{- $succeeded := coalesce .Status.succeeded 0 | toInt }}
     {{- printf "Indexed: %d/%d" $succeeded $total | bold | nindent 2 }}
     {{- with .Status.completedIndexes }} ({{ . | cyan }}){{ end }}
     {{- if .Status.active }}, {{ .Status.active | toString | cyan }} active{{ end }}

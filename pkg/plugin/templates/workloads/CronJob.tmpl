@@ -29,7 +29,7 @@
         {{- end }}
     {{- end }}
     {{- with $cronJobJobs }}
-        {{- "Jobs" | bold | nindent 2 }}, keep last {{ $.Spec.successfulJobsHistoryLimit | default 3 | int | toString | cyan }} successful / {{ $.Spec.failedJobsHistoryLimit | default 1 | int | toString | cyan }} failed:
+        {{- "Jobs" | bold | nindent 2 }}, keep last {{ $.Spec.successfulJobsHistoryLimit | default 3 | toInt | toString | cyan }} successful / {{ $.Spec.failedJobsHistoryLimit | default 1 | toInt | toString | cyan }} failed:
         {{- range . }}
             {{- if $.Config.GetBool "deep" }}
                 {{- $.IncludeRenderableObject . | nindent 4 }}

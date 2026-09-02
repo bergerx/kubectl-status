@@ -41,7 +41,7 @@
     {{- end }}
     {{- $limits := $spec.limits }}
     {{- $resources := (.Status | default dict).resources }}
-    {{- if or (and (kindIs "map" $limits) $limits) (and (kindIs "map" $resources) $resources) }}
+    {{- if or (and $limits (kindIs "map" $limits)) (and $resources (kindIs "map" $resources)) }}
         {{- $keys := list }}
         {{- range keys ($limits | default dict) }}{{ if not (has . $keys) }}{{ $keys = $keys | append . }}{{ end }}{{ end }}
         {{- range keys ($resources | default dict) }}{{ if not (has . $keys) }}{{ $keys = $keys | append . }}{{ end }}{{ end }}

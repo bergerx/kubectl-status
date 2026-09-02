@@ -148,22 +148,22 @@
     {{- if or .Status.installFailures .Status.upgradeFailures .Status.failures }}
         {{- "Failures" | red | bold | nindent 2 }}:
         {{- $failureParts := list }}
-        {{- with .Status.installFailures }}{{ $failureParts = $failureParts | append (printf "install:%d" (int .)) }}{{ end }}
-        {{- with .Status.upgradeFailures }}{{ $failureParts = $failureParts | append (printf "upgrade:%d" (int .)) }}{{ end }}
-        {{- with .Status.failures }}{{ $failureParts = $failureParts | append (printf "total:%d" (int .)) }}{{ end }}
+        {{- with .Status.installFailures }}{{ $failureParts = $failureParts | append (printf "install:%d" (toInt .)) }}{{ end }}
+        {{- with .Status.upgradeFailures }}{{ $failureParts = $failureParts | append (printf "upgrade:%d" (toInt .)) }}{{ end }}
+        {{- with .Status.failures }}{{ $failureParts = $failureParts | append (printf "total:%d" (toInt .)) }}{{ end }}
         {{- " " }}{{ join ", " $failureParts | red | bold }}
     {{- end }}
     {{- /* Remediation only matters once it deviates from the default of not retrying at all;
            a non-zero retry count explains repeated install/upgrade attempts between intervals,
            and the upgrade strategy decides whether a failure rolls back or uninstalls. */ -}}
-    {{- $installRetries := dig "install" "remediation" "retries" 0 (.Spec | default dict) }}
-    {{- $upgradeRetries := dig "upgrade" "remediation" "retries" 0 (.Spec | default dict) }}
-    {{- $upgradeStrategy := dig "upgrade" "remediation" "strategy" "" (.Spec | default dict) }}
+    {{- $installRetries := dig "install" "remediation" "retries" (.Spec | default dict) | default 0 }}
+    {{- $upgradeRetries := dig "upgrade" "remediation" "retries" (.Spec | default dict) | default 0 }}
+    {{- $upgradeStrategy := dig "upgrade" "remediation" "strategy" (.Spec | default dict) | default "" }}
     {{- if or $installRetries $upgradeRetries $upgradeStrategy }}
         {{- "Remediation" | bold | nindent 2 }}:
         {{- $remediationParts := list }}
-        {{- with $installRetries }}{{ $remediationParts = $remediationParts | append (printf "install retries %d" (int .)) }}{{ end }}
-        {{- with $upgradeRetries }}{{ $remediationParts = $remediationParts | append (printf "upgrade retries %d" (int .)) }}{{ end }}
+        {{- with $installRetries }}{{ $remediationParts = $remediationParts | append (printf "install retries %d" (toInt .)) }}{{ end }}
+        {{- with $upgradeRetries }}{{ $remediationParts = $remediationParts | append (printf "upgrade retries %d" (toInt .)) }}{{ end }}
         {{- with $upgradeStrategy }}{{ $remediationParts = $remediationParts | append (printf "on failed upgrade: %s" .) }}{{ end }}
         {{- " " }}{{ join ", " $remediationParts | cyan }}
     {{- end }}
@@ -174,8 +174,8 @@
            Only deviations are shown: we can't see whether the chart even ships a crds/ directory,
            so a line about the defaults would fire on every HelmRelease in the cluster, most of
            which have no CRDs for it to be about. */ -}}
-    {{- $installCRDs := dig "install" "crds" "Create" (.Spec | default dict) }}
-    {{- $upgradeCRDs := dig "upgrade" "crds" "Skip" (.Spec | default dict) }}
+    {{- $installCRDs := dig "install" "crds" (.Spec | default dict) | default "Create" }}
+    {{- $upgradeCRDs := dig "upgrade" "crds" (.Spec | default dict) | default "Skip" }}
     {{- if or (ne $installCRDs "Create") (ne $upgradeCRDs "Skip") }}
         {{- /* Both phases go on one line -- they're two halves of a single policy, and a reader
                deciding whether a CRD change will land needs them together. Whichever half is at

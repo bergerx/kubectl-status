@@ -8,9 +8,9 @@
            shaped), so they're read off .Object directly rather than .Spec/.Status. */ -}}
     {{- $scope := .Object.scope }}
     {{- $scopeSelector := .Object.scopeSelector }}
-    {{- if kindIs "map" $scope }}
+    {{- if and $scope (kindIs "map" $scope) }}
         {{- "Scope" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" ($scope.kind | default "") "name" ($scope.name | default "") "namespace" $scope.namespace "callerNamespace" $.Namespace) }}
-    {{- else if kindIs "map" $scopeSelector }}
+    {{- else if and $scopeSelector (kindIs "map" $scopeSelector) }}
         {{- if or ($scopeSelector | hasKey "matchLabels") ($scopeSelector | hasKey "matchExpressions") }}
             {{- "Scope selector" | bold | nindent 2 }}: {{ $scopeSelector | labelSelector | cyan }}
         {{- end }}
@@ -24,11 +24,11 @@
            counts instead of manufacturing a percentage from them keeps the render honest about
            what the API actually reports. */ -}}
     {{- $summary := .Object.summary | default dict }}
-    {{- $pass := $summary.pass | default 0 | int }}
-    {{- $fail := $summary.fail | default 0 | int }}
-    {{- $warn := $summary.warn | default 0 | int }}
-    {{- $error := $summary.error | default 0 | int }}
-    {{- $skip := $summary.skip | default 0 | int }}
+    {{- $pass := $summary.pass | default 0 | toInt }}
+    {{- $fail := $summary.fail | default 0 | toInt }}
+    {{- $warn := $summary.warn | default 0 | toInt }}
+    {{- $error := $summary.error | default 0 | toInt }}
+    {{- $skip := $summary.skip | default 0 | toInt }}
     {{- "Results" | bold | nindent 2 }}: {{ printf "%d passed" $pass | green }}
     {{- if gt $fail 0 }}, {{ printf "%d failed" $fail | red | bold }}{{ end }}
     {{- if gt $error 0 }}
@@ -51,7 +51,7 @@
     {{- $maxUnixNano := 0 }}
     {{- range $results }}
         {{- with .timestamp }}
-            {{- $val := add (mul (.seconds | default 0 | int) 1000000000) (.nanos | default 0 | int) }}
+            {{- $val := add (mul (.seconds | default 0 | toInt) 1000000000) (.nanos | default 0 | toInt) }}
             {{- if gt $val $maxUnixNano }}{{ $maxUnixNano = $val }}{{ end }}
         {{- end }}
     {{- end }}
@@ -83,7 +83,7 @@
     {{- $warn := .warn }}
     {{- $scope := $ctx.Object.scope }}
     {{- $scopeKey := "" }}
-    {{- if kindIs "map" $scope }}
+    {{- if and $scope (kindIs "map" $scope) }}
         {{- $scopeKey = printf "%s/%s/%s" ($scope.kind | default "") ($scope.namespace | default "") ($scope.name | default "") }}
     {{- end }}
     {{- $order := list }}

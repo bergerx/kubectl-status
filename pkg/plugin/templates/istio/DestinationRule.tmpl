@@ -101,7 +101,7 @@
            spelling them out for a policy that doesn't set them would put numbers on screen that
            the object never chose. */ -}}
     {{- $ctx := .ctx }}
-    {{- $indent := int (.indent | default 2) }}
+    {{- $indent := toInt (.indent | default 2) }}
     {{- with .policy }}
         {{- /* mTLS mode is the first thing to check when a workload is suddenly returning
                connection resets: DISABLE against a STRICT-mode upstream, or a plaintext port

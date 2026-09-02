@@ -96,8 +96,8 @@
     {{- with $obj.Spec }}{{ with .ports }}
         {{- range . }}
             {{- ", " }}
-            {{- if .name }}{{ printf "%s(%d/%s)" .name (.port | int) (.protocol | default "TCP") | cyan }}{{ else }}{{ printf "%d/%s" (.port | int) (.protocol | default "TCP") | cyan }}{{ end }}
-            {{- with .nodePort }}{{ printf "→%d" (. | int) | yellow | bold }}{{ end }}
+            {{- if .name }}{{ printf "%s(%d/%s)" .name (.port | toInt) (.protocol | default "TCP") | cyan }}{{ else }}{{ printf "%d/%s" (.port | toInt) (.protocol | default "TCP") | cyan }}{{ end }}
+            {{- with .nodePort }}{{ printf "→%d" (. | toInt) | yellow | bold }}{{ end }}
         {{- end }}
     {{- end }}{{ end }}
     {{- template "kstatus_if_abnormal" $obj }}

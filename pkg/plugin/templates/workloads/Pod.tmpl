@@ -85,7 +85,7 @@
     {{- range $pod.Status.containerStatuses }}
         {{- $total = add1 $total }}
         {{- if .ready }}{{ $ready = add1 $ready }}{{ end }}
-        {{- $restarts = $restarts | add (.restartCount | int) }}
+        {{- $restarts = $restarts | add (.restartCount | toInt) }}
         {{- with .state.waiting.reason }}
             {{- if not ($waitingReasons | has .) }}{{ $waitingReasons = $waitingReasons | append . }}{{ end }}
         {{- end }}
@@ -206,7 +206,7 @@
            to and surfaces only what explains trouble with this Pod: unhealthy conditions,
            cordoned/unschedulable state, and taints this Pod doesn't tolerate. Full Node capacity,
            labels, etc. are intentionally omitted here -- see Node.tmpl for the complete render. */ -}}
-    {{- $nodeName := get .Spec "nodeName" }}
+    {{- $nodeName := get "nodeName" .Spec }}
     {{- if $nodeName }}
         {{- $node := .KubeGetFirst "" "Node" $nodeName }}
         {{- if $node.Object }}
@@ -880,7 +880,7 @@
            mutually exclusive on how they gate. */ -}}
     {{- .containerStatus.name | bold }}{{ if .sidecar }}{{ " [sidecar]" | cyan }}{{ end }} ({{ .containerStatus.image | markYellow "latest" }}) {{ template "container_state_summary" .containerStatus.state }}
     {{- if .containerStatus.state.running }}{{ if .containerStatus.ready }} and {{ "Ready" | green }}{{ else }} but {{ "Not Ready" | red | bold }}{{ end }}{{ end }}
-    {{- if gt (.containerStatus.restartCount | int ) 0 }}, {{ printf "restarted %d times" (.containerStatus.restartCount | int) | yellow | bold }}{{ end }}
+    {{- if gt (.containerStatus.restartCount | toInt ) 0 }}, {{ printf "restarted %d times" (.containerStatus.restartCount | toInt) | yellow | bold }}{{ end }}
     {{- if or .defaultContainer .defaultLogsContainer }} (default kubectl container){{ end }}
     {{- /* Which of the Pod's spec.resourceClaims this container consumes -- inline rather than its
            own labeled block, since pod_device_claims right below already prints a "Device claims:"
@@ -936,10 +936,10 @@
         {{- end }}
     {{- end }}
     {{- $runningNotReady := and .containerStatus.state.running (not .containerStatus.ready) }}
-    {{- $hasRestarts := gt (.containerStatus.restartCount | int) 0 }}
+    {{- $hasRestarts := gt (.containerStatus.restartCount | toInt) 0 }}
     {{- if and $hasRestarts .containerSpec.livenessProbe }}
         {{- with .containerStatus.lastState.terminated }}
-            {{- if and (eq (.exitCode | int) 137) (ne .reason "OOMKilled") }}
+            {{- if and (eq (.exitCode | toInt) 137) (ne .reason "OOMKilled") }}
                 {{- "(possible liveness probe SIGKILL)" | red | nindent 2 }}
             {{- end }}
         {{- end }}
@@ -949,12 +949,12 @@
     {{- end }}
     {{- if and $hasRestarts .containerSpec.livenessProbe }}
         {{- $p := .containerSpec.livenessProbe -}}
-        {{- $budget := add ($p.initialDelaySeconds | default 0 | int) (mul ($p.failureThreshold | default 3 | int) ($p.periodSeconds | default 10 | int)) -}}
+        {{- $budget := add ($p.initialDelaySeconds | default 0 | toInt) (mul ($p.failureThreshold | default 3 | toInt) ($p.periodSeconds | default 10 | toInt)) -}}
         {{- "livenessProbe:" | yellow | nindent 2 }} {{ template "probe_summary" $p }} {{ "kill budget:" | bold }} {{ printf "%ds" $budget | cyan }}
     {{- end }}
     {{- if and $hasRestarts .containerSpec.startupProbe }}
         {{- $p := .containerSpec.startupProbe -}}
-        {{- $budget := add ($p.initialDelaySeconds | default 0 | int) (mul ($p.failureThreshold | default 3 | int) ($p.periodSeconds | default 10 | int)) -}}
+        {{- $budget := add ($p.initialDelaySeconds | default 0 | toInt) (mul ($p.failureThreshold | default 3 | toInt) ($p.periodSeconds | default 10 | toInt)) -}}
         {{- "startupProbe:" | yellow | nindent 2 }} {{ template "probe_summary" $p }} {{ "kill budget:" | bold }} {{ printf "%ds" $budget | cyan }}
     {{- end }}
     {{- with .containerStatus.state.waiting }}
@@ -1022,7 +1022,7 @@
         {{- "Running" | green }} {{ forOrSince }} {{ .startedAt | colorAgo }}
     {{- end }}
     {{- with .terminated }}
-        {{- if .startedAt }}
+        {{- if and .startedAt .finishedAt }}
             {{- $started := .startedAt | toDate "2006-01-02T15:04:05Z" -}}
             {{- $finished := .finishedAt | toDate "2006-01-02T15:04:05Z" -}}
             {{- $ranfor := $finished.Sub $started -}}
@@ -1044,10 +1044,10 @@
     {{- with .tcpSocket }}{{ "tcpSocket" | bold }} {{ printf "%s:%v" (.host | default "localhost") .port | cyan }}{{ end -}}
     {{- with .grpc }}{{ "grpc" | bold }} {{ printf ":%v" .port | cyan }}{{ with .service }} {{ . | cyan }}{{ end }}{{ end -}}
     {{- $parts := list -}}
-    {{- with .initialDelaySeconds }}{{ $parts = $parts | append (printf "delay %ds" (. | int)) }}{{ end -}}
-    {{- with .periodSeconds }}{{ $parts = $parts | append (printf "every %ds" (. | int)) }}{{ end -}}
-    {{- with .timeoutSeconds }}{{ $parts = $parts | append (printf "timeout %ds" (. | int)) }}{{ end -}}
-    {{- with .failureThreshold }}{{ $parts = $parts | append (printf "fail after %dx" (. | int)) }}{{ end -}}
+    {{- with .initialDelaySeconds }}{{ $parts = $parts | append (printf "delay %ds" (. | toInt)) }}{{ end -}}
+    {{- with .periodSeconds }}{{ $parts = $parts | append (printf "every %ds" (. | toInt)) }}{{ end -}}
+    {{- with .timeoutSeconds }}{{ $parts = $parts | append (printf "timeout %ds" (. | toInt)) }}{{ end -}}
+    {{- with .failureThreshold }}{{ $parts = $parts | append (printf "fail after %dx" (. | toInt)) }}{{ end -}}
     {{- if $parts }} ({{ join ", " $parts }}){{ end -}}
 {{- end -}}
 
@@ -1077,5 +1077,5 @@
 {{- define "exit_code_summary" }}
     {{- "exit with" }} {{ .exitCode | toString | redBoldIf (ne (.exitCode | toString) "0" ) }}
     {{- with .signal }} (signal: {{ . }}){{ end }}
-    {{- if and (gt (.exitCode | int) 128) (le (.exitCode | int) 165) }} ({{ sub (.exitCode | int) 128 | int64 | signalName }}){{ end }}
+     {{- if and (gt (.exitCode | toInt) 128) (le (.exitCode | toInt) 165) }} ({{ sub (.exitCode | toInt) 128 | toInt64 | signalName }}){{ end }}
 {{- end -}}

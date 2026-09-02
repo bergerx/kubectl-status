@@ -25,7 +25,7 @@
                 {{- else }}
                     {{- $portDefinedInSvc := false }}
                     {{- range $svc.Spec.ports }}
-                        {{- if or (eq $ingSvcPortName .name) (eq ($ingSvcPortNumber | int) (.port | int)) }}
+                        {{- if or (eq $ingSvcPortName .name) (eq ($ingSvcPortNumber | toInt) (.port | toInt)) }}
                             {{- $portDefinedInSvc = true }}
                         {{- end }}
                     {{- end }}

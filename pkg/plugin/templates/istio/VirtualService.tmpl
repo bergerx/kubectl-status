@@ -46,7 +46,7 @@
     {{- end }}
     {{- range $protocol := list "http" "tls" "tcp" }}
         {{- with index $.Spec $protocol }}
-            {{- $protocol | upper | bold | nindent 2 }}:
+            {{- $protocol | toUpper | bold | nindent 2 }}:
             {{- range . }}
                 {{- $route := . }}
                 {{- /* Route order is significant -- the first route whose match block accepts a
@@ -178,7 +178,7 @@
         {{- range . }}
             {{- "→" | nindent 6 }} {{ $ctx.Include "istio_destination" (dict "ctx" $ctx "dest" .destination) }}
             {{- if or $multi (. | hasKey "weight") }} {{ .weight | default 0 | toString | cyan }}%{{ end }}
-            {{- $sum = add $sum (.weight | default 0 | int) }}
+            {{- $sum = add $sum (.weight | default 0 | toInt) }}
             {{- $ctx.Include "istio_destination_problems" (dict "ctx" $ctx "dest" .destination) }}
         {{- end }}
         {{- if and $multi (ne $sum 100) }}
@@ -264,7 +264,7 @@
     {{- /* Expects a spec.http[].retries block. attempts:0 is not an omitted field but an
            explicit opt-out of the retry policy Istio would otherwise apply by default, so it
            reads as "retries disabled" rather than as a count. */ -}}
-    {{- if and (. | hasKey "attempts") (eq (.attempts | default 0 | int) 0) }}
+    {{- if and (. | hasKey "attempts") (eq (.attempts | default 0 | toInt) 0) }}
         {{- "retries disabled" }}
     {{- else }}
         {{- "retries" }} {{ .attempts | default 0 | toString | cyan }} attempts

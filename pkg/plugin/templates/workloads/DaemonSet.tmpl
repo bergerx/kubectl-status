@@ -49,7 +49,7 @@
           same rollout can tie; sort by the numeric revision field for a reliable order. */ -}}
     {{- $revisions = sortByRevisionField $revisions }}
     {{- $rolloutStatus := .RolloutStatus . }}
-    {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.desiredNumberScheduled | default 0 | int) (.Status.numberReady | default 0 | int)) (ne (.Status.desiredNumberScheduled | default 0 | int) (.Status.updatedNumberScheduled | default 0 | int)) (ne (.Status.numberMisscheduled | default 0 | int) 0) }}
+    {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.desiredNumberScheduled | default 0 | toInt) (.Status.numberReady | default 0 | toInt)) (ne (.Status.desiredNumberScheduled | default 0 | toInt) (.Status.updatedNumberScheduled | default 0 | toInt)) (ne (.Status.numberMisscheduled | default 0 | toInt) 0) }}
     {{- if or (gt (len $revisions) 1) (and (eq (len $revisions) 1) $rolloutProblem) }}
         {{- "Rollouts:" | nindent 2 }}
         {{- template "rollout_diffs_flag_help" $ }}
@@ -59,14 +59,14 @@
         {{- $previousRevisionObj := "" }}
         {{- $previousRevisionNumber := -1 }}
         {{- range $revisions }}
-            {{- $revisionNumber := .Object.revision | int }}
+            {{- $revisionNumber := .Object.revision | toInt }}
             {{- if gt $revisionNumber $maxRevisionNumber }}
                 {{- $maxRevisionNumber = $revisionNumber }}
                 {{- $activeRevisionObj = . }}
             {{- end }}
         {{- end }}
         {{- range $revisions }}
-            {{- $revisionNumber := .Object.revision | int }}
+            {{- $revisionNumber := .Object.revision | toInt }}
             {{- if and (ne $revisionNumber $maxRevisionNumber) (gt $revisionNumber $previousRevisionNumber) }}
                 {{- $previousRevisionNumber = $revisionNumber }}
                 {{- $previousRevisionObj = . }}

@@ -88,8 +88,8 @@
     {{- end }}
     {{- if eq ($sub.allocationMode | default "ExactCount") "All" }}
         {{- " " }}{{ "(all matching devices)" | yellow }}
-    {{- else if ne ($sub.count | default 1 | int) 1 }}
-        {{- printf " (count: %d)" ($sub.count | int) | cyan }}
+    {{- else if ne ($sub.count | default 1 | toInt) 1 }}
+        {{- printf " (count: %d)" ($sub.count | toInt) | cyan }}
     {{- end }}
     {{- if $sub.adminAccess }}
         {{- " " }}{{ "adminAccess" | yellow | bold }}

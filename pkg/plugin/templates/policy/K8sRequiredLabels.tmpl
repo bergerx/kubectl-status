@@ -20,7 +20,7 @@
                    each item's shape is checked before assuming it's a map. */ -}}
             {{- if eq (len .) 1 }}
                 {{- with index . 0 }}
-                    {{- if kindIs "map" . }}
+                    {{- if and . (kindIs "map" .) }}
                         {{- "Required labels" | bold | nindent 2 }}: {{ .key | cyan }}{{ with .allowedRegex }} matching {{ . | cyan }}{{ end }}
                     {{- else }}
                         {{- "Required labels" | bold | nindent 2 }}: {{ . | toString | cyan }}
@@ -29,7 +29,7 @@
             {{- else }}
                 {{- "Required labels" | bold | nindent 2 }}:
                 {{- range . }}
-                    {{- if kindIs "map" . }}
+                    {{- if and . (kindIs "map" .) }}
                         {{- "" | nindent 4 }}{{ .key | cyan }}{{ with .allowedRegex }} matching {{ . | cyan }}{{ end }}
                     {{- else }}
                         {{- "" | nindent 4 }}{{ . | toString | cyan }}
