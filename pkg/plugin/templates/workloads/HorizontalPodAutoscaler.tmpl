@@ -13,10 +13,10 @@
             {{- "Scales" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" (.kind | default "Deployment") "name" .name "group" .apiVersion) }}
         {{- end }}
     {{- end }}
-    {{- $minReplicas := 1 }}{{- if .Spec | hasKey "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | int }}{{- end }}
-    {{- $current := .Status.currentReplicas | default 0 | int }}
-    {{- $desired := .Status.desiredReplicas | default 0 | int }}
-    {{- "Replicas" | bold | nindent 2 }}: {{ printf "%d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas (.Spec.maxReplicas | int) }}
+    {{- $minReplicas := 1 }}{{- if .Spec | hasKey "minReplicas" }}{{- $minReplicas = .Spec.minReplicas | toInt }}{{- end }}
+    {{- $current := .Status.currentReplicas | default 0 | toInt }}
+    {{- $desired := .Status.desiredReplicas | default 0 | toInt }}
+    {{- "Replicas" | bold | nindent 2 }}: {{ printf "%d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas (.Spec.maxReplicas | toInt) }}
     {{- if ne $current $desired }}, {{ "desired" | yellow | bold }}: {{ printf "%d" $desired | yellow }}{{ end }}
     {{- with .Spec.metrics }}
         {{- "Metrics" | bold | nindent 2 }}:
@@ -36,9 +36,9 @@
                 {{- $target := .resource.target }}
                 {{- .resource.name | nindent 4 }}:
                 {{- if eq $target.type "Utilization" }}
-                    {{- $targetUtil := $target.averageUtilization | int }}
+                    {{- $targetUtil := $target.averageUtilization | toInt }}
                     {{- if ($cur.resource.current | default dict) | hasKey "averageUtilization" }}
-                        {{- $curUtil := $cur.resource.current.averageUtilization | int }}
+                        {{- $curUtil := $cur.resource.current.averageUtilization | toInt }}
                         {{- $curUtil | toString | redIf (ge $curUtil $targetUtil) }}%/
                     {{- end }}{{ $targetUtil | toString }}%
                 {{- else if eq $target.type "AverageValue" }}
@@ -50,9 +50,9 @@
                 {{- $target := .containerResource.target }}
                 {{- printf "%s[%s]" .containerResource.name .containerResource.container | nindent 4 }}:
                 {{- if eq $target.type "Utilization" }}
-                    {{- $targetUtil := $target.averageUtilization | int }}
+                    {{- $targetUtil := $target.averageUtilization | toInt }}
                     {{- if ($cur.containerResource.current | default dict) | hasKey "averageUtilization" }}
-                        {{- $curUtil := $cur.containerResource.current.averageUtilization | int }}
+                        {{- $curUtil := $cur.containerResource.current.averageUtilization | toInt }}
                         {{- $curUtil | toString | redIf (ge $curUtil $targetUtil) }}%/
                     {{- end }}{{ $targetUtil | toString }}%
                 {{- else if eq $target.type "AverageValue" }}
@@ -94,10 +94,10 @@
            it's redundant, same contract every "<Kind>.summary" template uses). */ -}}
     {{- $obj := .obj }}
     {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
-    {{- $minReplicas := 1 }}{{- if $obj.Spec | hasKey "minReplicas" }}{{- $minReplicas = $obj.Spec.minReplicas | int }}{{- end }}
-    {{- $current := $obj.Status.currentReplicas | default 0 | int }}
-    {{- $desired := $obj.Status.desiredReplicas | default 0 | int }}
-    {{- printf ", %d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas ($obj.Spec.maxReplicas | int) }}
+    {{- $minReplicas := 1 }}{{- if $obj.Spec | hasKey "minReplicas" }}{{- $minReplicas = $obj.Spec.minReplicas | toInt }}{{- end }}
+    {{- $current := $obj.Status.currentReplicas | default 0 | toInt }}
+    {{- $desired := $obj.Status.desiredReplicas | default 0 | toInt }}
+    {{- printf ", %d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas ($obj.Spec.maxReplicas | toInt) }}
     {{- if ne $current $desired }}, {{ "desired" | yellow | bold }}: {{ printf "%d" $desired | yellow }}{{ end }}
     {{- template "kstatus_if_abnormal" $obj }}
     {{- template "other_unhealthy_conditions" $obj }}

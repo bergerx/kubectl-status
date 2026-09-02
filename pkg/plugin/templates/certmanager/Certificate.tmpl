@@ -30,7 +30,7 @@
     {{- /* SANs — all names the cert is valid for */ -}}
     {{- $dns := .Spec.dnsNames | default list }}
     {{- if gt (len $dns) 1 }}
-        {{- "Also valid for" | bold | nindent 4 }}: {{ slice $dns 1 | join ", " | cyan }}
+        {{- "Also valid for" | bold | nindent 4 }}: {{ slice 1 $dns | join ", " | cyan }}
     {{- end }}
     {{- with .Spec.ipAddresses }}
         {{- "IPs" | bold | nindent 4 }}: {{ join ", " . | cyan }}

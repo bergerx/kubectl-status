@@ -24,7 +24,7 @@
             {{- range $.Status.listeners }}
                 {{- if eq .name $specListener.name }}{{ $statusListener = . }}{{ end }}
             {{- end }}
-            {{- .name | bold | nindent 4 }}: port={{ printf "%d" (.port | int) | cyan }}/{{ .protocol | cyan }}
+            {{- .name | bold | nindent 4 }}: port={{ printf "%d" (.port | toInt) | cyan }}/{{ .protocol | cyan }}
             {{- with .hostname }}, host={{ . | cyan }}{{ end }}
             {{- with .allowedRoutes.namespaces.from }}, namespaces={{ . | cyan }}{{ end }}
             {{- with $statusListener.supportedKinds }}, accepts={{ range $i, $k := . }}{{ if $i }}/{{ end }}{{ $k.kind | cyan }}{{ end }}{{ end }}

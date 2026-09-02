@@ -5,8 +5,8 @@
     {{- template "finalizer_details_on_termination" . }}
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
-    {{- $budgetViolated := lt (.Status.currentHealthy | int) (.Status.desiredHealthy | int) }}
-    {{- $noDisruptions := and (.Status | hasKey "disruptionsAllowed") (eq (.Status.disruptionsAllowed | int) 0) }}
+    {{- $budgetViolated := lt (.Status.currentHealthy | toInt) (.Status.desiredHealthy | toInt) }}
+    {{- $noDisruptions := and (.Status | hasKey "disruptionsAllowed") (eq (.Status.disruptionsAllowed | toInt) 0) }}
     {{- $budgetStatus := "Allowed" | green }}
     {{- if $budgetViolated }}{{- $budgetStatus = "Violated" | red | bold }}
     {{- else if $noDisruptions }}{{- $budgetStatus = "Constrained" | yellow }}
@@ -60,12 +60,12 @@
         {{- end }}
     {{- end }}
     {{- if .Status | hasKey "currentHealthy" }}
-        {{- printf "healthy:%d/expected:%d" (.Status.currentHealthy | int) (.Status.expectedPods | int) | redBoldIf $budgetViolated | nindent 2 }}
+        {{- printf "healthy:%d/expected:%d" (.Status.currentHealthy | toInt) (.Status.expectedPods | toInt) | redBoldIf $budgetViolated | nindent 2 }}
         {{- if .Status | hasKey "disruptionsAllowed" }}
-            {{- printf ", disruptions allowed:%d" (.Status.disruptionsAllowed | int) | redBoldIf $noDisruptions }}
+            {{- printf ", disruptions allowed:%d" (.Status.disruptionsAllowed | toInt) | redBoldIf $noDisruptions }}
         {{- end }}
         {{- if $budgetViolated }}
-            {{- printf "budget violated: only %d of %d pods healthy, %d required" (.Status.currentHealthy | int) (.Status.expectedPods | int) (.Status.desiredHealthy | int) | red | nindent 4 }}
+            {{- printf "budget violated: only %d of %d pods healthy, %d required" (.Status.currentHealthy | toInt) (.Status.expectedPods | toInt) (.Status.desiredHealthy | toInt) | red | nindent 4 }}
         {{- else if $noDisruptions }}
             {{- "no disruptions allowed — all pods must stay healthy to meet the budget" | yellow | nindent 4 }}
         {{- end }}
@@ -93,16 +93,16 @@
     {{- $obj := .obj }}
     {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
     {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- $budgetViolated := lt ($obj.Status.currentHealthy | int) ($obj.Status.desiredHealthy | int) }}
-    {{- $noDisruptions := and ($obj.Status | hasKey "disruptionsAllowed") (eq ($obj.Status.disruptionsAllowed | int) 0) }}
-    {{- $noOp := and ($obj.Status | hasKey "expectedPods") (eq ($obj.Status.expectedPods | int) 0) }}
+    {{- $budgetViolated := lt ($obj.Status.currentHealthy | toInt) ($obj.Status.desiredHealthy | toInt) }}
+    {{- $noDisruptions := and ($obj.Status | hasKey "disruptionsAllowed") (eq ($obj.Status.disruptionsAllowed | toInt) 0) }}
+    {{- $noOp := and ($obj.Status | hasKey "expectedPods") (eq ($obj.Status.expectedPods | toInt) 0) }}
     {{- with $obj.Spec.minAvailable }}, min available={{ . | toString | cyan }}{{ end }}
     {{- with $obj.Spec.maxUnavailable }}, max unavailable={{ . | toString | cyan }}{{ end }}
     {{- if $obj.Status | hasKey "currentHealthy" }}
         {{- if $noOp }}
             {{- ", selector matches no pods (no-op)" | yellow }}
         {{- else if $budgetViolated }}
-            {{- printf ", budget violated (%d/%d healthy, %d required)" ($obj.Status.currentHealthy | int) ($obj.Status.expectedPods | int) ($obj.Status.desiredHealthy | int) | red | bold }}
+            {{- printf ", budget violated (%d/%d healthy, %d required)" ($obj.Status.currentHealthy | toInt) ($obj.Status.expectedPods | toInt) ($obj.Status.desiredHealthy | toInt) | red | bold }}
         {{- else if $noDisruptions }}
             {{- ", evictions/drains currently blocked" | yellow }}
         {{- else }}

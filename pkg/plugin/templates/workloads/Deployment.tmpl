@@ -27,7 +27,7 @@
     {{- if not $rolloutStatus.done }}
         {{- template "rollout_ongoing_summary" (dict "rolloutStatus" $rolloutStatus) }}
     {{- end }}
-    {{- $replicas := 1 }}{{ if .Spec | hasKey "replicas" }}{{ $replicas = .Spec.replicas | int }}{{ end }}
+    {{- $replicas := 1 }}{{ if .Spec | hasKey "replicas" }}{{ $replicas = .Spec.replicas | toInt }}{{ end }}
     {{- if $replicas }}
         {{- if not .Status.readyReplicas }}
             {{- "Outage" | red | bold | nindent 2 }}: Deployment has no Ready replicas.
@@ -43,7 +43,7 @@
     {{- end }}
     {{- /* Only when the rollout already looks unhealthy, or in --deep, per CONVENTIONS.md: a
            Deployment that currently fits its quota shouldn't spend a query to say so. */ -}}
-    {{- if or (not $rolloutStatus.done) (ne (.Status.replicas | int) (.Status.readyReplicas | int)) (.Config.GetBool "deep") }}
+    {{- if or (not $rolloutStatus.done) (ne (.Status.replicas | toInt) (.Status.readyReplicas | toInt)) (.Config.GetBool "deep") }}
         {{- template "quota_headroom" . }}
     {{- end }}
     {{- template "recent_deployment_rollouts" . }}
@@ -66,7 +66,7 @@
           rollout can tie; sort by revision annotation for a reliable chronological order. */ -}}
     {{- $replicaSets = sortByRevisionAnnotation $replicaSets }}
     {{- $rolloutStatus := .RolloutStatus . }}
-    {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.replicas | default 0 | int) (.Status.readyReplicas | default 0 | int)) }}
+    {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.replicas | default 0 | toInt) (.Status.readyReplicas | default 0 | toInt)) }}
     {{- if or (gt (len $replicaSets) 1) (and (eq (len $replicaSets) 1) $rolloutProblem) }}
         {{- "Rollouts:" | nindent 2}}
         {{- template "rollout_diffs_flag_help" $ }}
@@ -96,7 +96,7 @@
             {{- if $activeReplicaSet }}
                 {{- $activeReplicaSetObj = . }}
             {{- else }}
-                {{- $revisionNumber := $replicationSetRevision | default "0" | int }}
+                {{- $revisionNumber := $replicationSetRevision | default "0" | toInt }}
                 {{- if gt $revisionNumber $previousRevisionNumber }}
                     {{- $previousRevisionNumber = $revisionNumber }}
                     {{- $previousReplicaSetByRevision = . }}

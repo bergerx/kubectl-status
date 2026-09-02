@@ -51,18 +51,18 @@
             {{- $parts := splitList "_" (.id | default "" | toString) }}
             {{- /* An id that doesn't split into four is bucketed rather than counted under its own
                    text, which would otherwise put the whole malformed id in the kind summary. */ -}}
-            {{- /* Counted under the same group-qualified kind the entries themselves are printed
+{{- /* Counted under the same group-qualified kind the entries themselves are printed
                    as below, so two same-named Kinds from different groups aren't summed into one
                    bogus count. Written as an if rather than a ternary because both branches of a
                    ternary are evaluated, and "index $parts 2" errors on a malformed id. */ -}}
             {{- $kind := "unparsable" }}
             {{- if eq (len $parts) 4 }}{{ $kind = displayKind (index $parts 3) (index $parts 2) }}{{ end }}
-            {{- $_ := $countsByKind | set $kind (add1 (int ($countsByKind | get $kind))) }}
+            {{- $_ := $countsByKind | set $kind (add1 (toInt ($countsByKind | get $kind))) }}
             {{- $ids = $ids | append (.id | default "" | toString) }}
         {{- end }}
         {{- $kindSummaries := list }}
         {{- range $kind := keys $countsByKind | sortAlpha }}
-            {{- $kindSummaries = $kindSummaries | append (printf "%s×%d" $kind (int ($countsByKind | get $kind))) }}
+            {{- $kindSummaries = $kindSummaries | append (printf "%s×%d" $kind (toInt ($countsByKind | get $kind))) }}
         {{- end }}
         {{- "Manages" | bold | nindent 2 }} {{ len $entries | toString | cyan }} resources: {{ join ", " $kindSummaries | cyan }}
         {{- /* Sorted by id so the list is stable across reconciliations -- the controller writes

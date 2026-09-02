@@ -35,7 +35,7 @@
                its spec.crd.spec.names.kind (confirmed live: status.byPod[].errors rejects a
                mismatched name), so the association is fully determined by the Kind string alone
                -- no lookup needed to know the name, only to fetch the object itself in --deep. */ -}}
-        {{- $ctName := . | lower }}
+        {{- $ctName := . | toLower }}
         {{- $.Include "resource_ref" (dict "kind" "ConstraintTemplate" "name" $ctName) | nindent 2 }}
         {{- $.Include "deep_render_ref" (dict "ctx" $ "kind" "ConstraintTemplate" "name" $ctName "group" "templates.gatekeeper.sh") }}
     {{- end }}
@@ -104,7 +104,7 @@
         {{- $auditedYet = true }}
         {{- "Last audited" | bold | nindent 2 }}: {{ . | colorAgo }}{{ agoSuffix }}
     {{- end }}
-    {{- $total := .Status.totalViolations | default 0 | int }}
+    {{- $total := .Status.totalViolations | default 0 | toInt }}
     {{- $violations := .Status.violations | default list }}
     {{- $topAction := .Spec.enforcementAction | default "deny" }}
     {{- if gt $total 0 }}

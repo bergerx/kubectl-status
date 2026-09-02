@@ -231,7 +231,7 @@
             {{- $restarts := 0 }}
             {{- range $cs := $pod.Status.containerStatuses | default list }}
                 {{- if $cs.ready }}{{ $readyContainers = $readyContainers | add 1 }}{{ end }}
-                {{- $restarts = $restarts | add ($cs.restartCount | int) }}
+                {{- $restarts = $restarts | add ($cs.restartCount | toInt) }}
             {{- end }}
             {{- if or (ne $pod.Status.phase "Running") (lt $readyContainers $totalContainers) (gt $restarts 0) }}
                 {{- $podsNeedingAttention = $podsNeedingAttention | append (dict "key" (printf "%s/%s" $pod.Namespace $pod.Name) "pod" $pod) }}

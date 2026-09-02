@@ -24,13 +24,13 @@
     {{- $revisionRef := .Spec.compositionRevisionRef }}
     {{- $updatePolicy := .Spec.compositionUpdatePolicy }}
     {{- $crossplane := .Spec.crossplane }}
-    {{- if kindIs "map" $crossplane }}
+    {{- if and $crossplane (kindIs "map" $crossplane) }}
         {{- with $crossplane.compositionRef }}{{ $ref = . }}{{ end }}
         {{- with $crossplane.compositionRevisionRef }}{{ $revisionRef = . }}{{ end }}
         {{- with $crossplane.compositionUpdatePolicy }}{{ $updatePolicy = . }}{{ end }}
     {{- end }}
-    {{- $refIsValid := and (kindIs "map" $ref) (kindIs "string" $ref.name) }}
-    {{- $revisionRefIsValid := and (kindIs "map" $revisionRef) (kindIs "string" $revisionRef.name) }}
+    {{- $refIsValid := and $ref (kindIs "map" $ref) (kindIs "string" $ref.name) }}
+    {{- $revisionRefIsValid := and $revisionRef (kindIs "map" $revisionRef) (kindIs "string" $revisionRef.name) }}
     {{- if or $refIsValid $revisionRefIsValid $updatePolicy }}
         {{- if $refIsValid }}
             {{- $.Include "resource_ref" (dict "kind" "Composition" "name" $ref.name) | nindent 2 }}
@@ -57,13 +57,13 @@
            and without the group both the lookup and the printed ref land on the core Kind. */ -}}
     {{- $refs := .Spec.resourceRefs }}
     {{- $crossplane := .Spec.crossplane }}
-    {{- if kindIs "map" $crossplane }}
+    {{- if and $crossplane (kindIs "map" $crossplane) }}
         {{- with $crossplane.resourceRefs }}{{ $refs = . }}{{ end }}
     {{- end }}
     {{- $validRefs := list }}
-    {{- if kindIs "slice" $refs }}
+    {{- if and $refs (kindIs "slice" $refs) }}
         {{- range $refs }}
-            {{- if and (kindIs "map" .) (kindIs "string" .kind) (kindIs "string" .name) }}
+            {{- if and . (kindIs "map" .) (kindIs "string" .kind) (kindIs "string" .name) }}
                 {{- $validRefs = $validRefs | append . }}
             {{- end }}
         {{- end }}
@@ -85,9 +85,9 @@
            status.atProvider then means the resource hasn't been observed yet, rather than that
            it's ineligible. See pkg/plugin/crossplanedrift for the comparison semantics. */ -}}
     {{- $forProvider := .Spec.forProvider }}
-    {{- if and (kindIs "map" $forProvider) $forProvider }}
+    {{- if and $forProvider (kindIs "map" $forProvider) }}
         {{- $atProvider := .Status.atProvider }}
-        {{- if not (and (kindIs "map" $atProvider) $atProvider) }}
+        {{- if not (and $atProvider (kindIs "map" $atProvider)) }}
             {{- "Drift" | bold | nindent 2 }}: unavailable; {{ "status.atProvider" | cyan }} has not been observed yet
         {{- else }}
             {{- $result := crossplaneManagedResourceDrift $forProvider $atProvider }}
@@ -126,7 +126,7 @@
            non-Crossplane resources and vanilla managed resources without these fields set stay
            quiet. */ -}}
     {{- $forProvider := .Spec.forProvider }}
-    {{- if and (kindIs "map" $forProvider) $forProvider }}
+    {{- if and $forProvider (kindIs "map" $forProvider) }}
         {{- $annotations := .Annotations }}
         {{- with $annotations | get "crossplane.io/external-name" }}
             {{- "External name" | bold | nindent 2 }}: {{ . | cyan }}
@@ -149,12 +149,12 @@
             {{- $.Include "resource_ref" (dict "kind" (.kind | default "ProviderConfig") "name" .name "group" .apiVersion) | nindent 2 }}
         {{- end }}
         {{- $policies := .Spec.managementPolicies }}
-        {{- if kindIs "slice" $policies }}
+        {{- if and $policies (kindIs "slice" $policies) }}
             {{- $isFullControl := and (eq (len $policies) 1) (eq (index $policies 0) "*") }}
             {{- "Management policies" | bold | nindent 2 }}: {{ if $isFullControl }}{{ "* (full control)" | cyan }}{{ else }}{{ $policies | join ", " | yellow }}{{ end }}
         {{- end }}
         {{- with .Spec.initProvider }}
-            {{- if kindIs "map" . }}
+            {{- if and . (kindIs "map" .) }}
                 {{- "initProvider" | bold | nindent 2 }}: {{ keys . | sortAlpha | join ", " | cyan }} (applied only at creation time)
             {{- end }}
         {{- end }}

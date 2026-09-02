@@ -22,7 +22,7 @@
     {{- with $pool.name }}, pool {{ . | cyan }}{{ end }}
     {{- with $pool.generation }} (gen {{ . | toString | cyan }}){{ end }}
     {{- $sliceCount := $pool.resourceSliceCount | default 1 }}
-    {{- if ne ($sliceCount | int) 1 }}, {{ printf "%v slices in this pool" $sliceCount | cyan }}{{ end }}
+    {{- if ne ($sliceCount | toInt) 1 }}, {{ printf "%v slices in this pool" $sliceCount | cyan }}{{ end }}
     {{- if $spec.allNodes }}
         {{- ", " }}{{ "all nodes" | cyan }}
     {{- else if $spec.nodeName }}

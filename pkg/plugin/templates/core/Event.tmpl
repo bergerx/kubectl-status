@@ -22,7 +22,7 @@
         {{- end }}
     {{- end }}
     {{- with $e.lastTimestamp }} {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
-    {{- if gt ($e.count | int) 1 -}}
+    {{- if gt ($e.count | toInt) 1 -}}
         {{- if $e.firstTimestamp }} (x{{ $e.count }} over {{ $e.firstTimestamp | colorAgo }})
         {{- else }} (x{{ $e.count }})
         {{- end -}}

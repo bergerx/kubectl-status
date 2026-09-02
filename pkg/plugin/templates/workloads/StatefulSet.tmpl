@@ -67,7 +67,7 @@
     {{- end }}
     {{- /* Only when the rollout already looks unhealthy, or in --deep, per CONVENTIONS.md: a
            StatefulSet that currently fits its quota shouldn't spend a query to say so. */ -}}
-    {{- if or (not $rolloutStatus.done) (ne ($status.currentReplicas | int) ($status.readyReplicas | int)) (.Config.GetBool "deep") }}
+    {{- if or (not $rolloutStatus.done) (ne ($status.currentReplicas | toInt) ($status.readyReplicas | toInt)) (.Config.GetBool "deep") }}
         {{- template "quota_headroom" . }}
     {{- end }}
     {{- template "recent_statefulset_rollouts" . }}
@@ -168,7 +168,7 @@
           same rollout can tie; sort by the numeric revision field for a reliable order. */ -}}
     {{- $revisions = sortByRevisionField $revisions }}
     {{- $rolloutStatus := .RolloutStatus . }}
-    {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.currentReplicas | default 0 | int) (.Status.readyReplicas | default 0 | int)) }}
+    {{- $rolloutProblem := or (not $rolloutStatus.done) (ne (.Status.currentReplicas | default 0 | toInt) (.Status.readyReplicas | default 0 | toInt)) }}
     {{- if or (gt (len $revisions) 1) (and (eq (len $revisions) 1) $rolloutProblem) }}
         {{- "Rollouts:" | nindent 2 }}
         {{- template "rollout_diffs_flag_help" $ }}
