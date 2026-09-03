@@ -465,8 +465,9 @@ func TestE2EClusterWide(t *testing.T) {
 		waitForPodScheduleWindow(t, ns, "app="+podName)
 
 		cmdTest{
-			args:            []string{"pod/" + podName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
-			stdoutRegexPath: "e2e-artifacts/pod-wfc-topologies-unbound.regex",
+			args:                    []string{"pod/" + podName, "-n", ns, "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath:         "e2e-artifacts/pod-wfc-topologies-unbound.regex",
+			retryStdoutRegexFor:     30 * time.Second,
 		}.assert(t, nil, opts...)
 	})
 	t.Run("pod nodeSelector key no NodePool declares surfaces a Karpenter incompatibility, a satisfiable one stays silent", func(t *testing.T) {

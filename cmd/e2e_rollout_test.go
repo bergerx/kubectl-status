@@ -61,8 +61,9 @@ func runRolloutSubtests(t *testing.T, hackOpts []func(*plugin.RenderConfig), cli
 		// The order in which the two ReplicaSet revisions are diffed (and so which side
 		// gets "-" vs "+") isn't guaranteed, so the fixture alternates both directions.
 		cmdTest{
-			args:            []string{"deployment/" + name, "-n", ns, "--include-rollout-diffs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
-			stdoutRegexPath: "e2e-artifacts/rollout-diff.regex",
+			args:                    []string{"deployment/" + name, "-n", ns, "--include-rollout-diffs", "--include-events=false", "--include-managed-fields=false", "--v", "5"},
+			stdoutRegexPath:         "e2e-artifacts/rollout-diff.regex",
+			retryStdoutRegexFor:     30 * time.Second,
 		}.assert(t, nil, opts...)
 	})
 	t.Run("Rollouts section shows a single blocked rollout even without a second one to compare against", func(t *testing.T) {
