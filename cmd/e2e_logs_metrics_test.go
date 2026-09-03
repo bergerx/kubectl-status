@@ -36,6 +36,11 @@ func runPodLogsAndMetricsSubtests(t *testing.T, hackOpts []func(*plugin.RenderCo
 		t.Cleanup(func() { deleteNamespaceAndWait(t, clientset, ns) })
 		require.NoError(t, err)
 		applyManifestInNamespace(t, "e2e-artifacts/pod-container-logs.yaml", ns)
+		// Ensure metrics-server APIService is healthy before waiting for container metrics.
+		// This prevents a race where the APIService becomes unhealthy between the metrics check
+		// and the render, causing the template to emit a specific error message instead of the
+		// expected "(no metrics yet)" fallback.
+		waitForMetricsAPIServiceAvailable(t)
 		// The fixture pins a usage line for both healthy containers -- wait for metrics-server to
 		// have scraped each of them specifically, not just the Pod overall: a container that
 		// started slightly later than its siblings can still be missing from PodMetrics even once
