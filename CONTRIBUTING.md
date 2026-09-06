@@ -217,6 +217,54 @@ same pair in `.github/workflows/security-checks.yml` — on every PR and push to
 daily, since both checks can start failing without anyone touching the repo (a new entry in the
 vulnerability DB, a new gitleaks rule matching something already in history).
 
+### Dependency and Vulnerability Policy
+
+This section documents the project's policy for Software Composition Analysis (SCA) findings —
+both vulnerabilities and license issues — and the pre-release gating requirements. It satisfies
+OpenSSF Baseline criteria [OSPS-VM-05.01](https://baseline.openssf.org/versions/2025-02-25#osps-vm-0501)
+(remediation threshold) and [OSPS-VM-05.02](https://baseline.openssf.org/versions/2025-02-25#osps-vm-0502)
+(pre-release gate).
+
+#### Tooling
+
+- **govulncheck** (via `make security-check` / `.github/workflows/security-checks.yml`): scans
+  the module graph for *reachable* known vulnerabilities (CVEs/GO-IDs). Only findings where
+  vulnerable code is actually callable from this module are reported.
+- **gitleaks** (via `make security-check` / `.github/workflows/security-checks.yml`): scans
+  the full git history for committed secrets. Synthetic test fixtures are allowlisted in
+  `.gitleaksignore` by fingerprint.
+- **dependency-review** (`.github/workflows/dependency-review.yml`): runs on every PR, flags
+  license issues and known vulnerabilities in added/changed dependencies.
+
+#### Remediation Thresholds
+
+| Finding Type | Threshold | Action Required |
+|--------------|-----------|-----------------|
+| **govulncheck reachable vulnerability** | **Fix within 7 days** of being surfaced (CI daily run or PR scan) | Bump the vulnerable dependency in `go.mod` / `go.sum` to a patched version. If no patch exists, document a mitigation or accept the risk with a written justification in the PR that merges the workaround. |
+| **gitleaks secret detection** | **Fix immediately** — blocks push/merge | Remove the secret from history (or add its fingerprint to `.gitleaksignore` *only* for synthetic test fixtures via `make gitleaks-allow`, with reviewer approval). Real secrets must be rotated. |
+| **dependency-review license issue** | **Blocks PR merge** | The introducing PR cannot be merged until the dependency is replaced, the license is resolved, or an explicit exception is documented and approved. |
+| **dependency-review vulnerability** | **Blocks PR merge** | Same as license issues — the PR introducing the vulnerable dependency cannot merge. |
+
+#### Pre-Release Gate
+
+**No release may be cut while any of the following are failing:**
+
+1. `govulncheck` (via `make security-check` or CI `security-checks.yml`) — must report zero reachable vulnerabilities.
+2. `gitleaks` (via `make security-check` or CI `security-checks.yml`) — must report zero new findings (allowlisted fixtures in `.gitleaksignore` excepted).
+3. `dependency-review` (CI `dependency-review.yml`) — must pass on the release branch.
+
+These checks run automatically in CI on every push to `master` and on the tag push that triggers the release workflow. A maintainer must not force-push a tag or bypass CI to publish a release if any check is red.
+
+#### Exceptions
+
+- **`.gitleaksignore`**: Only synthetic test fixture fingerprints may be added (via `make gitleaks-allow`, reviewed in the PR diff). Real secrets are never allowlisted — they must be rotated.
+- **Vulnerability with no upstream fix**: If a `govulncheck` finding has no patched version available, the maintainer may document a compensating control (e.g., the vulnerable code path is not exercised in our usage, or a workaround is in place) in the PR that merges the workaround. This exception must be explicit and time-bounded (re-evaluated at next release).
+
+#### Current CI Gaps (Honest Disclosure)
+
+- `dependency-review` is a **required** branch-protection status check on `master` — it blocks merges.
+- `govulncheck` and `gitleaks` (via `security-checks.yml`) are **not** currently required status checks — they run on every PR/push but a red result does not block merge today. This policy documents the *intent* that they should gate releases; adding them to the required checks list is tracked as a follow-up.
+
 ### Claude Code Integration
 
 The project ships a [Claude Code](https://claude.ai/code) skill and project-level settings under `.claude/`.
