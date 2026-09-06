@@ -100,6 +100,10 @@ Assuming you installed using [Krew](https://github.com/kubernetes-sigs/krew):
 kubectl krew upgrade status
 ```
 
+## Verifying a Release
+
+See [VERIFYING_RELEASES.md](VERIFYING_RELEASES.md) for step-by-step instructions on verifying the integrity, authenticity, and signer identity of release artifacts using cosign keyless OIDC verification.
+
 ## Usage
 
 In most cases, replacing a `kubectl get ...` with a `kubectl status ...` is all it takes — one command instead of the

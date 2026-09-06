@@ -107,7 +107,8 @@ test: vet staticcheck
 	# gotestsum wraps go test the same way test-e2e below already does (see its comment for
 	# --format rationale); --junitfile is the only reason it's used here, feeding Codecov Test
 	# Analytics (per-test pass/fail/flake history, not coverage) in ci-test.yml.
-	go run $(GOTESTSUM_MODULE) --junitfile unit-junit.xml -- -race -coverprofile=cover.out -coverpkg=./... -covermode=atomic ./...
+	# CGO_ENABLED=1 is required for -race.
+	CGO_ENABLED=1 go run $(GOTESTSUM_MODULE) --junitfile unit-junit.xml -- -race -coverprofile=cover.out -coverpkg=./... -covermode=atomic ./...
 
 # template-cover-html renders line-level coverage for pkg/plugin/templates/*.tmpl files -- Go's own
 # `go test -coverprofile` (above) only instruments compiled .go statements, it has no visibility
@@ -369,7 +370,7 @@ test-e2e: vet staticcheck install-e2e-deps
 	# still in flight -- see the panic in #861 -- so -timeout is raised to 40m to give that
 	# overhead headroom; ci-test.yml's own wrapper timeout is raised to match.
 	@mkdir -p $(E2E_HOME)
-	RUN_E2E_TESTS=true ASSUME_CLUSTER_IS_CONFIGURED=true $(E2E_CONTEXT_ENV) flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=40m -parallel=4 -run 'TestE2E*' -race -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
+	CGO_ENABLED=1 RUN_E2E_TESTS=true ASSUME_CLUSTER_IS_CONFIGURED=true $(E2E_CONTEXT_ENV) flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=40m -parallel=4 -run 'TestE2E*' -race -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
 else
 test-e2e: vet staticcheck e2e-cluster-up install-e2e-deps
 	# The clusters ($(E2E_CLUSTERS)) are shared across every worktree/branch/session on
@@ -381,7 +382,7 @@ test-e2e: vet staticcheck e2e-cluster-up install-e2e-deps
 	# branch above.
 	# See the gotestsum note, the -parallel=4 note above the other branch's go test invocation,
 	# and the coverage flags note above the other branch's invocation.
-	$(E2E_KUBECONFIG_ENV) RUN_E2E_TESTS=true ASSUME_CLUSTER_IS_CONFIGURED=true $(E2E_CONTEXT_ENV) flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=40m -parallel=4 -run 'TestE2E*' -race -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
+	$(E2E_KUBECONFIG_ENV) CGO_ENABLED=1 RUN_E2E_TESTS=true ASSUME_CLUSTER_IS_CONFIGURED=true $(E2E_CONTEXT_ENV) flock $(E2E_LOCKFILE) go run $(GOTESTSUM_MODULE) --junitfile e2e-junit.xml -- ./... -count=1 -timeout=40m -parallel=4 -run 'TestE2E*' -race -coverprofile=cover-e2e.out -coverpkg=./... -covermode=atomic
 endif
 
 # Passed through to test-e2e-quick's own invocation below, not test-e2e's: UPDATE_FIXTURES=true
