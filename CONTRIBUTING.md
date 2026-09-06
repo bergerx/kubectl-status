@@ -220,10 +220,7 @@ vulnerability DB, a new gitleaks rule matching something already in history).
 ### Dependency and Vulnerability Policy
 
 This section documents the project's policy for Software Composition Analysis (SCA) findings —
-both vulnerabilities and license issues — and the pre-release gating requirements. It satisfies
-OpenSSF Baseline criteria [OSPS-VM-05.01](https://baseline.openssf.org/versions/2025-02-25#osps-vm-0501)
-(remediation threshold) and [OSPS-VM-05.02](https://baseline.openssf.org/versions/2025-02-25#osps-vm-0502)
-(pre-release gate).
+both vulnerabilities and license issues — and the pre-release gating requirements.
 
 #### Tooling
 

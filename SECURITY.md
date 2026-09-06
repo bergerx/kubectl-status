@@ -52,8 +52,7 @@ Of particular interest are issues such as:
 ## Secrets and Credentials Management Policy
 
 This section documents how secrets and credentials used by the project are
-stored, accessed, controlled, and rotated. It satisfies OpenSSF Baseline
-criterion [OSPS-BR-07.02](https://baseline.openssf.org/versions/2025-02-25#osps-br-0702).
+stored, accessed, controlled, and rotated.
 
 ### Credentials Used by the Project
 
@@ -79,5 +78,5 @@ If a contributor or maintainer discovers a committed secret (real, not a test fi
 1. **Do not** push a commit that merely deletes the secret — it remains in git history.
 2. **Immediately rotate** the compromised credential at its source (e.g., revoke the GitHub token, regenerate the API key).
 3. **Report** the incident via the project's vulnerability reporting process (see [Reporting a Vulnerability](#reporting-a-vulnerability) above), even if the secret has been rotated — we track exposure for downstream impact assessment.
-4. **History rewrite** (e.g., `git filter-repo` or BFG Repo-Cleaner) may be needed to purge the secret from git history. Coordinate with the maintainer before force-pushing rewritten history to `master`.
+4. **History rewrite** (e.g., `git filter-repo` or BFG Repo-Cleaner) may be needed to purge the secret from git history. **Only maintainers can perform this** — force-push to `master` is not permitted by default and requires maintainer coordination.
 5. After rotation and history cleanup, verify `make gitleaks` passes clean.
