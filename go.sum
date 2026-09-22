@@ -73,8 +73,8 @@ github.com/go-openapi/testify/enable/yaml/v2 v2.6.0 h1:gGHwAJ0R/5jU8BEGDbfRNR3hL
 github.com/go-openapi/testify/enable/yaml/v2 v2.6.0/go.mod h1:tY+St1SGq4NFl0QIqdTY4aEdbChAHxhyB77XQi9iJCo=
 github.com/go-openapi/testify/v2 v2.6.0 h1:5PKH2HE7YJ/LuRPQGvSxBRlFXNQhSetBLlGAgUEu3ug=
 github.com/go-openapi/testify/v2 v2.6.0/go.mod h1:SgsVHtfooshd0tublTtJ50FPKhujf47YRqauXXOUxfw=
-github.com/go-sprout/sprout v1.1.1 h1:W1k8rnSGnKHDR5Z5M8pi22zjFvAx9mRsomsfFT9c85c=
-github.com/go-sprout/sprout v1.1.1/go.mod h1:/gb8yk3HCg6S5+X16PDh+mVjk+6KFtKb6j5xoix4sVk=
+github.com/go-sprout/sprout v1.1.2 h1:SXwcvySDM3mUaLyM9TKoT1/z6qunYC4nmMhvm0mQmbE=
+github.com/go-sprout/sprout v1.1.2/go.mod h1:U/0DFWSpcwLV5iNgK/4EZCllGvQFxhLSZTappEdLTqE=
 github.com/go-task/slim-sprig/v3 v3.0.0 h1:sUs3vkvUymDpBKi3qH1YSqBQk9+9D/8M2mN1vB6EwHI=
 github.com/go-task/slim-sprig/v3 v3.0.0/go.mod h1:W848ghGpv3Qj3dhTPRyJypKRiqCdHZiAzKg9hl15HA8=
 github.com/go-viper/mapstructure/v2 v2.4.0 h1:EBsztssimR/CONLSZZ04E8qAkxNYq4Qp9LvH92wZUgs=
