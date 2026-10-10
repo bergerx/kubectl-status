@@ -44,6 +44,14 @@ jobs:
       - name: Run govulncheck
         uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
         with:
+          # The action's go-version-input defaults to 'stable', and setup-go prefers a
+          # non-empty go-version over go-version-file -- so on its own go-version-file
+          # is silently ignored and the scan runs on whatever 'stable' resolves to,
+          # contradicting the invariant the Makefile's TOOL_GOVERSION comment relies on
+          # (CI's base Go comes from go.mod). An explicit empty string overrides the
+          # action's default (defaults only apply when an input is omitted, not set to
+          # ''), letting setup-go read go.mod instead.
+          go-version-input: ''
           go-version-file: 'go.mod'
           # Already checked out above (with fetch-depth: 0 for gitleaks); skip this
           # action's own default checkout.
