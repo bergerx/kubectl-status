@@ -1,6 +1,6 @@
 module github.com/bergerx/kubectl-status
 
-go 1.26.9
+go 1.26.10
 
 require (
 	github.com/dustin/go-humanize v1.1.0
