@@ -1,0 +1,24 @@
+
+NodePool/gpupool, created 1m ago, gen:4
+  Current: Resource is Ready
+  NodeClass: AKSNodeClass.karpenter.azure.com/gpupool-managed
+  Requirements:
+    kubernetes.io/arch In [amd64]
+    karpenter.sh/capacity-type In [on-demand]
+    kubernetes.io/os In [linux]
+    karpenter.azure.com/sku-name In [Standard_NC24ads_A100_v4]
+  Nodes: 1
+  Disruption: consolidateAfter:Never, policy:WhenEmpty
+  Resources: (current/limit)
+    cpu: 24/unlimited
+    ephemeral-storage: 132GB/unlimited
+    hugepages-1Gi: 0/unlimited
+    hugepages-2Mi: 0/unlimited
+    memory: 232.2GB/unlimited
+    nodes: 1/unlimited
+    nvidia.com/gpu: 1/unlimited
+    pods: 250/unlimited
+  NodeClassReady:True NodeClassReady for 1m
+  NodeRegistrationHealthy:True NodeRegistrationHealthy for 1m
+  Ready:True Ready for 1m
+  ValidationSucceeded:True ValidationSucceeded for 1m

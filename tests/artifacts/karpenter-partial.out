@@ -1,0 +1,31 @@
+
+NodePool/bare, created 1m ago
+  Current: Resource is current
+
+NodePool/incomplete-refs, created 1m ago
+  Current: Resource is current
+  NodeClass: /only-name (incomplete nodeClassRef)
+  Requirements:
+    karpenter.sh/capacity-type <no operator> []
+    kubernetes.io/arch In [amd64]
+  Disruption: budget:0, budget:10% from 0 9 * * * for 8h (Drifted)
+
+NodeClaim/bare, created 1m ago
+  Current: Resource is current
+
+NodeClaim/incomplete-refs, created 1m ago
+  Current: Resource is current
+  NodeClass: AKSNodeClass/ (incomplete nodeClassRef)
+
+AKSNodeClass/bare, created 1m ago
+  Current: Resource is current
+
+AKSNodeClass/partial-spec, created 1m ago
+  Current: Resource is current
+  Pinned Versions: node image 202610.30.1
+  Workload Runtime: KataVmIsolation
+  GPU Driver: None (drivers managed externally, e.g. GPU Operator)
+  Tags: example.com/owner=team
+
+NodeOverlay/bare, created 1m ago
+  Current: Resource is current

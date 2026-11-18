@@ -1,7 +1,7 @@
 
 NodeClaim/default-abcde, created 1m ago by NodePool.karpenter.sh/default, gen:1
   Current: Resource is Ready
-  NodeClass: EC2NodeClass/default
+  NodeClass: EC2NodeClass.karpenter.k8s.aws/default
   Capacity: m5.large (spot) in us-east-1a
   Node: Node/ip-10-0-1-23.ec2.internal
   Initialized:True Initialized for 1m

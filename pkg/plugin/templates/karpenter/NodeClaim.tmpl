@@ -9,10 +9,25 @@
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
     {{- with .Spec.nodeClassRef }}
-        {{- "NodeClass" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" .kind "name" .name) }}
+        {{- /* kind/name/group are all individually optional at render time however required the
+               schema says -- a hand-written manifest or an older controller can drop any of them,
+               and a nil reaching resource_ref aborts the whole render. */ -}}
+        {{- $kind := .kind | default "" | toString }}
+        {{- $name := .name | default "" | toString }}
+        {{- "NodeClass" | bold | nindent 2 }}:
+        {{- if and $kind $name }}
+            {{- " " }}{{ $.Include "resource_ref" (dict "kind" $kind "name" $name "group" (.group | default "" | toString)) }}
+        {{- else }}
+            {{- " " }}{{ printf "%s/%s" $kind $name }}{{ " (incomplete nodeClassRef)" | yellow }}
+        {{- end }}
     {{- end }}
+    {{- /* expireAfter's API default is 720h; anything else (typically Never for stateful/GPU
+           pools) changes node lifetime semantics and is worth a line. */ -}}
+    {{- with .Spec.expireAfter }}{{ if not (has (toString .) (list "720h" "720h0m0s")) }}
+        {{- "Expire After" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}{{ end }}
     {{- $labels := .Metadata.labels | default dict }}
-    {{- $instanceType := index $labels "node.kubernetes.io/instance-type" }}
+    {{- $instanceType := index $labels "node.kubernetes.io/instance-type" | default (index $labels "karpenter.azure.com/sku-name") }}
     {{- $zone := index $labels "topology.kubernetes.io/zone" }}
     {{- $capacityType := index $labels "karpenter.sh/capacity-type" }}
     {{- if or $instanceType $zone $capacityType }}
@@ -21,11 +36,51 @@
         {{- with $capacityType }} ({{ . | colorKeyword }}){{ end }}
         {{- with $zone }} in {{ . | cyan }}{{ end }}
     {{- end }}
+    {{- /* Drifted:True is invisible to other_unhealthy_conditions -- a True condition is
+           "healthy" by the abnormal-true polarity, yet drift means the node no longer matches
+           its NodePool and will be replaced. Call it out explicitly, with the Node's short
+           summary underneath so the reader sees what is about to be disrupted. */ -}}
+    {{- $drifted := false }}
+    {{- with getMatchingItemInMapList (dict "type" "Drifted") .StatusConditions }}
+        {{- if eq (.status | default "" | toString) "True" }}{{ $drifted = true }}{{ end }}
+    {{- end }}
+    {{- if $drifted }}
+        {{- "Drifted" | yellow | bold | nindent 2 }}: node no longer matches its NodePool template and will be replaced (subject to the pool's disruption budgets)
+    {{- end }}
     {{- with (.Status | default dict).nodeName }}
         {{- "Node" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" "Node" "name" .) }}
+        {{- if $drifted }}
+            {{- $node := $.KubeGetFirst "" "Node" . }}
+            {{- if $node.Object }}
+                {{- $.Include "Node.summary" (dict "obj" $node) | nindent 4 }}
+            {{- end }}
+        {{- end }}
     {{- end }}
     {{- template "conditions_summary" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
+{{- end -}}
+
+{{- define "NodeClaim.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Short one-line NodeClaim health summary, used wherever a NodeClaim is referenced from
+           another template (e.g. NodePool's claim list). Drift is called out here because
+           Drifted:True reads as healthy to other_unhealthy_conditions. */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "group" $obj.APIVersion "callerNamespace" .callerNamespace) }}
+    {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- $labels := $obj.Metadata.labels | default dict }}
+    {{- with index $labels "node.kubernetes.io/instance-type" | default (index $labels "karpenter.azure.com/sku-name") }}, {{ . | cyan }}{{ end }}
+    {{- with index $labels "karpenter.sh/capacity-type" }} ({{ . | colorKeyword }}){{ end }}
+    {{- with ($obj.Status | default dict).nodeName }}
+        {{- ", " }}{{ template "resource_ref" (dict "kind" "Node" "name" .) }}
+    {{- end }}
+    {{- with getMatchingItemInMapList (dict "type" "Drifted") $obj.StatusConditions }}
+        {{- if eq (.status | default "" | toString) "True" }}
+            {{- ", " }}{{ "drifted" | yellow | bold }}
+        {{- end }}
+    {{- end }}
+    {{- template "kstatus_if_abnormal" $obj }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}

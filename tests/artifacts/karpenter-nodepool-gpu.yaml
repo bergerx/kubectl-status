@@ -1,0 +1,97 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  annotations:
+    karpenter.sh/nodepool-hash: "4908959810212535366"
+    karpenter.sh/nodepool-hash-version: v3
+  creationTimestamp: "2026-10-02T08:53:50Z"
+  generation: 4
+  name: gpupool
+  resourceVersion: "114082547"
+  uid: 00000000-0000-0000-0000-000000000000
+spec:
+  disruption:
+    budgets:
+    - nodes: 10%
+    consolidateAfter: Never
+    consolidationPolicy: WhenEmpty
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        kubernetes.azure.com/ebpf-dataplane: cilium
+    spec:
+      expireAfter: Never
+      nodeClassRef:
+        group: karpenter.azure.com
+        kind: AKSNodeClass
+        name: gpupool-managed
+      requirements:
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - on-demand
+      - key: kubernetes.io/os
+        operator: In
+        values:
+        - linux
+      - key: karpenter.azure.com/sku-family
+        operator: In
+        values:
+        - "N"
+      - key: karpenter.azure.com/sku-name
+        operator: In
+        values:
+        - Standard_NC24ads_A100_v4
+      startupTaints:
+      - effect: NoExecute
+        key: node.cilium.io/agent-not-ready
+        value: "true"
+      taints:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        value: "true"
+      - effect: NoSchedule
+        key: node.example.com/dedicated
+        value: workload-only
+status:
+  conditions:
+  - lastTransitionTime: "2026-10-02T08:53:50Z"
+    message: ""
+    observedGeneration: 4
+    reason: ValidationSucceeded
+    status: "True"
+    type: ValidationSucceeded
+  - lastTransitionTime: "2026-10-06T12:22:35Z"
+    message: ""
+    observedGeneration: 4
+    reason: NodeRegistrationHealthy
+    status: "True"
+    type: NodeRegistrationHealthy
+  - lastTransitionTime: "2026-10-14T18:08:23Z"
+    message: ""
+    observedGeneration: 4
+    reason: NodeClassReady
+    status: "True"
+    type: NodeClassReady
+  - lastTransitionTime: "2026-10-14T18:08:23Z"
+    message: ""
+    observedGeneration: 4
+    reason: Ready
+    status: "True"
+    type: Ready
+  nodeClassObservedGeneration: 1
+  nodes: 1
+  resources:
+    cpu: "24"
+    ephemeral-storage: 128917488Ki
+    hugepages-1Gi: "0"
+    hugepages-2Mi: "0"
+    memory: 226760384Ki
+    nodes: "1"
+    nvidia.com/gpu: "1"
+    pods: "250"

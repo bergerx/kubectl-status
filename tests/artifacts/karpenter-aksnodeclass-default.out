@@ -1,0 +1,13 @@
+
+AKSNodeClass/default, created 1m ago, gen:1
+  Current: Resource is Ready
+  Image Family: Ubuntu
+  OS Disk: 128GB
+  Kubernetes Version: 1.36.5
+  Images: 3 available, latest 202610.30.1
+  ImagesReady:True ImagesReady for 1m
+  KubernetesVersionReady:True KubernetesVersionReady for 1m
+  LocalDNSReady:True LocalDNSReady for 1m
+  Ready:True Ready for 1m
+  SubnetsReady:True SubnetsReady for 1m
+  ValidationSucceeded:True ValidationSucceeded for 1m

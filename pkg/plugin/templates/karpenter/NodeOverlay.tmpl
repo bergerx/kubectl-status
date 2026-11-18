@@ -1,0 +1,43 @@
+{{- define "NodeOverlay" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: karpenter.sh/v1alpha1, Kind=NodeOverlay */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.weight }}
+        {{- "Weight" | bold | nindent 2 }}: {{ . | toString | cyan }}
+    {{- end }}
+    {{- /* requirements are the overlay's targeting: which simulated nodes it applies to. They
+           are required by the schema but not trusted at render time. */ -}}
+    {{- with .Spec.requirements }}
+        {{- "Requirements" | bold | nindent 2 }}:
+        {{- range . }}
+            {{- $line := "" }}
+            {{- if eq .operator "Exists" }}
+                {{- $line = printf "%s exists" .key }}
+            {{- else if eq .operator "DoesNotExist" }}
+                {{- $line = printf "%s does not exist" .key }}
+            {{- else }}
+                {{- $line = printf "%s %s [%s]" .key .operator (.values | default list | join ", ") }}
+            {{- end }}
+            {{- $line | cyan | nindent 4 }}
+        {{- end }}
+    {{- end }}
+    {{- /* price and priceAdjustment are mutually exclusive (schema validation); both guarded
+           independently so a hand-written manifest carrying both still renders. */ -}}
+    {{- with .Spec.price }}
+        {{- "Price" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- with .Spec.priceAdjustment }}
+        {{- "Price Adjustment" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- with .Spec.capacity }}
+        {{- "Capacity" | bold | nindent 2 }}:{{ range $k, $v := . }} {{ $k }}={{ $v | toString | bold }}{{ end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

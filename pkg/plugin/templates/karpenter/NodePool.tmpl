@@ -7,27 +7,42 @@
     {{- template "observed_generation_summary" . }}
     {{- template "application_details" . }}
     {{- with .Spec.template.spec.nodeClassRef }}
-        {{- "NodeClass" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" .kind "name" .name) }}
+        {{- /* kind/name/group are all individually optional at render time however required the
+               schema says -- a hand-written manifest or an older controller can drop any of them,
+               and a nil reaching resource_ref aborts the whole render. */ -}}
+        {{- $kind := .kind | default "" | toString }}
+        {{- $name := .name | default "" | toString }}
+        {{- "NodeClass" | bold | nindent 2 }}:
+        {{- if and $kind $name }}
+            {{- " " }}{{ $.Include "resource_ref" (dict "kind" $kind "name" $name "group" (.group | default "" | toString)) }}
+        {{- else }}
+            {{- " " }}{{ printf "%s/%s" $kind $name }}{{ " (incomplete nodeClassRef)" | yellow }}
+        {{- end }}
     {{- end }}
     {{- /* Only render requirements that constrain scheduling in ways operators typically care
            about when debugging "why won't this pool provision compatible capacity" -- template
            labels/annotations, taints and disruption settings are configuration, not capacity
-           envelope, so they're intentionally left out. */ -}}
-    {{- $relevantKeys := list "node.kubernetes.io/instance-type" "karpenter.k8s.aws/instance-category" "karpenter.k8s.aws/instance-family" "topology.kubernetes.io/zone" "kubernetes.io/arch" "kubernetes.io/os" "karpenter.sh/capacity-type" }}
+           envelope, so they're intentionally left out. karpenter.azure.com/sku-name is added
+           because AKS pools constrain on the SKU rather than the AWS-style instance-type label. */ -}}
+    {{- $relevantKeys := list "node.kubernetes.io/instance-type" "karpenter.azure.com/sku-name" "karpenter.k8s.aws/instance-category" "karpenter.k8s.aws/instance-family" "topology.kubernetes.io/zone" "kubernetes.io/arch" "kubernetes.io/os" "karpenter.sh/capacity-type" }}
     {{- $requirements := list }}
-    {{- range .Spec.template.spec.requirements }}
+    {{- range .Spec.template.spec.requirements | default list }}
         {{- if has .key $relevantKeys }}{{ $requirements = $requirements | append . }}{{ end }}
     {{- end }}
     {{- with $requirements }}
         {{- "Requirements" | bold | nindent 2 }}:
         {{- range . }}
+            {{- /* key and operator are each required by the schema, but a hand-written manifest
+                   can drop either -- default both rather than let a nil reach printf. */ -}}
+            {{- $key := .key | default "<no key>" | toString }}
+            {{- $operator := .operator | default "<no operator>" | toString }}
             {{- $line := "" }}
-            {{- if eq .operator "Exists" }}
-                {{- $line = printf "%s exists" .key }}
-            {{- else if eq .operator "DoesNotExist" }}
-                {{- $line = printf "%s does not exist" .key }}
+            {{- if eq $operator "Exists" }}
+                {{- $line = printf "%s exists" $key }}
+            {{- else if eq $operator "DoesNotExist" }}
+                {{- $line = printf "%s does not exist" $key }}
             {{- else }}
-                {{- $line = printf "%s %s [%s]" .key .operator (.values | default list | join ", ") }}
+                {{- $line = printf "%s %s [%s]" $key $operator (.values | default list | join ", ") }}
             {{- end }}
             {{- with .minValues }}{{ $line = printf "%s (min %d values)" $line . }}{{ end }}
             {{- $line | cyan | nindent 4 }}
@@ -38,6 +53,28 @@
         {{- "Replicas" | bold | nindent 2 }}: {{ $spec.replicas | toString | cyan }}
     {{- else if (.Status | default dict) | hasKey "nodes" }}
         {{- "Nodes" | bold | nindent 2 }}: {{ .Status.nodes | toString | cyan }}
+    {{- end }}
+    {{- with $spec.weight }}
+        {{- "Weight" | bold | nindent 2 }}: {{ . | toString | cyan }}
+    {{- end }}
+    {{- /* Disruption settings only when they deviate from the API defaults (consolidateAfter 0s,
+           policy WhenEmptyOrUnderutilized, a single always-active 10% budget) -- the defaults are
+           what nearly every pool runs, and restating them is noise. */ -}}
+    {{- $disruption := $spec.disruption | default dict }}
+    {{- $disruptionParts := list }}
+    {{- with $disruption.consolidateAfter }}{{ if ne . "0s" }}{{ $disruptionParts = $disruptionParts | append (printf "consolidateAfter:%s" .) }}{{ end }}{{ end }}
+    {{- with $disruption.consolidationPolicy }}{{ if ne . "WhenEmptyOrUnderutilized" }}{{ $disruptionParts = $disruptionParts | append (printf "policy:%s" .) }}{{ end }}{{ end }}
+    {{- range $disruption.budgets | default list }}
+        {{- if or (ne (.nodes | default "10%" | toString) "10%") .schedule .duration .reasons }}
+            {{- $budget := printf "budget:%s" (.nodes | default "10%" | toString) }}
+            {{- with .schedule }}{{ $budget = printf "%s from %s" $budget . }}{{ end }}
+            {{- with .duration }}{{ $budget = printf "%s for %s" $budget . }}{{ end }}
+            {{- with .reasons }}{{ $budget = printf "%s (%s)" $budget (. | join ", ") }}{{ end }}
+            {{- $disruptionParts = $disruptionParts | append $budget }}
+        {{- end }}
+    {{- end }}
+    {{- with $disruptionParts }}
+        {{- "Disruption" | bold | nindent 2 }}: {{ join ", " . | cyan }}
     {{- end }}
     {{- $limits := $spec.limits }}
     {{- $resources := (.Status | default dict).resources }}
@@ -58,8 +95,41 @@
             {{- printf "%s: %s/%s" $key $usedStr $limitStr | cyan | nindent 4 }}
         {{- end }}
     {{- end }}
+    {{- /* The claims are the only path from a NodePool to actual Nodes -- status.nodes is just a
+           count, and each claim's own template carries the Node link. Summaries by default, full
+           inline renders under --deep, nothing under --shallow/--local (the helper is a no-op
+           there). Zero claims is already visible in the Nodes count above, so an empty list
+           renders nothing rather than a "none" line. */ -}}
+    {{- if not .LiveQueriesDisabled }}
+        {{- $claims := .KubeGetByLabelsMap "" "nodeclaims" (dict "karpenter.sh/nodepool" .Name) }}
+        {{- if $claims }}
+            {{- "NodeClaims" | bold | nindent 2 }}:
+            {{- range $claims }}
+                {{- if $.Config.GetBool "deep" }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- else }}
+                    {{- $.Include "NodeClaim.summary" (dict "obj" .) | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
     {{- template "conditions_summary" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
     {{- template "owners" . }}
+{{- end -}}
+
+{{- define "NodePool.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Short one-line NodePool health summary, used wherever a NodePool is referenced from
+           another template (e.g. AKSNodeClass). */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "group" $obj.APIVersion "callerNamespace" .callerNamespace) }}
+    {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- if ($obj.Status | default dict) | hasKey "nodes" }}
+        {{- $nodes := $obj.Status.nodes | toString }}
+        {{- ", " }}{{ $nodes | cyan }} node{{ if ne $nodes "1" }}s{{ end }}
+    {{- end }}
+    {{- template "kstatus_if_abnormal" $obj }}
+    {{- template "other_unhealthy_conditions" $obj }}
 {{- end -}}

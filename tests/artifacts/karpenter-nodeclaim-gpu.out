@@ -1,0 +1,12 @@
+
+NodeClaim/gpupool-p6drp, created 1m ago by NodePool.karpenter.sh/gpupool, gen:1
+  Current: Resource is Ready
+  NodeClass: AKSNodeClass.karpenter.azure.com/gpupool-managed
+  Expire After: Never
+  Capacity: Standard_NC24ads_A100_v4 (on-demand) in westus2-2
+  Node: Node/aks-gpupool-p6drp
+  ConsistentStateFound:True ConsistentStateFound for 1m
+  Initialized:True Initialized for 1m
+  Launched:True Launched for 1m
+  Ready:True Ready for 1m
+  Registered:True Registered for 1m

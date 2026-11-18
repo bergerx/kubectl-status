@@ -2,7 +2,7 @@
 NodeClaim/default-fghij, created 1m ago by NodePool.karpenter.sh/default, gen:1
   InProgress: NodeClaim is not initialized
     Reconciling: NodeClaimNotInitialized, NodeClaim is not initialized
-  NodeClass: EC2NodeClass/default
+  NodeClass: EC2NodeClass.karpenter.k8s.aws/default
   Capacity: (spot)
   Initialized:Unknown AwaitingRegistration for 1m
   Launched:False LaunchFailed, InsufficientInstanceCapacity: We currently do not have sufficient m5.large capacity in the Availability Zone you requested for 1m

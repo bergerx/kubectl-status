@@ -1,0 +1,20 @@
+
+NodePool/default, created 1m ago, gen:1
+  Current: Resource is Ready
+  NodeClass: AKSNodeClass.karpenter.azure.com/default
+  Requirements:
+    kubernetes.io/arch In [amd64]
+    kubernetes.io/os In [linux]
+    karpenter.sh/capacity-type In [on-demand]
+  Nodes: 0
+  Disruption: budget:30%
+  Resources: (current/limit)
+    cpu: 0/unlimited
+    ephemeral-storage: 0B/unlimited
+    memory: 0B/unlimited
+    nodes: 0/unlimited
+    pods: 0/unlimited
+  NodeClassReady:True NodeClassReady for 1m
+  NodeRegistrationHealthy:Unknown AwaitingReconciliation, object is awaiting reconciliation for 1m
+  Ready:True Ready for 1m
+  ValidationSucceeded:True ValidationSucceeded for 1m

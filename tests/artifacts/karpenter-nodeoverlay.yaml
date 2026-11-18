@@ -1,0 +1,33 @@
+apiVersion: karpenter.sh/v1alpha1
+kind: NodeOverlay
+metadata:
+  name: priced
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  weight: 100
+  requirements:
+    - key: karpenter.sh/capacity-type
+      operator: Exists
+  price: "1.5"
+---
+apiVersion: karpenter.sh/v1alpha1
+kind: NodeOverlay
+metadata:
+  name: adjusted
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  requirements:
+    - key: node.kubernetes.io/instance-type
+      operator: In
+      values:
+        - Standard_D4s_v5
+  priceAdjustment: "+10%"
+  capacity:
+    example.com/gpu: "2"
+---
+apiVersion: karpenter.sh/v1alpha1
+kind: NodeOverlay
+metadata:
+  name: bare
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec: {}

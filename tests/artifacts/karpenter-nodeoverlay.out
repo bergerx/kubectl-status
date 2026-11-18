@@ -1,0 +1,17 @@
+
+NodeOverlay/priced, created 1m ago
+  Current: Resource is current
+  Weight: 100
+  Requirements:
+    karpenter.sh/capacity-type exists
+  Price: 1.5
+
+NodeOverlay/adjusted, created 1m ago
+  Current: Resource is current
+  Requirements:
+    node.kubernetes.io/instance-type In [Standard_D4s_v5]
+  Price Adjustment: +10%
+  Capacity: example.com/gpu=2
+
+NodeOverlay/bare, created 1m ago
+  Current: Resource is current

@@ -1,0 +1,80 @@
+{{- define "AKSNodeClass" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: karpenter.azure.com/v1beta1, Kind=AKSNodeClass */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- /* A NodeClass is a configuration object, so the spec is the content -- but only the
+           knobs that change what gets provisioned and deviate from their defaults earn a line.
+           osDiskType (only value: Managed), kubelet/linuxOSConfig/localDNS/artifactStreaming/
+           security/nodePublicIP/capacityReservation internals are deep configuration with
+           well-known defaults and are left out. */ -}}
+    {{- $spec := .Spec | default dict }}
+    {{- with $spec.imageFamily }}
+        {{- "Image Family" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- with $spec.versions }}{{ $v := . }}{{ if or $v.kubernetesVersion $v.nodeImageVersion }}
+        {{- "Pinned Versions" | bold | nindent 2 }}:{{ with $v.kubernetesVersion }} k8s {{ . | cyan }}{{ end }}{{ with $v.nodeImageVersion }}{{ if $v.kubernetesVersion }},{{ end }} node image {{ . | cyan }}{{ end }}
+    {{- end }}{{ end }}
+    {{- with $spec.maxPods }}
+        {{- "Max Pods" | bold | nindent 2 }}: {{ . | toString | cyan }}
+    {{- end }}
+    {{- with $spec.osDiskSizeGB }}
+        {{- "OS Disk" | bold | nindent 2 }}: {{ . | toString | cyan }}GB
+    {{- end }}
+    {{- with $spec.workloadRuntime }}{{ if ne . "OCIContainer" }}
+        {{- "Workload Runtime" | bold | nindent 2 }}: {{ . | yellow }}
+    {{- end }}{{ end }}
+    {{- with $spec.fipsMode }}{{ if ne . "Disabled" }}
+        {{- "FIPS" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}{{ end }}
+    {{- with $spec.gpu }}{{ with .mode }}{{ if ne . "Driver" }}
+        {{- "GPU Driver" | bold | nindent 2 }}: {{ . | yellow }} (drivers managed externally, e.g. GPU Operator)
+    {{- end }}{{ end }}{{ end }}
+    {{- with $spec.vnetSubnetID }}
+        {{- "Subnet" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- with $spec.tags }}
+        {{- "Tags" | bold | nindent 2 }}:{{ range $k, $v := . }} {{ $k }}={{ $v | bold }}{{ end }}
+    {{- end }}
+    {{- $status := .Status | default dict }}
+    {{- with $status.kubernetesVersion }}
+        {{- "Kubernetes Version" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- with $status.localDNSState }}{{ if ne . "Disabled" }}
+        {{- "LocalDNS" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}{{ end }}
+    {{- with $status.images }}
+        {{- "Images" | bold | nindent 2 }}: {{ . | len | toString | cyan }} available
+        {{- with ($status.observedVersions | default dict).latestImageVersion }}, latest {{ . | cyan }}{{ end }}
+    {{- end }}
+    {{- /* The pools pointing at this NodeClass are its only consumers -- a NodeClass nothing
+           references is dead configuration. Summaries by default, inline under --deep, nothing
+           under --shallow/--local. */ -}}
+    {{- if not .LiveQueriesDisabled }}
+        {{- $pools := list }}
+        {{- range .KubeGetByLabelsMap "" "nodepools" (dict) }}
+            {{- $ncName := "" }}
+            {{- with .Spec }}{{ with .template }}{{ with .spec }}{{ with .nodeClassRef }}{{ $ncName = .name | default "" | toString }}{{ end }}{{ end }}{{ end }}{{ end }}
+            {{- if eq $ncName $.Name }}{{ $pools = $pools | append . }}{{ end }}
+        {{- end }}
+        {{- if $pools }}
+            {{- "NodePools" | bold | nindent 2 }}:
+            {{- range $pools }}
+                {{- if $.Config.GetBool "deep" }}
+                    {{- $.IncludeRenderableObject . | nindent 4 }}
+                {{- else }}
+                    {{- $.Include "NodePool.summary" (dict "obj" .) | nindent 4 }}
+                {{- end }}
+            {{- end }}
+        {{- else }}
+            {{- "NodePools" | bold | nindent 2 }}: {{ "none reference this NodeClass" | yellow }}
+        {{- end }}
+    {{- end }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}

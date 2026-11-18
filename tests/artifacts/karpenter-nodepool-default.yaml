@@ -1,0 +1,90 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  annotations:
+    karpenter.sh/nodepool-hash: "9378733783953565953"
+    karpenter.sh/nodepool-hash-version: v3
+    kubernetes.io/description: General purpose NodePool for generic workloads
+    meta.helm.sh/release-name: aks-managed-karpenter-overlay
+    meta.helm.sh/release-namespace: kube-system
+  creationTimestamp: "2026-08-19T12:39:04Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    helm.toolkit.fluxcd.io/name: karpenter-overlay-main-adapter-helmrelease
+    helm.toolkit.fluxcd.io/namespace: 6a85a02baaeb850001a3f239
+  name: default
+  resourceVersion: "79840293"
+  uid: 00000000-0000-0000-0000-000000000000
+spec:
+  disruption:
+    budgets:
+    - nodes: 30%
+    consolidateAfter: 0s
+    consolidationPolicy: WhenEmptyOrUnderutilized
+  template:
+    metadata:
+      labels:
+        kubernetes.azure.com/ebpf-dataplane: cilium
+        kubernetes.azure.com/mode: user
+    spec:
+      expireAfter: Never
+      nodeClassRef:
+        group: karpenter.azure.com
+        kind: AKSNodeClass
+        name: default
+      requirements:
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      - key: kubernetes.io/os
+        operator: In
+        values:
+        - linux
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - on-demand
+      - key: karpenter.azure.com/sku-family
+        operator: In
+        values:
+        - D
+      startupTaints:
+      - effect: NoExecute
+        key: node.cilium.io/agent-not-ready
+        value: "true"
+status:
+  conditions:
+  - lastTransitionTime: "2026-08-19T12:39:04Z"
+    message: ""
+    observedGeneration: 1
+    reason: ValidationSucceeded
+    status: "True"
+    type: ValidationSucceeded
+  - lastTransitionTime: "2026-08-19T12:39:04Z"
+    message: object is awaiting reconciliation
+    observedGeneration: 1
+    reason: AwaitingReconciliation
+    status: Unknown
+    type: NodeRegistrationHealthy
+  - lastTransitionTime: "2026-10-14T18:08:25Z"
+    message: ""
+    observedGeneration: 1
+    reason: NodeClassReady
+    status: "True"
+    type: NodeClassReady
+  - lastTransitionTime: "2026-10-14T18:08:25Z"
+    message: ""
+    observedGeneration: 1
+    reason: Ready
+    status: "True"
+    type: Ready
+  nodeClassObservedGeneration: 1
+  nodes: 0
+  resources:
+    cpu: "0"
+    ephemeral-storage: "0"
+    memory: "0"
+    nodes: "0"
+    pods: "0"
