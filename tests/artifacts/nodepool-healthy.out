@@ -1,7 +1,7 @@
 
 NodePool/default, created 1m ago, gen:3
   Current: Resource is Ready
-  NodeClass: EC2NodeClass/default
+  NodeClass: EC2NodeClass.karpenter.k8s.aws/default
   Requirements:
     karpenter.sh/capacity-type In [spot, on-demand]
     node.kubernetes.io/instance-type exists
@@ -10,6 +10,8 @@ NodePool/default, created 1m ago, gen:3
     kubernetes.io/arch In [amd64]
     karpenter.k8s.aws/instance-family NotIn [t3, t3a]
   Nodes: 4
+  Weight: 10
+  Disruption: consolidateAfter:30s
   Resources: (current/limit)
     cpu: 48/1000
     memory: 206.1GB/1TB

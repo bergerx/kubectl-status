@@ -1,4 +1,4 @@
 
 NodePool/minimal, created 1m ago, gen:1
   Current: Resource is current
-  NodeClass: EC2NodeClass/minimal
+  NodeClass: EC2NodeClass.karpenter.k8s.aws/minimal

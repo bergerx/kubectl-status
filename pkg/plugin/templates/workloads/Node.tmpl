@@ -438,8 +438,7 @@
            absent on some runtimes) and "evictionHard". On the common single-disk node the two are
            the same filesystem, so every figure except how much each one uses is identical -- there
            they collapse onto one line instead of repeating the same capacity/free/inode numbers
-           twice. They only split back apart when imagefs really is a separate disk. */ -}}
-    {{- $fs := .fs }}
+           twice. They only split back apart when imagefs really is a separate disk. */ -}}    {{- $fs := .fs }}
     {{- $imageFs := .imageFs }}
     {{- $eh := .evictionHard | default dict }}
     {{- $nodefsAvail := index $eh "nodefs.available" | default "" }}
@@ -478,4 +477,45 @@
             {{- "imagefs" | bold | nindent 4 }}: {{ template "node_stats_summary_fs" (dict "fs" . "availableThreshold" $imagefsAvail "inodesThreshold" $imagefsInodes) }}
         {{- end }}
     {{- end }}
+{{- end -}}
+
+{{- define "Node.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Short one-line Node health summary, for use where a Node is referenced from another
+           template (currently the drifted-NodeClaim case) rather than rendered in full.
+
+           Only conditions whose polarity is well known are rendered here: the kubelet core set
+           plus the AKS Node Problem Detector set, all of which are faulty-when-True (Ready is
+           the inverse). Everything else -- vendor plugins, in-house automation conditions whose
+           meaning this tool can't know -- is dropped: a False on an unknown condition may well
+           be its healthy state, and restating it as a problem would be a lie. The full Node
+           render still shows every condition via conditions_summary. */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "group" $obj.APIVersion "callerNamespace" .callerNamespace) }}
+    {{- with $obj.Metadata.creationTimestamp }}, created {{ . | colorAgo }}{{ agoSuffix }}{{ end }}
+    {{- with index $obj.Labels "node.kubernetes.io/instance-type" }}, {{ . | cyan }}{{ end }}
+    {{- $readyCond := getMatchingItemInMapList (dict "type" "Ready") $obj.StatusConditions }}
+    {{- with $readyCond }}
+        {{- $unknown := or (eq (.status | default "" | toString) "Unknown") (not .status) }}
+        {{- if $unknown }}
+            {{- ", " }}{{ "Ready:Unknown" | yellow | bold }}
+        {{- else if isStatusConditionHealthy . }}
+            {{- ", " }}{{ "Ready" | green }}
+        {{- else }}
+            {{- ", " }}{{ "Not Ready" | red | bold }}{{ with .reason }} ({{ . | red | bold }}){{ end }}
+        {{- end }}
+    {{- end }}
+    {{- range list "MemoryPressure" "DiskPressure" "PIDPressure" "NetworkUnavailable"
+                   "KubeletProblem" "ContainerRuntimeProblem" "FilesystemCorruptionProblem"
+                   "VMEventScheduled" "FrequentKubeletRestart" "FrequentContainerdRestart"
+                   "FrequentDockerRestart" "FrequentUnregisterNetDevice" "KernelDeadlock"
+                   "ReadonlyFilesystem" "OutOfDisk" "GPUMissing" "GPUClockThrottling"
+                   "XIDError" "XIDErrors" "NVLinkStatusInactive" "IBLinkFlapping"
+                   "UnhealthyNvidiaDevicePlugin" "UnhealthyNvidiaDCGMServices" }}
+        {{- $cond := getMatchingItemInMapList (dict "type" .) $obj.StatusConditions }}
+        {{- if and $cond (eq ($cond.status | default "" | toString) "True") }}
+            {{- ", " }}{{ . | red | bold }}{{ with $cond.reason }} ({{ . | red }}){{ end }}
+        {{- end }}
+    {{- end }}
+    {{- template "kstatus_if_abnormal" $obj }}
 {{- end -}}
