@@ -32,6 +32,56 @@ func (r RenderableObject) LiveQueriesDisabled() bool {
 	return r.Config.GetBool("shallow") || r.Config.GetBool("local")
 }
 
+// SharedCacheKey is the viper key under which the shared object cache is stored.
+const SharedCacheKey = "sharedCache"
+
+// sharedCacheKey returns the viper key for the shared cache entry for this resource.
+// The key format is "kind/namespace/name" for specific objects, or just "kind" for list results.
+// Viper lowercases map keys when they are Set, so the key is lowercased here as well to keep
+// lookups consistent with entries written through viper.Config.Set.
+func sharedCacheKey(r RenderableObject, kind string) string {
+	namespace := r.Namespace()
+	name := r.Name()
+	if namespace != "" {
+		return strings.ToLower(kind + "/" + namespace + "/" + name)
+	}
+	return strings.ToLower(kind)
+}
+
+// sharedCacheLookup checks the viper shared cache for a previously cached object.
+// Returns the cached object if found, otherwise nil.
+func sharedCacheLookup(r RenderableObject, kind string) input.Objects {
+	if r.Config == nil {
+		return nil
+	}
+	v := r.Config.Get(SharedCacheKey)
+	if v == nil {
+		return nil
+	}
+	cacheMap, ok := v.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	cached, ok := cacheMap[sharedCacheKey(r, kind)]
+	if !ok {
+		return nil
+	}
+	cachedMap, ok := cached.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	objects := make(input.Objects, 0, len(cachedMap))
+	for _, value := range cachedMap {
+		obj, ok := value.(input.Object)
+		if !ok {
+			// A malformed entry must not take down a render; just skip it.
+			continue
+		}
+		objects = append(objects, obj)
+	}
+	return objects
+}
+
 func (r RenderableObject) KubeGet(namespace string, args ...string) (out []RenderableObject) {
 	if r.LiveQueriesDisabled() {
 		return
@@ -60,6 +110,8 @@ func (r RenderableObject) KubeGetFirst(namespace string, args ...string) Rendera
 	}
 	klog.V(5).InfoS("called template method KubeGetFirst",
 		"namespace", namespace, "args", args)
+	// Fetch from repo - the shared cache in viper is available for template functions
+	// to check, but we use the repo for the actual object data
 	var err error
 	nr.Object, err = r.repo.FirstObject(namespace, args, "")
 	if err != nil {
