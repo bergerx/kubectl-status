@@ -1,3 +1,38 @@
+{{- define "ResourceQuota.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Expects dict "obj" (ResourceQuota RenderableObject) "callerNamespace" (optional --
+           forwarded to resource_ref so obj's own namespace is dropped from the summary when it's
+           redundant, same contract every "<Kind>.summary" template uses). One-line quota usage
+           with a "near limit" marker when any resource is above 80% of its hard limit. */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "callerNamespace" .callerNamespace) }}
+    {{- $hard := $obj.Status.hard | default dict }}
+    {{- $used := $obj.Status.used | default dict }}
+    {{- $entries := list }}
+    {{- $nearLimit := false }}
+    {{- range $key, $hardStr := $hard }}
+        {{- $usedStr := index $used $key | default "0" }}
+        {{- $hardVal := $hardStr | toString | quantityToFloat64 }}
+        {{- $usedVal := $usedStr | toString | quantityToFloat64 }}
+        {{- $entry := "" }}
+        {{- if or (hasSuffix "memory" $key) (hasSuffix "storage" $key) (contains "hugepages" $key) }}
+            {{- $entry = printf "%s: %s/%s" $key ($usedVal | humanizeSI "B") ($hardVal | humanizeSI "B") }}
+        {{- else }}
+            {{- $entry = printf "%s: %g/%g" $key $usedVal $hardVal }}
+        {{- end }}
+        {{- if gt $hardVal 0.0 }}
+            {{- $pct := percent $usedVal $hardVal }}
+            {{- if ge $pct 80.0 }}{{- $nearLimit = true }}{{- end }}
+            {{- $entry = printf "%s[%s]" $entry ($pct | colorPercent "%.0f%%") }}
+        {{- end }}
+        {{- $entries = $entries | append $entry }}
+    {{- end }}
+    {{- if $entries }}
+        {{- ", " }}{{ $entries | join ", " }}
+    {{- end }}
+    {{- if $nearLimit }}, {{ "near limit" | yellow | bold }}{{ end }}
+{{- end -}}
+
 {{- define "ResourceQuota" }}
     {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
     {{- /* GVK: v1, Kind=ResourceQuota */ -}}

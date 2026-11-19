@@ -190,6 +190,9 @@ func TestAllArtifactsLocalShort(t *testing.T) {
 	artifacts := []string{
 		"../tests/artifacts/deployment-healthy.yaml",
 		"../tests/artifacts/multiple-2-pods-docs.yaml",
+		"../tests/artifacts/resourcequota-compute.yaml",
+		"../tests/artifacts/resourcequota-scoped.yaml",
+		"../tests/artifacts/resourcequota-besteffort.yaml",
 	}
 	for _, artifact := range artifacts {
 		artifact := artifact
