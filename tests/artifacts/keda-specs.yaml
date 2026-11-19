@@ -1,0 +1,84 @@
+# Spec-only fixtures for the KEDA kinds that have no live instances in the capture
+# cluster (ScaledJob, TriggerAuthentication, ClusterTriggerAuthentication,
+# CloudEventSource, ClusterCloudEventSource); status is never fabricated, so these
+# exercise the spec paths and the empty-status fallbacks.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: queue-worker-job
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  pollingInterval: 15
+  maxReplicaCount: 50
+  successfulJobsHistoryLimit: 5
+  scalingStrategy:
+    strategy: eager
+    multipleScalersCalculation: max
+  rollout:
+    strategy: immediate
+  envSourceContainerName: worker
+  triggers:
+  - type: rabbitmq
+    name: queue
+    authenticationRef:
+      name: rabbitmq-auth
+  - type: cron
+    name: schedule
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: rabbitmq-auth
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  secretTargetRef:
+  - parameter: host
+    name: rabbitmq-secret
+    key: host
+  - parameter: password
+    name: rabbitmq-secret
+    key: password
+  podIdentity:
+    provider: azure-workload
+---
+apiVersion: keda.sh/v1alpha1
+kind: ClusterTriggerAuthentication
+metadata:
+  name: global-auth
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  hashiCorpVault:
+    address: https://vault.example.com
+---
+apiVersion: eventing.keda.sh/v1alpha1
+kind: CloudEventSource
+metadata:
+  name: so-events
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  destination:
+    http:
+      uri: https://events.example.com/keda
+  eventSubscription:
+    includedEventTypes:
+    - keda.scaledobject.ready.v1
+    - keda.scaledobject.failed.v1
+  authenticationRef:
+    name: rabbitmq-auth
+  clusterName: example-cluster
+---
+apiVersion: eventing.keda.sh/v1alpha1
+kind: ClusterCloudEventSource
+metadata:
+  name: global-events
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  destination:
+    azureEventGridTopic:
+      endpoint: https://grid.example.azure.com
+  eventSubscription:
+    excludedEventTypes:
+    - keda.scaledobject.removed.v1

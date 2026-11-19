@@ -1,0 +1,105 @@
+{{- define "trigger_auth_details" }}
+    {{- /* Shared body for TriggerAuthentication and ClusterTriggerAuthentication (same spec
+           shape, different scope). Takes the RenderableObject. Renders which auth method(s)
+           are in use and where each parameter comes from -- secret names and keys, never
+           values. */ -}}
+    {{- $spec := .Spec | default dict }}
+    {{- $methods := list }}
+    {{- range $method := list "secretTargetRef" "env" "podIdentity" "filePath" "hashiCorpVault" "azureKeyVault" "azureServicePrincipal" "awsSecretManager" "gcpSecretManager" "oauth2" "boundServiceAccountToken" "configMapTargetRef" }}
+        {{- if $spec | hasKey $method }}{{ $methods = $methods | append $method }}{{ end }}
+    {{- end }}
+    {{- if not $methods }}
+        {{- "Auth Methods" | bold | yellow | nindent 2 }}: none configured
+    {{- else }}
+        {{- "Auth Methods" | bold | nindent 2 }}:
+        {{- range $methods }}
+            {{- if eq . "secretTargetRef" }}
+                {{- range (index $spec .) | default list }}
+                    {{- /* parameter/key/name are each schema-required but a hand-written manifest
+                           can drop any of them -- default rather than let a nil reach printf. */ -}}
+                    {{- $param := .parameter | default "<no parameter>" | toString }}
+                    {{- $secret := .name | default "<no secret>" | toString }}
+                    {{- $key := .key | default "<no key>" | toString }}
+                    {{- printf "%s: from %s" $param ($.Include "resource_ref" (dict "kind" "Secret" "name" $secret "callerNamespace" $.Namespace "nameSuffix" (printf ".%s" $key))) | nindent 4 }}
+                {{- end }}
+            {{- else if eq . "env" }}
+                {{- range (index $spec .) | default list }}
+                    {{- $param := .parameter | default "<no parameter>" | toString }}
+                    {{- $name := .name | default "<no name>" | toString }}
+                    {{- $line := printf "%s: env %s" $param $name }}
+                    {{- with .containerName }}{{ $line = printf "%s (container %s)" $line . }}{{ end }}
+                    {{- $line | nindent 4 }}
+                {{- end }}
+            {{- else if eq . "podIdentity" }}
+                {{- $pi := index $spec . | default dict }}
+                {{- $line := printf "provider %s" ($pi.provider | default "<no provider>" | toString) }}
+                {{- with $pi.identityOwner }}{{ $line = printf "%s (owner %s)" $line . }}{{ end }}
+                {{- with $pi.identityId }}{{ $line = printf "%s id %s" $line . }}{{ end }}
+                {{- with $pi.identityTenantId }}{{ $line = printf "%s tenant %s" $line . }}{{ end }}
+                {{- $line | nindent 4 }}
+            {{- else if eq . "hashiCorpVault" }}
+                {{- $vault := index $spec . | default dict }}
+                {{- with $vault.address }}{{ printf "address %s" . | nindent 4 }}{{ end }}
+            {{- else if eq . "azureKeyVault" }}
+                {{- $kv := index $spec . | default dict }}
+                {{- with $kv.name }}{{ printf "vault %s" . | nindent 4 }}{{ end }}
+                {{- with $kv.url }}{{ printf "url %s" . | nindent 4 }}{{ end }}
+            {{- else }}
+                {{- . | cyan | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- /* The controller records which scalers consume this authentication; empty means
+           nothing references it yet, which is worth a word since a dangling auth object is
+           usually a typo in a scaler's authenticationRef. A namespaced TriggerAuthentication's
+           users are always in its own namespace, so they resolve to live health summaries;
+           a ClusterTriggerAuthentication's users can sit in any namespace and the status
+           string carries names only, so those stay plain references. */ -}}
+    {{- $status := .Status | default dict }}
+    {{- $users := list }}
+    {{- with $status.scaledobjects }}{{ range splitList "," . }}{{ if ne (trimAll " " (toString .)) "" }}{{ $users = $users | append (dict "kind" "ScaledObject" "name" (trimAll " " (toString .))) }}{{ end }}{{ end }}{{ end }}
+    {{- with $status.scaledjobs }}{{ range splitList "," . }}{{ if ne (trimAll " " (toString .)) "" }}{{ $users = $users | append (dict "kind" "ScaledJob" "name" (trimAll " " (toString .))) }}{{ end }}{{ end }}{{ end }}
+    {{- if $users }}
+        {{- "Used By" | bold | nindent 2 }}:
+        {{- range $users }}
+            {{- if eq $.Kind "TriggerAuthentication" }}
+                {{- $.Include "managed_resource_line" (dict "ctx" $ "kind" .kind "name" .name "group" "keda.sh/v1alpha1" "namespace" $.Namespace) | nindent 4 }}
+            {{- else }}
+                {{- printf "%s/%s" .kind .name | cyan | nindent 4 }}
+            {{- end }}
+        {{- end }}
+    {{- else }}
+        {{- "Used By" | bold | yellow | nindent 2 }}: nothing references this authentication
+    {{- end }}
+{{- end -}}
+
+{{- define "TriggerAuthentication" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: keda.sh/v1alpha1, Kind=TriggerAuthentication */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "trigger_auth_details" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "TriggerAuthentication.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Short one-line TriggerAuthentication health summary, used wherever a
+           TriggerAuthentication is referenced from another template. */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "group" $obj.APIVersion "callerNamespace" .callerNamespace) }}
+    {{- $spec := $obj.Spec | default dict }}
+    {{- $methods := list }}
+    {{- range $method := list "secretTargetRef" "env" "podIdentity" "filePath" "hashiCorpVault" "azureKeyVault" "azureServicePrincipal" "awsSecretManager" "gcpSecretManager" "oauth2" "boundServiceAccountToken" "configMapTargetRef" }}
+        {{- if $spec | hasKey $method }}{{ $methods = $methods | append $method }}{{ end }}
+    {{- end }}
+    {{- with $methods }}, {{ join "+" . | cyan }}{{ else }}, {{ "no auth method" | yellow | bold }}{{ end }}
+    {{- template "kstatus_if_abnormal" $obj }}
+    {{- template "other_unhealthy_conditions" $obj }}
+{{- end -}}

@@ -23,11 +23,11 @@ Kustomization/podinfo -n e2e-flux-kustomization, created 1m ago, gen:1
           Current: Resource is current
           Deployment/podinfo\[e2e-flux-kustomization\] is already printed
           Replicas: 2/2-4
+          Scaling limited \(TooFewReplicas\), the desired replica count is less than the minimum replica count
           Metrics:
             cpu:[0-9]+%/99%
           AbleToScale:True (?:ReadyForNewScale, recommended size matches current size|SucceededRescale, the HPA controller was able to update the target scale to 2) for 1m
           ScalingActive:True ValidMetricFound, the HPA was able to successfully calculate a replica count from cpu resource utilization \(percentage of request\) for 1m
-          ScalingLimited:True TooFewReplicas, the desired replica count is less than the minimum replica count for 1m
           Applied by Flux Kustomization/podinfo
           Flux apply policy Merge: fields added by other tools are preserved rather than reverted
       Available:True MinimumReplicasAvailable, Deployment has minimum availability\. for 1m

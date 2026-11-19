@@ -1,0 +1,14 @@
+
+ScaledObject/worker -n app-a, created 1m ago, gen:2
+  Current: Resource is Ready
+  Scales Deployment/worker
+  Replicas: min 2, max 6
+  Timing: poll every 15s
+  Triggers:
+    prometheus/worker-demand @ http://prometheus.monitoring:9090
+      sum(max by (priority) (app_queue_depth_by_priority{namespace="app-a"})) + sum(app_active_jobs{namespace="app-a", pod=~"worker-.*"}) > 20
+  Activity: idle -- Scaling is not performed because triggers are not active
+  Last Active: 1m ago
+  Fallback: 6 replicas after 10 failed polls
+  HPA: HorizontalPodAutoscaler/keda-hpa-worker
+  Ready:True ScaledObjectReady, ScaledObject is defined correctly and is ready for scaling

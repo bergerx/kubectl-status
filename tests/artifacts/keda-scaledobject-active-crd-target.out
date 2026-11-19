@@ -1,0 +1,12 @@
+
+ScaledObject/group-a-scaler -n workload, created 1m ago, gen:1
+  Current: Resource is Ready
+  Scales GIGGroup.gig.example.com/group-a
+  Replicas: min 2, max 10
+  Timing: poll every 15s
+  Triggers:
+    cpu > 80%
+  Activity: active (ScalerActive)
+  Last Active: 1m ago
+  HPA: HorizontalPodAutoscaler/keda-hpa-group-a-scaler
+  Ready:True ScaledObjectReady, ScaledObject is defined correctly and is ready for scaling

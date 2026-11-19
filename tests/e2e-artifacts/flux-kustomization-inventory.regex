@@ -6,7 +6,7 @@ Kustomization/podinfo -n e2e-flux-kustomization, created 1m ago, gen:1
   Manages 3 resources: Deployment×1, HorizontalPodAutoscaler×1, Service×1
     Service/podinfo missing: no such object in the cluster
     Deployment/podinfo, created 1m ago, 2/2 ready
-    HorizontalPodAutoscaler/podinfo, 2/2-4
+    HorizontalPodAutoscaler/podinfo, 2/2-4, scaling-limited
   Ready covers the apply only: without wait or healthChecks, unhealthy managed resources leave it Ready
   Reconciles every 60m
   Ready:True ReconciliationSucceeded, Applied revision: 6\.9\.2@sha1:[0-9a-f]+ for 1m
