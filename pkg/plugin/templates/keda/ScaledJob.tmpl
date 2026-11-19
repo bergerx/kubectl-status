@@ -1,0 +1,106 @@
+{{- define "ScaledJob" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: keda.sh/v1alpha1, Kind=ScaledJob */ -}}
+    {{- /* jobTargetRef is an embedded batch/Job spec -- pure pod-template configuration that the
+           resulting Jobs render in full themselves, so it's intentionally not restated here. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- $spec := .Spec | default dict }}
+    {{- $replicaParts := list }}
+    {{- with $spec.minReplicaCount }}{{ $replicaParts = $replicaParts | append (printf "min %s" (. | toString)) }}{{ end }}
+    {{- with $spec.maxReplicaCount }}{{ $replicaParts = $replicaParts | append (printf "max %s" (. | toString)) }}{{ end }}
+    {{- with $replicaParts }}
+        {{- "Replicas" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- with $spec.pollingInterval }}{{ if ne . 30 }}
+        {{- "Polling Interval" | bold | nindent 2 }}: {{ printf "%ss" (. | toString) | cyan }}
+    {{- end }}{{ end }}
+    {{- /* History limits: batch/Job's own defaults are 3 successful / 1 failed; KEDA passes
+           these through to the created Jobs, so only deviations are worth a line. */ -}}
+    {{- $historyParts := list }}
+    {{- with $spec.successfulJobsHistoryLimit }}{{ if ne . 3 }}{{ $historyParts = $historyParts | append (printf "successful %s" (. | toString)) }}{{ end }}{{ end }}
+    {{- with $spec.failedJobsHistoryLimit }}{{ if ne . 1 }}{{ $historyParts = $historyParts | append (printf "failed %s" (. | toString)) }}{{ end }}{{ end }}
+    {{- with $historyParts }}
+        {{- "History Limits" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- $strategy := $spec.scalingStrategy | default dict }}
+    {{- $strategyParts := list }}
+    {{- with $strategy.strategy }}{{ if ne . "default" }}{{ $strategyParts = $strategyParts | append . }}{{ end }}{{ end }}
+    {{- with $strategy.multipleScalersCalculation }}{{ $strategyParts = $strategyParts | append (printf "multi-scaler:%s" .) }}{{ end }}
+    {{- with $strategy.customScalingQueueLengthDeduction }}{{ $strategyParts = $strategyParts | append (printf "queueDeduction:%s" (. | toString)) }}{{ end }}
+    {{- with $strategy.customScalingRunningJobPercentage }}{{ $strategyParts = $strategyParts | append (printf "runningPct:%s" .) }}{{ end }}
+    {{- with $strategyParts }}
+        {{- "Scaling Strategy" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- $rollout := $spec.rollout | default dict }}
+    {{- $rolloutParts := list }}
+    {{- with $rollout.strategy }}{{ if ne . "gradual" }}{{ $rolloutParts = $rolloutParts | append . }}{{ end }}{{ end }}
+    {{- with $rollout.propagationPolicy }}{{ $rolloutParts = $rolloutParts | append . }}{{ end }}
+    {{- with $rolloutParts }}
+        {{- "Rollout" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- with $spec.envSourceContainerName }}
+        {{- "Env Source Container" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+    {{- template "keda_triggers_section" (dict "triggers" $spec.triggers) }}
+    {{- /* Same Active:False-is-idle semantics as ScaledObject -- prose, not the raw condition. */ -}}
+    {{- $activeCond := getMatchingItemInMapList (dict "type" "Active") .StatusConditions }}
+    {{- $active := false }}
+    {{- if $activeCond }}{{ if eq ($activeCond.status | default "" | toString) "True" }}{{ $active = true }}{{ end }}{{ end }}
+    {{- if $active }}
+        {{- "Activity" | bold | nindent 2 }}: {{ "active" | green }}{{ with ($activeCond.reason | default "" | toString) }} ({{ . }}){{ end }}
+    {{- else }}
+        {{- "Activity" | bold | nindent 2 }}: {{ "idle" | yellow }}{{ with ($activeCond.message | default "" | toString) }} -- {{ . | yellow }}{{ end }}
+    {{- end }}
+    {{- with (.Status | default dict).lastActiveTime }}
+        {{- "Last Active" | bold | nindent 2 }}: {{ . | colorAgo }}{{ agoSuffix }}
+    {{- end }}
+    {{- $paused := false }}
+    {{- $pausedCond := getMatchingItemInMapList (dict "type" "Paused") .StatusConditions }}
+    {{- if $pausedCond }}{{ if eq ($pausedCond.status | default "" | toString) "True" }}{{ $paused = true }}{{ end }}{{ end }}
+    {{- with ($.Status | default dict).Paused }}{{ if . }}{{ $paused = true }}{{ end }}{{ end }}
+    {{- if $paused }}
+        {{- "Paused" | bold | yellow | nindent 2 }}: job creation suspended
+    {{- end }}
+    {{- /* Same dump conditions_summary does, minus the two conditions translated in the
+           body above (Active/Paused -- the normal-polarity heuristic reads their idle
+           states backwards). Ready stays: kstatus translates it, the raw line keeps
+           reason/message/timestamp. Anything this or a future controller version writes
+           beyond the two lands here raw. Whitespace mirrors conditions_summary's body so
+           each condition lands on its own line. */ -}}
+    {{- range .StatusConditions }}
+        {{- $type := .type | default "" | toString }}
+        {{- if and $type (not (has $type (list "Active" "Paused"))) }}
+  {{ template "condition_summary" . }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "ScaledJob.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Short one-line ScaledJob health summary. Skips other_unhealthy_conditions for the
+           same reason as ScaledObject.summary: Active:False is healthy idle here. */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "group" $obj.APIVersion "callerNamespace" .callerNamespace) }}
+    {{- $spec := $obj.Spec | default dict }}
+    {{- $replicaParts := list }}
+    {{- with $spec.minReplicaCount }}{{ $replicaParts = $replicaParts | append (printf "min %s" (. | toString)) }}{{ end }}
+    {{- with $spec.maxReplicaCount }}{{ $replicaParts = $replicaParts | append (printf "max %s" (. | toString)) }}{{ end }}
+    {{- with $replicaParts }}, {{ join "-" . | cyan }}{{ end }}
+    {{- $activeCond := getMatchingItemInMapList (dict "type" "Active") $obj.StatusConditions }}
+    {{- if and $activeCond (eq ($activeCond.status | default "" | toString) "True") }}
+        {{- ", " }}{{ "active" | green }}
+    {{- else }}
+        {{- ", " }}{{ "idle" | yellow }}
+    {{- end }}
+    {{- $pausedCond := getMatchingItemInMapList (dict "type" "Paused") $obj.StatusConditions }}
+    {{- if $pausedCond }}{{ if eq ($pausedCond.status | default "" | toString) "True" }}{{ ", " }}{{ "paused" | yellow | bold }}{{ end }}{{ end }}
+    {{- with ($obj.Status | default dict).Paused }}{{ if . }}{{ ", " }}{{ "paused" | yellow | bold }}{{ end }}{{ end }}
+    {{- template "kstatus_if_abnormal" $obj }}
+{{- end -}}

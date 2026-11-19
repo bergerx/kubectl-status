@@ -1,0 +1,96 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  annotations:
+    platform/workload-url: https://gitlab.example.net/team-a/apps/app-analytics.git
+    meta.helm.sh/release-name: app-analytics
+    meta.helm.sh/release-namespace: team-a
+  creationTimestamp: "2026-11-08T07:10:41Z"
+  finalizers:
+  - finalizer.keda.sh
+  generation: 3
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    platform/workload-class: pa
+    platform/workload-instance: inst001
+    scaledobject.keda.sh/name: te-scaled
+  name: task-scaled
+  namespace: team-a
+  resourceVersion: "823428036"
+  uid: 00000000-0000-0000-0000-000000000000
+spec:
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          policies:
+          - periodSeconds: 300
+            type: Pods
+            value: 1
+          stabilizationWindowSeconds: 300
+        scaleUp:
+          policies:
+          - periodSeconds: 60
+            type: Pods
+            value: 1
+          stabilizationWindowSeconds: 60
+    scalingModifiers: {}
+  cooldownPeriod: 10
+  fallback:
+    behavior: static
+    failureThreshold: 3
+    replicas: 1
+  maxReplicaCount: 5
+  minReplicaCount: 1
+  pollingInterval: 15
+  scaleTargetRef:
+    name: task-service
+  triggers:
+  - metadata:
+      query: max(app_scale_metric{namespace="team-a"})
+      serverAddress: http://prometheus.monitoring:9090
+      threshold: "100"
+    metricType: AverageValue
+    type: prometheus
+status:
+  authenticationsTypes: ""
+  conditions:
+  - message: ScaledObject is defined correctly and is ready for scaling
+    reason: ScaledObjectReady
+    status: "True"
+    type: Ready
+  - message: Scaling is performed because triggers are active
+    reason: ScalerActive
+    status: "True"
+    type: Active
+  - message: No fallbacks are active on this scaled object
+    reason: NoFallbackFound
+    status: "False"
+    type: Fallback
+  - message: pause annotation removed for ScaledObject
+    reason: ScaledObjectUnpaused
+    status: "False"
+    type: Paused
+  - message: HPA is actively scaling
+    reason: HPAActive
+    status: "True"
+    type: HPAActive
+  externalMetricNames:
+  - s0-prometheus
+  health:
+    s0-prometheus:
+      numberOfFailures: 0
+      status: Happy
+  hpaName: keda-hpa-task-scaled
+  lastActiveTime: "2026-11-19T00:02:42Z"
+  originalReplicaCount: 1
+  scaleTargetGVKR:
+    group: apps
+    kind: Deployment
+    resource: deployments
+    version: v1
+  scaleTargetKind: apps/v1.Deployment
+  triggersActivity:
+    s0-prometheus:
+      isActive: true
+  triggersTypes: prometheus

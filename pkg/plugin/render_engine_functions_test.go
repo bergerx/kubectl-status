@@ -167,9 +167,13 @@ func TestNativeSliceFunctions(t *testing.T) {
 }
 
 func TestNativeToDate(t *testing.T) {
-	// layout-first, value last; identical to the pre-migration toDate ordering
-	if got := renderWith(t, `{{ "2026-01-02T15:04:05Z" | toDate "2006-01-02T15:04:05Z" }}`, nil); got != "2026-01-02 15:04:05 +0000 UTC" {
-		t.Errorf("toDate = %q, want 2026-01-02 15:04:05 +0000 UTC", got)
+	// layout-first, value last; identical to the pre-migration toDate ordering.
+	// Asserted through .UTC on purpose: sprout's toDate parses with time.Local as the
+	// fallback location, so the zone *name* in the default String() rendering is whatever
+	// the machine's local zone calls a zero offset ("UTC" on CI, "GMT" on some macOS
+	// setups) -- comparing instants keeps the test environment-independent.
+	if got := renderWith(t, `{{ ("2026-01-02T15:04:05Z" | toDate "2006-01-02T15:04:05Z").UTC.Format "2006-01-02T15:04:05Z07:00" }}`, nil); got != "2026-01-02T15:04:05Z" {
+		t.Errorf("toDate = %q, want 2026-01-02T15:04:05Z", got)
 	}
 }
 

@@ -1,0 +1,56 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  creationTimestamp: "2026-11-09T23:40:00Z"
+  generation: 1
+  name: group-a-scaler
+  namespace: workload
+  resourceVersion: "79840300"
+  uid: 00000000-0000-0000-0000-000000000000
+spec:
+  cooldownPeriod: 300
+  maxReplicaCount: 10
+  minReplicaCount: 2
+  pollingInterval: 15
+  scaleTargetRef:
+    apiVersion: gig.example.com/v1
+    kind: GIGGroup
+    name: group-a
+  triggers:
+  - metadata:
+      value: "80"
+    metricType: Utilization
+    type: cpu
+status:
+  authenticationsTypes: ""
+  conditions:
+  - message: ScaledObject is defined correctly and is ready for scaling
+    reason: ScaledObjectReady
+    status: "True"
+    type: Ready
+  - message: Scaling is performed because triggers are active
+    reason: ScalerActive
+    status: "True"
+    type: Active
+  - message: No fallbacks are active on this scaled object
+    reason: NoFallbackFound
+    status: "False"
+    type: Fallback
+  - status: "False"
+    type: Paused
+  - message: HPA is actively scaling
+    reason: HPAActive
+    status: "True"
+    type: HPAActive
+  hpaName: keda-hpa-group-a-scaler
+  lastActiveTime: "2026-11-18T23:59:10Z"
+  originalReplicaCount: 2
+  resourceMetricNames:
+  - cpu
+  scaleTargetGVKR:
+    group: gig.example.com
+    kind: GIGGroup
+    resource: giggroups
+    version: v1
+  scaleTargetKind: gig.example.com/v1.GIGGroup
+  triggersTypes: cpu

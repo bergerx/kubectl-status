@@ -1,0 +1,89 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  annotations:
+    meta.helm.sh/release-name: app
+    meta.helm.sh/release-namespace: app-a
+  creationTimestamp: "2026-10-28T01:20:00Z"
+  generation: 2
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: worker
+  namespace: app-a
+  resourceVersion: "79840293"
+  uid: 00000000-0000-0000-0000-000000000000
+spec:
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          policies:
+          - periodSeconds: 300
+            type: Pods
+            value: 1
+          selectPolicy: Min
+          stabilizationWindowSeconds: 600
+        scaleUp:
+          policies:
+          - periodSeconds: 60
+            type: Pods
+            value: 4
+          stabilizationWindowSeconds: 0
+    scalingModifiers: {}
+  fallback:
+    behavior: static
+    failureThreshold: 10
+    replicas: 6
+  maxReplicaCount: 6
+  minReplicaCount: 2
+  pollingInterval: 15
+  scaleTargetRef:
+    name: worker
+  triggers:
+  - metadata:
+      ignoreNullValues: "false"
+      query: sum(max by (priority) (app_queue_depth_by_priority{namespace="app-a"})) + sum(app_active_jobs{namespace="app-a", pod=~"worker-.*"})
+      serverAddress: http://prometheus.monitoring:9090
+      threshold: "20"
+    name: worker-demand
+    type: prometheus
+status:
+  authenticationsTypes: ""
+  conditions:
+  - message: ScaledObject is defined correctly and is ready for scaling
+    reason: ScaledObjectReady
+    status: "True"
+    type: Ready
+  - message: Scaling is not performed because triggers are not active
+    reason: ScalerNotActive
+    status: "False"
+    type: Active
+  - message: No fallbacks are active on this scaled object
+    reason: NoFallbackFound
+    status: "False"
+    type: Fallback
+  - status: "False"
+    type: Paused
+  - message: HPA is actively scaling
+    reason: HPAActive
+    status: "True"
+    type: HPAActive
+  externalMetricNames:
+  - s0-prometheus
+  health:
+    s0-prometheus:
+      numberOfFailures: 0
+      status: Happy
+  hpaName: keda-hpa-worker
+  lastActiveTime: "2026-11-06T01:27:25Z"
+  originalReplicaCount: 1
+  scaleTargetGVKR:
+    group: apps
+    kind: Deployment
+    resource: deployments
+    version: v1
+  scaleTargetKind: apps/v1.Deployment
+  triggersActivity:
+    s0-prometheus:
+      isActive: false
+  triggersTypes: prometheus

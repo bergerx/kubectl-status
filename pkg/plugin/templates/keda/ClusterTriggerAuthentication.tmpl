@@ -1,0 +1,30 @@
+{{- define "ClusterTriggerAuthentication" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: keda.sh/v1alpha1, Kind=ClusterTriggerAuthentication */ -}}
+    {{- /* Same spec shape as TriggerAuthentication; the body is shared via
+           trigger_auth_details in TriggerAuthentication.tmpl. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "trigger_auth_details" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "ClusterTriggerAuthentication.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "group" $obj.APIVersion "callerNamespace" .callerNamespace) }}
+    {{- $spec := $obj.Spec | default dict }}
+    {{- $methods := list }}
+    {{- range $method := list "secretTargetRef" "env" "podIdentity" "filePath" "hashiCorpVault" "azureKeyVault" "azureServicePrincipal" "awsSecretManager" "gcpSecretManager" "oauth2" "boundServiceAccountToken" "configMapTargetRef" }}
+        {{- if $spec | hasKey $method }}{{ $methods = $methods | append $method }}{{ end }}
+    {{- end }}
+    {{- with $methods }}, {{ join "+" . | cyan }}{{ else }}, {{ "no auth method" | yellow | bold }}{{ end }}
+    {{- template "kstatus_if_abnormal" $obj }}
+    {{- template "other_unhealthy_conditions" $obj }}
+{{- end -}}

@@ -1,0 +1,14 @@
+
+ScaledObject/task-scaled -n team-a, created 1m ago, gen:3
+  Current: Resource is Ready
+  Scales Deployment/task-service
+  Replicas: min 1, max 5
+  Timing: poll every 15s, cooldown 10s
+  Triggers:
+    prometheus @ http://prometheus.monitoring:9090
+      max(app_scale_metric{namespace="team-a"}) > 100
+  Activity: active (ScalerActive)
+  Last Active: 1m ago
+  Fallback: 1 replicas after 3 failed polls
+  HPA: HorizontalPodAutoscaler/keda-hpa-task-scaled
+  Ready:True ScaledObjectReady, ScaledObject is defined correctly and is ready for scaling

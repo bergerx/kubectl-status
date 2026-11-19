@@ -18,6 +18,17 @@
     {{- $desired := .Status.desiredReplicas | default 0 | toInt }}
     {{- "Replicas" | bold | nindent 2 }}: {{ printf "%d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas (.Spec.maxReplicas | toInt) }}
     {{- if ne $current $desired }}, {{ "desired" | yellow | bold }}: {{ printf "%d" $desired | yellow }}{{ end }}
+    {{- /* ScalingLimited is polarity-inverted: False is the normal case (which the generic
+           normal-polarity heuristic paints red -- a false alarm on every healthy HPA), and
+           True means the HPA is pinned at a spec bound -- noteworthy, not faulty. Rendered
+           explicitly here and excluded from the generic condition dump below. */ -}}
+    {{- $scalingLimited := getMatchingItemInMapList (dict "type" "ScalingLimited") .StatusConditions }}
+    {{- if $scalingLimited }}{{ if eq ($scalingLimited.status | default "" | toString) "True" }}
+        {{- $line := "Scaling limited" | yellow | bold }}
+        {{- with $scalingLimited.reason }}{{ $line = printf "%s (%s)" $line . }}{{ end }}
+        {{- with $scalingLimited.message }}{{ $line = printf "%s, %s" $line . }}{{ end }}
+        {{- $line | yellow | nindent 2 }}
+    {{- end }}{{ end }}
     {{- with .Spec.metrics }}
         {{- "Metrics" | bold | nindent 2 }}:
         {{- range . }}
@@ -80,7 +91,15 @@
             {{- end }}
         {{- end }}
     {{- end }}
-    {{- template "conditions_summary" . }}
+    {{- /* Same dump conditions_summary does, minus ScalingLimited -- handled explicitly
+           above, since its inverted polarity reads backwards to the generic heuristic.
+           Whitespace mirrors conditions_summary's body so each condition lands on its
+           own line. */ -}}
+    {{- range .StatusConditions }}
+        {{- if and (ne .type "ScalingLimited") (or .type .reason .message) }}
+  {{ template "condition_summary" . }}
+        {{- end }}
+    {{- end }}
     {{- template "application_details" . }}
     {{- template "recent_updates" . }}
     {{- template "events" . }}
@@ -100,5 +119,18 @@
     {{- printf ", %d" $current | redBoldIf (ne $current $desired) }}/{{ printf "%d-%d" $minReplicas ($obj.Spec.maxReplicas | toInt) }}
     {{- if ne $current $desired }}, {{ "desired" | yellow | bold }}: {{ printf "%d" $desired | yellow }}{{ end }}
     {{- template "kstatus_if_abnormal" $obj }}
-    {{- template "other_unhealthy_conditions" $obj }}
+    {{- /* Same scan other_unhealthy_conditions does, minus ScalingLimited: its inverted
+           polarity (False = normal) would flag every healthy HPA as unhealthy. A True
+           value is a bound, not a fault, so it surfaces as a yellow marker instead. */ -}}
+    {{- $entries := list }}
+    {{- range $obj.StatusConditions }}
+        {{- if and .type (ne .type "Ready") (ne .type "ScalingLimited") (not (isStatusConditionHealthy .)) }}
+            {{- $entries = $entries | append ((coalesce .reason .message (printf "%s:%s" .type (.status | default "Unknown" | toString))) | red | bold) }}
+        {{- end }}
+    {{- end }}
+    {{- $scalingLimited := getMatchingItemInMapList (dict "type" "ScalingLimited") $obj.StatusConditions }}
+    {{- if $scalingLimited }}{{ if eq ($scalingLimited.status | default "" | toString) "True" }}
+        {{- $entries = $entries | append ("scaling-limited" | yellow | bold) }}
+    {{- end }}{{ end }}
+    {{- with $entries }}, {{ . | join ", " }}{{ end }}
 {{- end -}}

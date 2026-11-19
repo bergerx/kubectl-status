@@ -1,0 +1,200 @@
+# Partial objects: bare spec:{} for every KEDA kind, plus docs dropping required
+# sub-fields (scaleTargetRef without name, triggers without type, secretTargetRef
+# entries missing parameter/name/key, empty destination) and a TriggerAuthentication
+# status with whitespace-padded user names. Hand-written; live instances never
+# exercise these paths.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: bare
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec: {}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: no-target-name
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  scaleTargetRef:
+    kind: Deployment
+  triggers:
+  - {}
+  - type: cpu
+    authenticationRef: {}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: fallback-partial
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  scaleTargetRef:
+    name: web
+  triggers:
+  - type: cpu
+  fallback: {}
+status:
+  health:
+    s0-cpu:
+      status: Failing
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: hpa-inactive
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  scaleTargetRef:
+    name: web
+  triggers:
+  - type: cpu
+status:
+  conditions:
+  - message: ScaledObject is defined correctly and is ready for scaling
+    reason: ScaledObjectReady
+    status: "True"
+    type: Ready
+  - message: Scaling is not performed because triggers are not active
+    reason: ScalerNotActive
+    status: "False"
+    type: Active
+  - message: HPA is not actively scaling
+    reason: ScalingTargetNotFound
+    status: "False"
+    type: HPAActive
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: hpa-inactive-paused
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+  annotations:
+    autoscaling.keda.sh/paused-replicas: "3"
+spec:
+  scaleTargetRef:
+    name: web
+  triggers:
+  - type: cpu
+status:
+  conditions:
+  - message: ScaledObject is defined correctly and is ready for scaling
+    reason: ScaledObjectReady
+    status: "True"
+    type: Ready
+  - message: Scaling is not performed because triggers are not active
+    reason: ScalerNotActive
+    status: "False"
+    type: Active
+  - message: HPA is not actively scaling
+    reason: ScalingTargetNotFound
+    status: "False"
+    type: HPAActive
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: dup-triggers
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  scaleTargetRef:
+    name: web
+  triggers:
+  - type: cpu
+    metadata:
+      value: "80"
+  - type: cpu
+    metadata:
+      value: "80"
+  - type: cpu
+    metadata:
+      value: "80"
+  - type: prometheus
+    name: demand
+    metadata:
+      threshold: "100"
+      query: sum(app_queue_depth)
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: bare
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec: {}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: trigger-no-auth-name
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  triggers:
+  - authenticationRef:
+      kind: ClusterTriggerAuthentication
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: bare
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec: {}
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: ref-partial
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  secretTargetRef:
+  - parameter: host
+  - name: s
+  - {}
+  env:
+  - parameter: p
+  podIdentity: {}
+status:
+  scaledobjects: "so-a, ,so-b"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ClusterTriggerAuthentication
+metadata:
+  name: bare
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec: {}
+---
+apiVersion: eventing.keda.sh/v1alpha1
+kind: CloudEventSource
+metadata:
+  name: bare
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec: {}
+---
+apiVersion: eventing.keda.sh/v1alpha1
+kind: CloudEventSource
+metadata:
+  name: dest-partial
+  namespace: default
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec:
+  destination: {}
+  authenticationRef:
+    kind: ClusterTriggerAuthentication
+  eventSubscription: {}
+---
+apiVersion: eventing.keda.sh/v1alpha1
+kind: ClusterCloudEventSource
+metadata:
+  name: bare
+  creationTimestamp: "2026-06-27T09:12:04Z"
+spec: {}

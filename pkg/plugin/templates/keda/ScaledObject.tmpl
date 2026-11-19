@@ -1,0 +1,227 @@
+{{- define "keda_triggers_section" }}
+    {{- /* Expects dict "triggers" (the spec.triggers list). One entry per trigger in a
+           readable "what fires this scaler" form. The headline line carries the type, the
+           trigger's own identifier (metadata.metricName, falling back to name) and the
+           server it polls; a trigger whose metadata carries a query (prometheus and
+           friends) shows that query with the value that activates it on an indented line
+           underneath -- among same-type triggers the query is what actually tells them
+           apart. Without a query the activation value stays on the headline (cpu uses
+           value, + % only for metricType Utilization; most other scalers use threshold).
+           The rest of the metadata map stays configuration, readable from the object
+           itself. Identical entries (typically several unnamed scalers of the same type)
+           collapse into one entry with a count. */ -}}
+    {{- $entries := list }}
+    {{- range .triggers }}
+        {{- $type := .type | default "<no type>" | toString }}
+        {{- $meta := .metadata | default dict }}
+        {{- $line := $type }}
+        {{- with coalesce ($meta | get "metricName") .name }}{{ $line = printf "%s/%s" $type . }}{{ end }}
+        {{- $detail := "" }}
+        {{- with ($meta | get "query") }}
+            {{- $detail = . | toString }}
+            {{- with ($meta | get "threshold") }}{{ $detail = printf "%s > %s" $detail . }}{{ end }}
+        {{- else }}
+            {{- if eq $type "cpu" }}
+                {{- with ($meta | get "value") }}
+                    {{- $unit := "" }}
+                    {{- if ne (($meta | get "metricType") | default "Utilization" | toString) "Utilization" }}
+                        {{- $unit = printf " (%s)" ($meta | get "metricType" | toString) }}
+                    {{- else }}
+                        {{- $unit = "%" }}
+                    {{- end }}
+                    {{- $line = printf "%s > %s%s" $line . $unit }}
+                {{- end }}
+            {{- else }}
+                {{- with ($meta | get "threshold") }}{{ $line = printf "%s > %s" $line . }}{{ end }}
+            {{- end }}
+        {{- end }}
+        {{- with ($meta | get "serverAddress") }}{{ $line = printf "%s @ %s" $line . }}{{ end }}
+        {{- with .authenticationRef }}
+            {{- /* A trigger's scaler can authenticate separately from the object-level
+                   authenticationRef; name the ref so a broken auth is traceable to its trigger. */ -}}
+            {{- $refKind := .kind | default "TriggerAuthentication" | toString }}
+            {{- $refName := .name | default "" | toString }}
+            {{- if $refName }}{{ $line = printf "%s auth:%s/%s" $line $refKind $refName }}{{ end }}
+        {{- end }}
+        {{- $entries = $entries | append (dict "line" $line "detail" $detail) }}
+    {{- end }}
+    {{- if $entries }}
+        {{- "Triggers" | bold | nindent 2 }}:
+        {{- $printed := list }}
+        {{- range $entries }}
+            {{- $this := . }}
+            {{- $key := printf "%s|%s" $this.line $this.detail }}
+            {{- if not (has $key $printed) }}
+                {{- $count := 0 }}
+                {{- range $other := $entries }}{{ if eq (printf "%s|%s" $other.line $other.detail) $key }}{{ $count = add1 $count }}{{ end }}{{ end }}
+                {{- if gt $count 1 }}
+                    {{- printf "%s x%d" $this.line $count | cyan | nindent 4 }}
+                {{- else }}
+                    {{- $this.line | cyan | nindent 4 }}
+                {{- end }}
+                {{- with $this.detail }}{{ . | cyan | nindent 6 }}{{ end }}
+                {{- $printed = $printed | append $key }}
+            {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end -}}
+
+{{- define "ScaledObject" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: keda.sh/v1alpha1, Kind=ScaledObject */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- with .Spec.scaleTargetRef }}
+        {{- /* kind defaults to Deployment per the API; name is the only truly required piece.
+               The group comes from the spec's apiVersion, falling back to the controller-resolved
+               status.scaleTargetGVKR -- a bare Kind loses to discovery's tie-break otherwise. */ -}}
+        {{- $kind := .kind | default "Deployment" | toString }}
+        {{- $name := .name | default "" | toString }}
+        {{- $group := .apiVersion | default "" | toString }}
+        {{- if not $group }}{{ with ($.Status | default dict).scaleTargetGVKR }}{{ $group = printf "%s/%s" .group .version }}{{ end }}{{ end }}
+        {{- if $name }}
+            {{- "Scales" | bold | nindent 2 }} {{ $.Include "managed_resource_line" (dict "ctx" $ "kind" $kind "name" $name "group" $group) }}
+        {{- else }}
+            {{- "Scales" | bold | nindent 2 }} {{ printf "%s/<no name>" $kind }}{{ " (incomplete scaleTargetRef)" | yellow }}
+        {{- end }}
+    {{- end }}
+    {{- $spec := .Spec | default dict }}
+    {{- /* The envelope is the first thing to check when scaling misbehaves, so min/max always
+           show; pollingInterval (default 30s) and cooldownPeriod (default 300s) only when they
+           deviate, restating the defaults is noise. */ -}}
+    {{- $replicaParts := list }}
+    {{- with $spec.minReplicaCount }}{{ $replicaParts = $replicaParts | append (printf "min %s" (. | toString)) }}{{ end }}
+    {{- with $spec.maxReplicaCount }}{{ $replicaParts = $replicaParts | append (printf "max %s" (. | toString)) }}{{ end }}
+    {{- with $spec.idleReplicaCount }}{{ $replicaParts = $replicaParts | append (printf "idle %s" (. | toString)) }}{{ end }}
+    {{- with $replicaParts }}
+        {{- "Replicas" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- $timingParts := list }}
+    {{- with $spec.pollingInterval }}{{ if ne . 30 }}{{ $timingParts = $timingParts | append (printf "poll every %ss" (. | toString)) }}{{ end }}{{ end }}
+    {{- with $spec.cooldownPeriod }}{{ if ne . 300 }}{{ $timingParts = $timingParts | append (printf "cooldown %ss" (. | toString)) }}{{ end }}{{ end }}
+    {{- with $timingParts }}
+        {{- "Timing" | bold | nindent 2 }}: {{ join ", " . | cyan }}
+    {{- end }}
+    {{- template "keda_triggers_section" (dict "triggers" $spec.triggers) }}
+    {{- /* Activity is the Active condition, but Active:False is the healthy idle state -- the
+           scaler only scales when a trigger fires. Translated to prose here instead of letting
+           a red "Active:False" cry wolf. */ -}}
+    {{- $activeCond := getMatchingItemInMapList (dict "type" "Active") .StatusConditions }}
+    {{- $active := false }}
+    {{- if $activeCond }}{{ if eq ($activeCond.status | default "" | toString) "True" }}{{ $active = true }}{{ end }}{{ end }}
+    {{- if $active }}
+        {{- "Activity" | bold | nindent 2 }}: {{ "active" | green }}{{ with ($activeCond.reason | default "" | toString) }} ({{ . }}){{ end }}
+    {{- else }}
+        {{- "Activity" | bold | nindent 2 }}: {{ "idle" | yellow }}{{ with ($activeCond.message | default "" | toString) }} -- {{ . | yellow }}{{ end }}
+    {{- end }}
+    {{- with (.Status | default dict).lastActiveTime }}
+        {{- "Last Active" | bold | nindent 2 }}: {{ . | colorAgo }}{{ agoSuffix }}
+    {{- end }}
+    {{- /* Scaler health: a Failing entry means the scaler's metric source errored on the last
+           polls; numberOfFailures shows how long it has been failing. */ -}}
+    {{- $health := (.Status | default dict).health | default dict }}
+    {{- $failing := list }}
+    {{- range $name, $entry := $health }}
+        {{- if eq ($entry.status | default "" | toString) "Failing" }}
+            {{- $failing = $failing | append (printf "%s (%s failures)" $name (index $entry "numberOfFailures" | default 0 | toString)) }}
+        {{- end }}
+    {{- end }}
+    {{- with $failing }}
+        {{- "Scaler Health" | bold | red | nindent 2 }}: failing -- {{ join ", " . | red }}
+    {{- end }}
+    {{- with $spec.fallback }}
+        {{- $fallbackCond := getMatchingItemInMapList (dict "type" "Fallback") $.StatusConditions }}
+        {{- $fallbackActive := false }}
+        {{- if $fallbackCond }}{{ if eq ($fallbackCond.status | default "" | toString) "True" }}{{ $fallbackActive = true }}{{ end }}{{ end }}
+        {{- $line := printf "%s replicas" (.replicas | default "?" | toString) }}
+        {{- with .failureThreshold }}{{ $line = printf "%s after %s failed polls" $line (. | toString) }}{{ end }}
+        {{- with .behavior }}{{ if ne . "static" }}{{ $line = printf "%s (%s)" $line . }}{{ end }}{{ end }}
+        {{- "Fallback" | bold | nindent 2 }}: {{ $line | cyan }}{{ if $fallbackActive }}{{ " -- ACTIVE, real metrics are not being used" | yellow | bold }}{{ end }}
+    {{- end }}
+    {{- $pausedReplicas := "" }}
+    {{- $annotations := .Metadata.annotations | default dict }}
+    {{- with $annotations | get "autoscaling.keda.sh/paused-replicas" }}{{ $pausedReplicas = . | toString }}{{ end }}
+    {{- $paused := false }}
+    {{- $pausedCond := getMatchingItemInMapList (dict "type" "Paused") .StatusConditions }}
+    {{- if $pausedCond }}{{ if eq ($pausedCond.status | default "" | toString) "True" }}{{ $paused = true }}{{ end }}{{ end }}
+    {{- if or $pausedReplicas $paused }}
+        {{- "Paused" | bold | yellow | nindent 2 }}:{{ with $pausedReplicas }} replicas pinned to {{ . | cyan }}{{ end }}{{ if not $pausedReplicas }} scaling suspended{{ end }}
+    {{- end }}
+    {{- /* HPAActive:False is a real fault (metrics-server unreachable, scaling target
+           invalid, ...) that can coexist with Ready:True, so it gets its own red line
+           rather than relying on the Ready condition alone. Expected while paused, so
+           suppressed there. */ -}}
+    {{- $hpaCond := getMatchingItemInMapList (dict "type" "HPAActive") .StatusConditions }}
+    {{- if $hpaCond }}{{ if eq ($hpaCond.status | default "" | toString) "False" }}{{ if not (or $paused $pausedReplicas) }}
+        {{- $hpaLine := "HPA is not actively scaling" }}
+        {{- with $hpaCond.reason }}{{ $hpaLine = printf "%s (%s)" $hpaLine . }}{{ end }}
+        {{- with $hpaCond.message }}{{ if not (contains . $hpaLine) }}{{ $hpaLine = printf "%s -- %s" $hpaLine . }}{{ end }}{{ end }}
+        {{- $hpaLine | red | nindent 2 }}
+    {{- end }}{{ end }}{{ end }}
+    {{- with (.Status | default dict).hpaName }}
+        {{- "HPA" | bold | nindent 2 }}: {{ $.Include "managed_resource_line" (dict "ctx" $ "kind" "HorizontalPodAutoscaler" "name" . "group" "autoscaling") }}
+    {{- end }}
+    {{- /* Same dump conditions_summary does, minus the four conditions translated in the
+           body above (Active/Fallback/Paused/HPAActive -- the normal-polarity heuristic
+           reads their idle states backwards). Ready stays: kstatus translates it, the raw
+           line keeps reason/message/timestamp. Anything this or a future controller
+           version writes beyond the four lands here raw. Whitespace mirrors
+           conditions_summary's body so each condition lands on its own line. */ -}}
+    {{- range .StatusConditions }}
+        {{- $type := .type | default "" | toString }}
+        {{- if and $type (not (has $type (list "Active" "Fallback" "Paused" "HPAActive"))) }}
+  {{ template "condition_summary" . }}
+        {{- end }}
+    {{- end }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "ScaledObject.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* Short one-line ScaledObject health summary, used wherever a ScaledObject is referenced
+           from another template. Deliberately does NOT call other_unhealthy_conditions: KEDA's
+           Active:False is the healthy idle state (the scaler only scales when a trigger fires),
+           and the normal-polarity heuristic would flag every idle object as unhealthy. The
+           activity state is reported explicitly instead. */ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "group" $obj.APIVersion "callerNamespace" .callerNamespace) }}
+    {{- $spec := $obj.Spec | default dict }}
+    {{- with $spec.scaleTargetRef }}
+        {{- $kind := .kind | default "Deployment" | toString }}
+        {{- $name := .name | default "" | toString }}
+        {{- if $name }}, scales {{ template "resource_ref" (dict "kind" $kind "name" $name "callerNamespace" $obj.Namespace) }}{{ end }}
+    {{- end }}
+    {{- $replicaParts := list }}
+    {{- with $spec.minReplicaCount }}{{ $replicaParts = $replicaParts | append (printf "min %s" (. | toString)) }}{{ end }}
+    {{- with $spec.maxReplicaCount }}{{ $replicaParts = $replicaParts | append (printf "max %s" (. | toString)) }}{{ end }}
+    {{- with $replicaParts }}, {{ join "-" . | cyan }}{{ end }}
+    {{- $activeCond := getMatchingItemInMapList (dict "type" "Active") $obj.StatusConditions }}
+    {{- if and $activeCond (eq ($activeCond.status | default "" | toString) "True") }}
+        {{- ", " }}{{ "active" | green }}
+    {{- else }}
+        {{- ", " }}{{ "idle" | yellow }}
+    {{- end }}
+    {{- $pausedCond := getMatchingItemInMapList (dict "type" "Paused") $obj.StatusConditions }}
+    {{- $paused := false }}
+    {{- if $pausedCond }}{{ if eq ($pausedCond.status | default "" | toString) "True" }}{{ $paused = true }}{{ end }}{{ end }}
+    {{- with ($obj.Metadata.annotations | default dict) | get "autoscaling.keda.sh/paused-replicas" }}{{ $paused = true }}{{ end }}
+    {{- if $paused }}{{ ", " }}{{ "paused" | yellow | bold }}{{ end }}
+    {{- $fallbackCond := getMatchingItemInMapList (dict "type" "Fallback") $obj.StatusConditions }}
+    {{- if $fallbackCond }}{{ if eq ($fallbackCond.status | default "" | toString) "True" }}{{ ", " }}{{ "fallback active" | yellow | bold }}{{ end }}{{ end }}
+    {{- /* HPAActive:False is a real fault even with Ready:True; expected while paused. */ -}}
+    {{- $hpaCond := getMatchingItemInMapList (dict "type" "HPAActive") $obj.StatusConditions }}
+    {{- if $hpaCond }}{{ if eq ($hpaCond.status | default "" | toString) "False" }}{{ if not $paused }}
+        {{- ", " }}{{ "hpa not scaling" | red | bold }}
+    {{- end }}{{ end }}{{ end }}
+    {{- range $name, $entry := (($obj.Status | default dict).health | default dict) }}
+        {{- if eq ($entry.status | default "" | toString) "Failing" }}
+            {{- ", " }}{{ printf "scaler %s failing" $name | red | bold }}
+        {{- end }}
+    {{- end }}
+    {{- template "kstatus_if_abnormal" $obj }}
+{{- end -}}

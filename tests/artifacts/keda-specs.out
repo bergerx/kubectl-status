@@ -1,0 +1,41 @@
+
+ScaledJob/queue-worker-job -n default, created 1m ago
+  Current: Resource is current
+  Replicas: max 50
+  Polling Interval: 15s
+  History Limits: successful 5
+  Scaling Strategy: eager, multi-scaler:max
+  Rollout: immediate
+  Env Source Container: worker
+  Triggers:
+    rabbitmq/queue auth:TriggerAuthentication/rabbitmq-auth
+    cron/schedule
+  Activity: idle
+
+TriggerAuthentication/rabbitmq-auth -n default, created 1m ago
+  Current: Resource is current
+  Auth Methods:
+    host: from Secret/rabbitmq-secret.host
+    password: from Secret/rabbitmq-secret.password
+    provider azure-workload
+  Used By: nothing references this authentication
+
+ClusterTriggerAuthentication/global-auth, created 1m ago
+  Current: Resource is current
+  Auth Methods:
+    address https://vault.example.com
+  Used By: nothing references this authentication
+
+CloudEventSource/so-events -n default, created 1m ago
+  Current: Resource is current
+  Destination:
+    http https://events.example.com/keda
+  Event Filter: only keda.scaledobject.ready.v1, keda.scaledobject.failed.v1
+  Authentication: TriggerAuthentication.keda.sh/rabbitmq-auth
+  Cluster Name: example-cluster
+
+ClusterCloudEventSource/global-events, created 1m ago
+  Current: Resource is current
+  Destination:
+    azure-event-grid https://grid.example.azure.com
+  Event Filter: excluding keda.scaledobject.removed.v1

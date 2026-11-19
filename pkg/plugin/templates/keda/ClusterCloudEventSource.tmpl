@@ -1,0 +1,28 @@
+{{- define "ClusterCloudEventSource" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: eventing.keda.sh/v1alpha1, Kind=ClusterCloudEventSource */ -}}
+    {{- /* Same spec shape as CloudEventSource; the body is shared via
+           cloud_event_source_details in CloudEventSource.tmpl. */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "cloud_event_source_details" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "ClusterCloudEventSource.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "group" $obj.APIVersion "callerNamespace" .callerNamespace) }}
+    {{- with ($obj.Spec | default dict).destination }}
+        {{- with .http }}{{ with .uri }}, {{ printf "-> %s" . | cyan }}{{ end }}{{ end }}
+        {{- with .azureEventGridTopic }}{{ with .endpoint }}, {{ printf "-> %s" . | cyan }}{{ end }}{{ end }}
+    {{- end }}
+    {{- template "kstatus_if_abnormal" $obj }}
+    {{- template "other_unhealthy_conditions" $obj }}
+{{- end -}}

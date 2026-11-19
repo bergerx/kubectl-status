@@ -1,0 +1,61 @@
+{{- define "cloud_event_source_details" }}
+    {{- /* Shared body for CloudEventSource and ClusterCloudEventSource (same spec shape,
+           different scope). Takes the RenderableObject. */ -}}
+    {{- $spec := .Spec | default dict }}
+    {{- with $spec.destination }}
+        {{- "Destination" | bold | nindent 2 }}:
+        {{- with .http }}
+            {{- with .uri }}{{ printf "http %s" . | cyan | nindent 4 }}{{ end }}
+        {{- end }}
+        {{- with .azureEventGridTopic }}
+            {{- with .endpoint }}{{ printf "azure-event-grid %s" . | cyan | nindent 4 }}{{ end }}
+        {{- end }}
+    {{- end }}
+    {{- with $spec.eventSubscription }}
+        {{- $filterParts := list }}
+        {{- with .includedEventTypes }}{{ $filterParts = $filterParts | append (printf "only %s" (join ", " .)) }}{{ end }}
+        {{- with .excludedEventTypes }}{{ $filterParts = $filterParts | append (printf "excluding %s" (join ", " .)) }}{{ end }}
+        {{- with $filterParts }}
+            {{- "Event Filter" | bold | nindent 2 }}: {{ join " | " . | cyan }}
+        {{- end }}
+    {{- end }}
+    {{- with $spec.authenticationRef }}
+        {{- /* kind defaults to TriggerAuthentication; ClusterTriggerAuthentication is
+               cluster-scoped and resolves without a namespace. */ -}}
+        {{- $refKind := .kind | default "TriggerAuthentication" | toString }}
+        {{- $refName := .name | default "" | toString }}
+        {{- if $refName }}
+            {{- "Authentication" | bold | nindent 2 }}: {{ $.Include "resource_ref" (dict "kind" $refKind "name" $refName "callerNamespace" $.Namespace "group" "keda.sh/v1alpha1") }}
+        {{- end }}
+    {{- end }}
+    {{- with $spec.clusterName }}
+        {{- "Cluster Name" | bold | nindent 2 }}: {{ . | cyan }}
+    {{- end }}
+{{- end -}}
+
+{{- define "CloudEventSource" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- /* GVK: eventing.keda.sh/v1alpha1, Kind=CloudEventSource */ -}}
+    {{- template "status_summary_line" . }}
+    {{- template "kstatus_summary" . }}
+    {{- template "finalizer_details_on_termination" . }}
+    {{- template "observed_generation_summary" . }}
+    {{- template "application_details" . }}
+    {{- template "cloud_event_source_details" . }}
+    {{- template "conditions_summary" . }}
+    {{- template "recent_updates" . }}
+    {{- template "events" . }}
+    {{- template "owners" . }}
+{{- end -}}
+
+{{- define "CloudEventSource.summary" }}
+    {{- /*gotype: github.com/bergerx/kubectl-status/pkg/plugin.RenderableObject*/ -}}
+    {{- $obj := .obj }}
+    {{- template "resource_ref" (dict "kind" $obj.Kind "name" $obj.Name "namespace" $obj.Namespace "group" $obj.APIVersion "callerNamespace" .callerNamespace) }}
+    {{- with ($obj.Spec | default dict).destination }}
+        {{- with .http }}{{ with .uri }}, {{ printf "-> %s" . | cyan }}{{ end }}{{ end }}
+        {{- with .azureEventGridTopic }}{{ with .endpoint }}, {{ printf "-> %s" . | cyan }}{{ end }}{{ end }}
+    {{- end }}
+    {{- template "kstatus_if_abnormal" $obj }}
+    {{- template "other_unhealthy_conditions" $obj }}
+{{- end -}}

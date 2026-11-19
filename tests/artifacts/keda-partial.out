@@ -1,0 +1,88 @@
+
+ScaledObject/bare -n default, created 1m ago
+  Current: Resource is current
+  Activity: idle
+
+ScaledObject/no-target-name -n default, created 1m ago
+  Current: Resource is current
+  Scales Deployment/<no name> (incomplete scaleTargetRef)
+  Triggers:
+    <no type>
+    cpu
+  Activity: idle
+
+ScaledObject/fallback-partial -n default, created 1m ago
+  Current: Resource is current
+  Scales Deployment/web
+  Triggers:
+    cpu
+  Activity: idle
+  Scaler Health: failing -- s0-cpu (0 failures)
+
+ScaledObject/hpa-inactive -n default, created 1m ago
+  Current: Resource is Ready
+  Scales Deployment/web
+  Triggers:
+    cpu
+  Activity: idle -- Scaling is not performed because triggers are not active
+  HPA is not actively scaling (ScalingTargetNotFound)
+  Ready:True ScaledObjectReady, ScaledObject is defined correctly and is ready for scaling
+
+ScaledObject/hpa-inactive-paused -n default, created 1m ago
+  Current: Resource is Ready
+  Scales Deployment/web
+  Triggers:
+    cpu
+  Activity: idle -- Scaling is not performed because triggers are not active
+  Paused: replicas pinned to 3
+  Ready:True ScaledObjectReady, ScaledObject is defined correctly and is ready for scaling
+
+ScaledObject/dup-triggers -n default, created 1m ago
+  Current: Resource is current
+  Scales Deployment/web
+  Triggers:
+    cpu > 80% x3
+    prometheus/demand
+      sum(app_queue_depth) > 100
+  Activity: idle
+
+ScaledJob/bare -n default, created 1m ago
+  Current: Resource is current
+  Activity: idle
+
+ScaledJob/trigger-no-auth-name -n default, created 1m ago
+  Current: Resource is current
+  Triggers:
+    <no type>
+  Activity: idle
+
+TriggerAuthentication/bare -n default, created 1m ago
+  Current: Resource is current
+  Auth Methods: none configured
+  Used By: nothing references this authentication
+
+TriggerAuthentication/ref-partial -n default, created 1m ago
+  Current: Resource is current
+  Auth Methods:
+    host: from Secret/<no secret>.<no key>
+    <no parameter>: from Secret/s.<no key>
+    <no parameter>: from Secret/<no secret>.<no key>
+    p: env <no name>
+    provider <no provider>
+  Used By:
+    ScaledObject.keda.sh/so-a
+    ScaledObject.keda.sh/so-b
+
+ClusterTriggerAuthentication/bare, created 1m ago
+  Current: Resource is current
+  Auth Methods: none configured
+  Used By: nothing references this authentication
+
+CloudEventSource/bare -n default, created 1m ago
+  Current: Resource is current
+
+CloudEventSource/dest-partial -n default, created 1m ago
+  Current: Resource is current
+
+ClusterCloudEventSource/bare, created 1m ago
+  Current: Resource is current

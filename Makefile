@@ -43,7 +43,7 @@ TOOL_GOVERSION = $(shell go env GOVERSION)
 
 .PHONY: staticcheck
 staticcheck:
-	GOTOOLCHAIN=$(TOOL_GOVERSION) go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
+	GOTOOLCHAIN=$(TOOL_GOVERSION) go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
 
 #--------------------------
 # Security
