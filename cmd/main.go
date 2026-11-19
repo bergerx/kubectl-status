@@ -76,6 +76,9 @@ not all resources are fully supported.`
 // This variable is populated by goreleaser
 var version string
 
+// SharedCacheKey is the viper key under which the shared object cache is stored.
+const SharedCacheKey = plugin.SharedCacheKey
+
 // RootCmd builds the kubectl-status cobra.Command. It owns a fresh *viper.Viper and
 // plugin.RenderConfig for this invocation instead of reading the package-level viper singleton or
 // pkg/plugin's Now/DurationRound/StartedAfterClause, so concurrent invocations (e.g. parallel

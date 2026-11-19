@@ -1,0 +1,1 @@
+ResourceQuota/scoped-quota -n rq-test, pods: 0/3[0%]

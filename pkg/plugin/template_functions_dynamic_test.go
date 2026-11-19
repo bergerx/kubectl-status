@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -393,6 +394,106 @@ func TestStatefulSetPodUnreadySince(t *testing.T) {
 			got := statefulSetPodUnreadySince(tt.pod, tt.readyCondition)
 			if !got.Equal(tt.want) {
 				t.Errorf("statefulSetPodUnreadySince() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSharedCacheKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		object map[string]interface{}
+		kind   string
+		want   string
+	}{
+		{
+			name: "namespaced object",
+			object: map[string]interface{}{"metadata": map[string]interface{}{
+				"namespace": "ns", "name": "obj",
+			}},
+			kind: "Pod",
+			want: "pod/ns/obj",
+		},
+		{
+			name: "cluster scoped object",
+			object: map[string]interface{}{"metadata": map[string]interface{}{
+				"name": "obj",
+			}},
+			kind: "Namespace",
+			want: "namespace",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := RenderableObject{Unstructured: unstructured.Unstructured{Object: tt.object}}
+			if got := sharedCacheKey(r, tt.kind); got != tt.want {
+				t.Errorf("sharedCacheKey() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSharedCacheLookup(t *testing.T) {
+	obj := input.Object{"metadata": map[string]interface{}{"name": "pod"}}
+	cached := map[string]interface{}{
+		"Pod/ns/obj": map[string]interface{}{"pod": obj},
+	}
+	namespaced := RenderableObject{
+		Unstructured: unstructured.Unstructured{Object: map[string]interface{}{
+			"metadata": map[string]interface{}{"namespace": "ns", "name": "obj"},
+		}},
+	}
+
+	tests := []struct {
+		name string
+		cfg  *viper.Viper
+		want int
+	}{
+		{name: "nil config", cfg: nil, want: 0},
+		{name: "empty cache", cfg: viper.New(), want: 0},
+		{
+			name: "cache of wrong type",
+			cfg: func() *viper.Viper {
+				v := viper.New()
+				v.Set(SharedCacheKey, "not-a-cache")
+				return v
+			}(),
+			want: 0,
+		},
+		{
+			name: "cache miss",
+			cfg: func() *viper.Viper {
+				v := viper.New()
+				v.Set(SharedCacheKey, map[string]interface{}{"Pod/other/obj": cached["Pod/ns/obj"]})
+				return v
+			}(),
+			want: 0,
+		},
+		{
+			name: "cache hit skips malformed entries",
+			cfg: func() *viper.Viper {
+				v := viper.New()
+				v.Set(SharedCacheKey, map[string]interface{}{
+					"Pod/ns/obj": map[string]interface{}{
+						"pod":    obj,
+						"broken": "not an object",
+					},
+				})
+				return v
+			}(),
+			want: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := namespaced
+			r.Config = tt.cfg
+			got := sharedCacheLookup(r, "Pod")
+			if len(got) != tt.want {
+				t.Fatalf("sharedCacheLookup() returned %d objects, want %d", len(got), tt.want)
+			}
+			if tt.want > 0 && got[0]["metadata"].(map[string]interface{})["name"] != "pod" {
+				t.Errorf("sharedCacheLookup() returned unexpected object: %v", got[0])
 			}
 		})
 	}
